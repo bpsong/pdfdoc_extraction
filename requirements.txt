@@ -1,0 +1,12 @@
+fastapi==0.115.12
+pydantic==2.10.6
+passlib==1.7.4
+python-jose==3.4.0
+PyYAML==6.0.2
+prefect==3.4.6
+llama-cloud-services==0.6.50
+pandas==2.2.3
+uvicorn==0.34.2
+pytest==8.3.5
+nanoid==2.0.0
+bcrypt==4.1.2

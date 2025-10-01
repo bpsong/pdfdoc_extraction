@@ -1,0 +1,12 @@
+{
+    "id": "file_test_id_1",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Completed: store_file_to_localdrive",
+    "timestamps": {
+        "Preparing to copy file": "2025-09-05T13:14:25.940037Z",
+        "Task Completed: store_file_to_localdrive": "2025-09-05T13:14:25.940668Z"
+    },
+    "error": null,
+    "details": {}
+}

@@ -1,0 +1,11 @@
+{
+    "id": "test-6",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Failed: store_metadata_csv_v2",
+    "timestamps": {
+        "Task Failed: store_metadata_csv_v2": "2025-09-29T08:35:22.546901Z"
+    },
+    "error": "TaskError",
+    "details": {}
+}

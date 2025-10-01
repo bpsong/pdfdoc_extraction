@@ -1,0 +1,11 @@
+{
+    "id": "unknown",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Started: store_file_to_localdrive",
+    "timestamps": {
+        "Task Started: store_file_to_localdrive": "2025-09-05T13:14:25.953778Z"
+    },
+    "error": null,
+    "details": {}
+}

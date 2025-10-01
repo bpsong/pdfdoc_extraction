@@ -1,0 +1,199 @@
+## Relevant Files
+
+- [`config.yaml`](config.yaml:1) - Main application configuration, defining pipeline structure and global settings.
+- [`main.py`](main.py:1) - Application entry point, responsible for initializing managers and starting services.
+- [`modules/config_manager.py`](modules/config_manager.py:1) - Implements the singleton `ConfigManager` for loading and validating `config.yaml`, including static path validation and dynamic pipeline-path validation for `_dir` and `_file` parameters.
+- [`modules/shutdown_manager.py`](modules/shutdown_manager.py:1) - Implements the singleton `ShutdownManager` for coordinating graceful application shutdown and resource cleanup.
+- [`modules/status_manager.py`](modules/status_manager.py:1) - Implements the singleton `StatusManager` for tracking file processing status and managing status records.
+- [`modules/workflow_loader.py`](modules/workflow_loader.py:1) - Parses `config.yaml` to dynamically build and execute Prefect flows, including direct, unconditional invocation of the mandatory CleanupTask (housekeeping) as the final step for reliable cleanup and status finalization.
+- [`modules/base_task.py`](modules/base_task.py:1) - Defines the `BaseTask` abstract class for all pipeline steps, including error handling patterns.
+- [`modules/exceptions.py`](modules/exceptions.py:1) - Contains custom exception classes like `TaskError` for robust error propagation.
+- [`modules/file_processor.py`](modules/file_processor.py:1) - Encapsulates file movement and processing logic with retry mechanisms.
+- [`modules/watch_folder_monitor.py`](modules/watch_folder_monitor.py:1) - Implements watch folder monitoring, PDF validation, UUID assignment, renaming, and integration with file processing.
+- [`modules/utils.py`](modules/utils.py:1) - Utility functions including Windows long path handling and UUID filename generation.
+- [`modules/workflow_manager.py`](modules/workflow_manager.py:1) - Manages the triggering of Prefect workflows based on file ingestion events and integrates with FileProcessor.
+- [`modules/logging_config.py`](modules/logging_config.py:1) - Centralized logging configuration used across the application.
+- [`modules/auth_utils.py`](modules/auth_utils.py:1) - Handles user authentication, JWT token generation, and validation.
+- [`modules/api_router.py`](modules/api_router.py:1) - FastAPI routing helpers for API endpoints and mounting the web app, enhanced with complete status data response for modal dialog including Singapore timezone conversion and graceful fallback handling.
+- [`web/server.py`](web/server.py:1) - The main FastAPI application for the web interface.
+- [`web/templates/login.html`](web/templates/login.html:1) - HTML template for the user login page.
+- [`web/templates/dashboard.html`](web/templates/dashboard.html:1) - HTML template for displaying file upload and processing status, enhanced with comprehensive modal dialog system for in-page status viewing with timeline visualization and debug capabilities.
+- [`web/templates/upload.html`](web/templates/upload.html:1) - HTML template for the PDF upload form.
+- [`web/static/css/style.css`](web/static/css/style.css:1) - Stylesheets for the web interface, enhanced with comprehensive modal dialog styling including responsive grid layouts, timeline visualization, and fallback inline styles.
+- [`web/static/js/status.js`](web/static/js/status.js:1) - JavaScript for dynamic status updates on the dashboard.
+- [`standard_step/extraction/extract_pdf.py`](standard_step/extraction/extract_pdf.py:1) - Implementation of the standard PDF data extraction task.
+- [`standard_step/extraction/extract_pdf_v2.py`](standard_step/extraction/extract_pdf_v2.py:1) - v2 extraction task supporting LlamaExtract array-of-objects (line items).
+- [`standard_step/storage/store_metadata_as_csv.py`](standard_step/storage/store_metadata_as_csv.py:1) - Standard task for storing extracted metadata as CSV.
+- [`standard_step/storage/store_metadata_as_json.py`](standard_step/storage/store_metadata_as_json.py:1) - Standard task for storing extracted metadata as JSON.
+- [`standard_step/storage/store_metadata_as_json_v2.py`](standard_step/storage/store_metadata_as_json_v2.py:1) - v2 JSON storage task preserving array-of-objects structure.
+- [`standard_step/storage/store_metadata_as_csv_v2.py`](standard_step/storage/store_metadata_as_csv_v2.py:1) - v2 CSV storage task with row-per-item expansion for arrays.
+- [`standard_step/storage/store_file_to_localdrive.py`](standard_step/storage/store_file_to_localdrive.py:1) - Standard task for storing processed files to local drive.
+- [`standard_step/rules/update_reference.py`](standard_step/rules/update_reference.py:1) - Standard task for updating a reference CSV file.
+- [`standard_step/archiver/archive_pdf.py`](standard_step/archiver/archive_pdf.py:1) - Standard task for archiving original PDF files.
+- [`standard_step/context/assign_nanoid.py`](standard_step/context/assign_nanoid.py:1) - Task to generate secure nanoid strings and add them to processing context.
+- [`standard_step/housekeeping/cleanup_task.py`](standard_step/housekeeping/cleanup_task.py:1) - The mandatory final task (invoked directly by WorkflowLoader) for cleanup, archiving processed files with original names, removing status files, logging operations/errors, and ensuring final status updates regardless of pipeline success or failure.
+- [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1) - Unit tests for `ConfigManager` functionality, including path validation.
+- [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1) - Unit tests for `StatusManager` operations and status updates.
+- [`test/core/test_core_components.py`](test/core/test_core_components.py:1) - Core component tests that exercise multiple managers and integration points.
+- [`test/extraction/test_extraction.py`](test/extraction/test_extraction.py:1) - Unit tests for the `extract_pdf` task.
+- [`test/extraction/test_extraction_v2.py`](test/extraction/test_extraction_v2.py:1) - Unit tests for the `extract_pdf_v2` task with array-of-objects support.
+- [`test/storage/test_storage.py`](test/storage/test_storage.py:1) - Unit tests for standard storage tasks.
+- [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1) - Unit tests for v2 JSON storage task with array-of-objects support.
+- [`test/storage/test_storage_v2_csv.py`](test/storage/test_storage_v2_csv.py:1) - Unit tests for v2 CSV storage task with row-per-item expansion.
+- [`test/standard_step/test_standard_steps.py`](test/standard_step/test_standard_steps.py:1) - Consolidated tests for standard step implementations (archiver, storage, rules, housekeeping).
+- [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1) - Unit tests for the `cleanup_task`.
+- [`test/standard_step/rules/test_rules.py`](test/standard_step/rules/test_rules.py:1) - Unit tests for update_reference and related rule tasks.
+- [`test/integration/test_api_endpoints.py`](test/integration/test_api_endpoints.py:1) - Integration tests for API routes.
+- [`test/integration/test_input_processing.py`](test/integration/test_input_processing.py:1) - Integration tests for watch folder and web upload processing end-to-end.
+- [`test/workflow/test_workflow_manager.py`](test/workflow/test_workflow_manager.py:1) - Unit tests for `WorkflowManager`'s ability to trigger workflows and handle context.
+- [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1) - Unit tests for `WorkflowLoader`'s ability to parse YAML and build Prefect flows.
+- [`test/utils/test_utilities.py`](test/utils/test_utilities.py:1) - Tests for utility functions including field path helpers and PDF header validation.
+- [`test/third_party/llamacloud_connection_test.py`](test/third_party/llamacloud_connection_test.py:1) - Tests for third-party service connections (LlamaCloud).
+- [`tools/generate_password_hash.py`](tools/generate_password_hash.py:1) - CLI utility to generate bcrypt password hashes for configuration files.
+- [`dev_config.yaml`](dev_config.yaml:1) - Development configuration for testing v2 features without impacting production config.yaml.
+- [`docs/design_architecture.md`](docs/design_architecture.md:1) - Updated with v2 LlamaExtract array-of-objects support section.
+- [`docs/user_guide.md`](docs/user_guide.md:1) - Updated with v2 configuration guide and migration instructions.
+- [`tasks/future_todos.md`](tasks/future_todos.md:1) - Updated with v2 migration checklist and completed implementation notes.
+
+> **Migration Note:** Update Reference Configuration Update: Bare field names (e.g., 'purchase_order_number') are now preferred over dotted paths (e.g., 'data.purchase_order_number'). The dotted format is still supported for backward compatibility but will be deprecated in future releases. Deprecation warnings are logged when the old format is used.
+
+### Notes
+
+- Unit tests should be placed in the `test` folder and its relevant subfolders, rather than alongside the code files they are testing.
+- Use `pytest [optional/path/to/test/file]` to run tests. Running without a path executes all tests found by the pytest configuration.
+
+## Tasks
+
+- [x] 1.0 Set up Core Application Infrastructure
+  - [x] 1.1 Implement `ConfigManager` singleton to load and parse `config.yaml` with validation.
+  - [x] 1.2 Implement `StatusManager` singleton for tracking file processing status and persistence.
+  - [x] 1.3 Define initial `config.yaml` structure with global settings (web, authentication, logging).
+  - [x] 1.4 Add static directory validation for core paths in `ConfigManager`.
+  - [x] 1.5 Implement dynamic pipeline-path validation in `ConfigManager` for `_dir` and `_file` parameters.
+  - [x] 1.6 Implement `ShutdownManager` singleton for graceful application shutdown and resource cleanup.
+  - [x] 1.7 Ensure all managers are implemented as singletons with proper instance management.
+
+- [x] 2.0 Implement Dynamic Pipeline Orchestration
+  - [x] 2.1 Develop `WorkflowLoader` to parse the `pipeline` section of `config.yaml` and build Prefect flows.
+  - [x] 2.1.1 Implement dynamic loading and instantiation of task classes from YAML configuration.
+  - [x] 2.1.2 Ensure `WorkflowLoader` validates all `_dir` and `_file` parameters before task execution.
+  - [x] 2.2 Integrate Prefect to orchestrate the dynamically loaded and configured tasks.
+  - [x] 2.3 Create `BaseTask` abstract class with `on_start`, `run`, and `validate_required_fields` methods.
+  - [x] 2.4 Implement Railway Programming error handling within `BaseTask` with proper error registration.
+  - [x] 2.5 Design and implement the shared `context` dictionary for data passing between tasks.
+  - [x] 2.6 Ensure `context` includes `data`, `error`, `error_step`, and source tracking fields.
+
+- [x] 3.0 Develop Input Ingestion and File Management
+  - [x] 3.1 Implement watch folder monitoring for new PDF files.
+  - [x] 3.2 Implement PDF header validation for watch folder uploads.
+  - [x] 3.2.1 Ensure header validation occurs before any processing begins.
+  - [x] 3.3 Assign a unique UUID to each ingested file and rename it to `<UUID>.pdf` where "<UUID>" is the value created.
+  - [x] 3.3.1 Implement UUID-based renaming mechanism.
+  - [x] 3.4 Move validated PDF files to a designated processing folder.
+  - [x] 3.5 Create initial status record (`Pending`) for each ingested file using `StatusManager`.
+    - [x] 3.5.1 Ensure initial status record creation is followed by workflow triggering.
+  
+  - [x] 3.7 Implement Event-Driven Workflow Triggering
+    - [x] 3.7.1 Create `modules/workflow_manager.py` to encapsulate workflow triggering logic and context management.
+    - [x] 3.7.2 Modify `modules/file_processor.py` to use `WorkflowManager` for triggering workflows after file movement and status creation.
+    - [x] 3.7.3 Update `main.py` to instantiate `WorkflowManager` and inject it into `FileProcessor`.
+    - [x] 3.7.4 Ensure `WorkflowManager` can accept `source` (watch folder/web upload) and pass it to the workflow context.
+    - [x] 3.7.5 Develop comprehensive unit tests for `WorkflowManager` with mocking and integration scenarios.
+  
+  - [x] 3.6 Implement Enhancements from Old Version Review
+  - [x] 3.6.1 Implement Windows Long Path Handling.
+  - [x] 3.6.2 Implement Retry Logic with Cleanup.
+  - [x] 3.6.3 Implement Status File Persistence enhancements.
+
+- [x] 4.0 Integrate Standard Tasks and Housekeeping
+  - [x] 4.1 Implement `standard_step.extraction.extract_pdf` task.
+  - [x] 4.2 Implement `standard_step.storage.store_metadata_as_csv` task.
+  - [x] 4.3 Implement `standard_step.storage.store_metadata_as_json` task.
+  - [x] 4.4 Implement `standard_step.storage/store_file_to_localdrive` task.
+  - [x] 4.5 Implement `standard_step.rules.update_reference` task.
+  - [x] 4.6 Implement `standard_step.archiver.archive_pdf` task.
+  - [x] 4.7 Implement the mandatory `housekeeping` task for cleanup and final status updates.
+  - [x] 4.7.1 Ensure `housekeeping` task includes error logging and application termination on critical errors.
+  - [x] 4.8 Implement `standard_step.context.assign_nanoid` task for generating secure nanoid strings.
+  - [x] 4.8.1 Ensure nanoid task validates length parameter (5-21 characters) and handles configuration properly.
+  - [x] 4.8.2 Ensure nanoid task adds generated ID to context data dictionary with key "nanoid".
+  - [x] 4.8.3 Implement comprehensive unit tests for nanoid task functionality.
+  - [x] 4.9 Ensure `housekeeping` task runs regardless of preceding task success/failure.
+
+- [x] 5.0 Build Web Interface and API Endpoints
+  - [x] 5.1 Implement single-user authentication using credentials from `config.yaml` and JWT for session management.
+  - [x] 5.2 Create API router system with modular endpoint management and dependency injection.
+  - [x] 5.3 Create API endpoint `POST /upload` for PDF file uploads with validation.
+  - [x] 5.4 Create API endpoint `GET /api/files` to retrieve a list of processed files and their statuses.
+  - [x] 5.5 Create API endpoint `GET /api/status/{file_id}` for detailed status of individual files.
+  - [x] 5.6 Develop web interface for user login with secure session management.
+  - [x] 5.7 Develop web interface for PDF file uploads with client-side validation.
+  - [x] 5.8 Develop web interface for displaying processing status with real-time updates.
+  - [x] 5.9 Implement session expiry for web interface authentication tokens with automatic logout.
+  - [x] 5.10 Ensure graceful error handling and user feedback in the web interface.
+  - [x] 5.11 Develop web upload functionality for PDF files with progress tracking.
+  - [x] 5.12 Implement PDF header validation for web uploads before processing.
+  - [x] 5.13 Assign a unique UUID to each ingested file and rename it to `UUID.pdf` (Web Uploads).
+  - [x] 5.14 Create initial status record (`Pending`) for each ingested file using `StatusManager` (Web Uploads).
+    - [x] 5.15 Ensure initial status record creation is followed by workflow triggering for web uploads.
+
+- [x] 6.0 Recent Enhancements and Testing Improvements
+  - [x] 6.1 Implement centralized logging configuration with `modules/logging_config.py`.
+  - [x] 6.2 Add comprehensive integration tests for end-to-end workflow validation.
+  - [x] 6.3 Implement API router for modular FastAPI route management.
+  - [x] 6.4 Add utility functions for field path normalization and validation.
+  - [x] 6.5 Create test utilities for mocking and test data management.
+  - [x] 6.6 Implement third-party service connection testing (LlamaCloud).
+  - [x] 6.7 Add password hash generation utility for configuration management.
+  - [x] 6.8 Enhance error handling and validation across all components.
+  - [x] 6.9 Implement consolidated test suites for standard step components.
+  - [x] 6.10 Add workflow manager testing with mock task implementations.
+
+- [x] 7.0 Implement Enhanced File Status Modal Dialog
+  - [x] 7.1 Enhance `/api/status/{file_id}` endpoint to return complete status data including timestamps, details, and processing history.
+  - [x] 7.2 Implement Singapore timezone conversion (GMT+8) for all timestamp displays in modal.
+  - [x] 7.3 Add graceful fallback handling for missing status files instead of 404 errors.
+  - [x] 7.4 Fix thread-safety issues in dictionary iteration for timestamp conversion.
+  - [x] 7.5 Design and implement comprehensive modal HTML structure with sections for core fields, timeline, and error display.
+  - [x] 7.6 Create responsive CSS grid layout for status information with auto-fit columns.
+  - [x] 7.7 Implement timeline visualization with chronological processing steps and color-coded status indicators.
+  - [x] 7.8 Add reference document match detection and special note section.
+  - [x] 7.9 Implement collapsible raw JSON debug view for technical troubleshooting.
+  - [x] 7.10 Create comprehensive JavaScript functions for modal show/hide with event handlers.
+  - [x] 7.11 Implement modal data fetching with smart state detection for processing vs. completed files.
+  - [x] 7.12 Add comprehensive CSS styling with backdrop blur, animations, and dark theme integration.
+  - [x] 7.13 Implement accessibility features including focus management and keyboard navigation.
+  - [x] 7.14 Add robust fallback inline styling system for CSS loading failures.
+  - [x] 7.15 Update table rendering to use modal triggers instead of external links.
+  - [x] 7.16 Enhance empty state design with improved messaging and visual appeal.
+  - [x] 7.17 Add comprehensive documentation with JSDoc comments and technical explanations.
+
+- [x] 8.0 Implement v2 LlamaExtract Array-of-Objects Support
+  - [x] 8.1 Create [`standard_step/extraction/extract_pdf_v2.py`](standard_step/extraction/extract_pdf_v2.py:1) that:
+    - Accepts LlamaCloud schema where fields may be arrays of objects (e.g., Items -> [{Description, Quantity}, ...]).
+    - Discovers array field name via extraction.fields config (no hardcoding; use required 'is_table: true' - uses normalized field name as context key).
+    - Normalizes array-of-objects to List[Any] under context["data"][normalized_field_name] with type hints and cleaning (Note: may require extending type parser to support Dict).
+    - Preserves scalar fields, metadata handling, and StatusManager updates identical to v1.
+    - Loads config via ConfigManager for the new item_fields configuration and other parameters.
+  - [x] 8.2 Create unit tests [`test/extraction/test_extraction_v2.py`](test/extraction/test_extraction_v2.py:1):
+    - Mocks LlamaCloud responses with sample array-of-objects JSON.
+    - Asserts normalized context["data"]["items"] as List[Any] (using normalized field name).
+    - Verifies unchanged behavior for scalar fields and status updates.
+  - [x] 8.3 Create parallel storage tasks:
+    - [x] 8.3.1 [`standard_step/storage/store_metadata_as_json_v2.py`](standard_step/storage/store_metadata_as_json_v2.py:1):
+      - Preserves top-level alias mapping.
+      - Keeps list-of-objects structure in JSON output under the normalized field name (e.g., 'items').
+    - [x] 8.3.2 [`standard_step/storage/store_metadata_as_csv_v2.py`](standard_step/storage/store_metadata_as_csv_v2.py:1):
+      - Emits one CSV row per line item, repeating invoice-level fields.
+      - Uses item field aliases as CSV column names (prefixed with 'item_', e.g., 'item_description', 'item_quantity').
+  - [x] 8.4 Create companion tests under test/storage/:
+    - [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1): Verifies JSON keeps list-of-objects under the normalized field name.
+    - [`test/storage/test_storage_v2_csv.py`](test/storage/test_storage_v2_csv.py:1): Verifies CSV row-per-item mode.
+  - [x] 8.5 Create dev config [`dev_config.yaml`](dev_config.yaml:1):
+    - Wires v2 tasks into pipeline for testing without impacting production config.yaml.
+    - Includes example extraction.fields with 'is_table: true' for Items field.
+  - [x] 8.6 Update documentation post-implementation:
+    - Add v2 section to [`docs/design_architecture.md`](docs/design_architecture.md:1) with schema examples and export semantics.
+    - Update [`docs/user_guide.md`](docs/user_guide.md:1) with dev config usage, CSV conventions (row-per-item + optional JSON column).
+  - [x] 8.7 Add migration checklist to [`tasks/future_todos.md`](tasks/future_todos.md:1):
+    - Steps to promote v2: validate tests, update config.yaml, test staging, promote.

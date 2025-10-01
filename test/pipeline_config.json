@@ -1,0 +1,6 @@
+[
+    "extract_document_data",
+    "store_csv",
+    "store_json",
+    "store_file"
+]

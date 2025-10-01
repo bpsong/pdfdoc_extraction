@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Upload - PDF Processor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="/static/css/style.css" rel="stylesheet" />
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Upload PDF</h1>
+            <nav class="nav">
+                <a href="/dashboard">Dashboard</a>
+                <form action="/logout" method="get" style="display:inline;">
+                    <button type="submit" class="btn btn-secondary">Logout</button>
+                </form>
+            </nav>
+        </header>
+
+        <div id="alert" class="alert" style="display:none;"></div>
+
+        <!-- Standard HTML form submit; server reads HttpOnly cookie and redirects after enqueue -->
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="file">Choose PDF</label>
+                <input id="file" name="file" type="file" accept="application/pdf,.pdf" required />
+            </div>
+            <button type="submit" class="btn">Upload</button>
+        </form>
+
+        <p class="note">After upload, you will be redirected. Check the dashboard table for status updates.</p>
+    </div>
+</body>
+
+</html>

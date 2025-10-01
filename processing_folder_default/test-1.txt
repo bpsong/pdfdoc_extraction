@@ -1,0 +1,16 @@
+{
+    "id": "test-1",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Completed: store_metadata_csv_v2",
+    "timestamps": {
+        "Task Failed: store_metadata_csv_v2": "2025-09-29T08:32:15.967188Z",
+        "Writing CSV rows": "2025-09-29T08:32:41.730610Z",
+        "Task Completed: store_metadata_csv_v2": "2025-09-29T08:32:41.731520Z"
+    },
+    "error": null,
+    "details": {
+        "output_path": "C:\\Users\\bpson\\AppData\\Local\\Temp\\tmpnwpv9l76\\ACME Corp_123.45.csv",
+        "rows": 1
+    }
+}

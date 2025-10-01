@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Dashboard - PDF Processor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="/static/css/style.css?v=2" rel="stylesheet" />
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>Dashboard</h1>
+            <nav class="nav">
+                <a href="/upload">Upload</a>
+                <form action="/logout" method="get" style="display:inline;">
+                    <button type="submit" class="btn btn-secondary">Logout</button>
+                </form>
+            </nav>
+        </header>
+
+        <div id="alert" class="alert" style="display:none;"></div>
+
+        <section>
+            <h2>Processed Files</h2>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>File ID</th>
+                        <th>Original Name</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTbody">
+                    <tr>
+                        <td colspan="6">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- Modal Dialog -->
+    <div id="statusModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">File Status Details</h2>
+                <button id="modalClose" class="modal-close" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div id="modalLoading" style="display: none;">Loading...</div>
+                <div id="modalContent" style="display: none;">
+                    <!-- Core Fields -->
+                    <div class="status-grid">
+                        <div class="status-field">
+                            <div class="status-field-label">File ID</div>
+                            <div class="status-field-value" id="modalFileId">-</div>
+                        </div>
+                        <div class="status-field">
+                            <div class="status-field-label">Original Name</div>
+                            <div class="status-field-value" id="modalOriginalName">-</div>
+                        </div>
+                        <div class="status-field">
+                            <div class="status-field-label">Status</div>
+                            <div class="status-field-value" id="modalStatus">-</div>
+                        </div>
+                        <div class="status-field">
+                            <div class="status-field-label">Created At</div>
+                            <div class="status-field-value" id="modalCreatedAt">-</div>
+                        </div>
+                        <div class="status-field">
+                            <div class="status-field-label">Updated At</div>
+                            <div class="status-field-value" id="modalUpdatedAt">-</div>
+                        </div>
+                        <div class="status-field">
+                            <div class="status-field-label">Error</div>
+                            <div class="status-field-value error" id="modalError" style="display: none;">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Timeline Section -->
+                    <div class="timeline" id="timelineSection" style="display: none;">
+                        <h3>Processing Timeline</h3>
+                        <div id="timelineContainer"></div>
+                    </div>
+
+                    <!-- Special Note Section -->
+                    <div class="special-note" id="specialNoteSection" style="display: none;">
+                        <h3>📄 Special Note</h3>
+                        <p id="specialNoteContent"></p>
+                    </div>
+
+                    <!-- Debug Section -->
+                    <div class="debug-section">
+                        <button id="debugToggle" class="debug-toggle">Show Raw JSON</button>
+                        <div id="debugContent" class="debug-content" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Modal Dialog Implementation for File Status Details
+         *
+         * This script implements a comprehensive modal dialog system that replaces external
+         * /api/status/{file_id} links with an in-page modal interface. The modal provides:
+         * - Core file information (ID, name, status, timestamps)
+         * - Processing timeline with chronological status transitions
+         * - Reference document match notifications
+         * - Collapsible raw JSON debug view
+         * - Graceful error handling and loading states
+         *
+         * Modal Behavior:
+         * - Opens when clicking file ID buttons in the Processed Files table
+         * - Fetches complete status data from enhanced /api/status/{file_id} endpoint
+         * - Displays Singapore time (GMT+8) converted timestamps
+         * - Handles files still in processing with informative messages
+         * - Includes fallback CSS styling for robustness
+         * - Maintains focus management for accessibility
+         * - Continues background polling without interruption
+         *
+         * @author PDF Processing System
+         * @since 1.0.0
+         */
+
+        // Modal functionality - Core DOM element references
+        const modal = document.getElementById('statusModal');
+        const modalClose = document.getElementById('modalClose');
+        const modalBody = document.getElementById('modalBody');
+        const modalLoading = document.getElementById('modalLoading');
+        const modalContent = document.getElementById('modalContent');
+        const debugToggle = document.getElementById('debugToggle');
+        const debugContent = document.getElementById('debugContent');
+        const alertBox = document.getElementById('alert');
+
+        // Modal elements
+        const modalTitle = document.getElementById('modalTitle');
+        const modalFileId = document.getElementById('modalFileId');
+        const modalOriginalName = document.getElementById('modalOriginalName');
+        const modalStatus = document.getElementById('modalStatus');
+        const modalCreatedAt = document.getElementById('modalCreatedAt');
+        const modalUpdatedAt = document.getElementById('modalUpdatedAt');
+        const modalError = document.getElementById('modalError');
+        const timelineSection = document.getElementById('timelineSection');
+        const timelineContainer = document.getElementById('timelineContainer');
+        const specialNoteSection = document.getElementById('specialNoteSection');
+        const specialNoteContent = document.getElementById('specialNoteContent');
+
+        let currentFocusElement = null;
+
+        // Show alert messages
+        function showAlert(msg) {
+            alertBox.textContent = msg;
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+
+        /**
+         * Opens and displays the file status modal dialog.
+         *
+         * This function initiates the modal display process by adding CSS classes,
+         * applying fallback inline styles for robustness, managing focus for accessibility,
+         * and triggering the data loading process. The modal provides a comprehensive
+         * view of file processing status including timeline, errors, and debug information.
+         *
+         * CSS Class Toggle Mechanism:
+         * - Adds 'show' class to trigger CSS-based display (primary method)
+         * - Applies inline styles as fallback if CSS fails to load
+         * - Handles both overlay positioning and content styling
+         *
+         * Focus Management:
+         * - Captures current focus element for restoration on close
+         * - Prevents background scrolling during modal display
+         * - Ensures accessibility compliance
+         *
+         * @param {string} fileId - The unique identifier of the file to display status for
+         * @returns {void}
+         *
+         * @example
+         * showModal('582a8132-7170-433c-8ba4-5c42d481dbad');
+         */
+        function showModal(fileId) {
+            // Don't open modal if fileId is invalid or empty
+            if (!fileId || fileId.trim() === '') {
+                return;
+            }
+
+            currentFocusElement = document.activeElement;
+            modal.classList.add('show');
+
+            // Fallback inline styles in case CSS doesn't load
+            // These styles replicate the .modal.show and .modal-content rules
+            modal.style.cssText = `
+                display: flex !important;
+                position: fixed !important;
+                z-index: 1000 !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+                background: rgba(0, 0, 0, 0.7) !important;
+                align-items: center !important;
+                justify-content: center !important;
+            `;
+
+            // Apply fallback styles to modal content
+            const modalContentElement = modal.querySelector('.modal-content');
+            if (modalContentElement) {
+                modalContentElement.style.cssText = `
+                    background: linear-gradient(180deg, #111827, rgba(17, 24, 39, 0.95)) !important;
+                    border: 1px solid #374151 !important;
+                    border-radius: 16px !important;
+                    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5) !important;
+                    max-width: 800px !important;
+                    width: 90% !important;
+                    max-height: 90vh !important;
+                    overflow: hidden !important;
+                `;
+            }
+
+            document.body.classList.add('modal-open');
+            document.body.style.overflow = 'hidden'; // Fallback for modal-open class
+            loadStatusData(fileId);
+        }
+
+        // Hide modal
+        function hideModal() {
+            modal.classList.remove('show');
+
+            // Fallback inline styles in case CSS doesn't load
+            modal.style.cssText = `
+                display: none !important;
+            `;
+
+            document.body.classList.remove('modal-open');
+            document.body.style.overflow = ''; // Restore scrolling
+            if (currentFocusElement) {
+                currentFocusElement.focus();
+                currentFocusElement = null;
+            }
+            // Reset debug content when hiding modal
+            debugContent.style.display = 'none';
+            debugToggle.textContent = 'Show Raw JSON';
+        }
+
+        /**
+         * Fetches and loads file status data from the API endpoint.
+         *
+         * Makes an authenticated request to /api/status/{fileId} and processes the response
+         * to display appropriate content in the modal. Handles various response scenarios:
+         * - Successful data retrieval with complete status information
+         * - Processing status for files still being worked on
+         * - Network or server errors with user-friendly error display
+         * - Authentication failures with redirect to login
+         *
+         * The function implements smart content routing:
+         * - renderProcessingStatus() for files without complete status data
+         * - renderStatusData() for files with full status information
+         *
+         * @async
+         * @param {string} fileId - The unique identifier of the file to fetch status for
+         * @returns {Promise<void>} Resolves when status data is loaded and rendered
+         *
+         * @throws {Error} Network or API errors are caught and displayed in modal
+         *
+         * @example
+         * await loadStatusData('582a8132-7170-433c-8ba4-5c42d481dbad');
+         */
+        async function loadStatusData(fileId) {
+            try {
+                modalLoading.style.display = 'block';
+                modalContent.style.display = 'none';
+
+                const resp = await fetch(`/api/status/${fileId}`, { credentials: 'same-origin' });
+                if (resp.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                if (!resp.ok) {
+                    throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+                }
+
+                const data = await resp.json();
+
+                // Apply fallback styles to ensure content displays correctly
+                const statusGrid = document.querySelector('.status-grid');
+                if (statusGrid) {
+                    statusGrid.style.cssText = `
+                        display: grid !important;
+                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+                        gap: 20px !important;
+                        margin-bottom: 24px !important;
+                    `;
+                }
+
+                // Check if this is a placeholder response (file exists but no status yet)
+                if (data.status === "Processing" && data.error && data.error.includes("not yet available")) {
+                    renderProcessingStatus(data);
+                } else {
+                    renderStatusData(data);
+                }
+            } catch (e) {
+                console.error('Status load error:', e);
+                modalLoading.innerHTML = `
+                    <div style="text-align: center; padding: 40px 20px; color: var(--muted);">
+                        <div style="font-size: 3rem; margin-bottom: 16px;">⚠️</div>
+                        <div style="font-size: 1.1rem; margin-bottom: 12px; color: var(--danger);">Error Loading Status</div>
+                        <div style="font-size: 0.9rem; margin-bottom: 16px;">Unable to retrieve status information for this file.</div>
+                        <div style="font-size: 0.8rem; font-family: monospace; background: rgba(220, 38, 38, 0.1); padding: 8px; border-radius: 4px; color: var(--danger);">${e.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Render processing status (when file exists but status not yet available)
+        function renderProcessingStatus(data) {
+            modalLoading.style.display = 'none';
+            modalContent.style.display = 'block';
+
+            // Update title
+            modalTitle.textContent = `Status: ${data.file_id || 'Unknown'}`;
+
+            // Core fields
+            modalFileId.textContent = data.file_id || '-';
+            modalOriginalName.textContent = data.original_name || '-';
+            modalStatus.textContent = data.status || 'Processing';
+            modalCreatedAt.textContent = data.timestamps?.created_sg || 'Not available';
+            modalUpdatedAt.textContent = data.timestamps?.pending_sg || 'Not available';
+
+            // Show processing message instead of error
+            const errorElement = modalError;
+            errorElement.textContent = 'This file is currently being processed. Status information will be available once processing is complete.';
+            errorElement.style.display = 'block';
+            errorElement.className = 'status-field-value processing'; // Use processing styling
+
+            // Hide timeline and special notes for processing files
+            timelineSection.style.display = 'none';
+            specialNoteSection.style.display = 'none';
+
+            // Store raw data for debug view
+            modal.rawData = data;
+        }
+
+        /**
+         * Renders complete file status information in the modal dialog.
+         *
+         * This is the main rendering function for files with complete status data.
+         * Populates all modal sections with formatted information including:
+         * - Core file information (ID, name, status, timestamps)
+         * - Error display with conditional styling
+         * - Processing timeline with chronological status transitions
+         * - Reference document match notifications
+         * - Raw JSON debug data for technical users
+         *
+         * Data Structure Expected:
+         * {
+         *   "id": "file_uuid",
+         *   "original_filename": "document.pdf",
+         *   "status": "completed",
+         *   "timestamps": {"created": "utc_time", "created_sg": "sg_time", ...},
+         *   "details": {"match": true, "reference_document": "..."},
+         *   "error": "error_message_if_any"
+         * }
+         *
+         * @param {Object} data - Complete status data object from API
+         * @param {string} data.file_id - File unique identifier
+         * @param {string} data.original_name - Original uploaded filename
+         * @param {string} data.status - Current processing status
+         * @param {Object} data.timestamps - UTC and Singapore time timestamps
+         * @param {Object} data.details - Additional processing details
+         * @param {string} [data.error] - Error message if processing failed
+         * @returns {void}
+         *
+         * @example
+         * renderStatusData({
+         *   id: '582a8132-7170-433c-8ba4-5c42d481dbad',
+         *   original_filename: 'sample.pdf',
+         *   status: 'completed',
+         *   timestamps: { created_sg: '28-09-2025 11:09:50 GMT+8' }
+         * });
+         */
+        function renderStatusData(data) {
+            modalLoading.style.display = 'none';
+            modalContent.style.display = 'block';
+
+            // Update title
+            modalTitle.textContent = `Status: ${data.file_id || 'Unknown'}`;
+
+            // Core fields
+            modalFileId.textContent = data.file_id || '-';
+            modalOriginalName.textContent = data.original_name || '-';
+            modalStatus.textContent = data.status || '-';
+            modalCreatedAt.textContent = data.timestamps?.created_sg || '-';
+            modalUpdatedAt.textContent = data.timestamps?.pending_sg || '-';
+
+            // Error handling
+            const errorElement = modalError;
+            const errorText = data.error || '';
+            if (errorText) {
+                errorElement.textContent = errorText;
+                errorElement.style.display = 'block';
+            } else {
+                errorElement.style.display = 'none';
+            }
+
+            // Render timeline
+            renderTimeline(data);
+
+            // Check for special notes (reference document matches)
+            renderSpecialNote(data);
+
+            // Store raw data for debug view
+            modal.rawData = data;
+        }
+
+        /**
+         * Renders the processing timeline showing chronological status transitions.
+         *
+         * Creates a visual timeline of file processing steps by analyzing timestamp data.
+         * The timeline shows the sequence of status changes with Singapore time display
+         * and color-coded status indicators for different processing stages.
+         *
+         * Timeline Processing Algorithm:
+         * 1. Extract timestamps from data.timestamps object
+         * 2. Filter for standard processing events (created, pending, processing, etc.)
+         * 3. Include any additional custom timestamp events
+         * 4. Sort chronologically by timestamp
+         * 5. Generate HTML with color-coded status indicators
+         *
+         * Color Coding:
+         * - Default: Blue border (var(--primary))
+         * - Error events: Red border (var(--danger))
+         * - Completed events: Green border (var(--success))
+         *
+         * @param {Object} data - Status data object containing timestamps
+         * @param {Object} data.timestamps - Timestamp object with UTC and Singapore times
+         * @returns {void}
+         *
+         * @example
+         * renderTimeline({
+         *   timestamps: {
+         *     created: "2025-09-28T11:09:50Z",
+         *     created_sg: "28-09-2025 11:09:50 GMT+8",
+         *     processing: "2025-09-28T11:10:15Z",
+         *     processing_sg: "28-09-2025 11:10:15 GMT+8"
+         *   }
+         * });
+         */
+        function renderTimeline(data) {
+            const timestamps = data.timestamps || {};
+            const timelineItems = [];
+
+            // Define the order of timeline events
+            const eventOrder = [
+                'created', 'pending', 'processing', 'extracting', 'storing',
+                'completed', 'error'
+            ];
+
+            eventOrder.forEach(event => {
+                const utcTime = timestamps[event];
+                const sgTime = timestamps[`${event}_sg`];
+
+                if (utcTime) {
+                    timelineItems.push({
+                        event: event,
+                        timestamp: sgTime || utcTime,
+                        status: event === 'error' ? 'Error' : event.charAt(0).toUpperCase() + event.slice(1),
+                        step: event
+                    });
+                }
+            });
+
+            // Add any additional timestamp events not in the standard order
+            Object.keys(timestamps).forEach(key => {
+                if (!key.endsWith('_sg') && !eventOrder.includes(key)) {
+                    const utcTime = timestamps[key];
+                    const sgTime = timestamps[`${key}_sg`];
+                    if (utcTime) {
+                        timelineItems.push({
+                            event: key,
+                            timestamp: sgTime || utcTime,
+                            status: key.charAt(0).toUpperCase() + key.slice(1),
+                            step: key
+                        });
+                    }
+                }
+            });
+
+            // Sort by timestamp
+            timelineItems.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            if (timelineItems.length > 0) {
+                timelineContainer.innerHTML = timelineItems.map(item => `
+                    <div class="timeline-item ${item.event === 'error' ? 'error' : item.event === 'completed' ? 'completed' : ''}">
+                        <div>
+                            <div class="timeline-timestamp">${item.timestamp}</div>
+                            <div class="timeline-status">${item.status}</div>
+                            <div class="timeline-step">${item.step}</div>
+                        </div>
+                    </div>
+                `).join('');
+                timelineSection.style.display = 'block';
+            } else {
+                timelineSection.style.display = 'none';
+            }
+        }
+
+        // Render special note for reference document matches
+        function renderSpecialNote(data) {
+            const details = data.details || {};
+            let noteText = '';
+
+            // Check for reference document match
+            if (details.match || details.reference_match || details.reference_document) {
+                noteText = 'This document appears to match a reference document in the system. ';
+                if (details.match_score) {
+                    noteText += `Match confidence: ${Math.round(details.match_score * 100)}%. `;
+                }
+                if (details.reference_document) {
+                    noteText += `Reference: ${details.reference_document}`;
+                }
+            }
+
+            if (noteText) {
+                specialNoteContent.textContent = noteText;
+                specialNoteSection.style.display = 'block';
+            } else {
+                specialNoteSection.style.display = 'none';
+            }
+        }
+
+        // Toggle debug view
+        function toggleDebugView() {
+            if (debugContent.style.display === 'none') {
+                debugContent.textContent = JSON.stringify(modal.rawData, null, 2);
+                debugContent.style.display = 'block';
+                debugToggle.textContent = 'Hide Raw JSON';
+            } else {
+                debugContent.style.display = 'none';
+                debugToggle.textContent = 'Show Raw JSON';
+            }
+        }
+
+        // Load files
+        async function loadFiles() {
+            try {
+                const resp = await fetch('/api/files', { credentials: 'same-origin' });
+                if (resp.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+                const data = await resp.json();
+                renderTable(data);
+            } catch (e) {
+                showAlert('Failed to load files');
+            }
+        }
+
+        /**
+         * Renders the Processed Files table with modal integration.
+         *
+         * This function replaces the old external link behavior with modal triggers.
+         * Instead of opening /api/status/{file_id} in new tabs, file ID buttons now
+         * trigger the modal dialog for in-page status display.
+         *
+         * Enhanced Empty State:
+         * When no files are present, displays a user-friendly empty state with:
+         * - Document icon for visual appeal
+         * - Clear "No files found" messaging
+         * - Helpful guidance to upload files
+         *
+         * Modal Integration:
+         * - File ID buttons trigger showModal() instead of navigation
+         * - Maintains existing table structure and styling
+         * - Preserves all existing functionality (polling, error display)
+         * - Adds button styling with hover effects
+         *
+         * @param {Array<Object>} files - Array of file status objects from API
+         * @param {string} files[].file_id - Unique file identifier
+         * @param {string} files[].original_name - Original filename
+         * @param {string} files[].status - Current processing status
+         * @param {string} files[].created_at - Creation timestamp (Singapore time)
+         * @param {string} files[].updated_at - Last update timestamp (Singapore time)
+         * @param {string} [files[].error] - Error message if processing failed
+         * @returns {void}
+         *
+         * @example
+         * renderTable([
+         *   {
+         *     file_id: '582a8132-7170-433c-8ba4-5c42d481dbad',
+         *     original_name: 'sample.pdf',
+         *     status: 'completed',
+         *     created_at: '28-09-2025 11:09:50 GMT+8',
+         *     updated_at: '28-09-2025 11:10:30 GMT+8'
+         *   }
+         * ]);
+         */
+        function renderTable(files) {
+            const tbody = document.getElementById('filesTbody');
+            tbody.innerHTML = '';
+            if (!files || files.length === 0) {
+                const tr = document.createElement('tr');
+                const td = document.createElement('td');
+                td.colSpan = 6;
+                td.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📄</div>
+                        <div class="empty-state-title">No files found</div>
+                        <div class="empty-state-subtitle">Upload some PDF files to get started</div>
+                    </div>
+                `;
+                tr.appendChild(td);
+                tbody.appendChild(tr);
+                return;
+            }
+            for (const f of files) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><button class="file-id-btn" onclick="showModal('${f.file_id}')" data-file-id="${f.file_id}">${f.file_id}</button></td>
+                    <td>${f.original_name || ''}</td>
+                    <td>${f.status}</td>
+                    <td>${f.created_at || ''}</td>
+                    <td>${f.updated_at || ''}</td>
+                    <td>${f.error || ''}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // Event listeners
+        modalClose.addEventListener('click', hideModal);
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) {
+                hideModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                hideModal();
+            }
+        });
+
+        debugToggle.addEventListener('click', toggleDebugView);
+
+        // Initial load and periodic refresh
+        loadFiles();
+        setInterval(loadFiles, 1000);
+    </script>
+</body>
+
+</html>

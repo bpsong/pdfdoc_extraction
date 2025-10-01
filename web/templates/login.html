@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Login - PDF Processor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link href="/static/css/style.css" rel="stylesheet" />
+</head>
+
+<body>
+    <div class="container">
+        <h1>Login</h1>
+        {% if error %}
+        <div id="alert" class="alert" style="display:block;">{{ error }}</div>
+        {% else %}
+        <div id="alert" class="alert" style="display:none;"></div>
+        {% endif %}
+        <!-- Standard HTML form submit; server sets HttpOnly cookie and redirects -->
+        <form action="/auth/login" method="post">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" required autocomplete="username" />
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" required autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
+    </div>
+</body>
+
+</html>
