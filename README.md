@@ -35,7 +35,6 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - **FastAPI Backend**: High-performance REST API
 - **Interactive Dashboard**: Real-time processing status
 - **Enhanced Modal Dialogs**: Detailed progress visualization with timeline
-- **Singapore Timezone Support**: Localized timestamp display
 - **Responsive Design**: Mobile-friendly interface
 
 ## 📋 Table of Contents
