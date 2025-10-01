@@ -2,6 +2,7 @@
 config.yaml
 dev_config.yaml
 config copy.yaml
+*.yaml
 
 # Log files
 app.log
