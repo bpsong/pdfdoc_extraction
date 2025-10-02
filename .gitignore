@@ -6,8 +6,9 @@ config copy.yaml
 
 # Log files
 app.log
-# sample file
-sample_invoice.pdf
+
+# Ignore all PDF documents (do not sync PDFs to the repository)
+*.pdf
 
 # Customer data directories (PDFs and extracted data)
 data/
@@ -23,7 +24,6 @@ MagicMock/
 # Test data containing customer PDFs and processed outputs
 test/data/
 test/files/
-test/archive_folder/sample_invoice.pdf
 
 # Standard Python ignores
 __pycache__/
