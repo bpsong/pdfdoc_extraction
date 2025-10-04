@@ -1,7 +1,7 @@
 # Future To-Do Items
 
 - [ ] Implement schema validation for config.yaml to ensure configuration integrity and early error detection.
-- [ ] Refactor ConfigManager's internal path validation logic (_validate_static_paths, _precreate_required_directories, _validate_dynamic_paths) to support the new 'tasks' and 'pipeline' schema, and update test/test_config_manager/config.yaml and its corresponding tests accordingly.
+- [x] Refactor ConfigManager's internal path validation logic (_validate_static_paths, _precreate_required_directories, _validate_dynamic_paths) to support the new 'tasks' and 'pipeline' schema, and update test/test_config_manager/config.yaml and its corresponding tests accordingly.
 
 ## Completed v2 LlamaExtract Array-of-Objects Implementation
 

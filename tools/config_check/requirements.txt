@@ -1,0 +1,19 @@
+# Core dependencies for config-check CLI tool
+
+# YAML parsing and validation - supports both loading and dumping YAML with advanced features
+pyyaml>=6.0
+
+# Data validation and schema enforcement - provides robust configuration validation
+pydantic>=2.0
+
+# Advanced YAML parsing with round-trip preservation and better error reporting
+# Used for detailed YAML structure validation and preservation of formatting/comments
+ruamel.yaml>=0.18
+
+# Optional: Generate unique identifiers for validation tracking
+# nanoid
+
+# Development dependencies (can be added later)
+# pytest>=7.0  # For unit testing
+# black>=23.0  # Code formatting
+# mypy>=1.0   # Type checking

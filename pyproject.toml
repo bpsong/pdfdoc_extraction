@@ -1,0 +1,51 @@
+[build-system]
+requires = [
+    "setuptools>=68",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "config-check"
+version = "0.1.0"
+description = "CLI tool for validating PDF processing system configuration files"
+readme = "tools/config_check/README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [
+    { name = "PDF Document Extraction Team" }
+]
+dependencies = [
+    "pyyaml>=6.0",
+    "pydantic>=2.0",
+    "ruamel.yaml>=0.18"
+]
+keywords = ["pdf", "configuration", "validation", "cli"]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: Microsoft :: Windows",
+    "Intended Audience :: System Administrators",
+    "Topic :: Software Development :: Build Tools"
+]
+
+[project.scripts]
+config-check = "tools.config_check.__main__:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "tools.config_check",
+    "tools.config_check.*"
+]
+namespaces = true
+
