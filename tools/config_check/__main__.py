@@ -9,11 +9,7 @@ This implements Task 2.0 from the PRD checklist:
 - Subcommands 'validate' and 'schema' are required
 - Proper exit codes and input validation
 
-TODO: Add unit tests for edge cases and error conditions
-TODO: Consider adding configuration file format conversion utilities
-TODO: Add performance benchmarks for large configuration files
-TODO: Add integration tests with real PDF processing pipeline
-TODO: Consider adding configuration validation plugins/extensions
+The module exposes the CLI entry point used by the integration tests and packaging metadata.
 """
 
 import argparse

@@ -10,6 +10,9 @@
 - `tools/config_check/yaml_parser.py` - YAML parsing with location tracking
 - `test/tools/config_check/` - Comprehensive test suite
 - `tools/config_check/README.md` - Documentation and usage examples
+- `tools/config_check/examples/` - Sample configuration files (valid_config.yaml, invalid_missing_paths.yaml)
+- `pyproject.toml` - Modern Python packaging configuration with console script entry point
+- `docs/config_check_troubleshooting.md` - Troubleshooting guide with common error scenarios and solutions
 
 ## Notes
 

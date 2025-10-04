@@ -5,8 +5,8 @@ This module provides a YAMLParser class that can parse YAML files with location
 information using ruamel.yaml when available, falling back to PyYAML otherwise.
 Designed for the Windows environment with proper path handling.
 
-TODO: integrate location-backed node lookups
-TODO: support ruamel round-trip preservation for suggestions
+Future enhancements under consideration include location-backed node lookups
+and ruamel round-trip preservation for richer suggestion context.
 """
 
 import logging
