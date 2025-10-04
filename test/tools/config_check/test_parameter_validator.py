@@ -80,6 +80,27 @@ def _base_tasks():
     }
 
 
+def _rules_task():
+    return {
+        "module": "standard_step.rules.update_reference",
+        "class": "UpdateReferenceTask",
+        "params": {
+            "reference_file": "C:/data/reference.csv",
+            "update_field": "status",
+            "write_value": "Processed",
+            "csv_match": {
+                "type": "column_equals_all",
+                "clauses": [
+                    {
+                        "column": "id",
+                        "from_context": "id",
+                    }
+                ],
+            },
+        },
+    }
+
+
 def test_extraction_fields_require_alias_and_type():
     tasks = _base_tasks()
     tasks["extract_metadata"]["params"]["fields"]["supplier_name"].pop("alias")
@@ -146,3 +167,64 @@ def test_params_must_be_mapping():
     result = validate_parameters({"tasks": tasks})
 
     assert any("must be a mapping" in issue.message for issue in result.errors)
+
+def test_rules_task_requires_core_parameters():
+    tasks = _base_tasks()
+    rules_task = _rules_task()
+    rules_task["params"].pop("reference_file")
+    rules_task["params"].pop("update_field")
+    tasks["update_reference"] = rules_task
+
+    result = validate_parameters({"tasks": tasks})
+    codes = {issue.code for issue in result.errors}
+
+    assert "param-rules-missing-reference-file" in codes
+    assert "param-rules-missing-update-field" in codes
+
+
+def test_rules_task_enforces_clause_bounds():
+    tasks = _base_tasks()
+    rules_task = _rules_task()
+    rules_task["params"]["csv_match"]["clauses"] = []
+    tasks["update_reference"] = rules_task
+
+    result = validate_parameters({"tasks": tasks})
+    assert any(issue.code == "param-rules-clauses-count" for issue in result.errors)
+
+    tasks = _base_tasks()
+    rules_task = _rules_task()
+    rules_task["params"]["csv_match"]["clauses"] = [
+        {"column": f"col{i}", "from_context": "value"} for i in range(6)
+    ]
+    tasks["update_reference"] = rules_task
+
+    result = validate_parameters({"tasks": tasks})
+    assert any(issue.code == "param-rules-clauses-count" for issue in result.errors)
+
+
+def test_rules_task_validates_csv_match_mapping():
+    tasks = _base_tasks()
+    rules_task = _rules_task()
+    rules_task["params"]["csv_match"] = "invalid"
+    tasks["update_reference"] = rules_task
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert any(issue.code == "param-rules-csv-match-mapping" for issue in result.errors)
+
+
+def test_rules_task_validates_clause_structure():
+    tasks = _base_tasks()
+    rules_task = _rules_task()
+    rules_task["params"]["csv_match"]["clauses"] = [
+        {"column": "", "from_context": ""},
+        {"column": "status", "from_context": "status", "number": "yes"},
+    ]
+    tasks["update_reference"] = rules_task
+
+    result = validate_parameters({"tasks": tasks})
+    codes = {issue.code for issue in result.errors}
+
+    assert "param-rules-clause-column" in codes
+    assert "param-rules-clause-context" in codes
+    assert "param-rules-clause-number-type" in codes

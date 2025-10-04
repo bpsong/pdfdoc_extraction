@@ -15,6 +15,14 @@ def _describe_config_key(details: Dict[str, Any]) -> str:
     return f"'{key}'"
 
 
+def _describe_clause(details: Dict[str, Any]) -> str:
+    """Return a label for a csv_match clause using its index when available."""
+    index = details.get("index")
+    if index is None:
+        return "each clause"
+    return f"clause[{index}]"
+
+
 def _suggest_create_dir(details: Dict[str, Any]) -> str:
     """Suggest creating a directory or updating the path reference."""
     path = details.get("path")
@@ -186,6 +194,17 @@ _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "param-field-invalid-type": _suggest_field_type,
     "param-field-istable-bool": lambda d: f"Set 'is_table' for field '{d.get('field', 'field')}' to true or false.",
     "param-field-missing-item-fields": _suggest_field_item_fields,
+    "param-rules-not-mapping": lambda _: "Define this task's params as a mapping that includes reference_file, update_field, and csv_match.",
+    "param-rules-missing-reference-file": lambda _: "Set reference_file to the CSV file that should be updated.",
+    "param-rules-missing-update-field": lambda _: "Set update_field to the column name that must be updated.",
+    "param-rules-csv-match-mapping": lambda _: "Provide a csv_match mapping with a type and clauses list.",
+    "param-rules-csv-type": lambda _: "Set csv_match.type to 'column_equals_all'.",
+    "param-rules-clauses-type": lambda _: "Define csv_match.clauses as a list of clause mappings.",
+    "param-rules-clauses-count": lambda _: "Provide between 1 and 5 clause definitions in csv_match.clauses.",
+    "param-rules-clause-not-mapping": lambda d: f"Ensure {_describe_clause(d)} is a mapping with column and from_context entries.",
+    "param-rules-clause-column": lambda d: f"Provide a non-empty column value for {_describe_clause(d)}.",
+    "param-rules-clause-context": lambda d: f"Provide a non-empty from_context value for {_describe_clause(d)}.",
+    "param-rules-clause-number-type": lambda d: f"Set number on {_describe_clause(d)} to true/false or remove it.",
     "param-storage-missing-data-dir": lambda _: "Set data_dir to the output directory (e.g., ./output).",
     "param-storage-missing-filename": lambda _: "Provide a filename pattern (e.g., {supplier_name}.json).",
     "param-archiver-missing-archive-dir": lambda _: "Set archive_dir to the folder for archived files.",

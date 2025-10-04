@@ -131,6 +131,13 @@ Configuration Schema Details:
 - For archiver.tasks.params (when module starts with archiver):
   - archive_dir: string (required) - Directory path for archived files
 
+- For rules.tasks.params (when module starts with rules/update_reference):
+  - reference_file: string (required) - CSV file path to update
+  - update_field: string (required) - Column name that will be updated
+  - csv_match: mapping (required)
+    - type: must be 'column_equals_all'
+    - clauses: list with 1-5 items; each clause requires column (string), from_context (string), and optional number (boolean)
+
 - For context.tasks.params (when module starts with context):
   - length: integer (optional, default 10) - Length for nanoid generation (5-21)
 

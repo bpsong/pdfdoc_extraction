@@ -36,17 +36,23 @@ All commands are also available by invoking the module directly (`C:\Python313\p
 
 ## Output Formats
 
-- **text** (default) – Human readable groups of errors, warnings, and info messages.
-- **json** – Machine readable payload that contains finding metadata, suggestions, and the computed exit code.
+- **text** (default) - Human readable groups of errors, warnings, and info messages.
+- **json** - Machine readable payload that contains finding metadata, suggestions, and the computed exit code.
 
 Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings only), `64` (usage problems such as missing files or bad flags).
+
+## Validation Coverage Highlights
+
+- Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
+- Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including csv_match clause bounds (1-5) and required column/from_context fields.
+- Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and housekeeping ordering rules.
 
 ## Sample Configurations
 
 Two ready-to-run sample files live under `tools/config_check/examples/`:
 
-- `valid_config.yaml` – Passes all validators and demonstrates required/optional sections.
-- `invalid_missing_paths.yaml` – Shows typical path and dependency failures for smoke testing.
+- `valid_config.yaml` - Passes all validators and demonstrates required/optional sections.
+- `invalid_missing_paths.yaml` - Shows typical path and dependency failures for smoke testing.
 
 Use them as templates for new environments or as fixtures when extending the validator.
 

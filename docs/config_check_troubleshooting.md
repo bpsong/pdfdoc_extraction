@@ -61,6 +61,25 @@ Suggestion: Create the directory or update the path in config
 - Add the project root to `PYTHONPATH` or install the module in editable mode.
 - Verify the class name matches the exported symbol inside the module.
 
+## Rules Task Configuration Errors
+
+**Symptom**
+```
+[ERROR] tasks.update_reference.params.csv_match.type: csv_match.type must be 'column_equals_all'
+[ERROR] tasks.update_reference.params.csv_match.clauses: csv_match.clauses must define between 1 and 5 entries
+```
+
+**Fixes**
+- Confirm `tasks.<name>.module` points at `standard_step.rules.update_reference` (or a compatible custom implementation).
+- Provide required strings:
+  - `reference_file`: path to the CSV file being updated.
+  - `update_field`: the column that will be rewritten.
+- Ensure `csv_match` is a mapping with:
+  - `type: column_equals_all`.
+  - `clauses`: list containing 1-5 clause mappings.
+    - Each clause must define `column` (CSV column) and `from_context` (context key); optional `number` must be `true` or `false`.
+- When the validator flags a specific clause index (e.g., `clauses[2].column`), edit that entry directly in the YAML to supply the missing value or correct the type.
+
 ## Token Or Dependency Issues
 
 **Symptom**

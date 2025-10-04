@@ -56,6 +56,9 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from .pipeline_validator import MODULE_PREFIX_CLASSIFICATION
 
 _ALLOWED_BASE_TYPES = {"str", "int", "float", "bool", "Any"}
+_RULES_REQUIRED_KEYS = ("reference_file", "update_field")
+_RULES_MIN_CLAUSES = 1
+_RULES_MAX_CLAUSES = 5
 
 
 @dataclass(slots=True)
@@ -137,6 +140,8 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
                 errors,
                 code="param-archiver-missing-archive-dir",
             )
+        elif classification == "rules":
+            _validate_rules_params(params, params_path, errors)
         elif classification == "context":
             _validate_context_params(params, params_path, errors)
 
@@ -249,6 +254,135 @@ def _validate_field_spec(
             for sub_name, sub_spec in item_fields.items():
                 sub_path = f"{path}.item_fields.{sub_name}"
                 _validate_field_spec(sub_spec, sub_path, errors, sub_name)
+
+def _validate_rules_params(
+    params: Any, params_path: str, errors: List[ParameterIssue]
+) -> None:
+    if not isinstance(params, dict):
+        errors.append(
+            ParameterIssue(
+                path=params_path,
+                message="rules task params must be a mapping",
+                code="param-rules-not-mapping",
+                details={"config_key": params_path},
+            )
+        )
+        return
+
+    for key in _RULES_REQUIRED_KEYS:
+        _validate_required_string(
+            params,
+            params_path,
+            key,
+            errors,
+            code=f"param-rules-missing-{key.replace('_', '-')}",
+        )
+
+    csv_match = params.get("csv_match")
+    csv_path = f"{params_path}.csv_match"
+
+    if not isinstance(csv_match, dict):
+        errors.append(
+            ParameterIssue(
+                path=csv_path,
+                message="csv_match must be a mapping with type and clauses",
+                code="param-rules-csv-match-mapping",
+                details={"config_key": csv_path},
+            )
+        )
+        return
+
+    match_type = csv_match.get("type", "column_equals_all")
+    if not isinstance(match_type, str) or not match_type.strip():
+        errors.append(
+            ParameterIssue(
+                path=f"{csv_path}.type",
+                message="csv_match.type must be a non-empty string",
+                code="param-rules-csv-type",
+            )
+        )
+    elif match_type != "column_equals_all":
+        errors.append(
+            ParameterIssue(
+                path=f"{csv_path}.type",
+                message="csv_match.type must be 'column_equals_all'",
+                code="param-rules-csv-type",
+            )
+        )
+
+    clauses = csv_match.get("clauses")
+    clauses_path = f"{csv_path}.clauses"
+
+    if not isinstance(clauses, list):
+        errors.append(
+            ParameterIssue(
+                path=clauses_path,
+                message="csv_match.clauses must be a list of clause definitions",
+                code="param-rules-clauses-type",
+            )
+        )
+        return
+
+    clause_count = len(clauses)
+    if clause_count < _RULES_MIN_CLAUSES or clause_count > _RULES_MAX_CLAUSES:
+        errors.append(
+            ParameterIssue(
+                path=clauses_path,
+                message=(
+                    f"csv_match.clauses must define between {_RULES_MIN_CLAUSES} and {_RULES_MAX_CLAUSES} entries"
+                ),
+                code="param-rules-clauses-count",
+                details={"count": clause_count},
+            )
+        )
+        return
+
+    for index, clause in enumerate(clauses):
+        clause_path = f"{clauses_path}[{index}]"
+
+        if not isinstance(clause, dict):
+            errors.append(
+                ParameterIssue(
+                    path=clause_path,
+                    message="Each csv_match clause must be a mapping",
+                    code="param-rules-clause-not-mapping",
+                    details={"index": index},
+                )
+            )
+            continue
+
+        column = clause.get("column")
+        if not isinstance(column, str) or not column.strip():
+            errors.append(
+                ParameterIssue(
+                    path=f"{clause_path}.column",
+                    message="Clause column must be a non-empty string",
+                    code="param-rules-clause-column",
+                    details={"index": index},
+                )
+            )
+
+        from_context = clause.get("from_context")
+        if not isinstance(from_context, str) or not from_context.strip():
+            errors.append(
+                ParameterIssue(
+                    path=f"{clause_path}.from_context",
+                    message="Clause from_context must be a non-empty string",
+                    code="param-rules-clause-context",
+                    details={"index": index},
+                )
+            )
+
+        if "number" in clause and not isinstance(clause.get("number"), bool):
+            errors.append(
+                ParameterIssue(
+                    path=f"{clause_path}.number",
+                    message="Clause number flag must be boolean when provided",
+                    code="param-rules-clause-number-type",
+                    details={"index": index},
+                )
+            )
+
 
 def _validate_required_string(
     params: Any,

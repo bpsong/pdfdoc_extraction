@@ -84,6 +84,7 @@
   - [x] 8.5 Create type validation for complex field definitions (List, Optional types)
   - [x] 8.6 Add validation for template token compatibility with available fields
     - **Verified: Parameter-level validation system tests pass on Windows; 7/7 tests passed (on_error value validation, extraction field validation, storage task parameter validation, archiver task parameter validation, type validation for complex field definitions, template token compatibility validation). All parameter-level validation logic functioning correctly.**
+  - [x] 8.7 Enforce rules task parameters (UpdateReference) including required csv_match clauses and clause bounds.
 - [x] 9.0 Implement output formatting and reporting
   - [x] 9.1 Create Finding class for structured error/warning reporting
   - [x] 9.2 Implement text format output with proper grouping and formatting
