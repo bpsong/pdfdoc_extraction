@@ -46,8 +46,15 @@ def _build_config(upload_dir, watch_dir, storage_data_dir, pipeline_order):
         tasks["store_json"]["params"]["data_dir"] = str(storage_data_dir)
 
     return {
-        "web": {"upload_dir": str(upload_dir)},
+        "web": {
+            "upload_dir": str(upload_dir),
+            "secret_key": "suggestions-secret",
+        },
         "watch_folder": {"dir": str(watch_dir)},
+        "authentication": {
+            "username": "admin",
+            "password_hash": "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W",
+        },
         "tasks": tasks,
         "pipeline": pipeline_order,
     }

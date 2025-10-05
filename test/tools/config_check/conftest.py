@@ -57,10 +57,15 @@ class ConfigFactory:
         return {
             "web": {
                 "upload_dir": str(self.paths.upload_dir),
+                "secret_key": "testing-secret-key",
             },
             "watch_folder": {
                 "dir": str(self.paths.watch_dir),
                 "recursive": False,
+            },
+            "authentication": {
+                "username": "admin",
+                "password_hash": "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W",
             },
             "tasks": {
                 "extract_metadata": {

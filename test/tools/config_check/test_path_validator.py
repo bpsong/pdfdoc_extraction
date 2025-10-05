@@ -48,8 +48,15 @@ from tools.config_check.path_validator import PathValidator
 
 def _base_config(upload_dir: Path, watch_dir: Path) -> dict:
     return {
-        "web": {"upload_dir": str(upload_dir)},
+        "web": {
+            "upload_dir": str(upload_dir),
+            "secret_key": "path-secret",
+        },
         "watch_folder": {"dir": str(watch_dir)},
+        "authentication": {
+            "username": "admin",
+            "password_hash": "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W",
+        },
         "tasks": {
             "step_one": {
                 "module": "sample.module",
@@ -118,8 +125,15 @@ def test_base_dir_is_used_for_relative_paths():
         target_file.write_text("data", encoding="utf-8")
 
         config = {
-            "web": {"upload_dir": "uploads"},
+            "web": {
+                "upload_dir": "uploads",
+                "secret_key": "path-secret",
+            },
             "watch_folder": {"dir": "watch"},
+            "authentication": {
+                "username": "admin",
+                "password_hash": "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W",
+            },
             "tasks": {
                 "step_one": {
                     "module": "sample.module",

@@ -59,8 +59,15 @@ from tools.config_check.task_validator import validate_tasks  # noqa: E402
 
 def _base_config() -> dict:
     return {
-        "web": {"upload_dir": "./uploads"},
+        "web": {
+            "upload_dir": "./uploads",
+            "secret_key": "task-secret",
+        },
         "watch_folder": {"dir": "./watch"},
+        "authentication": {
+            "username": "admin",
+            "password_hash": "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W",
+        },
         "tasks": {
             "step_one": {
                 "module": "sample.module",
