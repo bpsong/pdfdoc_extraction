@@ -294,7 +294,7 @@ def _validate_extraction_params(
         )
         return
 
-    if _requires_extraction_credentials(module_name):
+    if _requires_extraction_credentials(module_name) or 'fields' in params:
         _validate_extraction_credential(
             params,
             params_path,

@@ -7,12 +7,12 @@
 
 - [x] Add module-aware extraction validation (standard_step.extraction.*) so config-check enforces presence of `api_key` and `agent_id` before runtime.
 - [x] Have config-check warn when more than one extraction field is marked `is_table: true`, reflecting the single-table limitation baked into v2 storage tasks.
-- [ ] Teach config-check the `store_file_to_localdrive` schema (require `files_dir`/`filename`, validate types) to stop runtime-only failures.
-- [ ] Allow nested `storage.{data_dir, filename}` blocks for v2 storage tasks and fall back to top-level params; flag unknown keys for clarity.
-- [ ] Emit a config-check warning when v2 storage tasks cannot locate `extraction.fields` metadata (missing `extract_document_data_v2` task), so alias gaps are expected.
-- [ ] Extend rules-task validation to type-check optional knobs (`write_value`, `backup`, `task_slug`) and verify `reference_file` looks like a `.csv` path.
-- [ ] Ensure config-check validates `CleanupTask` `processing_dir` overrides as non-empty strings before they become `Path` objects.
-- [ ] Cross-check storage filename templates in config-check so every `{token}` maps to an available scalar extraction field.
+- [x] Teach config-check the `store_file_to_localdrive` schema (require `files_dir`/`filename`, validate types) to stop runtime-only failures.
+- [x] Allow nested `storage.{data_dir, filename}` blocks for v2 storage tasks and fall back to top-level params; flag unknown keys for clarity.
+- [x] Emit a config-check warning when v2 storage tasks cannot locate `extraction.fields` metadata (missing `extract_document_data_v2` task), so alias gaps are expected.
+- [x] Extend rules-task validation to type-check optional knobs (`write_value`, `backup`, `task_slug`) and verify `reference_file` looks like a `.csv` path.
+- [x] Ensure config-check validates `CleanupTask` `processing_dir` overrides as non-empty strings before they become `Path` objects.
+- [x] Cross-check storage filename templates in config-check so every `{token}` maps to an available scalar extraction field.
 
 ## Completed v2 LlamaExtract Array-of-Objects Implementation
 

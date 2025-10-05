@@ -552,3 +552,63 @@ def test_housekeeping_params_must_be_mapping():
 
     result = validate_parameters({"tasks": tasks})
     assert any(issue.code == "param-housekeeping-not-mapping" for issue in result.errors)
+
+
+def test_extraction_without_module_requires_credentials():
+    """Extraction tasks without module metadata still enforce credentials."""
+    base_params = {
+        "fields": {
+            "supplier_name": {
+                "alias": "Supplier",
+                "type": "str",
+            }
+        }
+    }
+
+    tasks_missing_module = {
+        "adhoc_extraction": {
+            "class": "ExtractPdfTask",
+            "params": dict(base_params),
+        }
+    }
+
+    result_missing_module = validate_parameters({"tasks": tasks_missing_module})
+    error_codes_missing_module = {issue.code for issue in result_missing_module.errors}
+    assert "param-extraction-missing-api-key" in error_codes_missing_module
+    assert "param-extraction-missing-agent-id" in error_codes_missing_module
+
+    tasks_module_none = {
+        "adhoc_extraction": {
+            "module": None,
+            "class": "ExtractPdfTask",
+            "params": dict(base_params),
+        }
+    }
+
+    result_module_none = validate_parameters({"tasks": tasks_module_none})
+    error_codes_module_none = {issue.code for issue in result_module_none.errors}
+    assert "param-extraction-missing-api-key" in error_codes_module_none
+    assert "param-extraction-missing-agent-id" in error_codes_module_none
+
+
+def test_extraction_with_unknown_module_requires_credentials():
+    """Unknown extraction modules still require credentials when fields are defined."""
+    tasks = {
+        "adhoc_extraction": {
+            "module": "extract_pdf_task",
+            "class": "ExtractPdfTask",
+            "params": {
+                "fields": {
+                    "supplier_name": {
+                        "alias": "Supplier",
+                        "type": "str",
+                    }
+                }
+            },
+        }
+    }
+
+    result = validate_parameters({"tasks": tasks})
+    error_codes = {issue.code for issue in result.errors}
+    assert "param-extraction-missing-api-key" in error_codes
+    assert "param-extraction-missing-agent-id" in error_codes

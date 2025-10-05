@@ -164,7 +164,7 @@ Configuration Schema Details:
 
 5.1 Upcoming Validation Enhancements (vNext)
 
-- **Module-aware extraction prerequisites**: For modules under standard_step.extraction.* (and custom equivalents), require configs to declare api_key and agent_id before runtime and emit actionable errors when they are missing or empty.
+- **Module-aware extraction prerequisites**: For modules under standard_step.extraction.* (and custom equivalents), require configs to declare api_key and agent_id before runtime and emit actionable errors when they are missing or empty. This enforcement also applies when extraction tasks are inferred from their fields map even if module metadata is omitted.
 - **Single-table guardrail**: Surface a warning when more than one extraction field advertises is_table: true so operators understand the v2 storage limitation to a single tabular payload.
 - **store_file_to_localdrive schema support**: Validate that store_file_to_localdrive tasks declare files_dir and filename parameters with correct types and presence, preventing runtime-only schema failures.
 - **Nested storage overrides**: Accept nested storage.{data_dir, filename} blocks for v2 storage tasks, fall back to top-level params when absent, and flag unknown keys inside the storage block to preserve clarity.
