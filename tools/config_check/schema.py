@@ -23,6 +23,27 @@ class WebConfig(BaseModel):
     upload_dir: str = Field(
         ..., min_length=1, description="Directory where uploaded files are stored"
     )
+    secret_key: str = Field(
+        ...,
+        min_length=1,
+        description="Secret key used for signing sessions and CSRF tokens",
+    )
+
+
+class AuthenticationConfig(BaseModel):
+    """Authentication credentials for accessing the web interface."""
+
+    model_config = ConfigDict(extra="allow")
+
+    username: str = Field(
+        ..., min_length=1, description="Username used to authenticate web requests"
+    )
+    password_hash: str = Field(
+        ...,
+        min_length=1,
+        pattern=r"^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$",
+        description="BCrypt password hash protecting the authentication user",
+    )
 
 
 class WatchFolderConfig(BaseModel):
@@ -99,8 +120,8 @@ class ConfigModel(BaseModel):
     logging: Optional[Dict[str, Any]] = Field(
         default=None, description="Optional logging configuration block"
     )
-    authentication: Optional[Dict[str, Any]] = Field(
-        default=None, description="Optional authentication settings"
+    authentication: AuthenticationConfig = Field(
+        ..., description="Authentication settings for the web interface"
     )
     secrets: Optional[Dict[str, Any]] = Field(
         default=None, description="Secret management configuration"
