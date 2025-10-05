@@ -81,6 +81,20 @@ MODULE_PREFIX_CLASSIFICATION = {
     "custom_step.rules.": "rules",
 }
 
+V2_STORAGE_SUFFIXES: Set[str] = {
+    "store_metadata_as_json_v2",
+    "store_metadata_as_csv_v2",
+}
+
+
+@dataclass(slots=True)
+class TokenUsage:
+    """Capture template token usage for a specific parameter string."""
+
+    task_name: str
+    path: str
+    tokens: Set[str]
+
 
 @dataclass(slots=True)
 class PipelineIssue:
@@ -98,6 +112,7 @@ class PipelineValidationResult:
 
     errors: List[PipelineIssue]
     warnings: List[PipelineIssue]
+
 
 
 def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
@@ -133,30 +148,66 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
 
     metadata = _build_task_metadata(tasks)
     known_field_tokens: Set[str] = metadata["known_fields"]
-    tokens_by_path = metadata["tokens_by_path"]
+    token_usages = metadata["tokens_by_path"]
     per_task_tokens = metadata["per_task_tokens"]
     classifications = metadata["classifications"]
+    metadata_producers = metadata.get("metadata_producers", set())
+    module_names = metadata.get("module_names", {})
+    scalar_field_tokens: Set[str] = metadata.get("scalar_fields", set())
+    table_field_tokens: Set[str] = metadata.get("table_fields", set())
 
     allowed_tokens = known_field_tokens | KNOWN_CONTEXT_TOKENS
 
-    for token_path, tokens in tokens_by_path:
-        for token in tokens:
+    for usage in token_usages:
+        for token in usage.tokens:
             if token not in allowed_tokens:
                 errors.append(
                     PipelineIssue(
-                        path=token_path,
+                        path=usage.path,
                         message=(
                             f"Unknown template token '{token}'. Add an extraction field or update the template."
                         ),
                         code="pipeline-unknown-token",
-                        details={"token": token, "config_key": token_path},
+                        details={"token": token, "config_key": usage.path},
+                    )
+                )
+
+    reported_non_scalar: Set[Tuple[str, str]] = set()
+    for usage in token_usages:
+        classification = classifications.get(usage.task_name)
+        if classification != "storage":
+            continue
+        if not _is_storage_filename_path(usage.task_name, usage.path):
+            continue
+        for token in usage.tokens:
+            if token in known_field_tokens and token not in scalar_field_tokens:
+                marker = (usage.path, token)
+                if marker in reported_non_scalar:
+                    continue
+                reported_non_scalar.add(marker)
+                details = {
+                    "token": token,
+                    "field": token,
+                    "task_name": usage.task_name,
+                    "config_key": usage.path,
+                }
+                if token in table_field_tokens:
+                    details["field_type"] = "table"
+                warnings.append(
+                    PipelineIssue(
+                        path=usage.path,
+                        message=(
+                            f"Filename token '{{{token}}}' in storage task '{usage.task_name}' references non-scalar extraction field '{token}'. Use a scalar field or update the template."
+                        ),
+                        code="pipeline-storage-filename-non-scalar",
+                        details=details,
                     )
                 )
 
     seen_counts: Dict[str, int] = {}
     extraction_seen = False
+    metadata_ready = False
     context_seen = False
-    housekeeping_indices: List[int] = []
 
     for index, entry in enumerate(pipeline):
         path = f"pipeline[{index}]"
@@ -185,15 +236,15 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
             )
 
         classification = classifications.get(task_name)
+        module_name = module_names.get(task_name)
         task_tokens = per_task_tokens.get(task_name, set())
 
         if classification == "extraction":
             extraction_seen = True
+            if task_name in metadata_producers:
+                metadata_ready = True
         elif classification == "context":
             context_seen = True
-        elif classification == "housekeeping":
-            housekeeping_indices.append(index)
-
         if (
             classification == "storage"
             and (task_tokens & known_field_tokens)
@@ -206,6 +257,22 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
                         f"Storage task '{task_name}' uses extracted data tokens but no extraction task runs earlier."
                     ),
                     code="pipeline-storage-before-extraction",
+                    details={"task_name": task_name},
+                )
+            )
+
+        if (
+            classification == "storage"
+            and _is_v2_storage_module(module_name)
+            and not metadata_ready
+        ):
+            warnings.append(
+                PipelineIssue(
+                    path=path,
+                    message=(
+                        f"Storage task '{task_name}' expects extraction metadata but no metadata-producing extraction task runs earlier."
+                    ),
+                    code="pipeline-storage-metadata-missing",
                     details={"task_name": task_name},
                 )
             )
@@ -231,43 +298,28 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
             )
         )
 
-    if not housekeeping_indices:
-        errors.append(
-            PipelineIssue(
-                path="pipeline",
-                message="Pipeline must include a housekeeping task as the final step",
-                code="pipeline-missing-housekeeping",
-            )
-        )
-    else:
-        last_housekeeping_index = housekeeping_indices[-1]
-        if last_housekeeping_index != len(pipeline) - 1:
-            task_name = pipeline[last_housekeeping_index] if last_housekeeping_index < len(pipeline) else None
-            details = {"task_name": task_name} if isinstance(task_name, str) else None
-            warnings.append(
-                PipelineIssue(
-                    path=f"pipeline[{last_housekeeping_index}]",
-                    message="Housekeeping task should be the final pipeline step",
-                    code="pipeline-housekeeping-not-last",
-                    details=details,
-                )
-            )
-
     return PipelineValidationResult(errors=errors, warnings=warnings)
+
+
 
 
 def _build_task_metadata(tasks: Dict[str, Any]) -> Dict[str, Any]:
     known_fields: Set[str] = set()
-    tokens_by_path: List[Tuple[str, Set[str]]] = []
+    token_usages: List[TokenUsage] = []
     per_task_tokens: Dict[str, Set[str]] = {}
     classifications: Dict[str, Optional[str]] = {}
+    metadata_producers: Set[str] = set()
+    module_names: Dict[str, Optional[str]] = {}
+    scalar_fields: Set[str] = set()
+    table_fields: Set[str] = set()
 
     for task_name, task_config in tasks.items():
         if not isinstance(task_config, dict):
             continue
 
         params = task_config.get("params", {})
-        classification = _classify_task(task_config.get("module"))
+        module_name = task_config.get("module")
+        classification = _classify_task(module_name)
 
         if (
             classification is None
@@ -277,26 +329,44 @@ def _build_task_metadata(tasks: Dict[str, Any]) -> Dict[str, Any]:
             classification = "extraction"
 
         classifications[task_name] = classification
+        module_names[task_name] = module_name if isinstance(module_name, str) else None
 
         if classification == "extraction" and isinstance(params, dict):
             fields = params.get("fields")
             if isinstance(fields, dict):
-                known_fields.update(fields.keys())
+                if fields:
+                    metadata_producers.add(task_name)
+                for field_name, spec in fields.items():
+                    known_fields.add(field_name)
+                    if _is_table_field(spec):
+                        table_fields.add(field_name)
+                    else:
+                        scalar_fields.add(field_name)
 
         task_tokens: Set[str] = set()
         for string_path, value in _iter_string_values(params, f"tasks.{task_name}.params"):
             tokens = _extract_tokens(value)
             if tokens:
-                tokens_by_path.append((string_path, tokens))
+                token_usages.append(
+                    TokenUsage(
+                        task_name=task_name,
+                        path=string_path,
+                        tokens=tokens,
+                    )
+                )
                 task_tokens.update(tokens)
 
         per_task_tokens[task_name] = task_tokens
 
     return {
         "known_fields": known_fields,
-        "tokens_by_path": tokens_by_path,
+        "tokens_by_path": token_usages,
         "per_task_tokens": per_task_tokens,
         "classifications": classifications,
+        "metadata_producers": metadata_producers,
+        "module_names": module_names,
+        "scalar_fields": scalar_fields,
+        "table_fields": table_fields,
     }
 
 
@@ -307,6 +377,26 @@ def _classify_task(module_name: Optional[str]) -> Optional[str]:
         if module_name.startswith(prefix):
             return classification
     return None
+
+
+def _is_storage_filename_path(task_name: str, path: str) -> bool:
+    if not path:
+        return False
+    targets = (
+        f"tasks.{task_name}.params.filename",
+        f"tasks.{task_name}.params.storage.filename",
+    )
+    return path in targets
+
+
+def _is_table_field(spec: Any) -> bool:
+    return isinstance(spec, dict) and spec.get("is_table") is True
+
+
+def _is_v2_storage_module(module_name: Optional[str]) -> bool:
+    if not isinstance(module_name, str):
+        return False
+    return module_name.split('.')[-1] in V2_STORAGE_SUFFIXES
 
 
 def _iter_string_values(node: Any, base_path: str) -> Iterable[Tuple[str, str]]:

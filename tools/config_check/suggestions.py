@@ -79,15 +79,41 @@ def _suggest_pipeline_storage(details: Dict[str, Any]) -> str:
     return f"Move an extraction task before '{task_name}' or remove extraction tokens from its parameters."
 
 
+def _suggest_storage_filename_scalar(details: Dict[str, Any]) -> str:
+    '''Suggest using scalar extraction fields for storage filenames.'''
+    token = details.get("token", "token")
+    task_name = details.get("task_name", "the storage task")
+    config_key = _describe_config_key(details)
+    return (
+        f"Expose '{token}' as a scalar extraction field before '{task_name}' runs or update {config_key} to remove the '{{{token}}}' placeholder."
+    )
+
+
+
+def _suggest_pipeline_storage_metadata(details: Dict[str, Any]) -> str:
+    """Suggest adding metadata-producing extraction before v2 storage."""
+    task_name = details.get("task_name", "the storage task")
+    return (
+        f"Schedule a metadata-producing extraction task (e.g., extract_document_data_v2) before '{task_name}' or update the storage configuration."
+    )
+
+
+
+
+def _suggest_multiple_tables(details: Dict[str, Any]) -> str:
+    """Suggest reconciling multiple table field declarations."""
+    table_fields = details.get('fields') or []
+    formatted = ', '.join(table_fields) if table_fields else 'table fields'
+    return (
+        f"Leave only one field with is_table: true (currently: {formatted}) or split tables into"
+        " separate extraction tasks."
+    )
+
+
 def _suggest_pipeline_nanoid(details: Dict[str, Any]) -> str:
     """Suggest scheduling a context task before nanoid usage."""
     task_name = details.get("task_name", "the task")
     return f"Schedule a context initializer (e.g., assign_nanoid) before '{task_name}'."
-
-
-def _suggest_pipeline_housekeeping_missing(details: Dict[str, Any]) -> str:
-    """Suggest adding a housekeeping task to the end of the pipeline."""
-    return "Add a housekeeping task (e.g., standard_step.housekeeping.cleanup) as the final pipeline step."
 
 
 def _suggest_pipeline_missing_extraction(details: Dict[str, Any]) -> str:
@@ -95,18 +121,12 @@ def _suggest_pipeline_missing_extraction(details: Dict[str, Any]) -> str:
     return "Add an extraction task (e.g., standard_step.extraction.extract_pdf) before downstream steps."
 
 
-def _suggest_pipeline_housekeeping_not_last(details: Dict[str, Any]) -> str:
-    """Suggest moving housekeeping tasks to the final pipeline position."""
-    task_name = details.get("task_name", "the housekeeping task")
-    return f"Move '{task_name}' to the final position in the pipeline."
-
-
 def _suggest_unknown_token(details: Dict[str, Any]) -> str:
     """Suggest reconciling unknown template tokens with extraction fields."""
     token = details.get("token", "token")
     config_key = details.get("config_key", "this value")
     return (
-        f"Add extraction field '{token}' or update {config_key} to remove the '{{{token}}}' placeholder."
+        f"Add scalar extraction field '{token}' or update {config_key} to remove the '{{{token}}}' placeholder."
     )
 
 
@@ -173,10 +193,10 @@ _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "pipeline-missing-task": _suggest_pipeline_missing_task,
     "pipeline-duplicate-task": _suggest_pipeline_duplicate,
     "pipeline-storage-before-extraction": _suggest_pipeline_storage,
+    "pipeline-storage-metadata-missing": _suggest_pipeline_storage_metadata,
+    "pipeline-storage-filename-non-scalar": _suggest_storage_filename_scalar,
     "pipeline-nanoid-before-context": _suggest_pipeline_nanoid,
     "pipeline-missing-extraction": _suggest_pipeline_missing_extraction,
-    "pipeline-missing-housekeeping": _suggest_pipeline_housekeeping_missing,
-    "pipeline-housekeeping-not-last": _suggest_pipeline_housekeeping_not_last,
     "pipeline-unknown-token": _suggest_unknown_token,
     "pipeline-not-list": lambda _: "Define pipeline as a list of task identifiers in execution order.",
     "tasks-not-mapping": lambda _: "Define the tasks section as a mapping of task ids to definitions.",
@@ -194,6 +214,7 @@ _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "param-field-invalid-type": _suggest_field_type,
     "param-field-istable-bool": lambda d: f"Set 'is_table' for field '{d.get('field', 'field')}' to true or false.",
     "param-field-missing-item-fields": _suggest_field_item_fields,
+    "param-extraction-multiple-tables": _suggest_multiple_tables,
     "param-rules-not-mapping": lambda _: "Define this task's params as a mapping that includes reference_file, update_field, and csv_match.",
     "param-rules-missing-reference-file": lambda _: "Set reference_file to the CSV file that should be updated.",
     "param-rules-missing-update-field": lambda _: "Set update_field to the column name that must be updated.",

@@ -1,15 +1,15 @@
 <!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 2.2
-Release Date: 2025-08-01
+Version: 2.4
+Release Date: 2025-08-20
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 2.2  
-Release Date: 2025-08-01  
+Version: 2.4  
+Release Date: 2025-08-20  
 Author: [Your Organization/Name]
 
 ---
@@ -46,6 +46,7 @@ Author: [Your Organization/Name]
      - [4.10. v2 LlamaExtract Array-of-Objects Support](#410-v2-llamaextract-array-of-objects-support)
   - [4.8. Example Workflows](#48-example-workflows)
   - [4.9. Housekeeping and the Processing Folder](#49-housekeeping-and-the-processing-folder)
+  - [4.11. Config Check Validation Tool](#411-config-check-validation-tool)
 - [5. Frequently Asked Questions (FAQ)](#5-frequently-asked-questions-faq)
 - [6. Appendix](#6-appendix)
   - [Glossary](#glossary)
@@ -63,6 +64,7 @@ Author: [Your Organization/Name]
 | 2.1     | 2025-08-01 | [Your Organization] | Added Quick Start guide, simplified explanations, expanded glossary, and improved configuration editing instructions for non-developers |
 | 2.2     | 2025-08-01 | [Your Organization] | Added YAML configuration examples to all 4.7.x subsections for clarity      |
 | 2.3     | 2025-08-11 | [Your Organization] | Implemented and documented web interface for PDF upload and status monitoring|
+| 2.4     | 2025-08-20 | [Your Organization] | Added config-check administrator overview and cross-references to validation docs |
 
 ---
 
@@ -1026,6 +1028,25 @@ Notes:
 - Deleting old status files is safe; they are used for history and diagnostics.
 
 ---
+
+### 4.11. Config Check Validation Tool
+
+**Audience:** Administrators (end users should contact an administrator if configuration changes are required).
+
+The `config-check` utility lives under `tools/config_check` and validates `config.yaml` before you deploy or restart services. Run it whenever you modify tasks, pipelines, or environment-specific paths--especially after applying workflow updates from product tasks 13-19.
+
+**Core workflow**
+- Use `C:\Windows\System32\cmd.exe` or PowerShell from the project root.
+- Execute `C:\Python313\python.exe -m tools.config_check validate --config config.yaml --base-dir .` to lint the active configuration.
+- Pass `--format json` when you need machine-readable output for ticket attachments or CI logs.
+- Treat exit code `0` as success, `1` as blocking errors, and `2` as warnings that still need follow-up.
+
+**When to escalate**
+- Review `tools/config_check/README.md` for CLI flag details and examples.
+- Cross-reference `docs/config_check_troubleshooting.md` to resolve the common findings surfaced by tasks 13-19 (credential gaps, storage overrides, token mismatches, and similar issues).
+- If end users report workflow failures, run the validator before redeploying--most misconfigurations are caught here without rerunning full jobs.
+
+Administrators should share validator output with end users only when requesting missing information (for example, credential placeholders or directory paths). End users do not need to run the tool directly but should know that configuration changes will be certified via `config-check` before they go live.
 
 ## 5. Frequently Asked Questions (FAQ)
 

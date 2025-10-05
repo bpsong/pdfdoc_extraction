@@ -162,6 +162,17 @@ Configuration Schema Details:
 12) Documentation
 - Provide README section with examples and troubleshooting.
 
+5.1 Upcoming Validation Enhancements (vNext)
+
+- **Module-aware extraction prerequisites**: For modules under standard_step.extraction.* (and custom equivalents), require configs to declare api_key and agent_id before runtime and emit actionable errors when they are missing or empty.
+- **Single-table guardrail**: Surface a warning when more than one extraction field advertises is_table: true so operators understand the v2 storage limitation to a single tabular payload.
+- **store_file_to_localdrive schema support**: Validate that store_file_to_localdrive tasks declare files_dir and filename parameters with correct types and presence, preventing runtime-only schema failures.
+- **Nested storage overrides**: Accept nested storage.{data_dir, filename} blocks for v2 storage tasks, fall back to top-level params when absent, and flag unknown keys inside the storage block to preserve clarity.
+- **Storage metadata readiness signal**: Emit a warning when v2 storage tasks cannot locate extraction.fields metadata (e.g., missing extract_document_data_v2 task) so teams can reconcile alias gaps before deployment.
+- **Rules task optional knobs**: Type-check optional parameters write_value, backup, and task_slug on rules tasks and ensure reference_file values resolve to .csv-like paths.
+- **Filename token cross-check**: Validate that every token in storage filename templates matches an available scalar extraction field; highlight extraneous tokens with guidance for field creation or template updates.
+
+
 6. Non-Goals (Out of Scope)
 
 - The tool does not run the application, orchestrate tasks, or contact external services.

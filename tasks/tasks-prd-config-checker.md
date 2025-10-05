@@ -114,4 +114,28 @@
   - [x] 12.4 Write troubleshooting guide with common error scenarios and solutions
   - [x] 12.5 Add inline documentation and docstrings throughout codebase
 
-
+- [x] 13.0 Enforce extraction credential prerequisites
+  - [x] 13.1 Extend validator to require api_key and agent_id for modules under standard_step.extraction.* (and custom equivalents), emitting targeted errors when either value is missing or blank.
+  - [x] 13.2 Add regression tests covering configs with and without credentials to ensure errors surface before runtime.
+- [x] 14.0 Warn about multiple table extractions
+  - [x] 14.1 Add detection for multiple extraction.fields entries with is_table: true and surface a warning that v2 storage tasks currently support a single table payload.
+  - [x] 14.2 Update token/extraction validation tests to cover multi-table configs and confirm warning text.
+- [x] 15.0 Support store_file_to_localdrive schema validation
+  - [x] 15.1 Define schema rules for store_file_to_localdrive tasks requiring files_dir (existing directory) and filename (string template) parameters with type validation.
+  - [x] 15.2 Create unit tests that exercise valid/invalid local drive storage definitions and expected findings.
+- [x] 16.0 Allow nested storage overrides for v2 tasks
+  - [x] 16.1 Expand task schema to accept nested storage.{data_dir, filename} mappings alongside legacy top-level params.
+  - [x] 16.2 Implement fallback logic that uses top-level params when nested overrides are absent and raises warnings for unknown keys inside storage blocks.
+  - [x] 16.3 Author validation tests confirming precedence rules, fallback behavior, and warning emission for stray keys.
+- [x] 17.0 Detect missing extraction metadata for v2 storage tasks
+  - [x] 17.1 Cross-check pipeline composition so v2 storage tasks verify extraction.fields metadata is produced (e.g., ensure extract_document_data_v2 precedes storage tasks).
+  - [x] 17.2 Emit warnings when metadata is unavailable and document remediation guidance in suggestion text.
+  - [x] 17.3 Add integration tests covering pipelines with and without upstream metadata tasks.
+- [x] 18.0 Validate rules task optional knobs
+  - [x] 18.1 Type-check optional write_value, backup, and task_slug parameters for rules tasks and ensure defaults remain intact.
+  - [x] 18.2 Verify reference_file values resemble .csv paths (extension + non-empty basename) and provide targeted suggestions on failure.
+  - [x] 18.3 Extend rules task unit tests to capture new validation paths and edge cases.
+- [x] 19.0 Cross-check storage filename tokens
+  - [x] 19.1 Update filename token validator so every {token} resolves to a scalar extraction field (exclude tables/objects) and surface warnings for mismatches.
+  - [x] 19.2 Enhance suggestion messaging to recommend adding fields or adjusting templates when unmatched tokens are discovered.
+  - [x] 19.3 Add tests covering valid tokens, missing scalar fields, and table-only references to prevent regressions.

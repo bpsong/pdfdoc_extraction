@@ -14,6 +14,8 @@ def _build_config(upload_dir, watch_dir, storage_data_dir, pipeline_order):
             "module": "standard_step.extraction.extract_metadata",
             "class": "ExtractMetadata",
             "params": {
+                "api_key": "llx-test-key",
+                "agent_id": "agent-001",
                 "fields": {
                     "supplier_name": {
                         "alias": "Supplier",
@@ -123,3 +125,123 @@ def test_validator_provides_parameter_suggestion(tmp_path):
 
     assert param_issue.suggestion is not None
     assert "Set data_dir" in param_issue.suggestion
+
+
+def test_validator_warns_on_multiple_table_fields(tmp_path):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    watch = tmp_path / "watch"
+    watch.mkdir()
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+
+    config = _build_config(
+        upload_dir=uploads,
+        watch_dir=watch,
+        storage_data_dir=data_dir,
+        pipeline_order=["extract_metadata", "store_json", "cleanup"],
+    )
+
+    fields = config["tasks"]["extract_metadata"]["params"]["fields"]
+    fields["line_items"] = {
+        "alias": "Line Items",
+        "type": "List[Any]",
+        "is_table": True,
+        "item_fields": {
+            "sku": {
+                "alias": "SKU",
+                "type": "str",
+            }
+        },
+    }
+    fields["charges"] = {
+        "alias": "Charges",
+        "type": "List[Any]",
+        "is_table": True,
+        "item_fields": {
+            "code": {
+                "alias": "Code",
+                "type": "str",
+            }
+        },
+    }
+
+    validator = ConfigValidator(base_dir=tmp_path)
+    result = validator.validate_config_data(config)
+
+    warning = next(
+        (message for message in result.warnings if message.code == "param-extraction-multiple-tables"),
+        None,
+    )
+
+    assert warning is not None
+    assert warning.suggestion is not None
+    assert "Leave only one field" in warning.suggestion
+
+
+def test_validator_provides_unknown_token_scalar_hint(tmp_path):
+    uploads = tmp_path / 'uploads'
+    uploads.mkdir()
+    watch = tmp_path / 'watch'
+    watch.mkdir()
+    data_dir = tmp_path / 'data'
+    data_dir.mkdir()
+
+    config = _build_config(
+        upload_dir=uploads,
+        watch_dir=watch,
+        storage_data_dir=data_dir,
+        pipeline_order=['extract_metadata', 'store_json', 'cleanup'],
+    )
+    config['tasks']['store_json']['params']['filename'] = '{missing_field}.json'
+
+    validator = ConfigValidator(base_dir=tmp_path)
+    result = validator.validate_config_data(config)
+
+    issue = next(message for message in result.errors if message.code == 'pipeline-unknown-token')
+
+    assert issue.suggestion is not None
+    assert 'scalar extraction field' in issue.suggestion
+
+
+
+def test_validator_warns_on_table_filename_token(tmp_path):
+    uploads = tmp_path / 'uploads'
+    uploads.mkdir()
+    watch = tmp_path / 'watch'
+    watch.mkdir()
+    data_dir = tmp_path / 'data'
+    data_dir.mkdir()
+
+    config = _build_config(
+        upload_dir=uploads,
+        watch_dir=watch,
+        storage_data_dir=data_dir,
+        pipeline_order=['extract_metadata', 'store_json', 'cleanup'],
+    )
+    fields = config['tasks']['extract_metadata']['params']['fields']
+    fields['line_items'] = {
+        'alias': 'Line Items',
+        'type': 'List[Any]',
+        'is_table': True,
+        'item_fields': {
+            'sku': {
+                'alias': 'SKU',
+                'type': 'str',
+            }
+        },
+    }
+    config['tasks']['store_json']['params']['filename'] = '{line_items}.json'
+
+    validator = ConfigValidator(base_dir=tmp_path)
+    result = validator.validate_config_data(config)
+
+    warning = next(
+        (message for message in result.warnings if message.code == 'pipeline-storage-filename-non-scalar'),
+        None,
+    )
+
+    assert warning is not None
+    assert warning.suggestion is not None
+    assert 'scalar extraction field' in warning.suggestion
+

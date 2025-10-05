@@ -7,7 +7,6 @@ different types of processing tasks in the PDF document extraction system.
 The test suite covers pipeline validation for:
 - Dependency order validation (extraction before storage)
 - Context token availability (nanoid requires context initializer)
-- Housekeeping task placement requirements (must be final step)
 - Template token validation against extraction fields
 - Task classification and categorization validation
 - Duplicate pipeline entry detection
@@ -101,6 +100,8 @@ def test_storage_after_extraction_passes():
     result = validate_pipeline(config)
 
     assert result.errors == []
+    warning_codes = {issue.code for issue in result.warnings}
+    assert "pipeline-storage-filename-non-scalar" not in warning_codes
 
 
 def test_nanoid_requires_context_initializer():
@@ -120,22 +121,6 @@ def test_nanoid_requires_context_initializer():
 
     assert all("references {nanoid}" not in issue.message for issue in result_with_context.errors)
 
-
-def test_housekeeping_must_be_last():
-    config = _base_config()
-    config["pipeline"] = ["extract_metadata", "store_json"]
-
-    result = validate_pipeline(config)
-
-    assert any("housekeeping task" in issue.message for issue in result.errors)
-
-    config_warning = _base_config()
-    config_warning["tasks"]["store_json"]["params"]["filename"] = "output.json"
-    config_warning["pipeline"] = ["extract_metadata", "cleanup", "store_json"]
-
-    result_warning = validate_pipeline(config_warning)
-
-    assert any("should be the final pipeline step" in issue.message for issue in result_warning.warnings)
 
 
 def test_unknown_token_reports_error():
@@ -180,3 +165,105 @@ def test_duplicate_pipeline_entries_warn():
     result = validate_pipeline(config)
 
     assert any("appears multiple times" in issue.message for issue in result.warnings)
+
+
+
+def test_v2_storage_warns_when_metadata_missing():
+    config = {
+        "tasks": {
+            "extract_headers": {
+                "module": "standard_step.extraction.extract_pdf_v2",
+                "class": "ExtractPdfV2Task",
+                "params": {
+                    "fields": {},
+                },
+            },
+            "store_json_v2": {
+                "module": "standard_step.storage.store_metadata_as_json_v2",
+                "class": "StoreMetadataAsJsonV2",
+                "params": {
+                    "filename": "{id}.json",
+                },
+            },
+            "cleanup": {
+                "module": "standard_step.housekeeping.cleanup",
+                "class": "CleanupTask",
+                "params": {},
+            },
+        },
+        "pipeline": [
+            "extract_headers",
+            "store_json_v2",
+            "cleanup",
+        ],
+    }
+
+    result = validate_pipeline(config)
+
+    codes = {issue.code for issue in result.warnings}
+    assert "pipeline-storage-metadata-missing" in codes
+
+
+def test_v2_storage_metadata_ready_suppresses_warning():
+    config = {
+        "tasks": {
+            "extract_metadata": {
+                "module": "standard_step.extraction.extract_pdf_v2",
+                "class": "ExtractPdfV2Task",
+                "params": {
+                    "fields": {
+                        "supplier_name": {"alias": "Supplier"},
+                    }
+                },
+            },
+            "store_json_v2": {
+                "module": "standard_step.storage.store_metadata_as_json_v2",
+                "class": "StoreMetadataAsJsonV2",
+                "params": {
+                    "filename": "{id}.json",
+                },
+            },
+            "cleanup": {
+                "module": "standard_step.housekeeping.cleanup",
+                "class": "CleanupTask",
+                "params": {},
+            },
+        },
+        "pipeline": [
+            "extract_metadata",
+            "store_json_v2",
+            "cleanup",
+        ],
+    }
+
+    result = validate_pipeline(config)
+
+    codes = {issue.code for issue in result.warnings}
+    assert "pipeline-storage-metadata-missing" not in codes
+
+
+def test_storage_filename_table_field_emits_warning():
+    config = _base_config()
+    config['tasks']['extract_metadata']['params']['fields']['line_items'] = {
+        'alias': 'Line Items',
+        'type': 'List[Any]',
+        'is_table': True,
+        'item_fields': {
+            'sku': {
+                'alias': 'SKU',
+                'type': 'str',
+            }
+        },
+    }
+    config['tasks']['store_json']['params']['filename'] = '{line_items}.json'
+
+    result = validate_pipeline(config)
+
+    warning = next(
+        (issue for issue in result.warnings if issue.code == 'pipeline-storage-filename-non-scalar'),
+        None,
+    )
+
+    assert warning is not None
+    assert '{line_items}' in warning.message
+

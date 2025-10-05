@@ -67,6 +67,8 @@ class ConfigFactory:
                     "module": "standard_step.extraction.extract_metadata",
                     "class": "ExtractMetadata",
                     "params": {
+                        "api_key": "llx-test-key",
+                        "agent_id": "agent-001",
                         "fields": {
                             "supplier_name": {
                                 "alias": "Supplier",

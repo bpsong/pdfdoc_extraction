@@ -5,8 +5,8 @@
 
 ## Upcoming Enhancements for config-check Tool
 
-- [ ] Add module-aware extraction validation (standard_step.extraction.*) so config-check enforces presence of `api_key` and `agent_id` before runtime.
-- [ ] Have config-check warn when more than one extraction field is marked `is_table: true`, reflecting the single-table limitation baked into v2 storage tasks.
+- [x] Add module-aware extraction validation (standard_step.extraction.*) so config-check enforces presence of `api_key` and `agent_id` before runtime.
+- [x] Have config-check warn when more than one extraction field is marked `is_table: true`, reflecting the single-table limitation baked into v2 storage tasks.
 - [ ] Teach config-check the `store_file_to_localdrive` schema (require `files_dir`/`filename`, validate types) to stop runtime-only failures.
 - [ ] Allow nested `storage.{data_dir, filename}` blocks for v2 storage tasks and fall back to top-level params; flag unknown keys for clarity.
 - [ ] Emit a config-check warning when v2 storage tasks cannot locate `extraction.fields` metadata (missing `extract_document_data_v2` task), so alias gaps are expected.

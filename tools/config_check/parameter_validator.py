@@ -59,6 +59,20 @@ _ALLOWED_BASE_TYPES = {"str", "int", "float", "bool", "Any"}
 _RULES_REQUIRED_KEYS = ("reference_file", "update_field")
 _RULES_MIN_CLAUSES = 1
 _RULES_MAX_CLAUSES = 5
+_EXTRACTION_CREDENTIAL_PREFIXES = (
+    'standard_step.extraction.',
+    'custom_step.extraction.',
+)
+
+_LOCALDRIVE_MODULE_SUFFIX = 'store_file_to_localdrive'
+_STORAGE_OVERRIDE_KEYS = {"data_dir", "filename"}
+
+
+
+def _is_localdrive_storage(module_name: Optional[str]) -> bool:
+    """Return True when module refers to the local drive storage task."""
+
+    return isinstance(module_name, str) and module_name.split('.')[-1] == _LOCALDRIVE_MODULE_SUFFIX
 
 
 @dataclass(slots=True)
@@ -113,25 +127,40 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
 
         params = task_config.get("params", {})
         params_path = f"tasks.{task_name}.params"
-        classification = _classify_task(task_config.get("module"), params)
+        module_name = task_config.get("module")
+        classification = _classify_task(module_name, params)
 
         if classification == "extraction":
-            _validate_extraction_params(params, params_path, errors)
+            _validate_extraction_params(
+                params,
+                params_path,
+                errors,
+                warnings,
+                module_name=module_name,
+            )
         elif classification == "storage":
-            _validate_required_string(
-                params,
-                params_path,
-                "data_dir",
-                errors,
-                code="param-storage-missing-data-dir",
-            )
-            _validate_required_string(
-                params,
-                params_path,
-                "filename",
-                errors,
-                code="param-storage-missing-filename",
-            )
+            if _is_localdrive_storage(module_name):
+                _validate_required_string(
+                    params,
+                    params_path,
+                    "files_dir",
+                    errors,
+                    code="param-localdrive-missing-files-dir",
+                )
+                _validate_required_string(
+                    params,
+                    params_path,
+                    "filename",
+                    errors,
+                    code="param-localdrive-missing-filename",
+                )
+            else:
+                _validate_standard_storage_params(
+                    params,
+                    params_path,
+                    errors,
+                    warnings,
+                )
         elif classification == "archiver":
             _validate_required_string(
                 params,
@@ -144,8 +173,96 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
             _validate_rules_params(params, params_path, errors)
         elif classification == "context":
             _validate_context_params(params, params_path, errors)
+        elif classification == "housekeeping":
+            _validate_housekeeping_params(params, params_path, errors)
 
     return ParameterValidationResult(errors=errors, warnings=warnings)
+
+
+def _validate_standard_storage_params(
+    params: Any,
+    params_path: str,
+    errors: List[ParameterIssue],
+    warnings: List[ParameterIssue],
+) -> None:
+    """Validate storage task parameters with optional nested overrides."""
+
+    if not isinstance(params, dict):
+        errors.append(
+            ParameterIssue(
+                path=params_path,
+                message="storage task params must be a mapping",
+                code="param-not-mapping",
+                details={"config_key": params_path},
+            )
+        )
+        return
+
+    storage_block = params.get("storage")
+    storage_path = f"{params_path}.storage"
+    storage_dict: Optional[Dict[str, Any]] = None
+
+    if storage_block is not None:
+        if isinstance(storage_block, dict):
+            storage_dict = storage_block
+            allowed_keys = ', '.join(sorted(_STORAGE_OVERRIDE_KEYS))
+            for key in storage_dict:
+                if key not in _STORAGE_OVERRIDE_KEYS:
+                    warnings.append(
+                        ParameterIssue(
+                            path=f"{storage_path}.{key}",
+                            message=(
+                                f"storage overrides do not support key '{key}'; "
+                                f"allowed keys are {allowed_keys}."
+                            ),
+                            code="param-storage-unknown-storage-key",
+                            details={"config_key": f"{storage_path}.{key}", "key": key},
+                        )
+                    )
+        else:
+            errors.append(
+                ParameterIssue(
+                    path=storage_path,
+                    message="storage overrides must be provided as a mapping",
+                    code="param-storage-storage-block-type",
+                    details={"config_key": storage_path},
+                )
+            )
+
+    if storage_dict and "data_dir" in storage_dict:
+        _validate_required_string(
+            storage_dict,
+            storage_path,
+            "data_dir",
+            errors,
+            code="param-storage-missing-data-dir",
+        )
+    else:
+        _validate_required_string(
+            params,
+            params_path,
+            "data_dir",
+            errors,
+            code="param-storage-missing-data-dir",
+        )
+
+    if storage_dict and "filename" in storage_dict:
+        _validate_required_string(
+            storage_dict,
+            storage_path,
+            "filename",
+            errors,
+            code="param-storage-missing-filename",
+        )
+    else:
+        _validate_required_string(
+            params,
+            params_path,
+            "filename",
+            errors,
+            code="param-storage-missing-filename",
+        )
+
 
 
 def _classify_task(module_name: Optional[str], params: Any) -> Optional[str]:
@@ -159,7 +276,12 @@ def _classify_task(module_name: Optional[str], params: Any) -> Optional[str]:
 
 
 def _validate_extraction_params(
-    params: Any, params_path: str, errors: List[ParameterIssue]
+    params: Any,
+    params_path: str,
+    errors: List[ParameterIssue],
+    warnings: List[ParameterIssue],
+    *,
+    module_name: Optional[str] = None,
 ) -> None:
     if not isinstance(params, dict):
         errors.append(
@@ -172,7 +294,23 @@ def _validate_extraction_params(
         )
         return
 
-    fields = params.get("fields")
+    if _requires_extraction_credentials(module_name):
+        _validate_extraction_credential(
+            params,
+            params_path,
+            'api_key',
+            errors,
+            code='param-extraction-missing-api-key',
+        )
+        _validate_extraction_credential(
+            params,
+            params_path,
+            'agent_id',
+            errors,
+            code='param-extraction-missing-agent-id',
+        )
+
+    fields = params.get('fields')
     if not isinstance(fields, dict) or not fields:
         errors.append(
             ParameterIssue(
@@ -184,9 +322,59 @@ def _validate_extraction_params(
         )
         return
 
+    table_fields: List[str] = []
+
     for field_name, spec in fields.items():
+        if isinstance(spec, dict) and spec.get('is_table') is True:
+            table_fields.append(field_name)
+
         field_path = f"{params_path}.fields.{field_name}"
         _validate_field_spec(spec, field_path, errors, field_name)
+
+    if len(table_fields) > 1:
+        warnings.append(
+            ParameterIssue(
+                path=f"{params_path}.fields",
+                message=(
+                    "Multiple extraction fields are marked is_table: true; v2 storage tasks currently "
+                    "support only a single table payload."
+                ),
+                code="param-extraction-multiple-tables",
+                details={
+                    "config_key": f"{params_path}.fields",
+                    "fields": table_fields,
+                },
+            )
+        )
+
+
+def _requires_extraction_credentials(module_name: Optional[str]) -> bool:
+    if not isinstance(module_name, str):
+        return False
+    return any(module_name.startswith(prefix) for prefix in _EXTRACTION_CREDENTIAL_PREFIXES)
+
+
+def _validate_extraction_credential(
+    params: Dict[str, Any],
+    params_path: str,
+    key: str,
+    errors: List[ParameterIssue],
+    *,
+    code: str,
+) -> None:
+    value = params.get(key)
+    if not isinstance(value, str) or not value.strip():
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.{key}",
+                message=f"Extraction tasks require '{key}' to be provided as a non-empty string.",
+                code=code,
+                details={
+                    'config_key': f"{params_path}.{key}",
+                    'credential': key,
+                },
+            )
+        )
 
 
 def _validate_field_spec(
@@ -277,6 +465,31 @@ def _validate_rules_params(
             errors,
             code=f"param-rules-missing-{key.replace('_', '-')}",
         )
+
+    # Validate optional knobs as per Task 18 requirements
+    _validate_optional_string_param(
+        params,
+        params_path,
+        "write_value",
+        errors,
+        code="param-rules-invalid-write-value",
+    )
+
+    _validate_optional_bool_param(
+        params,
+        params_path,
+        "backup",
+        errors,
+        code="param-rules-invalid-backup",
+    )
+
+    _validate_optional_string_param(
+        params,
+        params_path,
+        "task_slug",
+        errors,
+        code="param-rules-invalid-task-slug",
+    )
 
     csv_match = params.get("csv_match")
     csv_path = f"{params_path}.csv_match"
@@ -409,8 +622,56 @@ def _validate_required_string(
             ParameterIssue(
                 path=f"{params_path}.{key}",
                 message=f"Parameter '{key}' is required and must be a non-empty string",
-                code=code,
+                code=code or "param-required-string",
                 details={"config_key": f"{params_path}.{key}"},
+            )
+        )
+
+
+def _validate_optional_string_param(
+    params: Any,
+    params_path: str,
+    key: str,
+    errors: List[ParameterIssue],
+    *,
+    code: Optional[str] = None,
+) -> None:
+    """Validate optional string parameter."""
+    if not isinstance(params, dict):
+        return
+
+    value = params.get(key)
+    if value is not None and not isinstance(value, str):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.{key}",
+                message=f"Parameter '{key}' must be a string when provided",
+                code=code or "param-optional-invalid-type",
+                details={"config_key": f"{params_path}.{key}", "expected_type": "str"},
+            )
+        )
+
+
+def _validate_optional_bool_param(
+    params: Any,
+    params_path: str,
+    key: str,
+    errors: List[ParameterIssue],
+    *,
+    code: Optional[str] = None,
+) -> None:
+    """Validate optional boolean parameter."""
+    if not isinstance(params, dict):
+        return
+
+    value = params.get(key)
+    if value is not None and not isinstance(value, bool):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.{key}",
+                message=f"Parameter '{key}' must be a boolean when provided",
+                code=code or "param-optional-invalid-type",
+                details={"config_key": f"{params_path}.{key}", "expected_type": "bool"},
             )
         )
 
@@ -445,6 +706,35 @@ def _validate_context_params(
                     path=f"{params_path}.length",
                     message="length must be between 5 and 21",
                     code="param-context-length-bounds",
+                )
+            )
+
+
+def _validate_housekeeping_params(
+    params: Any, params_path: str, errors: List[ParameterIssue]
+) -> None:
+    """Validate housekeeping task parameters, specifically CleanupTask processing_dir."""
+    if not isinstance(params, dict):
+        errors.append(
+            ParameterIssue(
+                path=params_path,
+                message="housekeeping task params must be a mapping",
+                code="param-housekeeping-not-mapping",
+                details={"config_key": params_path},
+            )
+        )
+        return
+
+    # Task 18: Validate CleanupTask processing_dir if provided
+    if "processing_dir" in params:
+        processing_dir = params["processing_dir"]
+        if not isinstance(processing_dir, str) or not processing_dir.strip():
+            errors.append(
+                ParameterIssue(
+                    path=f"{params_path}.processing_dir",
+                    message="CleanupTask processing_dir must be a non-empty string when provided",
+                    code="param-housekeeping-processing-dir-invalid",
+                    details={"config_key": f"{params_path}.processing_dir"},
                 )
             )
 
