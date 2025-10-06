@@ -30,7 +30,7 @@ authentication:
 logging:
   log_file: "app.log"
   log_level: "INFO"
-  log_format: "%(asctime)s %(levelname)s %(name)s %(message)s"
+  
 
 tasks:
   extract_document_data:
@@ -97,7 +97,7 @@ class ConfigManager:
     logging:
       log_file: "app.log"
       log_level: "INFO"
-      log_format: "%(asctime)s %(levelname)s %(name)s %(message)s"
+      
 
     tasks:
       extract_document_data:
