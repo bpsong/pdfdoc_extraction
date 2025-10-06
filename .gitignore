@@ -2,6 +2,7 @@
 config.yaml
 dev_config.yaml
 config copy.yaml
+test/third_party/test_config.yaml
 *.yaml
 
 # Log files

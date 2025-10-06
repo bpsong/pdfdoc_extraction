@@ -1,16 +1,25 @@
 import logging
 import pytest
+import yaml
+from pathlib import Path
 from llama_cloud_services import LlamaExtract
 
 @pytest.fixture
-def api_key():
-    """Fixture to provide LlamaCloud API key (updated per user request)"""
-    return "llx-WJbMPY1riM0GCHxAer5f8nePPQKw7FFG9o3xmiuBhQ333HGs"
+def test_config():
+    """Fixture to load test configuration from test_config.yaml"""
+    config_path = Path(__file__).parent / "test_config.yaml"
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)
 
 @pytest.fixture
-def agent_id():
-    """Fixture to provide LlamaCloud agent ID"""
-    return "4e65985c-fe36-4cd1-903d-368f2078a87d"
+def api_key(test_config):
+    """Fixture to provide LlamaCloud API key from test config"""
+    return test_config['llamacloud']['api_key']
+
+@pytest.fixture
+def agent_id(test_config):
+    """Fixture to provide LlamaCloud agent ID from test config"""
+    return test_config['llamacloud']['agent_id']
 
 def test_llamacloud_connection(api_key: str, agent_id: str):
     logging.basicConfig(level=logging.INFO)
@@ -34,7 +43,11 @@ def test_llamacloud_connection(api_key: str, agent_id: str):
         raise
 
 if __name__ == "__main__":
-    # Replace with your actual API key and agent ID (updated per user request)
-    API_KEY = "WJbMPY1riM0GCHxAer5f8nePPQKw7FFG9o3xmiuBhQ333HGs"
-    AGENT_ID = "f311fd08-282f-4fef-8a41-f728242159e9"
+    # Load credentials from test config file
+    config_path = Path(__file__).parent / "test_config.yaml"
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+
+    API_KEY = config['llamacloud']['api_key']
+    AGENT_ID = config['llamacloud']['agent_id']
     test_llamacloud_connection(API_KEY, AGENT_ID)
