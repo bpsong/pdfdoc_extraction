@@ -114,88 +114,189 @@ def validate_tasks(
 
 
 def _run_import_checks(tasks: Dict[str, Any]) -> List[TaskIssue]:
+    """Enhanced import validation with better error reporting."""
     findings: List[TaskIssue] = []
 
     for task_name, task_config in tasks.items():
-        if not isinstance(task_config, dict):
-            findings.append(
-                TaskIssue(
-                    path=f"tasks.{task_name}",
-                    message="Task definition must be a mapping",
-                    code="task-definition-not-mapping",
-                    details={"task_name": task_name},
-                )
-            )
+        # Validate task structure
+        validation_result = _validate_task_structure(task_name, task_config)
+        findings.extend(validation_result)
+        
+        if validation_result:  # Skip import checks if structure is invalid
             continue
-
-        module_name = task_config.get("module")
-        class_name = task_config.get("class")
-        task_path = f"tasks.{task_name}"
-
-        if not module_name or not isinstance(module_name, str):
-            findings.append(
-                TaskIssue(
-                    path=f"{task_path}.module",
-                    message="Task module must be a non-empty string for import checks",
-                    code="task-import-invalid-module",
-                    details={"task_name": task_name},
-                )
-            )
-            continue
-        if not class_name or not isinstance(class_name, str):
-            findings.append(
-                TaskIssue(
-                    path=f"{task_path}.class",
-                    message="Task class must be a non-empty string for import checks",
-                    code="task-import-invalid-class",
-                    details={"task_name": task_name},
-                )
-            )
-            continue
-
-        try:
-            module = importlib.import_module(module_name)
-        except Exception as exc:  # noqa: BLE001 - surface actual import error
-            findings.append(
-                TaskIssue(
-                    path=f"{task_path}.module",
-                    message=(
-                        f"Could not import module '{module_name}': {exc}. "
-                        "Check PYTHONPATH, installation, or module name."
-                    ),
-                    code="task-import-module",
-                    details={"module": module_name, "task_name": task_name},
-                )
-            )
-            continue
-
-        try:
-            attr = getattr(module, class_name)
-        except AttributeError:
-            findings.append(
-                TaskIssue(
-                    path=f"{task_path}.class",
-                    message=(
-                        f"Class '{class_name}' not found in module '{module_name}'. "
-                        "Verify the class name or update the configuration."
-                    ),
-                    code="task-import-class",
-                    details={"module": module_name, "class": class_name, "task_name": task_name},
-                )
-            )
-            continue
-
-        if not inspect.isclass(attr):
-            findings.append(
-                TaskIssue(
-                    path=f"{task_path}.class",
-                    message=(
-                        f"Attribute '{class_name}' in module '{module_name}' is not a class. "
-                        "Ensure the configuration references a callable task class."
-                    ),
-                    code="task-import-not-class",
-                    details={"module": module_name, "class": class_name, "task_name": task_name},
-                )
-            )
+            
+        # Perform import validation
+        import_result = _validate_task_imports(task_name, task_config)
+        findings.extend(import_result)
 
     return findings
+
+
+def _validate_task_structure(task_name: str, task_config: Any) -> List[TaskIssue]:
+    """Validate task definition structure."""
+    findings: List[TaskIssue] = []
+    
+    if not isinstance(task_config, dict):
+        findings.append(
+            TaskIssue(
+                path=f"tasks.{task_name}",
+                message="Task definition must be a mapping",
+                code="task-definition-not-mapping",
+                details={"task_name": task_name},
+            )
+        )
+        return findings
+
+    module_name = task_config.get("module")
+    class_name = task_config.get("class")
+    task_path = f"tasks.{task_name}"
+
+    if not module_name or not isinstance(module_name, str):
+        findings.append(
+            TaskIssue(
+                path=f"{task_path}.module",
+                message="Task module must be a non-empty string for import checks",
+                code="task-import-invalid-module",
+                details={"task_name": task_name},
+            )
+        )
+    
+    if not class_name or not isinstance(class_name, str):
+        findings.append(
+            TaskIssue(
+                path=f"{task_path}.class",
+                message="Task class must be a non-empty string for import checks",
+                code="task-import-invalid-class",
+                details={"task_name": task_name},
+            )
+        )
+
+    return findings
+
+
+def _validate_task_imports(task_name: str, task_config: Dict[str, Any]) -> List[TaskIssue]:
+    """Validate task module and class imports with detailed error handling."""
+    findings: List[TaskIssue] = []
+    
+    module_name = task_config.get("module")
+    class_name = task_config.get("class")
+    
+    # Validate module import
+    module_issue = _validate_module_import(module_name, task_name)
+    if module_issue:
+        findings.append(module_issue)
+        return findings  # Skip class validation if module import fails
+    
+    # Validate class existence and type
+    class_issue = _validate_class_existence(module_name, class_name, task_name)
+    if class_issue:
+        findings.append(class_issue)
+        return findings
+    
+    # Validate class type
+    type_issue = _validate_class_type(module_name, class_name, task_name)
+    if type_issue:
+        findings.append(type_issue)
+    
+    return findings
+
+
+def _validate_module_import(module_name: str, task_name: str) -> Optional[TaskIssue]:
+    """Validate that a module can be imported with detailed error reporting."""
+    try:
+        importlib.import_module(module_name)
+        return None
+    except ModuleNotFoundError as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.module",
+            message=f"Module '{module_name}' not found: {exc}. Check PYTHONPATH and module installation.",
+            code="task-import-module-not-found",
+            details={"module": module_name, "task_name": task_name, "error": str(exc)}
+        )
+    except SyntaxError as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.module",
+            message=f"Module '{module_name}' has syntax errors: {exc}",
+            code="task-import-module-syntax-error",
+            details={"module": module_name, "task_name": task_name, "error": str(exc)}
+        )
+    except ImportError as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.module",
+            message=f"Failed to import module '{module_name}': {exc}. Check module dependencies.",
+            code="task-import-module-import-error",
+            details={"module": module_name, "task_name": task_name, "error": str(exc)}
+        )
+    except Exception as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.module",
+            message=f"Unexpected error importing module '{module_name}': {exc}",
+            code="task-import-module-error",
+            details={"module": module_name, "task_name": task_name, "error": str(exc)}
+        )
+
+
+def _validate_class_existence(module_name: str, class_name: str, task_name: str) -> Optional[TaskIssue]:
+    """Validate that a class exists in the specified module."""
+    try:
+        module = importlib.import_module(module_name)
+        getattr(module, class_name)
+        return None
+    except AttributeError:
+        # Get available attributes for better error message
+        available_attrs = [attr for attr in dir(module) if not attr.startswith('_')]
+        return TaskIssue(
+            path=f"tasks.{task_name}.class",
+            message=(
+                f"Class '{class_name}' not found in module '{module_name}'. "
+                f"Available attributes: {', '.join(available_attrs[:5])}{'...' if len(available_attrs) > 5 else ''}. "
+                "Verify the class name or update the configuration."
+            ),
+            code="task-import-class-not-found",
+            details={
+                "module": module_name, 
+                "class": class_name, 
+                "task_name": task_name,
+                "available_attributes": available_attrs
+            }
+        )
+    except Exception as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.class",
+            message=f"Error accessing class '{class_name}' in module '{module_name}': {exc}",
+            code="task-import-class-access-error",
+            details={"module": module_name, "class": class_name, "task_name": task_name, "error": str(exc)}
+        )
+
+
+def _validate_class_type(module_name: str, class_name: str, task_name: str) -> Optional[TaskIssue]:
+    """Validate that the specified attribute is actually a callable class."""
+    try:
+        module = importlib.import_module(module_name)
+        attr = getattr(module, class_name)
+        
+        if not inspect.isclass(attr):
+            attr_type = type(attr).__name__
+            return TaskIssue(
+                path=f"tasks.{task_name}.class",
+                message=(
+                    f"Attribute '{class_name}' in module '{module_name}' is not a class (found {attr_type}). "
+                    "Ensure the configuration references a callable task class."
+                ),
+                code="task-import-not-callable",
+                details={
+                    "module": module_name, 
+                    "class": class_name, 
+                    "task_name": task_name,
+                    "actual_type": attr_type
+                }
+            )
+        
+        return None
+    except Exception as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.class",
+            message=f"Error validating class type for '{class_name}' in module '{module_name}': {exc}",
+            code="task-import-class-type-error",
+            details={"module": module_name, "class": class_name, "task_name": task_name, "error": str(exc)}
+        )

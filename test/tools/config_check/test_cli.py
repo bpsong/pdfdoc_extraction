@@ -167,7 +167,7 @@ class TestValidateCommand:
 
         assert exit_code == 1
         lines = _capture_stdout_lines(capsys)
-        assert any("import" in line and "store_json" in line for line in lines)
+        assert any("store_json" in line and "Module" in line and "not found" in line for line in lines)
 
     def test_validate_reports_yaml_parse_error(
         self,

@@ -67,6 +67,7 @@ class PathValidator:
 
     STATIC_DIR_KEYS = ("web.upload_dir",)
     WATCH_DIR_KEY = "watch_folder.dir"
+    PROCESSING_DIR_KEY = "watch_folder.processing_dir"
 
     def __init__(self, base_dir: Optional[Path] = None) -> None:
         self.base_dir = Path(base_dir) if base_dir else None
@@ -77,6 +78,7 @@ class PathValidator:
 
         errors.extend(self._validate_static_paths(config))
         errors.extend(self._validate_watch_folder(config))
+        errors.extend(self._validate_processing_dir(config))
         errors.extend(self._validate_dynamic_paths(config))
 
         return PathValidationResult(errors=errors, warnings=warnings)
@@ -118,6 +120,27 @@ class PathValidator:
         findings.extend(issues)
         return findings
 
+    def _validate_processing_dir(self, config: Dict[str, Any]) -> List[PathIssue]:
+        """Validate watch_folder.processing_dir with lenient existence checking."""
+        findings: List[PathIssue] = []
+        value = self._get_nested_value(config, self.PROCESSING_DIR_KEY)
+        
+        if value is None:
+            # processing_dir is optional and has a default value, so this is fine
+            return findings
+        
+        # Validate the path format but allow the directory to not exist
+        # (it may be created at runtime)
+        issues = self._validate_directory_value(
+            value,
+            self.PROCESSING_DIR_KEY,
+            allow_creation=True,  # Allow directory to not exist
+            missing_message=f"Processing directory does not exist: {value}",
+        )
+        
+        findings.extend(issues)
+        return findings
+
     def _validate_dynamic_paths(self, config: Dict[str, Any]) -> List[PathIssue]:
         findings: List[PathIssue] = []
 
@@ -126,7 +149,7 @@ class PathValidator:
                 for key, value in node.items():
                     current = f"{trace}.{key}".lstrip(".")
                     lowered_key = key.lower()
-                    if current in {self.WATCH_DIR_KEY, *self.STATIC_DIR_KEYS}:
+                    if current in {self.WATCH_DIR_KEY, self.PROCESSING_DIR_KEY, *self.STATIC_DIR_KEYS}:
                         # Already handled by dedicated checks
                         pass
                     elif lowered_key.endswith("_dir"):

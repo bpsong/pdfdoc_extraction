@@ -28,6 +28,33 @@ class WebConfig(BaseModel):
         min_length=1,
         description="Secret key used for signing sessions and CSRF tokens",
     )
+    host: str = Field(
+        default="127.0.0.1",
+        min_length=1,
+        description="Host address for the web server"
+    )
+    port: int = Field(
+        default=8000,
+        ge=1,
+        le=65535,
+        description="Port number for the web server"
+    )
+
+    @field_validator("host")
+    @classmethod
+    def validate_host(cls, value: str) -> str:
+        """Validate that host is a non-empty string."""
+        if not value or not value.strip():
+            raise ValueError("Host must be a non-empty string")
+        return value.strip()
+
+    @field_validator("port")
+    @classmethod
+    def validate_port(cls, value: int) -> int:
+        """Validate that port is within valid range."""
+        if not isinstance(value, int) or value < 1 or value > 65535:
+            raise ValueError("Port must be an integer between 1 and 65535")
+        return value
 
 
 class AuthenticationConfig(BaseModel):
@@ -58,6 +85,23 @@ class WatchFolderConfig(BaseModel):
         default=False,
         description="Monitor sub-directories when set to True",
     )
+    validate_pdf_header: Optional[bool] = Field(
+        default=True,
+        description="Whether to validate PDF file headers before processing"
+    )
+    processing_dir: str = Field(
+        default="processing",
+        min_length=1,
+        description="Directory for temporary file processing"
+    )
+
+    @field_validator("processing_dir")
+    @classmethod
+    def validate_processing_dir(cls, value: str) -> str:
+        """Validate that processing_dir is a non-empty string."""
+        if not value or not value.strip():
+            raise ValueError("Processing directory must be a non-empty string")
+        return value.strip()
 
 
 class TaskDefinition(BaseModel):

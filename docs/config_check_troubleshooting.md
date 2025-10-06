@@ -155,6 +155,67 @@ Suggestion: Create the directory or update the path in config
 - If not provided, the task defaults to using `'processing'` as the directory name.
 - Ensure the directory exists and the service account has read/write permissions.
 
+## Web Server Configuration Errors
+
+**Symptoms**
+```
+[ERROR] web.host: Web host must be a non-empty string
+[ERROR] web.port: Web port must be an integer between 1 and 65535
+```
+
+**Fixes**
+- **Empty or missing host**: Set `web.host` to a valid hostname or IP address:
+  - `host: "127.0.0.1"` for localhost access only
+  - `host: "0.0.0.0"` to accept connections from any interface
+  - `host: "localhost"` for local development
+- **Invalid port number**: Set `web.port` to a valid port number between 1 and 65535:
+  - `port: 8000` for development (default)
+  - `port: 80` for HTTP (requires admin privileges on Windows)
+  - `port: 443` for HTTPS (requires admin privileges on Windows)
+  - Avoid ports below 1024 unless running with administrator privileges
+
+## Watch Folder Configuration Errors
+
+**Symptoms**
+```
+[ERROR] watch_folder.validate_pdf_header: PDF header validation must be a boolean value
+[ERROR] watch_folder.processing_dir: Processing directory must be a non-empty string
+```
+
+**Fixes**
+- **Invalid PDF validation setting**: Set `watch_folder.validate_pdf_header` to a boolean value:
+  - `validate_pdf_header: true` to enable PDF header validation (recommended)
+  - `validate_pdf_header: false` to disable validation (use with caution)
+  - Remove quotes around boolean values (not `"true"` but `true`)
+- **Empty or missing processing directory**: Set `watch_folder.processing_dir` to a valid directory name:
+  - `processing_dir: "processing"` (default)
+  - `processing_dir: "temp_processing"` for custom directory
+  - Ensure the directory name is not empty or just whitespace
+
+## Enhanced Import Validation Errors
+
+**Symptoms** (when using `--import-checks` flag)
+```
+[ERROR] tasks.my_task.module: Module 'nonexistent.module' not found
+[ERROR] tasks.my_task.class: Class 'NonExistentClass' not found in module 'standard_step.extraction.extract_pdf'
+[ERROR] tasks.my_task.class: 'join' is not a callable class in module 'os.path'
+```
+
+**Fixes**
+- **Module not found**: 
+  - Verify the module name spelling: `module: standard_step.extraction.extract_pdf`
+  - Ensure the module is installed or available in the Python path
+  - Check that the module file exists in the expected location
+  - For custom modules, ensure they are properly installed or in PYTHONPATH
+- **Class not found in module**:
+  - Verify the class name spelling: `class: ExtractPdfTask`
+  - Check that the class exists in the specified module
+  - Ensure the class hasn't been renamed or moved to a different module
+- **Attribute is not a callable class**:
+  - Ensure you're referencing a class, not a function or variable
+  - Example: `os.path.join` is a function, not a class
+  - Use actual task classes like `ExtractPdfTask`, not utility functions
+
 ## Token Or Dependency Issues
 
 **Symptoms**
@@ -179,4 +240,14 @@ Run the validator in verbose mode to see detailed logging:
 config-check validate --config .\config.yaml --verbose
 ```
 
-If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team.
+For comprehensive validation including import checks:
+```
+config-check validate --config .\config.yaml --import-checks --verbose
+```
+
+Get machine-readable output for automated troubleshooting:
+```
+config-check validate --config .\config.yaml --format json
+```
+
+If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include whether you used the `--import-checks` flag, as this affects which validation errors are reported.

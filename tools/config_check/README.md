@@ -46,6 +46,77 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 - Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
 - Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including csv_match clause bounds (1-5) and required column/from_context fields.
 - Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and housekeeping ordering rules.
+- **New**: Enhanced schema validation for web server and watch folder configuration fields.
+- **New**: Import validation to verify task modules and classes are importable.
+
+## Validated Configuration Fields
+
+### Web Configuration
+The validator now checks these web server configuration fields:
+
+- `web.host`: Web server host address (default: "127.0.0.1")
+  - Must be a non-empty string
+  - Example: `host: "0.0.0.0"` for all interfaces
+- `web.port`: Web server port number (default: 8000)
+  - Must be an integer between 1 and 65535
+  - Example: `port: 8080`
+
+### Watch Folder Configuration
+Enhanced validation for watch folder settings:
+
+- `watch_folder.validate_pdf_header`: Enable PDF header validation (default: true)
+  - Must be a boolean value
+  - Example: `validate_pdf_header: false` to disable validation
+- `watch_folder.processing_dir`: Temporary processing directory (default: "processing")
+  - Must be a non-empty string representing a directory path
+  - Example: `processing_dir: "temp_processing"`
+
+### Configuration Example
+```yaml
+web:
+  host: "127.0.0.1"
+  port: 8000
+  upload_dir: "web_upload"
+  secret_key: "your-secret-key"
+
+watch_folder:
+  dir: "watch_folder"
+  recursive: false
+  validate_pdf_header: true
+  processing_dir: "processing"
+```
+
+## Import Validation
+
+Use the `--import-checks` flag to verify that task modules and classes can be imported:
+
+```powershell
+config-check validate --import-checks config.yaml
+```
+
+This validates:
+- **Module Resolution**: Task module names are importable Python modules
+- **Class Existence**: Specified class names exist within the modules
+- **Class Validation**: Specified attributes are actually callable classes
+
+### Import Validation Examples
+
+```powershell
+# Basic validation without import checks
+config-check validate config.yaml
+
+# Full validation including import verification
+config-check validate --import-checks config.yaml
+
+# Import validation with JSON output for automation
+config-check validate --import-checks --format json config.yaml
+```
+
+### Import Error Types
+- `task-import-module-not-found`: Module not found in Python path
+- `task-import-module-syntax-error`: Module contains syntax errors
+- `task-import-class-not-found`: Class not found in module
+- `task-import-not-callable`: Specified attribute is not a callable class
 
 ## Sample Configurations
 
@@ -58,7 +129,40 @@ Use them as templates for new environments or as fixtures when extending the val
 
 ## Troubleshooting
 
-Common failure modes and their remedies (missing directories, import errors, malformed YAML, token mismatches, etc.) are documented in [`docs/config_check_troubleshooting.md`](../../docs/config_check_troubleshooting.md).
+### Common Validation Errors
+
+#### Schema Validation Errors
+- **`web-host-invalid`**: Web host must be a non-empty string
+  - Fix: Ensure `web.host` is set to a valid hostname or IP address
+  - Example: `host: "127.0.0.1"` or `host: "localhost"`
+
+- **`web-port-invalid`**: Web port must be an integer between 1 and 65535
+  - Fix: Set `web.port` to a valid port number
+  - Example: `port: 8000` (avoid ports below 1024 without admin privileges)
+
+- **`watch-folder-pdf-validation-invalid`**: PDF header validation must be a boolean
+  - Fix: Set `watch_folder.validate_pdf_header` to `true` or `false`
+  - Example: `validate_pdf_header: true`
+
+- **`watch-folder-processing-dir-invalid`**: Processing directory must be a non-empty string
+  - Fix: Provide a valid directory path for `watch_folder.processing_dir`
+  - Example: `processing_dir: "processing"`
+
+#### Import Validation Errors
+- **`task-import-module-not-found`**: Module not found in Python path
+  - Fix: Ensure the module is installed or the path is correct
+  - Check: Verify module name spelling and Python path configuration
+
+- **`task-import-class-not-found`**: Class not found in module
+  - Fix: Verify the class name exists in the specified module
+  - Check: Ensure class name spelling matches the actual class definition
+
+- **`task-import-not-callable`**: Specified attribute is not a callable class
+  - Fix: Ensure the specified attribute is a class, not a variable or function
+  - Check: Verify the attribute can be instantiated as a class
+
+### Advanced Troubleshooting
+For detailed troubleshooting of path validation, parameter validation, and pipeline dependency issues, see [`docs/config_check_troubleshooting.md`](../../docs/config_check_troubleshooting.md).
 
 ## Development
 

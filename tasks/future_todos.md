@@ -16,14 +16,14 @@
 
 ## Schema Validation Enhancements Needed
 
-- [ ] Add `web.host` to schema validation (currently used in `main.py` for web server host configuration)
-- [ ] Add `web.port` to schema validation (currently used in `main.py` for web server port configuration)
-- [ ] Add `watch_folder.validate_pdf_header` to schema validation (currently used in `modules/file_processor.py` for PDF header validation)
-- [ ] Add `watch_folder.processing_dir` to schema validation (currently used throughout codebase for processing directory path)
+- [x] Add `web.host` to schema validation (currently used in `main.py` for web server host configuration)
+- [x] Add `web.port` to schema validation (currently used in `main.py` for web server port configuration)
+- [x] Add `watch_folder.validate_pdf_header` to schema validation (currently used in `modules/file_processor.py` for PDF header validation)
+- [x] Add `watch_folder.processing_dir` to schema validation (currently used throughout codebase for processing directory path)
 
 ## Config Checker Tool Improvements
 
-- [ ] Add module and class import validation to config-check tool - currently the tool validates structure and dependencies but doesn't verify that module names (e.g., "standard_step.storage.store_metadata_as_jsonx") and class names are actually importable Python modules/classes
+- [x] Add module and class import validation to config-check tool - currently the tool validates structure and dependencies but doesn't verify that module names (e.g., "standard_step.storage.store_metadata_as_jsonx") and class names are actually importable Python modules/classes
 
 ## Completed v2 LlamaExtract Array-of-Objects Implementation
 
