@@ -15,7 +15,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, status
+import json
+from urllib.parse import parse_qs
+
+from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -149,14 +152,52 @@ def create_app() -> FastAPI:
         response.headers["Expires"] = "0"
         return response
 
+    async def _extract_credentials(request: Request) -> tuple[str, str]:
+        """Extract username and password from form or JSON payload."""
+
+        content_type = request.headers.get("content-type", "").lower()
+        body = await request.body()
+        if not body:
+            return "", ""
+
+        if "application/x-www-form-urlencoded" in content_type:
+            decoded = body.decode("utf-8", errors="replace")
+            parsed = parse_qs(decoded, keep_blank_values=True)
+            username = parsed.get("username", [""])[0]
+            password = parsed.get("password", [""])[0]
+            return username, password
+
+        if "application/json" in content_type:
+            try:
+                payload = json.loads(body.decode("utf-8", errors="replace"))
+            except json.JSONDecodeError:
+                return "", ""
+            username = str(payload.get("username", ""))
+            password = str(payload.get("password", ""))
+            return username, password
+
+        return "", ""
+
     @app.post("/login")
-    async def login_post(request: Request, username: str = Form(...), password: str = Form(...)):
+    async def login_post(request: Request):
         """Handles login form submission, verifies credentials, sets cookie, redirects.
         
         On successful authentication: sets HttpOnly cookie and redirects to dashboard.
         On authentication failure: returns login page with error message and cache-control headers
         to prevent browser caching of error responses.
         """
+        username, password = await _extract_credentials(request)
+        if not username or not password:
+            logger.warning("Login attempt with missing credentials")
+            response = templates.TemplateResponse(
+                "login.html",
+                {"request": request, "error": "Invalid username or password", "is_authenticated": False}
+            )
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            return response
+
         logger.info(f"Login attempt for username: {username}")
         
         try:
@@ -205,10 +246,10 @@ def create_app() -> FastAPI:
             return response
 
     @app.post("/auth/login")
-    async def auth_login_submit(request: Request, username: str = Form(...), password: str = Form(...)):
+    async def auth_login_submit(request: Request):
         """Alternative login endpoint that forwards to the main login handler."""
         logger.info(f"/auth/login POST: forwarding to main login handler")
-        return await login_post(request, username, password)
+        return await login_post(request)
 
     @app.get("/logout")
     async def logout(request: Request):

@@ -23,19 +23,21 @@ Architecture Reference:
     with the overall system, refer to docs/design_architecture.md.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import os
 import json
 from pathlib import Path
-import asyncio
 import logging
 import uuid
-import shutil
 from datetime import datetime, timezone, timedelta
+from dataclasses import dataclass
+from email.parser import BytesParser
+from email.policy import default
+from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
 from .auth_utils import AuthUtils, AuthError
@@ -265,12 +267,72 @@ def build_router() -> APIRouter:
     router = APIRouter()
     logger = logging.getLogger("api_router")
 
+    async def _extract_login_credentials(request: Request) -> Tuple[str, str]:
+        """Extract username and password from supported payload formats."""
+
+        content_type = request.headers.get("content-type", "").lower()
+        body = await request.body()
+        if not body:
+            return "", ""
+
+        if "application/x-www-form-urlencoded" in content_type:
+            decoded = body.decode("utf-8", errors="replace")
+            parsed = parse_qs(decoded, keep_blank_values=True)
+            username = parsed.get("username", [""])[0]
+            password = parsed.get("password", [""])[0]
+            return username, password
+
+        if "application/json" in content_type:
+            try:
+                payload = json.loads(body.decode("utf-8", errors="replace"))
+            except json.JSONDecodeError:
+                return "", ""
+            username = str(payload.get("username", ""))
+            password = str(payload.get("password", ""))
+            return username, password
+
+        return "", ""
+
+    @dataclass
+    class ParsedUpload:
+        """Simple data container for a parsed upload payload."""
+
+        filename: str
+        content_type: str
+        data: bytes
+
+    async def _parse_multipart_upload(request: Request) -> ParsedUpload:
+        """Parse the multipart body and extract the uploaded file."""
+
+        content_type = request.headers.get("content-type", "")
+        if "multipart/form-data" not in content_type.lower():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported content type")
+
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty upload payload")
+
+        header_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("latin-1", errors="ignore")
+        message = BytesParser(policy=default).parsebytes(header_bytes + body)
+
+        for part in message.iter_parts():
+            if part.get_content_disposition() != "form-data":
+                continue
+            if part.get_param("name", header="content-disposition") != "file":
+                continue
+            filename = part.get_filename() or "uploaded_file"
+            file_bytes = part.get_payload(decode=True) or b""
+            content = part.get_content_type() or "application/octet-stream"
+            return ParsedUpload(filename=filename, content_type=content, data=file_bytes)
+
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file field provided")
+
     @router.post("/api/login", response_model=TokenResponse)
-    def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    async def login(request: Request):
         """Authenticate a user and return an access token.
 
         Args:
-            form_data: Form data containing 'username' and 'password' per OAuth2PasswordRequestForm.
+            request: The FastAPI request object containing login credentials.
 
         Returns:
             TokenResponse: Contains the bearer access token, token type, and expiration.
@@ -282,9 +344,13 @@ def build_router() -> APIRouter:
             - 200: Successful authentication, returns access token
             - 401: Invalid credentials provided
         """
+        username, password = await _extract_login_credentials(request)
+        if not username or not password:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid credentials")
+
         _, auth, _, _, _ = get_dependencies()
         try:
-            token = auth.login(form_data.username, form_data.password)
+            token = auth.login(username, password)
             exp_minutes = auth.token_exp_minutes
             return TokenResponse(access_token=token, expires_in=exp_minutes * 60)
         except AuthError:
@@ -292,8 +358,8 @@ def build_router() -> APIRouter:
 
     @router.post("/upload")
     async def upload_pdf(
+        request: Request,
         background_tasks: BackgroundTasks,
-        file: UploadFile = File(...),
         user: str = Depends(get_current_user),
     ):
         """Upload a PDF file for processing.
@@ -316,6 +382,7 @@ def build_router() -> APIRouter:
         """
         config, _, _, _, file_processor = get_dependencies()
         try:
+            upload = await _parse_multipart_upload(request)
             # Generate a UUID for the file
             file_id = str(uuid.uuid4())
             
@@ -330,7 +397,7 @@ def build_router() -> APIRouter:
             
             # Save the uploaded file immediately to the temporary location
             with open(temp_path, "wb") as out_f:
-                shutil.copyfileobj(file.file, out_f)
+                out_f.write(upload.data)
             
             # Validate PDF header before scheduling background processing.
             # Use 5 bytes ('%PDF-'), 3 attempts and 0.2s delay to match watch-folder behavior.
@@ -355,13 +422,11 @@ def build_router() -> APIRouter:
                 logger.error(f"PDF header validation error: {e}")
                 raise HTTPException(status_code=400, detail="Invalid PDF header")
             # Reset file pointer to beginning for any future reads
-            file.file.seek(0)
-            
             # Log the successful immediate save
             logger.info(f"File saved immediately with ID: {file_id}")
-            
+
             # Add the processing task to background tasks
-            background_tasks.add_task(process_file_in_background, file_processor, temp_path, file_id, file.filename)
+            background_tasks.add_task(process_file_in_background, file_processor, temp_path, file_id, upload.filename)
             
             # Redirect to dashboard page immediately after upload
             return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
