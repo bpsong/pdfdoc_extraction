@@ -409,7 +409,7 @@ def _validate_field_spec(
         errors.append(
             ParameterIssue(
                 path=f"{path}.type",
-                message="Field type must be one of str, int, float, bool, Any, Optional[T], or List[T]",
+                message="Field type must be one of str, int, float, bool, Any, Optional[T], List[T], or nested combinations like Optional[List[T]]",
                 code="param-field-invalid-type",
                 details={"field": field},
             )
@@ -758,10 +758,10 @@ def _is_valid_field_type(type_value: str) -> bool:
 
     if type_value.startswith("Optional[") and type_value.endswith("]"):
         inner = type_value[len("Optional[") : -1]
-        return inner in _ALLOWED_BASE_TYPES
+        return _is_valid_field_type(inner)  # Recursive validation for nested types
 
     if type_value.startswith("List[") and type_value.endswith("]"):
         inner = type_value[len("List[") : -1]
-        return inner in _ALLOWED_BASE_TYPES or inner == "Any"
+        return inner in _ALLOWED_BASE_TYPES or inner == "Any" or _is_valid_field_type(inner)
 
     return False

@@ -246,18 +246,19 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
         elif classification == "context":
             context_seen = True
         if (
-            classification == "storage"
+            classification in ("storage", "rules")
             and (task_tokens & known_field_tokens)
             and not extraction_seen
         ):
+            task_type = "Storage" if classification == "storage" else "Rules"
             errors.append(
                 PipelineIssue(
                     path=path,
                     message=(
-                        f"Storage task '{task_name}' uses extracted data tokens but no extraction task runs earlier."
+                        f"{task_type} task '{task_name}' uses extracted data tokens but no extraction task runs earlier."
                     ),
                     code="pipeline-storage-before-extraction",
-                    details={"task_name": task_name},
+                    details={"task_name": task_name, "task_type": task_type.lower()},
                 )
             )
 
@@ -355,6 +356,26 @@ def _build_task_metadata(tasks: Dict[str, Any]) -> Dict[str, Any]:
                     )
                 )
                 task_tokens.update(tokens)
+
+        # Special handling for rules tasks that use from_context
+        if classification == "rules" and isinstance(params, dict):
+            csv_match = params.get("csv_match")
+            if isinstance(csv_match, dict) and "clauses" in csv_match:
+                clauses = csv_match["clauses"]
+                if isinstance(clauses, list):
+                    for clause in clauses:
+                        if isinstance(clause, dict):
+                            from_context = clause.get("from_context")
+                            if isinstance(from_context, str) and from_context.strip():
+                                # Add as if it were a template token for dependency checking
+                                task_tokens.add(from_context.strip())
+                                token_usages.append(
+                                    TokenUsage(
+                                        task_name=task_name,
+                                        path=f"tasks.{task_name}.params.csv_match.clauses[].from_context",
+                                        tokens={from_context.strip()},
+                                    )
+                                )
 
         per_task_tokens[task_name] = task_tokens
 
