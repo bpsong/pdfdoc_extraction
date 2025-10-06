@@ -256,7 +256,11 @@ def main():
             if uvicorn_proc is not None:
                 ret = uvicorn_proc.poll()
                 if ret is not None:
-                    logger.error(f"Uvicorn subprocess exited with code {ret}. Check logs at {config_manager.get('logging.log_file', 'app.log')}")
+                    log_path = config_manager.get('logging.log_file', 'app.log')
+                    if ret == 0:
+                        logger.info(f"Uvicorn subprocess exited cleanly with code {ret}. Check logs at {log_path}")
+                    else:
+                        logger.error(f"Uvicorn subprocess exited with code {ret}. Check logs at {log_path}")
                     break
             time.sleep(1)
     except KeyboardInterrupt:

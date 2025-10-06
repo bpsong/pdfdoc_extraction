@@ -326,7 +326,6 @@ authentication:
 logging:
   log_file: "app.log"
   log_level: "INFO"
-  log_format: "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 # Pipeline definition
 tasks:

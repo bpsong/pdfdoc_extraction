@@ -303,7 +303,6 @@ Below is an example configuration snippet with explanations:
 logging:
   log_file: "app.log"                 # Path to the log file
   log_level: "INFO"                   # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  log_format: "%(asctime)s %(levelname)s %(name)s %(message)s"  # Log message format
 
 watch_folder:
   dir: "watch_folder"                 # Folder to watch for incoming PDFs (must pre-exist; startup fails if missing)
@@ -918,7 +917,6 @@ watch_folder:
 logging:
   log_file: "app.log"
   log_level: "INFO"
-  log_format: "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 # Tasks registry: name -> module/class/params
 tasks:

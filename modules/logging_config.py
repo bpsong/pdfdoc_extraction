@@ -1,138 +1,134 @@
 """
-Minimal centralized logging configuration for PDF document extraction system.
-Provides clean, readable logs with file rotation and UTF-8 support.
-
-Examples:
-    Example YAML configuration for logging setup:
-    ```yaml
-    logging:
-      level: DEBUG
-      file: app.log
-      format: "%(asctime)s %(levelname)s %(name)s %(message)s"
-      handlers:
-        - console
-        - file
-      rotation:
-        max_bytes: 10485760  # 10MB
-        backup_count: 5
-      encoding: utf-8
-    ```
+Prefect-aligned logging configuration for the PDF document extraction system.
 """
+import io
 import logging
 import logging.handlers
+import os
 import sys
-import io
+from typing import TextIO
+
+from prefect.logging.formatters import PrefectFormatter
+from prefect.logging.handlers import PrefectConsoleHandler
+
+# Prevent Prefect from spawning API log handlers when running locally/tests.
+os.environ.setdefault("PREFECT_LOGGING_TO_API_ENABLED", "false")
+
+# Prefect console styles mirror prefect/logging/logging.yml
+_PREFECT_CONSOLE_STYLES = {
+    "log.web_url": "bright_blue",
+    "log.local_url": "bright_blue",
+    "log.debug_level": "blue",
+    "log.info_level": "cyan",
+    "log.warning_level": "yellow3",
+    "log.error_level": "red3",
+    "log.critical_level": "bright_red",
+    "log.completed_state": "green",
+    "log.cancelled_state": "yellow3",
+    "log.failed_state": "red3",
+    "log.crashed_state": "bright_red",
+    "log.cached_state": "bright_blue",
+    "log.flow_run_name": "magenta",
+    "log.flow_name": "bold magenta",
+}
+
+_CONSOLE_FORMAT = "%(asctime)s.%(msecs)03d | %(levelname)-7s | %(name)s - %(message)s"
+_TASK_FORMAT = "%(asctime)s.%(msecs)03d | %(levelname)-7s | Task run %(task_run_name)r - %(message)s"
+_FLOW_FORMAT = "%(asctime)s.%(msecs)03d | %(levelname)-7s | Flow run %(flow_run_name)r - %(message)s"
+_CONSOLE_DATEFMT = "%H:%M:%S"
+_FILE_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+
+class _NonClosingUTF8Wrapper(io.TextIOWrapper):
+    """UTF-8 wrapper that keeps the underlying stream open when closed."""
+
+    def __init__(self, buffer: io.BufferedIOBase):
+        super().__init__(buffer, encoding="utf-8", line_buffering=True, write_through=True)
+
+    def close(self) -> None:  # pragma: no cover - defensive flush only
+        try:
+            self.flush()
+        except Exception:
+            pass
+
+
+class _NonClosingRotatingFileHandler(logging.handlers.RotatingFileHandler):
+    """Rotating handler that tolerates flushes after the stream closes."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            super().emit(record)
+        except ValueError:
+            return
+
+    def close(self) -> None:  # pragma: no cover - defensive flush only
+        try:
+            self.flush()
+        except Exception:
+            pass
+
+
+def _prefect_formatter(*, datefmt: str) -> PrefectFormatter:
+    return PrefectFormatter(
+        format=_CONSOLE_FORMAT,
+        datefmt=datefmt,
+        task_run_fmt=_TASK_FORMAT,
+        flow_run_fmt=_FLOW_FORMAT,
+    )
+
+
+def _resolve_console_stream(wrap_stdout_utf8: bool) -> TextIO:
+    base_stream: TextIO = getattr(sys, "__stdout__", sys.stdout)
+    if not wrap_stdout_utf8:
+        return base_stream
+    buffer = getattr(base_stream, "buffer", None)
+    if buffer is None:
+        return base_stream
+    try:
+        return _NonClosingUTF8Wrapper(buffer)
+    except Exception:
+        return base_stream
 
 
 def setup_logging(wrap_stdout_utf8: bool = False) -> logging.Logger:
-    """
-    Set up centralized logging configuration with clean, readable format.
-
-    Args:
-        wrap_stdout_utf8: Whether to wrap stdout for UTF-8 encoding on Windows
-
-    Returns:
-        Root logger configured with the specified settings
-
-    Examples:
-        Basic usage with default settings:
-        >>> logger = setup_logging()
-
-        Usage with UTF-8 stdout wrapping on Windows:
-        >>> logger = setup_logging(wrap_stdout_utf8=True)
-
-        Example YAML configuration that this function implements:
-        ```yaml
-        logging:
-          setup:
-            wrap_stdout_utf8: false
-          handlers:
-            console:
-              enabled: true
-              formatter: "%(asctime)s %(levelname)s %(name)s %(message)s"
-            file:
-              enabled: true
-              filename: app.log
-              max_bytes: 10485760
-              backup_count: 5
-              encoding: utf-8
-          root_level: INFO
-        ```
-    """
-    # Configure root logger
+    """Configure root logging using Prefect-style formatting."""
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
 
-    # Remove existing handlers to avoid duplication
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
 
-    # Create clean formatter without context clutter
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    file_formatter = _prefect_formatter(datefmt=_FILE_DATEFMT)
+    console_formatter = _prefect_formatter(datefmt=_CONSOLE_DATEFMT)
 
-    # File handler with rotation
     try:
-        file_handler = logging.handlers.RotatingFileHandler(
+        file_handler = _NonClosingRotatingFileHandler(
             "app.log",
-            maxBytes=10*1024*1024,  # 10MB
+            maxBytes=10 * 1024 * 1024,
             backupCount=5,
-            encoding='utf-8'
+            encoding="utf-8",
         )
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         root_logger.addHandler(file_handler)
-    except Exception as e:
-        print(f"Warning: Failed to set up file logging: {e}")
+    except Exception as exc:  # pragma: no cover
+        print(f"Warning: Failed to set up file logging: {exc}")
 
-    # Console handler for development. Optionally wrap stdout for UTF-8 on Windows.
-    if wrap_stdout_utf8:
-        try:
-            utf8_stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
-            console_handler = logging.StreamHandler(stream=utf8_stdout)
-        except Exception:
-            console_handler = logging.StreamHandler(sys.stdout)
-    else:
-        console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
+    console_stream = _resolve_console_stream(wrap_stdout_utf8)
+    console_handler = PrefectConsoleHandler(stream=console_stream, styles=_PREFECT_CONSOLE_STYLES)
+    console_handler.setFormatter(console_formatter)
     root_logger.addHandler(console_handler)
 
-    # Capture warnings
-    logging.captureWarnings(True)
+    # Mute noisy loggers that emit during Prefect server shutdown.
+    for noisy_name in ("prefect.server.api.server", "httpx"):
+        noisy_logger = logging.getLogger(noisy_name)
+        noisy_logger.handlers.clear()
+        noisy_logger.propagate = False
 
+    logging.captureWarnings(True)
+    logging.raiseExceptions = False
     return root_logger
 
 
 def get_logger(name: str) -> logging.Logger:
-    """
-    Get a logger with the specified name.
-
-    Args:
-        name: Logger name
-
-    Returns:
-        Configured logger instance
-
-    Examples:
-        Get a logger for a specific module:
-        >>> logger = get_logger("file_processor")
-        >>> logger.info("Processing file")
-
-        Get a logger for a workflow step:
-        >>> extraction_logger = get_logger("extraction.pdf_parser")
-        >>> extraction_logger.debug("Starting PDF extraction")
-
-        Example YAML configuration for logger hierarchy:
-        ```yaml
-        logging:
-          loggers:
-            file_processor:
-              level: INFO
-              propagate: true
-            extraction.pdf_parser:
-              level: DEBUG
-              propagate: false
-            api:
-              level: WARNING
-              propagate: true
-        ```
-    """
+    """Return a logger configured with the centralized Prefect-style setup."""
     return logging.getLogger(name)
