@@ -4,13 +4,13 @@ from llama_cloud_services import LlamaExtract
 
 @pytest.fixture
 def api_key():
-    """Fixture to provide LlamaCloud API key"""
-    return "llx-CsOui2BBuQIAsd9tGmxWo3EdViSjz59L5nxitWDByvn100tT"
+    """Fixture to provide LlamaCloud API key (updated per user request)"""
+    return "llx-WJbMPY1riM0GCHxAer5f8nePPQKw7FFG9o3xmiuBhQ333HGs"
 
 @pytest.fixture
 def agent_id():
     """Fixture to provide LlamaCloud agent ID"""
-    return "f311fd08-282f-4fef-8a41-f728242159e9"
+    return "4e65985c-fe36-4cd1-903d-368f2078a87d"
 
 def test_llamacloud_connection(api_key: str, agent_id: str):
     logging.basicConfig(level=logging.INFO)
@@ -34,7 +34,7 @@ def test_llamacloud_connection(api_key: str, agent_id: str):
         raise
 
 if __name__ == "__main__":
-    # Replace with your actual API key and agent ID
-    API_KEY = "llx-CsOui2BBuQIAsd9tGmxWo3EdViSjz59L5nxitWDByvn100tT"
-    AGENT_ID = "f311fd08-282f-4fef-8a41-f728242159e9" 
+    # Replace with your actual API key and agent ID (updated per user request)
+    API_KEY = "WJbMPY1riM0GCHxAer5f8nePPQKw7FFG9o3xmiuBhQ333HGs"
+    AGENT_ID = "f311fd08-282f-4fef-8a41-f728242159e9"
     test_llamacloud_connection(API_KEY, AGENT_ID)

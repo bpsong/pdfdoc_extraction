@@ -321,7 +321,19 @@ def build_router() -> APIRouter:
             if part.get_param("name", header="content-disposition") != "file":
                 continue
             filename = part.get_filename() or "uploaded_file"
-            file_bytes = part.get_payload(decode=True) or b""
+            # get_payload(decode=True) may return bytes or (rarely) str/other types depending on part.
+            # Normalize to bytes to satisfy type expectations and avoid Pylance type errors.
+            raw_payload = part.get_payload(decode=True)
+            if isinstance(raw_payload, (bytes, bytearray)):
+                file_bytes = bytes(raw_payload)
+            elif raw_payload is None:
+                file_bytes = b""
+            else:
+                # Fallback: convert to str then encode.
+                try:
+                    file_bytes = str(raw_payload).encode("utf-8", errors="ignore")
+                except Exception:
+                    file_bytes = b""
             content = part.get_content_type() or "application/octet-stream"
             return ParsedUpload(filename=filename, content_type=content, data=file_bytes)
 
