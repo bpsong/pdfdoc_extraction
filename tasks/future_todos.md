@@ -27,15 +27,15 @@
 
 ### Enhanced Rules Task Validation (update_reference.py)
 
-- [ ] **File Path Validation**: Add validation that `reference_file` parameter points to an existing, readable CSV file before runtime
-- [ ] **CSV Structure Validation**: Verify that the reference CSV file can be opened/parsed and contains proper headers
-- [ ] **Column Existence Validation**: Check that `update_field` and all clause `column` values exist as actual columns in the target CSV file
+- [x] **File Path Validation**: Add validation that `reference_file` parameter points to an existing, readable CSV file before runtime
+- [x] **CSV Structure Validation**: Verify that the reference CSV file can be opened/parsed and contains proper headers
+- [x] **Column Existence Validation**: Check that `update_field` and all clause `column` values exist as actual columns in the target CSV file
 - [ ] **Clause Uniqueness Validation**: 
   - Error on completely identical clauses (same column + same from_context)
   - Warning on multiple clauses referencing the same CSV column (potentially impossible AND conditions)
   - Info on multiple clauses using the same context value (might be intentional but worth noting)
 - [ ] **Context Path Validation**: Validate `from_context` dotted paths follow proper notation and reference realistic pipeline fields
-- [ ] **Deprecation Warnings**: Emit warnings for deprecated "data." prefixes in `from_context` paths (should use bare field names)
+- [x] **Deprecation Warnings**: Emit warnings for deprecated "data." prefixes in `from_context` paths (should use bare field names)
 - [ ] **Type Consistency Validation**: When `number: true` is specified, validate that the referenced context field is likely to be numeric based on extraction field definitions
 - [ ] **Cross-Pipeline Validation**: Ensure rules tasks are positioned after extraction tasks in the pipeline and that referenced fields are available from upstream tasks
 - [ ] **Semantic Validation**: 
@@ -46,10 +46,10 @@
 ### General Config-Check Enhancements
 
 - [ ] **Runtime File Validation Mode**: Add optional `--check-files` flag to validate file paths, CSV structures, and other runtime dependencies
-- [ ] **Field Consistency Validation**: Cross-reference field names between extraction tasks and downstream storage/rules tasks to catch naming mismatches
-- [ ] **Pipeline Dependency Analysis**: Validate that tasks are ordered correctly (extraction → rules → storage → archiver) and that required fields flow properly between stages
-- [ ] **Template Token Validation Enhancement**: Extend existing template validation to check against actual extraction field definitions rather than just basic syntax
-- [ ] **Configuration Completeness Warnings**: Warn about common missing configurations (e.g., rules tasks without corresponding extraction tasks, storage tasks without required fields)
+- [x] **Field Consistency Validation**: Cross-reference field names between extraction tasks and downstream storage/rules tasks to catch naming mismatches
+- [x] **Pipeline Dependency Analysis**: Validate that tasks are ordered correctly (extraction → rules → storage → archiver) and that required fields flow properly between stages
+- [x] **Template Token Validation Enhancement**: Extend existing template validation to check against actual extraction field definitions rather than just basic syntax
+- [x] **Configuration Completeness Warnings**: Warn about common missing configurations (e.g., rules tasks without corresponding extraction tasks, storage tasks without required fields)
 - [ ] **Performance Impact Analysis**: Flag configurations that might cause performance issues (e.g., too many extraction fields, overly complex rules clauses)
 - [ ] **Security Validation**: Check for potential security issues in file paths, ensure proper path traversal protection in directory configurations
 
