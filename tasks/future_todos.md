@@ -25,7 +25,7 @@
 
 - [x] Add module and class import validation to config-check tool - currently the tool validates structure and dependencies but doesn't verify that module names (e.g., "standard_step.storage.store_metadata_as_jsonx") and class names are actually importable Python modules/classes
 
-### Enhanced Rules Task Validation (update_reference.py)
+### Enhanced Rules Task Validation (update_reference.py) for config-check Tool
 
 - [ ] **File Path Validation**: Add validation that `reference_file` parameter points to an existing, readable CSV file before runtime
 - [ ] **CSV Structure Validation**: Verify that the reference CSV file can be opened/parsed and contains proper headers
@@ -43,7 +43,7 @@
   - Detect unrealistic field references that don't match common extraction patterns
   - Flag multiple clauses on the same column that might create impossible conditions
 
-### General Config-Check Enhancements
+### General Config-Check Enhancements for config-check Tool
 
 - [ ] **Runtime File Validation Mode**: Add optional `--check-files` flag to validate file paths, CSV structures, and other runtime dependencies
 - [ ] **Field Consistency Validation**: Cross-reference field names between extraction tasks and downstream storage/rules tasks to catch naming mismatches
