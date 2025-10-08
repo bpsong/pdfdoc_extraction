@@ -1,0 +1,5 @@
+supplier_name,invoice_number,amount,status,policy_number
+ABC Corp,INV-001,1500.00,pending,POL-123
+XYZ Ltd,INV-002,2750.50,processed,POL-456
+Tech Solutions,INV-003,890.25,pending,POL-789
+Global Services,INV-004,3200.00,processed,POL-012

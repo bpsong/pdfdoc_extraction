@@ -54,6 +54,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from .pipeline_validator import MODULE_PREFIX_CLASSIFICATION
+from .rules_task_validator import validate_rules_task
 
 _ALLOWED_BASE_TYPES = {"str", "int", "float", "bool", "Any"}
 _RULES_REQUIRED_KEYS = ("reference_file", "update_field")
@@ -171,6 +172,28 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
             )
         elif classification == "rules":
             _validate_rules_params(params, params_path, errors)
+            # Enhanced rules task validation
+            rules_findings = validate_rules_task(task_name, task_config)
+            for finding in rules_findings:
+                severity = finding.details.get("severity", "error") if finding.details else "error"
+                if severity == "error":
+                    errors.append(
+                        ParameterIssue(
+                            path=finding.path,
+                            message=finding.message,
+                            code=finding.code,
+                            details=finding.details
+                        )
+                    )
+                elif severity in ("warning", "info"):
+                    warnings.append(
+                        ParameterIssue(
+                            path=finding.path,
+                            message=finding.message,
+                            code=finding.code,
+                            details=finding.details
+                        )
+                    )
         elif classification == "context":
             _validate_context_params(params, params_path, errors)
         elif classification == "housekeeping":

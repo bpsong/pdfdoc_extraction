@@ -44,6 +44,7 @@ from .schema import (
 )
 from .suggestions import get_suggestion
 from .task_validator import TaskValidationResult, validate_tasks
+from .runtime_file_validator import validate_runtime_files
 from .yaml_parser import YAMLParser
 
 logger = logging.getLogger(__name__)
@@ -87,11 +88,13 @@ class ConfigValidator:
         strict_mode: bool = False,
         base_dir: Optional[Union[str, Path]] = None,
         import_checks: bool = False,
+        check_files: bool = False,
         yaml_parser: Optional[YAMLParser] = None,
     ) -> None:
         self.strict_mode = strict_mode
         self.base_dir = Path(base_dir) if base_dir else None
         self.import_checks = import_checks
+        self.check_files = check_files
         self.parser = yaml_parser or YAMLParser()
         self.logger = logger.getChild(self.__class__.__name__)
         self.path_validator = PathValidator(base_dir=self.base_dir)
@@ -102,6 +105,10 @@ class ConfigValidator:
             self._run_pipeline_pass,
             self._run_path_pass,
         ]
+        
+        # Add runtime file validation if enabled
+        if self.check_files:
+            self._validation_passes.append(self._run_runtime_file_pass)
 
     def validate(self, config_path: Union[str, Path]) -> ValidationResult:
         """Validate a configuration file on disk."""
@@ -317,3 +324,36 @@ class ConfigValidator:
 
         return ValidationResult(errors=errors, warnings=warnings)
 
+    def _run_runtime_file_pass(self, config_data: Dict[str, Any]) -> ValidationResult:
+        """Run runtime file validation pass."""
+
+        if not isinstance(config_data, dict):
+            return ValidationResult()
+
+        file_result = validate_runtime_files(config_data, self.base_dir)
+
+        errors: List[ValidationMessage] = []
+        for issue in file_result.errors:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            errors.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        warnings: List[ValidationMessage] = []
+        for issue in file_result.warnings:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            warnings.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        return ValidationResult(errors=errors, warnings=warnings)

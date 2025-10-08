@@ -187,6 +187,12 @@ Exit Codes:
         help='Enable validation of import references in config'
     )
 
+    validate_parser.add_argument(
+        '--check-files',
+        action='store_true',
+        help='Enable runtime file system validation (check file existence, permissions, CSV structure)'
+    )
+
     # Schema subcommand
     schema_parser = subparsers.add_parser(
         'schema',
@@ -247,7 +253,8 @@ def run_validate_command(args, logger: logging.Logger) -> int:
         f"strict_mode={args.strict}",
         f"verbose={args.verbose}",
         f"base_dir={args.base_dir}" if args.base_dir else None,
-        f"import_checks={args.import_checks}"
+        f"import_checks={args.import_checks}",
+        f"check_files={args.check_files}"
     ]
     # Filter out None values and join with spaces for one-line format
     valid_args = [arg for arg in args_summary if arg is not None]
@@ -261,6 +268,7 @@ def run_validate_command(args, logger: logging.Logger) -> int:
         strict_mode=args.strict,
         base_dir=args.base_dir,
         import_checks=args.import_checks,
+        check_files=args.check_files,
     )
     validation_result = validator.validate(resolved_config_path)
 
@@ -268,6 +276,8 @@ def run_validate_command(args, logger: logging.Logger) -> int:
         logger.debug(f"Base directory override: {args.base_dir}")
     if args.import_checks:
         logger.info("Import checks enabled")
+    if args.check_files:
+        logger.info("Runtime file validation enabled")
 
     # Create reporter based on format choice
     reporter = ValidationReporter(

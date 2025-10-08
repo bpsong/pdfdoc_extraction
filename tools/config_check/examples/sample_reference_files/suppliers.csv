@@ -1,0 +1,6 @@
+supplier_name,invoice_number,total_amount,processing_status,policy_number
+"ABC Corp","INV-001",1500.00,"pending","POL-12345"
+"XYZ Ltd","INV-002",2750.50,"processed","POL-67890"
+"Tech Solutions","INV-003",890.25,"pending","POL-11111"
+"Global Services","INV-004",3200.00,"processed","POL-22222"
+"Local Vendor","INV-005",450.75,"pending","POL-33333"

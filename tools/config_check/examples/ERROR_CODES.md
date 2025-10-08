@@ -1,169 +1,212 @@
-# Config Check Error Codes Reference
+# Config-Check Error Codes Reference
 
-This document provides a comprehensive reference for all error codes returned by the config-check tool, including the new schema validation and import validation error codes.
+This document provides a comprehensive reference of all validation error codes used by the config-check tool, organized by validation category.
 
 ## Schema Validation Error Codes
 
 ### Web Configuration Errors
-
-#### `web-host-invalid`
-**Description**: Web host must be a non-empty string  
-**Cause**: The `web.host` field is empty, null, or contains only whitespace  
-**Solution**: Set `web.host` to a valid hostname or IP address  
-**Example Fix**:
-```yaml
-web:
-  host: "127.0.0.1"  # or "localhost" or "0.0.0.0"
-```
-
-#### `web-port-invalid`
-**Description**: Web port must be an integer between 1 and 65535  
-**Cause**: The `web.port` field is not an integer or is outside the valid port range  
-**Solution**: Set `web.port` to a valid port number  
-**Example Fix**:
-```yaml
-web:
-  port: 8000  # Any integer from 1 to 65535
-```
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `web-host-invalid` | Error | Web host must be a non-empty string | Set `web.host` to a valid hostname or IP address |
+| `web-port-invalid` | Error | Web port must be an integer between 1 and 65535 | Set `web.port` to a valid port number (e.g., 8000) |
 
 ### Watch Folder Configuration Errors
-
-#### `watch-folder-pdf-validation-invalid`
-**Description**: PDF header validation must be a boolean value  
-**Cause**: The `watch_folder.validate_pdf_header` field is not a boolean (true/false)  
-**Solution**: Set the field to `true` or `false`  
-**Example Fix**:
-```yaml
-watch_folder:
-  validate_pdf_header: true  # or false
-```
-
-#### `watch-folder-processing-dir-invalid`
-**Description**: Processing directory must be a non-empty string  
-**Cause**: The `watch_folder.processing_dir` field is empty, null, or contains only whitespace  
-**Solution**: Provide a valid directory path  
-**Example Fix**:
-```yaml
-watch_folder:
-  processing_dir: "processing"  # or any valid directory name
-```
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `watch-folder-pdf-validation-invalid` | Error | PDF header validation must be a boolean | Set `watch_folder.validate_pdf_header` to `true` or `false` |
+| `watch-folder-processing-dir-invalid` | Error | Processing directory must be a non-empty string | Provide a valid directory path for `watch_folder.processing_dir` |
 
 ## Import Validation Error Codes
 
-These errors only appear when using the `--import-checks` flag.
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `task-import-module-not-found` | Error | Module not found in Python path | Ensure module is installed and path is correct |
+| `task-import-module-syntax-error` | Error | Module contains syntax errors | Fix syntax errors in the specified module |
+| `task-import-class-not-found` | Error | Class not found in module | Verify class name exists in the specified module |
+| `task-import-not-callable` | Error | Specified attribute is not a callable class | Ensure attribute is a class, not a variable or function |
 
-#### `task-import-module-not-found`
-**Description**: Module not found in Python path  
-**Cause**: The specified task module cannot be imported  
-**Common Reasons**:
-- Module name is misspelled
-- Module is not installed
-- Module is not in the Python path
-- Module file doesn't exist
+## Rules Task Validation Error Codes
 
-**Solution**: 
-- Verify the module name spelling
-- Ensure the module is installed or available
-- Check Python path configuration
-- Verify the module file exists in the expected location
+### CSV File Validation
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `file-not-found` | Error | Reference CSV file does not exist | Ensure CSV file path is correct and file exists |
+| `rules-csv-not-readable` | Error | CSV file cannot be opened or parsed | Verify file is valid CSV format with proper permissions |
+| `rules-csv-empty` | Error | CSV file is empty | Add data to CSV file or use different reference file |
+| `rules-csv-missing-headers` | Error | CSV file has no column headers | Add proper column headers to first row of CSV |
+| `rules-csv-pandas-missing` | Error | pandas library required but not available | Install pandas: `pip install pandas` |
 
-**Example Fix**:
+### Column Reference Validation
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `rules-column-not-found` | Error | Referenced column does not exist in CSV file | Update column names to match CSV headers exactly |
+
+### Clause Validation
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `rules-duplicate-clause` | Error | Identical clause definition found | Remove duplicate clauses or modify to be unique |
+| `rules-impossible-condition` | Warning | Multiple clauses on same column may create impossible condition | Review business logic for multiple conditions on same column |
+| `rules-context-reuse` | Info | Multiple clauses use same context value | Note: might be intentional but worth reviewing |
+
+### Context Path Validation
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `rules-context-path-invalid` | Error | Invalid context path syntax | Use proper dotted notation (e.g., `field_name` or `nested.field`) |
+| `rules-deprecated-data-prefix` | Warning | Deprecated 'data.' prefix in context path | Remove 'data.' prefix (e.g., `data.field` → `field`) |
+| `rules-field-not-found` | Warning | Referenced field not found in extraction configuration | Ensure field exists in extraction task configuration |
+| `rules-context-path-issue` | Warning | General context path issue | Review context path for potential issues |
+
+### Semantic Validation
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `rules-semantic-type-mismatch` | Warning | Type mismatch in field comparison | Ensure `number` flag matches expected data type |
+| `rules-unrealistic-field-reference` | Info | Field reference doesn't match common patterns | Verify field name exists in extraction configuration |
+
+## Runtime File Validation Error Codes
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `file-not-found` | Error | Referenced file does not exist | Ensure file path is correct and file exists |
+| `file-not-file` | Error | Path exists but is not a file | Ensure path points to a file, not a directory |
+| `file-not-readable` | Error | File exists but cannot be read | Check file permissions and ensure read access |
+| `file-access-error` | Error | General file access error | Review file path and permissions |
+
+## Parameter Validation Error Codes
+
+### Rules Task Parameters
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `param-rules-not-mapping` | Error | Rules task params must be a mapping | Define params as a dictionary with required fields |
+| `param-rules-missing-reference-file` | Error | Missing reference_file parameter | Set `reference_file` to CSV file path |
+| `param-rules-missing-update-field` | Error | Missing update_field parameter | Set `update_field` to column name to update |
+| `param-rules-csv-match-mapping` | Error | csv_match must be a mapping | Provide csv_match as dictionary with type and clauses |
+| `param-rules-csv-type` | Error | Invalid csv_match.type value | Set `csv_match.type` to 'column_equals_all' |
+| `param-rules-clauses-type` | Error | csv_match.clauses must be a list | Define clauses as list of clause mappings |
+| `param-rules-clauses-count` | Error | Invalid number of clauses | Provide between 1 and 5 clause definitions |
+| `param-rules-clause-not-mapping` | Error | Clause must be a mapping | Ensure each clause is a dictionary |
+| `param-rules-clause-column` | Error | Clause column must be non-empty string | Provide valid column name for each clause |
+| `param-rules-clause-context` | Error | Clause from_context must be non-empty string | Provide valid from_context for each clause |
+| `param-rules-clause-number-type` | Error | Clause number flag must be boolean | Set number to true/false or remove it |
+
+## Error Severity Levels
+
+### Error (Exit Code 1)
+- Configuration is invalid and will cause runtime failures
+- Must be fixed before deployment
+- Examples: Missing required fields, invalid syntax, file not found
+
+### Warning (Exit Code 2)
+- Configuration may cause issues or uses deprecated features
+- Should be addressed but won't prevent operation
+- Examples: Deprecated syntax, potential type mismatches, impossible conditions
+
+### Info (Exit Code 0)
+- Informational messages about configuration
+- No action required but worth noting
+- Examples: Context reuse, unrealistic field references
+
+## Common Error Patterns
+
+### File Path Issues
 ```yaml
-tasks:
-  my_task:
-    module: standard_step.extraction.extract_pdf  # Correct module path
-    class: ExtractPdfTask
+# ERROR: file-not-found
+reference_file: "missing_file.csv"
+
+# FIX: Use correct path
+reference_file: "reference_file/suppliers.csv"
 ```
 
-#### `task-import-module-syntax-error`
-**Description**: Module contains syntax errors  
-**Cause**: The specified module has Python syntax errors that prevent import  
-**Solution**: Fix the syntax errors in the module file  
-**Common Issues**:
-- Missing colons, parentheses, or brackets
-- Incorrect indentation
-- Invalid Python syntax
-
-#### `task-import-class-not-found`
-**Description**: Class not found in module  
-**Cause**: The specified class name doesn't exist in the imported module  
-**Common Reasons**:
-- Class name is misspelled
-- Class was renamed or removed
-- Class is defined in a different module
-
-**Solution**: 
-- Verify the class name spelling
-- Check that the class exists in the specified module
-- Ensure you're referencing the correct module
-
-**Example Fix**:
+### Column Name Mismatches
 ```yaml
-tasks:
-  my_task:
-    module: standard_step.extraction.extract_pdf
-    class: ExtractPdfTask  # Correct class name
+# ERROR: rules-column-not-found
+update_field: "Status"  # CSV has "status" (lowercase)
+
+# FIX: Match exact column name
+update_field: "status"
 ```
 
-#### `task-import-not-callable`
-**Description**: Specified attribute is not a callable class  
-**Cause**: The specified attribute exists but is not a class (e.g., it's a function, variable, or constant)  
-**Solution**: Ensure you're referencing a class, not a function or variable  
-**Example of Incorrect Usage**:
+### Duplicate Clauses
 ```yaml
-tasks:
-  my_task:
-    module: os.path
-    class: join  # 'join' is a function, not a class
+# ERROR: rules-duplicate-clause
+clauses:
+  - column: "supplier_name"
+    from_context: "supplier_name"
+  - column: "supplier_name"    # Exact duplicate
+    from_context: "supplier_name"
+
+# FIX: Remove duplicate or make unique
+clauses:
+  - column: "supplier_name"
+    from_context: "supplier_name"
+  - column: "invoice_number"   # Different column
+    from_context: "invoice_number"
 ```
 
-**Example Fix**:
+### Deprecated Context Paths
 ```yaml
-tasks:
-  my_task:
-    module: standard_step.extraction.extract_pdf
-    class: ExtractPdfTask  # This is a class
+# WARNING: rules-deprecated-data-prefix
+from_context: "data.supplier_name"
+
+# FIX: Remove data. prefix
+from_context: "supplier_name"
 ```
 
-## Legacy Error Codes
+### Type Mismatches
+```yaml
+# WARNING: rules-semantic-type-mismatch
+- column: "amount"           # Numeric column
+  from_context: "total_amount"
+  number: false              # Forces string comparison
 
-The config-check tool also includes existing error codes for other validation types:
+# FIX: Use appropriate type
+- column: "amount"
+  from_context: "total_amount"
+  number: true               # Numeric comparison
+```
 
-### Path Validation Errors
-- Path-related errors for missing directories and files
-- File permission errors
-- Invalid path formats
+## Using Error Codes
 
-### Parameter Validation Errors
-- Task-specific parameter validation errors
-- Missing required parameters
-- Invalid parameter values
+### Command Line Usage
+```powershell
+# Get detailed error information
+config-check validate --format json config.yaml
 
-### Pipeline Validation Errors
-- Pipeline dependency errors
-- Task ordering violations
-- Missing pipeline tasks
+# Filter by error severity
+config-check validate config.yaml | findstr "ERROR"
+config-check validate config.yaml | findstr "WARNING"
+```
 
-## Using Error Codes in Automation
-
-When using the `--format json` flag, error codes are included in the JSON output for programmatic processing:
-
+### JSON Output Format
 ```json
 {
   "findings": [
     {
-      "path": "web.host",
-      "message": "Web host must be a non-empty string",
-      "code": "web-host-invalid",
-      "level": "error"
+      "path": "tasks.update_supplier.params.reference_file",
+      "message": "Reference CSV file 'missing.csv' not found",
+      "code": "file-not-found",
+      "severity": "error",
+      "details": {
+        "file_path": "missing.csv"
+      }
     }
   ],
   "exit_code": 1
 }
 ```
 
-This allows automated systems to:
-- Parse specific error types
-- Implement custom error handling
-- Generate targeted fixes
-- Track error patterns across configurations
+### Automation Integration
+Use error codes in CI/CD pipelines to handle different validation outcomes:
+
+```powershell
+# PowerShell example
+$result = config-check validate --format json config.yaml
+$json = $result | ConvertFrom-Json
+
+foreach ($finding in $json.findings) {
+    if ($finding.code -eq "file-not-found") {
+        Write-Host "Missing file: $($finding.details.file_path)"
+    }
+}
+
+exit $json.exit_code
+```

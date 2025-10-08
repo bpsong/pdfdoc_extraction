@@ -216,6 +216,154 @@ Suggestion: Create the directory or update the path in config
   - Example: `os.path.join` is a function, not a class
   - Use actual task classes like `ExtractPdfTask`, not utility functions
 
+## Rules Task Validation Errors
+
+### CSV File Issues
+
+**Symptoms**
+```
+[ERROR] tasks.update_reference.params.reference_file: Reference CSV file 'suppliers.csv' not found
+[ERROR] tasks.update_reference.params.reference_file: Cannot read CSV file 'suppliers.csv': [Errno 13] Permission denied
+[ERROR] tasks.update_reference.params.reference_file: Reference CSV file 'suppliers.csv' is empty
+[ERROR] tasks.update_reference.params.reference_file: Reference CSV file 'suppliers.csv' is empty or has no columns
+```
+
+**Fixes**
+- **File not found (`file-not-found`)**:
+  - Verify the CSV file path is correct: `reference_file: "reference_file/suppliers.csv"`
+  - Ensure the file exists at the specified location
+  - Use absolute paths for testing: `reference_file: "C:/full/path/to/suppliers.csv"`
+  - Check working directory with `--base-dir` flag if using relative paths
+- **Cannot read CSV (`rules-csv-not-readable`)**:
+  - Check file permissions: ensure the file is readable by the current user
+  - Close the file in Excel or other applications that might have it locked
+  - Verify the file is not corrupted by opening it manually
+  - Ensure the file is in valid CSV format
+- **Empty CSV file (`rules-csv-empty`)**:
+  - Add data to the CSV file or use a different reference file
+  - Ensure the CSV contains at least header rows with column names
+- **Missing headers (`rules-csv-missing-headers`)**:
+  - Add proper column headers to the first row of the CSV file
+  - Example: `supplier_name,invoice_number,total_amount,status`
+
+### Column Reference Issues
+
+**Symptoms**
+```
+[ERROR] tasks.update_reference.params.update_field: Update field 'Status' not found in CSV columns: supplier_name, invoice_number, status
+[ERROR] tasks.update_reference.params.csv_match.clauses[0].column: Clause column 'Supplier_Name' not found in CSV columns: supplier_name, invoice_number, status
+```
+
+**Fixes**
+- **Column not found (`rules-column-not-found`)**:
+  - Check exact column names in CSV file (case-sensitive)
+  - Fix case mismatches: `Status` → `status`, `Supplier_Name` → `supplier_name`
+  - Verify column names don't have extra spaces or special characters
+  - Add missing columns to CSV file if needed
+  - Use `Get-Content "file.csv" | Select-Object -First 1` to view actual headers
+
+### Clause Configuration Issues
+
+**Symptoms**
+```
+[ERROR] tasks.update_reference.params.csv_match.clauses[1]: Duplicate clause: column='supplier_name', from_context='supplier_name'
+[WARNING] tasks.update_reference.params.csv_match.clauses: Multiple clauses reference column 'supplier_name' (indices: [0, 2]). This may create impossible AND conditions.
+[INFO] tasks.update_reference.params.csv_match.clauses: Multiple clauses use context 'supplier_name' (indices: [0, 3]). This might be intentional but worth noting.
+```
+
+**Fixes**
+- **Duplicate clauses (`rules-duplicate-clause`)**:
+  - Remove exact duplicate clauses with identical column and from_context values
+  - Make clauses unique by using different columns or contexts
+  - Check for copy-paste errors in configuration
+- **Impossible conditions (`rules-impossible-condition`)**:
+  - Review business logic: multiple clauses on same column create AND conditions
+  - Example: `supplier_name = "A" AND supplier_name = "B"` is impossible
+  - Use different columns for different conditions
+  - Consider if OR logic is needed (may require separate rules tasks)
+- **Context reuse (`rules-context-reuse`)**:
+  - This is informational - multiple clauses using same context may be intentional
+  - Review if this matches your business requirements
+  - Consider using different context values if clauses should be independent
+
+### Context Path Issues
+
+**Symptoms**
+```
+[ERROR] tasks.update_reference.params.csv_match.clauses[0].from_context: Invalid dotted path syntax: 'supplier..name'
+[WARNING] tasks.update_reference.params.csv_match.clauses[1].from_context: Deprecated 'data.' prefix in context path: 'data.supplier_name'. Use bare field name 'supplier_name' instead.
+[WARNING] tasks.update_reference.params.csv_match.clauses[2].from_context: Field 'nonexistent_field' not found in extraction fields
+```
+
+**Fixes**
+- **Invalid path syntax (`rules-context-path-invalid`)**:
+  - Fix malformed dotted notation: `supplier..name` → `supplier_name`
+  - Remove leading/trailing dots: `.supplier_name` → `supplier_name`
+  - Use proper dotted notation: `invoice.total_amount` for nested fields
+- **Deprecated data prefix (`rules-deprecated-data-prefix`)**:
+  - Remove 'data.' prefix from context paths
+  - Change: `data.supplier_name` → `supplier_name`
+  - Modern extraction tasks don't use the data. prefix
+- **Field not found (`rules-field-not-found`)**:
+  - Ensure the field exists in your extraction task configuration
+  - Verify field names match between extraction and rules tasks
+  - Add missing fields to extraction task if needed
+  - Use `--check-files` flag for comprehensive field validation
+
+### Semantic Validation Issues
+
+**Symptoms**
+```
+[WARNING] tasks.update_reference.params.csv_match.clauses[0]: Column 'amount' appears to be numeric but clause forces string comparison. Consider removing 'number: false' or verify the column type.
+[INFO] tasks.update_reference.params.csv_match.clauses[1]: Field reference 'unlikely_field_name' doesn't match common extraction patterns. Verify this field exists in your extraction configuration.
+```
+
+**Fixes**
+- **Type mismatch (`rules-semantic-type-mismatch`)**:
+  - Use correct type flag for numeric columns: `number: true`
+  - For text columns, use `number: false` or omit (default is false)
+  - Verify CSV column actually contains the expected data type
+  - Example: For amount columns, use `number: true` for numeric comparison
+- **Unrealistic field reference (`rules-unrealistic-field-reference`)**:
+  - This is informational - verify the field name exists in extraction configuration
+  - Check field names follow your extraction naming conventions
+  - May be intentional for custom fields, but worth double-checking
+
+### Runtime File Validation Issues (--check-files flag)
+
+**Symptoms**
+```
+[ERROR] tasks.update_reference.params.reference_file: Reference file does not exist: C:/path/to/suppliers.csv
+[ERROR] tasks.update_reference.params.reference_file: Reference file is not readable (permission denied): C:/path/to/suppliers.csv
+[ERROR] tasks.update_reference.params.reference_file: Reference path is not a file: C:/path/to/directory
+```
+
+**Fixes**
+- **File not found (`file-not-found`)**:
+  - Ensure file exists at the specified path
+  - Check file path spelling and location
+  - Verify working directory is correct
+- **File not readable (`file-not-readable`)**:
+  - Check file permissions for the current user
+  - Ensure file is not locked by another application
+  - Verify file system permissions allow read access
+- **Path is not a file (`file-not-file`)**:
+  - Ensure path points to a file, not a directory
+  - Check for typos in file path that might point to directory instead
+
+### Pandas Dependency Issues
+
+**Symptoms**
+```
+[ERROR] tasks.update_reference.params.reference_file: pandas is required for CSV validation but is not available
+```
+
+**Fixes**
+- **Missing pandas (`rules-csv-pandas-missing`)**:
+  - Install pandas: `C:\Python313\python.exe -m pip install pandas`
+  - Verify pandas is available in the current Python environment
+  - Check that the correct Python environment is being used
+
 ## Token Or Dependency Issues
 
 **Symptoms**
@@ -245,9 +393,20 @@ For comprehensive validation including import checks:
 config-check validate --config .\config.yaml --import-checks --verbose
 ```
 
+For full validation including file system checks:
+```
+config-check validate --config .\config.yaml --check-files --verbose
+```
+
+For complete validation with all features:
+```
+config-check validate --config .\config.yaml --import-checks --check-files --verbose
+```
+
 Get machine-readable output for automated troubleshooting:
 ```
 config-check validate --config .\config.yaml --format json
+config-check validate --config .\config.yaml --check-files --format json
 ```
 
-If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include whether you used the `--import-checks` flag, as this affects which validation errors are reported.
+If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include whether you used the `--import-checks` and `--check-files` flags, as these affect which validation errors are reported.

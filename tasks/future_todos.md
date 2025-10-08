@@ -30,22 +30,22 @@
 - [x] **File Path Validation**: Add validation that `reference_file` parameter points to an existing, readable CSV file before runtime
 - [x] **CSV Structure Validation**: Verify that the reference CSV file can be opened/parsed and contains proper headers
 - [x] **Column Existence Validation**: Check that `update_field` and all clause `column` values exist as actual columns in the target CSV file
-- [ ] **Clause Uniqueness Validation**: 
+- [x] **Clause Uniqueness Validation**: 
   - Error on completely identical clauses (same column + same from_context)
   - Warning on multiple clauses referencing the same CSV column (potentially impossible AND conditions)
   - Info on multiple clauses using the same context value (might be intentional but worth noting)
-- [ ] **Context Path Validation**: Validate `from_context` dotted paths follow proper notation and reference realistic pipeline fields
+- [x] **Context Path Validation**: Validate `from_context` dotted paths follow proper notation and reference realistic pipeline fields
 - [x] **Deprecation Warnings**: Emit warnings for deprecated "data." prefixes in `from_context` paths (should use bare field names)
-- [ ] **Type Consistency Validation**: When `number: true` is specified, validate that the referenced context field is likely to be numeric based on extraction field definitions
-- [ ] **Cross-Pipeline Validation**: Ensure rules tasks are positioned after extraction tasks in the pipeline and that referenced fields are available from upstream tasks
-- [ ] **Semantic Validation**: 
+- [x] **Type Consistency Validation**: When `number: true` is specified, validate that the referenced context field is likely to be numeric based on extraction field definitions
+- [x] **Cross-Pipeline Validation**: Ensure rules tasks are positioned after extraction tasks in the pipeline and that referenced fields are available from upstream tasks
+- [x] **Semantic Validation**: 
   - Warn about potentially problematic configurations (e.g., string comparison on obviously numeric fields)
   - Detect unrealistic field references that don't match common extraction patterns
   - Flag multiple clauses on the same column that might create impossible conditions
 
 ### General Config-Check Enhancements for config-check Tool
 
-- [ ] **Runtime File Validation Mode**: Add optional `--check-files` flag to validate file paths, CSV structures, and other runtime dependencies
+- [x] **Runtime File Validation Mode**: Add optional `--check-files` flag to validate file paths, CSV structures, and other runtime dependencies
 - [x] **Field Consistency Validation**: Cross-reference field names between extraction tasks and downstream storage/rules tasks to catch naming mismatches
 - [x] **Pipeline Dependency Analysis**: Validate that tasks are ordered correctly (extraction → rules → storage → archiver) and that required fields flow properly between stages
 - [x] **Template Token Validation Enhancement**: Extend existing template validation to check against actual extraction field definitions rather than just basic syntax

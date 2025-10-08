@@ -1,0 +1,4 @@
+supplier_name,invoice_number,total_amount
+"ABC Corp","INV-001",1500.00
+"XYZ Ltd","INV-002"  # Missing column
+"Tech Solutions","INV-003",890.25,"extra_column"  # Extra column

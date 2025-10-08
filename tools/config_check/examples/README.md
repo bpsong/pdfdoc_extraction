@@ -69,6 +69,39 @@ config-check validate examples/invalid_configs/invalid_watch_folder_fields.yaml
 config-check validate --import-checks examples/invalid_configs/invalid_import_errors.yaml
 ```
 
+## Rules Task Validation Examples
+
+### `rules_task_examples.yaml`
+Comprehensive examples demonstrating rules task validation scenarios:
+
+- **Valid Rules Task**: Properly configured rules task with all required fields
+- **Rules Task with Issues**: Examples of common validation errors and warnings
+- **Semantic Issues**: Type mismatches and unrealistic field references
+- **Corrected Configuration**: Fixed versions of problematic configurations
+- **Complex Rules Task**: Advanced scenarios with extraction and rules tasks
+
+### Sample Reference Files (`sample_reference_files/`)
+CSV files for testing rules task validation:
+
+- `suppliers.csv`: Valid CSV file with proper headers and data
+- `empty_suppliers.csv`: Empty CSV file for testing empty file handling
+- `invalid_format.csv`: Malformed CSV for testing error handling
+
+### Testing Rules Task Validation
+
+```powershell
+# Test rules task validation with sample files
+config-check validate examples/rules_task_examples.yaml
+
+# Test with runtime file validation
+config-check validate --check-files examples/rules_task_examples.yaml
+
+# Test specific validation scenarios
+config-check validate --format json examples/rules_task_examples.yaml
+```
+
+For detailed troubleshooting of rules task validation issues, see the main troubleshooting guide at [`docs/config_check_troubleshooting.md`](../../../docs/config_check_troubleshooting.md).
+
 ## Error Code Reference
 
 See `ERROR_CODES.md` for a comprehensive reference of all validation error codes and their meanings.
