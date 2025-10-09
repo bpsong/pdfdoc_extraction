@@ -45,6 +45,8 @@ from .schema import (
 from .suggestions import get_suggestion
 from .task_validator import TaskValidationResult, validate_tasks
 from .runtime_file_validator import validate_runtime_files
+from .performance_analyzer import PerformanceAnalyzer, PerformanceAnalysisResult
+from .security_validator import SecurityValidator, SecurityAnalysisResult
 from .yaml_parser import YAMLParser
 
 logger = logging.getLogger(__name__)
@@ -89,15 +91,21 @@ class ConfigValidator:
         base_dir: Optional[Union[str, Path]] = None,
         import_checks: bool = False,
         check_files: bool = False,
+        performance_analysis: bool = False,
+        security_analysis: bool = False,
         yaml_parser: Optional[YAMLParser] = None,
     ) -> None:
         self.strict_mode = strict_mode
         self.base_dir = Path(base_dir) if base_dir else None
         self.import_checks = import_checks
         self.check_files = check_files
+        self.performance_analysis = performance_analysis
+        self.security_analysis = security_analysis
         self.parser = yaml_parser or YAMLParser()
         self.logger = logger.getChild(self.__class__.__name__)
         self.path_validator = PathValidator(base_dir=self.base_dir)
+        self.performance_analyzer = PerformanceAnalyzer()
+        self.security_validator = SecurityValidator()
         self._validation_passes = [
             self._run_schema_pass,
             self._run_task_reference_pass,
@@ -109,6 +117,14 @@ class ConfigValidator:
         # Add runtime file validation if enabled
         if self.check_files:
             self._validation_passes.append(self._run_runtime_file_pass)
+            
+        # Add performance analysis if enabled
+        if self.performance_analysis:
+            self._validation_passes.append(self._run_performance_pass)
+            
+        # Add security analysis if enabled
+        if self.security_analysis:
+            self._validation_passes.append(self._run_security_pass)
 
     def validate(self, config_path: Union[str, Path]) -> ValidationResult:
         """Validate a configuration file on disk."""
@@ -346,6 +362,98 @@ class ConfigValidator:
 
         warnings: List[ValidationMessage] = []
         for issue in file_result.warnings:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            warnings.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        return ValidationResult(errors=errors, warnings=warnings)
+
+    def _run_performance_pass(self, config_data: Dict[str, Any]) -> ValidationResult:
+        """Run performance analysis pass."""
+
+        if not isinstance(config_data, dict):
+            return ValidationResult()
+
+        performance_result: PerformanceAnalysisResult = self.performance_analyzer.analyze_performance_impact(config_data)
+
+        errors: List[ValidationMessage] = []
+        for issue in performance_result.errors:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            errors.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        warnings: List[ValidationMessage] = []
+        for issue in performance_result.warnings:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            warnings.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        # Add info messages as warnings with lower severity
+        for issue in performance_result.info:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            warnings.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        return ValidationResult(errors=errors, warnings=warnings)
+
+    def _run_security_pass(self, config_data: Dict[str, Any]) -> ValidationResult:
+        """Run security analysis pass."""
+
+        if not isinstance(config_data, dict):
+            return ValidationResult()
+
+        security_result: SecurityAnalysisResult = self.security_validator.validate_security(config_data)
+
+        errors: List[ValidationMessage] = []
+        for issue in security_result.errors:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            errors.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        warnings: List[ValidationMessage] = []
+        for issue in security_result.warnings:
+            suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
+            warnings.append(
+                ValidationMessage(
+                    path=issue.path,
+                    message=issue.message,
+                    code=issue.code,
+                    suggestion=suggestion,
+                )
+            )
+
+        # Add info messages as warnings with lower severity
+        for issue in security_result.info:
             suggestion = get_suggestion(issue.code, getattr(issue, "details", None))
             warnings.append(
                 ValidationMessage(

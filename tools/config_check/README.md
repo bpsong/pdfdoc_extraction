@@ -315,6 +315,286 @@ clauses:
     from_context: "data.supplier_name"  # Use "supplier_name" instead
 ```
 
+## Performance Impact Analysis
+
+The `--performance-analysis` flag enables performance impact analysis that identifies potential performance issues in configuration files before deployment.
+
+### Performance Analysis Features
+
+#### Extraction Field Complexity Analysis
+Analyzes extraction tasks for performance impact based on field count and complexity:
+
+```powershell
+# Enable performance analysis
+config-check validate --performance-analysis config.yaml
+```
+
+**Performance thresholds:**
+- **Warning**: >20 extraction fields per task
+- **Error**: >50 extraction fields per task
+- **Info**: Multiple table fields (>1 table field)
+- **Warning**: >3 table fields per task
+
+#### Rules Task Complexity Analysis
+Evaluates rules tasks for performance bottlenecks:
+
+**Performance checks:**
+- **Info**: Deeply nested context paths (4+ levels deep)
+- **Info**: >3 complex context paths per task
+- **Info**: >7 string comparison clauses per task
+
+#### Pipeline Impact Analysis
+Assesses overall pipeline performance characteristics:
+
+**Performance thresholds:**
+- **Warning**: >15 tasks in pipeline
+- **Error**: >30 tasks in pipeline
+- **Warning**: >2 extraction tasks in pipeline
+- **Info**: >5 rules tasks in pipeline
+
+### Performance Analysis Examples
+
+```powershell
+# Basic validation without performance analysis
+config-check validate config.yaml
+
+# Performance analysis with text output
+config-check validate --performance-analysis config.yaml
+
+# Performance analysis with JSON output for automation
+config-check validate --performance-analysis --format json config.yaml
+
+# Combined analysis with other validation modes
+config-check validate --performance-analysis --import-checks --check-files config.yaml
+```
+
+### Performance Issue Types
+
+#### Extraction Performance Issues
+- `performance-excessive-fields`: Too many extraction fields (warning level)
+- `performance-excessive-fields-critical`: Critically high field count (error level)
+- `performance-multiple-tables`: Multiple table fields detected (info level)
+- `performance-multiple-tables-warning`: Too many table fields (warning level)
+- `performance-complex-field-patterns`: Complex extraction patterns detected (info level)
+
+#### Rules Performance Issues
+- `performance-complex-context-paths`: Deeply nested context paths detected (info level)
+- `performance-complex-context-paths`: Complex context paths detected (info level)
+- `performance-excessive-string-comparisons`: Too many string comparisons (info level)
+
+#### Pipeline Performance Issues
+- `performance-excessive-pipeline-length`: Pipeline too long (warning level)
+- `performance-excessive-pipeline-length-critical`: Critically long pipeline (error level)
+- `performance-multiple-extraction-tasks`: Multiple extraction tasks (warning level)
+- `performance-multiple-rules-tasks`: Multiple rules tasks (info level)
+
+### Performance Optimization Recommendations
+
+#### Extraction Task Optimization
+```yaml
+# BEFORE: Performance warning (25 fields)
+tasks:
+  extract_data:
+    params:
+      fields:
+        - {name: "field1", alias: "Field 1", type: "str"}
+        - {name: "field2", alias: "Field 2", type: "str"}
+        # ... 23 more fields
+
+# AFTER: Optimized (reduced to essential fields)
+tasks:
+  extract_data:
+    params:
+      fields:
+        - {name: "supplier_name", alias: "Supplier", type: "str"}
+        - {name: "invoice_number", alias: "Invoice Number", type: "str"}
+        - {name: "total_amount", alias: "Total Amount", type: "float"}
+        - {name: "invoice_date", alias: "Date", type: "str"}
+```
+
+#### Rules Task Optimization
+```yaml
+# BEFORE: Performance info (deeply nested context paths)
+csv_match:
+  clauses:
+    - {column: "supplier_name", from_context: "invoice.header.supplier.details.name"}
+    - {column: "invoice_number", from_context: "invoice.header.document.reference.number"}
+
+# AFTER: Optimized (simplified context paths)
+csv_match:
+  clauses:
+    - {column: "supplier_name", from_context: "supplier_name"}
+    - {column: "invoice_number", from_context: "invoice_number"}
+```
+
+#### Pipeline Optimization
+```yaml
+# BEFORE: Performance warning (20 tasks)
+pipeline:
+  - extract_task1
+  - extract_task2
+  - extract_task3
+  # ... 17 more tasks
+
+# AFTER: Optimized (consolidated tasks)
+pipeline:
+  - extract_consolidated
+  - apply_rules
+  - store_results
+  - archive_files
+```
+
+## Security Analysis
+
+The `--security-analysis` flag enables security analysis that identifies potential security vulnerabilities in configuration files before deployment.
+
+### Security Analysis Features
+
+#### Path Traversal Detection
+Identifies dangerous path patterns that could lead to path traversal attacks:
+
+```powershell
+# Enable security analysis
+config-check validate --security-analysis config.yaml
+```
+
+**Dangerous patterns detected:**
+- `../` and `..\\` (directory traversal)
+- `..` (parent directory references)
+- `~` (home directory references)
+- `$` and `%` (environment variable references)
+- `|`, `;`, `&` (command injection patterns)
+- `` ` ``, `$(`, `${` (command/variable substitution)
+
+#### System Path Validation
+Detects references to potentially unsafe system directories:
+
+**Suspicious system paths:**
+- `/etc/`, `/var/`, `/tmp/` (Unix system directories)
+- `C:\Windows\`, `C:\Program Files\` (Windows system directories)
+- `\\` (UNC path indicators)
+- `//` (double slash patterns)
+
+#### Directory Security Analysis
+Validates directory configurations for security issues:
+
+**Security checks:**
+- **Absolute vs Relative Path Security**: Analyzes path security implications
+- **Directory Location Validation**: Warns about unsafe system locations
+- **Permission Analysis**: Basic directory accessibility checks (when possible)
+
+### Security Analysis Examples
+
+```powershell
+# Basic validation without security analysis
+config-check validate config.yaml
+
+# Security analysis with text output
+config-check validate --security-analysis config.yaml
+
+# Security analysis with JSON output for automation
+config-check validate --security-analysis --format json config.yaml
+
+# Combined security and performance analysis
+config-check validate --security-analysis --performance-analysis config.yaml
+```
+
+### Security Issue Types
+
+#### Path Traversal Issues
+- `security-path-traversal-risk`: Dangerous path patterns detected (error/warning level)
+- `security-suspicious-system-path`: System directory references (warning level)
+- `security-unsafe-absolute-path`: Potentially unsafe absolute paths (info level)
+- `security-unsafe-relative-path`: Potentially unsafe relative paths (warning level)
+
+#### Directory Security Issues
+- `security-unsafe-directory-location`: Directory in unsafe system location (warning level)
+- `security-directory-analysis-failed`: Could not analyze directory security (info level)
+
+### Security Vulnerability Examples
+
+#### Path Traversal Vulnerabilities
+```yaml
+# ERROR: Path traversal risk
+web:
+  upload_dir: "../../../etc/uploads"  # Dangerous: escapes intended directory
+
+watch_folder:
+  dir: "..\\..\\Windows\\System32"   # Dangerous: Windows path traversal
+
+# SECURE: Proper path configuration
+web:
+  upload_dir: "./uploads"             # Safe: relative to application directory
+
+watch_folder:
+  dir: "C:\\app\\watch"               # Safe: absolute path within app boundary
+```
+
+#### Command Injection Risks
+```yaml
+# WARNING: Command injection patterns
+tasks:
+  store_data:
+    params:
+      files_dir: "/tmp; rm -rf /"     # Dangerous: command separator
+      filename: "output|cat /etc/passwd"  # Dangerous: pipe character
+
+# SECURE: Clean path configuration
+tasks:
+  store_data:
+    params:
+      files_dir: "./output"           # Safe: clean relative path
+      filename: "result.json"         # Safe: simple filename
+```
+
+#### Environment Variable Risks
+```yaml
+# WARNING: Environment variable patterns
+web:
+  upload_dir: "$HOME/../sensitive"    # Risky: environment variable with traversal
+
+watch_folder:
+  dir: "%USERPROFILE%\\..\\system"   # Risky: Windows environment variable
+
+# SECURE: Explicit path configuration
+web:
+  upload_dir: "./uploads"             # Safe: explicit relative path
+
+watch_folder:
+  dir: "C:\\app\\watch"               # Safe: explicit absolute path
+```
+
+### Security Remediation Guidelines
+
+#### Path Security Best Practices
+1. **Use Absolute Paths**: When possible, use absolute paths within application boundaries
+2. **Validate Input**: Ensure paths don't contain dangerous patterns
+3. **Restrict Boundaries**: Keep all paths within expected application directories
+4. **Avoid System Directories**: Don't reference system directories unless necessary
+5. **Sanitize Paths**: Remove or escape dangerous characters from path inputs
+
+#### Secure Configuration Examples
+```yaml
+# Secure web configuration
+web:
+  host: "127.0.0.1"                   # Localhost only
+  port: 8000                          # Non-privileged port
+  upload_dir: "./uploads"             # Application-relative directory
+
+# Secure watch folder configuration
+watch_folder:
+  dir: "./watch"                      # Application-relative directory
+  processing_dir: "processing"        # Simple directory name
+
+# Secure task configuration
+tasks:
+  store_data:
+    module: "standard_step.storage.store_json"
+    params:
+      data_dir: "./output"            # Application-relative directory
+      filename: "result.json"         # Simple filename without variables
+```
+
 ## Runtime File Validation
 
 The `--check-files` flag enables runtime file validation that performs file system checks beyond structural validation.

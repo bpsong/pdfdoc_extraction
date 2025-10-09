@@ -50,8 +50,8 @@
 - [x] **Pipeline Dependency Analysis**: Validate that tasks are ordered correctly (extraction → rules → storage → archiver) and that required fields flow properly between stages
 - [x] **Template Token Validation Enhancement**: Extend existing template validation to check against actual extraction field definitions rather than just basic syntax
 - [x] **Configuration Completeness Warnings**: Warn about common missing configurations (e.g., rules tasks without corresponding extraction tasks, storage tasks without required fields)
-- [ ] **Performance Impact Analysis**: Flag configurations that might cause performance issues (e.g., too many extraction fields, overly complex rules clauses)
-- [ ] **Security Validation**: Check for potential security issues in file paths, ensure proper path traversal protection in directory configurations
+- [x] **Performance Impact Analysis**: Flag configurations that might cause performance issues (e.g., too many extraction fields, overly complex rules clauses)
+- [x] **Security Validation**: Check for potential security issues in file paths, ensure proper path traversal protection in directory configurations
 
 ## Completed v2 LlamaExtract Array-of-Objects Implementation
 

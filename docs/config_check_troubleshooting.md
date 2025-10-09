@@ -381,6 +381,124 @@ Suggestion: Create the directory or update the path in config
 - Expose table columns that need to appear in filenames as scalar extraction fields, or adjust the filename template to avoid table tokens.
 - Create the missing extraction field (preferably scalar) or remove the unknown placeholder if the value is not needed.
 
+## Performance Analysis Issues
+
+### Excessive Extraction Fields
+
+**Symptoms**
+```
+[WARNING] tasks.extract_data.params.fields: Extraction task has 25 fields. Consider reducing to under 20 for optimal performance.
+[ERROR] tasks.extract_data.params.fields: Extraction task has 55 fields, which may severely impact performance. Consider reducing to under 20 fields.
+```
+
+**Fixes**
+- **Reduce field count**: Remove unnecessary extraction fields
+- **Split tasks**: Divide large extraction tasks into smaller, focused tasks
+- **Prioritize fields**: Keep only essential fields for core functionality
+- **Use selective extraction**: Extract only fields needed for immediate processing
+
+### Complex Context Paths
+
+**Symptoms**
+```
+[INFO] tasks.update_reference.params.csv_match.clauses: Rules task has 2 clauses with deeply nested context paths (4+ levels). Consider simplifying context path structure.
+```
+
+**Fixes**
+- **Simplify paths**: Reduce deeply nested context paths (4+ levels) to simpler references
+- **Flatten structure**: Consider flattening the extraction field structure to avoid deep nesting
+- **Use aliases**: Create simpler field aliases in extraction tasks to avoid complex path references
+- **Review necessity**: Ensure deeply nested paths are necessary for the business requirements
+
+### Pipeline Performance Issues
+
+**Symptoms**
+```
+[WARNING] pipeline: Pipeline has 20 tasks. Consider optimizing for better performance (recommended: <15).
+[WARNING] pipeline: Pipeline has 3 extraction tasks: extract_1, extract_2, extract_3. Multiple extraction tasks may significantly impact performance.
+```
+
+**Fixes**
+- **Consolidate tasks**: Combine related tasks into single, more efficient tasks
+- **Optimize extraction**: Use a single extraction task with comprehensive field definitions
+- **Parallel processing**: Consider if some tasks can be parallelized (requires code changes)
+- **Remove redundancy**: Eliminate duplicate or unnecessary processing steps
+
+## Security Analysis Issues
+
+### Path Traversal Vulnerabilities
+
+**Symptoms**
+```
+[ERROR] web.upload_dir: Upload directory path '../../../etc/uploads' contains potentially dangerous patterns: ../, ../. This may be vulnerable to path traversal attacks.
+[WARNING] tasks.store_data.params.data_dir: Task parameter 'data_dir' path '../output' contains potentially dangerous patterns: ../. This may be vulnerable to path traversal attacks.
+```
+
+**Fixes**
+- **Use absolute paths**: Replace relative paths with absolute paths within application boundaries
+  - Change: `../../../etc/uploads` → `C:\app\uploads` or `./uploads`
+- **Remove traversal patterns**: Eliminate `../`, `..\\`, and `..` from paths
+- **Validate boundaries**: Ensure paths stay within expected application directories
+- **Use application-relative paths**: Prefer paths relative to the application root
+
+### Suspicious System Paths
+
+**Symptoms**
+```
+[WARNING] web.upload_dir: Upload directory path 'C:\Windows\System32\uploads' references system directories: C:\Windows\. Ensure this is intentional and properly secured.
+[WARNING] watch_folder.dir: Watch directory path '/etc/watch-folder' references system directories: /etc/. Ensure this is intentional and properly secured.
+```
+
+**Fixes**
+- **Avoid system directories**: Don't use system directories unless absolutely necessary
+  - Avoid: `/etc/`, `/var/`, `C:\Windows\`, `C:\Program Files\`
+  - Use: `./data/`, `C:\app\data\`, `/opt/app/data/`
+- **Use application directories**: Create dedicated directories for your application
+- **Verify permissions**: Ensure proper access controls if system directories are required
+- **Document justification**: If system directories are necessary, document why and ensure security measures
+
+### Command Injection Risks
+
+**Symptoms**
+```
+[WARNING] tasks.store_data.params.files_dir: Task parameter 'files_dir' path '/tmp; rm -rf /' contains potentially dangerous patterns: ;. This may be vulnerable to path traversal attacks.
+```
+
+**Fixes**
+- **Remove command separators**: Eliminate `;`, `|`, `&`, `` ` ``, `$(`, `${` from paths
+- **Sanitize input**: Clean path values of potentially dangerous characters
+- **Use simple paths**: Stick to alphanumeric characters, hyphens, underscores, and path separators
+- **Validate input**: Implement input validation to reject dangerous patterns
+
+### Environment Variable Risks
+
+**Symptoms**
+```
+[WARNING] web.upload_dir: Upload directory path '$HOME/../sensitive' contains potentially dangerous patterns: $, ../. This may be vulnerable to path traversal attacks.
+```
+
+**Fixes**
+- **Avoid environment variables**: Don't use `$VAR`, `${VAR}`, or `%VAR%` in configuration paths
+- **Use explicit paths**: Replace environment variable references with explicit paths
+  - Change: `$HOME/uploads` → `/home/app/uploads` or `C:\app\uploads`
+- **Configure at deployment**: Set explicit paths during deployment rather than using variables
+- **Document paths**: Clearly document expected path values for different environments
+
+### Unsafe Directory Locations
+
+**Symptoms**
+```
+[WARNING] web.upload_dir: Directory 'C:\Windows\Temp\uploads' is located in a potentially unsafe system location. Consider using a more secure location.
+```
+
+**Fixes**
+- **Use application directories**: Move directories to application-specific locations
+  - Change: `C:\Windows\Temp\uploads` → `C:\app\uploads`
+  - Change: `/tmp/uploads` → `/opt/app/uploads`
+- **Create dedicated directories**: Establish directories specifically for your application
+- **Set proper permissions**: Ensure directories have appropriate access controls
+- **Avoid temporary directories**: Don't use system temporary directories for persistent data
+
 ## Still Stuck?
 
 Run the validator in verbose mode to see detailed logging:
@@ -398,15 +516,20 @@ For full validation including file system checks:
 config-check validate --config .\config.yaml --check-files --verbose
 ```
 
+For performance and security analysis:
+```
+config-check validate --config .\config.yaml --performance-analysis --security-analysis --verbose
+```
+
 For complete validation with all features:
 ```
-config-check validate --config .\config.yaml --import-checks --check-files --verbose
+config-check validate --config .\config.yaml --import-checks --check-files --performance-analysis --security-analysis --verbose
 ```
 
 Get machine-readable output for automated troubleshooting:
 ```
 config-check validate --config .\config.yaml --format json
-config-check validate --config .\config.yaml --check-files --format json
+config-check validate --config .\config.yaml --check-files --performance-analysis --security-analysis --format json
 ```
 
-If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include whether you used the `--import-checks` and `--check-files` flags, as these affect which validation errors are reported.
+If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include which validation flags you used (`--import-checks`, `--check-files`, `--performance-analysis`, `--security-analysis`) as these affect which validation errors are reported.

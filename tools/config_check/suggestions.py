@@ -180,6 +180,72 @@ def _suggest_context_length(details: Dict[str, Any]) -> str:
     return "Choose a length between 5 and 21 for nanoid generation."
 
 
+def _suggest_reduce_extraction_fields(details: Dict[str, Any]) -> str:
+    """Suggest reducing the number of extraction fields for better performance."""
+    field_count = details.get("field_count", 0)
+    recommended_max = details.get("recommended_max", 20)
+    return f"Consider reducing from {field_count} to under {recommended_max} fields for optimal performance."
+
+
+
+
+
+def _suggest_consolidate_tables(details: Dict[str, Any]) -> str:
+    """Suggest consolidating multiple table fields."""
+    table_count = details.get("table_field_count", 0)
+    return f"Consider consolidating {table_count} table fields into a single table or separate tasks."
+
+
+def _suggest_optimize_pipeline(details: Dict[str, Any]) -> str:
+    """Suggest optimizing pipeline length."""
+    task_count = details.get("task_count", 0)
+    recommended_max = details.get("recommended_max", 15)
+    return f"Consider optimizing from {task_count} to under {recommended_max} tasks for better performance."
+
+
+def _suggest_reduce_extraction_tasks(details: Dict[str, Any]) -> str:
+    """Suggest reducing multiple extraction tasks."""
+    extraction_count = details.get("extraction_task_count", 0)
+    return f"Consider consolidating {extraction_count} extraction tasks to reduce processing overhead."
+
+
+def _suggest_consolidate_rules(details: Dict[str, Any]) -> str:
+    """Suggest consolidating multiple rules tasks."""
+    rules_count = details.get("rules_task_count", 0)
+    return f"Consider consolidating {rules_count} rules tasks into fewer tasks with combined logic."
+
+
+def _suggest_fix_path_traversal(details: Dict[str, Any]) -> str:
+    """Suggest fixing path traversal vulnerabilities."""
+    path = details.get("path", "the path")
+    dangerous_patterns = details.get("dangerous_patterns", [])
+    return f"Remove dangerous patterns ({', '.join(dangerous_patterns)}) from '{path}' or use absolute paths with proper validation."
+
+
+def _suggest_secure_system_path(details: Dict[str, Any]) -> str:
+    """Suggest securing system directory references."""
+    path = details.get("path", "the path")
+    return f"Ensure '{path}' references are intentional and properly secured. Consider using application-specific directories."
+
+
+def _suggest_secure_absolute_path(details: Dict[str, Any]) -> str:
+    """Suggest securing absolute path usage."""
+    path = details.get("path", "the path")
+    return f"Validate that absolute path '{path}' is within expected boundaries and properly secured."
+
+
+def _suggest_secure_relative_path(details: Dict[str, Any]) -> str:
+    """Suggest securing relative path usage."""
+    path = details.get("path", "the path")
+    return f"Consider using absolute paths instead of '{path}' or add additional validation to prevent directory traversal."
+
+
+def _suggest_secure_directory_location(details: Dict[str, Any]) -> str:
+    """Suggest using more secure directory locations."""
+    path = details.get("path", "the directory")
+    return f"Consider moving '{path}' to a more secure location outside of system directories."
+
+
 _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "path-missing-dir": _suggest_create_dir,
     "path-not-dir": _suggest_directory_type,
@@ -232,6 +298,25 @@ _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "param-not-mapping": lambda d: f"Define {d.get('config_key', 'these parameters')} as a mapping of names to values.",
     "param-context-length-type": lambda _: "Set length to an integer between 5 and 21.",
     "param-context-length-bounds": _suggest_context_length,
+    # Performance analysis suggestions
+    "performance-excessive-fields": _suggest_reduce_extraction_fields,
+    "performance-excessive-fields-critical": _suggest_reduce_extraction_fields,
+    "performance-multiple-tables": _suggest_consolidate_tables,
+    "performance-multiple-tables-warning": _suggest_consolidate_tables,
+    "performance-excessive-pipeline-length": _suggest_optimize_pipeline,
+    "performance-excessive-pipeline-length-critical": _suggest_optimize_pipeline,
+    "performance-multiple-extraction-tasks": _suggest_reduce_extraction_tasks,
+    "performance-multiple-rules-tasks": _suggest_consolidate_rules,
+    "performance-complex-field-patterns": lambda _: "Consider simplifying complex extraction patterns for better performance.",
+    "performance-complex-context-paths": lambda _: "Consider using simpler context paths to improve rules processing speed.",
+    "performance-excessive-string-comparisons": lambda _: "Consider using numeric comparisons where possible for better performance.",
+    # Security analysis suggestions
+    "security-path-traversal-risk": _suggest_fix_path_traversal,
+    "security-suspicious-system-path": _suggest_secure_system_path,
+    "security-unsafe-absolute-path": _suggest_secure_absolute_path,
+    "security-unsafe-relative-path": _suggest_secure_relative_path,
+    "security-unsafe-directory-location": _suggest_secure_directory_location,
+    "security-directory-analysis-failed": lambda _: "Ensure the directory exists and is accessible for security analysis.",
 }
 
 
