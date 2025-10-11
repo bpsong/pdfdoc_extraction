@@ -11,7 +11,15 @@ import importlib
 import logging
 import sys
 import threading
+import warnings
 from typing import Dict, Any, Callable, Type, cast, Union
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Config key `.*` is set in model_config but will be ignored because no .+ source is configured.*",
+    module="pydantic_settings.main",
+    category=UserWarning,
+)
 
 from prefect import flow, task, get_run_logger
 from prefect.futures import PrefectFuture

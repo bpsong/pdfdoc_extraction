@@ -13,8 +13,9 @@ from typing import TextIO
 # Silence those specific messages while keeping other warnings visible.
 warnings.filterwarnings(
     "ignore",
-    message=r"Config key `.*` is set in model_config but will be ignored because no .* source is configured.",
+    message=r"Config key `.*` is set in model_config but will be ignored because no .+ source is configured.*",
     module="pydantic_settings.main",
+    category=UserWarning,
 )
 
 from prefect.logging.formatters import PrefectFormatter
@@ -51,7 +52,7 @@ _FILE_DATEFMT = "%Y-%m-%d %H:%M:%S"
 class _NonClosingUTF8Wrapper(io.TextIOWrapper):
     """UTF-8 wrapper that keeps the underlying stream open when closed."""
 
-    def __init__(self, buffer: io.BufferedIOBase):
+    def __init__(self, buffer: io.BufferedWriter):
         super().__init__(buffer, encoding="utf-8", line_buffering=True, write_through=True)
 
     def close(self) -> None:  # pragma: no cover - defensive flush only

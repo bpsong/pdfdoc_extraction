@@ -11,7 +11,16 @@ Architecture Reference:
     patterns, refer to docs/design_architecture.md.
 """
 import logging
+import warnings
 from typing import Dict, Any
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"Config key `.*` is set in model_config but will be ignored because no .+ source is configured.*",
+    module="pydantic_settings.main",
+    category=UserWarning,
+)
+
 from prefect import flow
 from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
