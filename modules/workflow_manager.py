@@ -11,15 +11,7 @@ Architecture Reference:
     patterns, refer to docs/design_architecture.md.
 """
 import logging
-import warnings
 from typing import Dict, Any
-
-warnings.filterwarnings(
-    "ignore",
-    message=r"Config key `.*` is set in model_config but will be ignored because no .+ source is configured.*",
-    module="pydantic_settings.main",
-    category=UserWarning,
-)
 
 from prefect import flow
 from modules.workflow_loader import WorkflowLoader
@@ -106,11 +98,15 @@ class WorkflowManager:
             }
             
             self.status_manager.update_status(unique_id, "Workflow Triggered")
-            
-            # Start the flow asynchronously
+
+            # Start the flow (Prefect executes synchronously; log before and after for clarity)
+            self.logger.info(
+                f"Workflow triggered for file: {original_filename} (ID: {unique_id}) from source: {source}"
+            )
             flow_func(initial_context)
-            
-            self.logger.info(f"Workflow triggered for file: {original_filename} (ID: {unique_id}) from source: {source}")
+            self.logger.info(
+                f"Workflow completed for file: {original_filename} (ID: {unique_id}) from source: {source}"
+            )
             return True
             
         except Exception as e:

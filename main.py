@@ -73,6 +73,7 @@ from pathlib import Path
 import threading
 import time
 import logging.handlers
+import warnings
 
 import uvicorn
 import subprocess
@@ -81,6 +82,24 @@ import os as _os
 
 # Add the current directory to the Python path to ensure modules are discoverable
 sys.path.append(str(Path(__file__).parent))
+
+# Ensure Prefect and any spawned subprocesses inherit a warning filter that silences
+# pydantic_settings' noisy "ignored config key" messages related to unused TOML sources.
+_warning_filter = "ignore::UserWarning:pydantic_settings.main"
+existing_warning_env = os.environ.get("PYTHONWARNINGS", "")
+if _warning_filter not in existing_warning_env.split(","):
+    os.environ["PYTHONWARNINGS"] = ",".join(filter(None, [existing_warning_env, _warning_filter]))
+warnings.filterwarnings(
+    "ignore",
+    message=r"Config key `.*` is set in model_config but will be ignored because no .+ source is configured.*",
+    module="pydantic_settings.main",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message=r"Config key `pyproject_toml_table_header` is set in model_config but will be ignored because no PyprojectTomlConfigSettingsSource source is configured.*",
+    category=UserWarning,
+)
 
 from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
