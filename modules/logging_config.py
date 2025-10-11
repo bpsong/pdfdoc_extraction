@@ -6,7 +6,16 @@ import logging
 import logging.handlers
 import os
 import sys
+import warnings
 from typing import TextIO
+
+# Prefect imports trigger pydantic_settings warnings about unused TOML config keys.
+# Silence those specific messages while keeping other warnings visible.
+warnings.filterwarnings(
+    "ignore",
+    message=r"Config key `.*` is set in model_config but will be ignored because no .* source is configured.",
+    module="pydantic_settings.main",
+)
 
 from prefect.logging.formatters import PrefectFormatter
 from prefect.logging.handlers import PrefectConsoleHandler
