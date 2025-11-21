@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Inter:wght@400;500;600&display=swap');
+
 :root {
     --bg: #0f172a;
     --panel: #111827;
@@ -5,9 +7,13 @@
     --muted: #9ca3af;
     --primary: #2563eb;
     --primary-700: #1d4ed8;
-    --danger: #dc2626;
-    --success: #16a34a;
+    --danger: #ef4444;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --info: #38bdf8;
     --border: #374151;
+    --font-heading: 'Space Grotesk', 'Inter', 'Segoe UI', system-ui, sans-serif;
+    --font-body: 'Inter', 'Space Grotesk', 'Segoe UI', system-ui, sans-serif;
 }
 
 * {
@@ -19,9 +25,27 @@ body {
     margin: 0;
     padding: 0;
     height: 100%;
-    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    font-family: var(--font-body);
     background: radial-gradient(1200px 800px at 20% 30%, #1f2937, #0b1220);
     color: var(--text);
+}
+
+h1, h2, h3 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.01em;
+    margin-bottom: 0.35em;
+}
+
+h1 {
+    font-size: 1.75rem;
+}
+
+h2 {
+    font-size: 1.3rem;
+}
+
+h3 {
+    font-size: 1.05rem;
 }
 
 .container {
@@ -66,6 +90,13 @@ body {
 .nav button:hover {
     border-color: var(--primary);
     color: #fff;
+}
+
+a,
+button,
+input,
+.btn {
+    transition: all 0.2s ease;
 }
 
 .form-group {
@@ -143,8 +174,17 @@ input:focus {
     color: var(--muted);
 }
 
+.table tbody tr {
+    transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
 .table tr:hover td {
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.table tbody tr:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.25);
 }
 
 .result {
@@ -153,6 +193,71 @@ input:focus {
     border: 1px solid var(--border);
     border-radius: 8px;
     background: rgba(255, 255, 255, 0.03);
+}
+
+.drop-zone {
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+}
+
+.drop-zone-icon {
+    font-size: 1.5rem;
+}
+
+.drop-zone .linkish {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.drop-zone .muted {
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.drop-zone.dragging {
+    border-color: var(--primary);
+    background: rgba(37, 99, 235, 0.08);
+    transform: translateY(-1px);
+}
+
+.progress-note {
+    margin-top: 16px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.progress-label {
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.progress-bar-fill {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary), var(--primary-700));
+    animation: progressPulse 2s ease-in-out infinite;
+}
+
+.small {
+    font-size: 0.85rem;
 }
 
 /* Modal Styles - File Status Dialog Implementation */
@@ -192,6 +297,7 @@ input:focus {
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(4px);
     animation: fadeIn 0.3s ease;
+    transition: opacity 0.25s ease;
 }
 
 .modal.show {
@@ -213,6 +319,7 @@ input:focus {
     width: 90%;
     overflow: hidden;
     animation: slideIn 0.3s ease;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .modal-header {
@@ -304,6 +411,52 @@ input:focus {
 
 .status-field-value.success {
     color: var(--success);
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    text-transform: capitalize;
+}
+
+.status-pill::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+}
+
+.status-unknown::before {
+    background: var(--muted);
+}
+
+.status-pending::before,
+.status-queued::before {
+    background: var(--warning);
+}
+
+.status-processing::before,
+.status-extracting::before,
+.status-storing::before {
+    background: var(--info);
+}
+
+.status-completed::before,
+.status-success::before {
+    background: var(--success);
+}
+
+.status-error::before,
+.status-failed::before {
+    background: var(--danger);
 }
 
 .timeline {
@@ -434,6 +587,20 @@ input:focus {
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes progressPulse {
+    0% {
+        transform: translateX(-20%);
+    }
+
+    50% {
+        transform: translateX(0);
+    }
+
+    100% {
+        transform: translateX(20%);
     }
 }
 

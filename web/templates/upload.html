@@ -23,16 +23,102 @@
         <div id="alert" class="alert" style="display:none;"></div>
 
         <!-- Standard HTML form submit; server reads HttpOnly cookie and redirects after enqueue -->
-        <form action="/upload" method="post" enctype="multipart/form-data">
+        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
             <div class="form-group">
-                <label for="file">Choose PDF</label>
-                <input id="file" name="file" type="file" accept="application/pdf,.pdf" required />
+                <label for="file">Upload PDF</label>
+                <div id="dropZone" class="drop-zone">
+                    <div class="drop-zone-icon">📄</div>
+                    <div class="drop-zone-text">
+                        <strong>Drag &amp; drop</strong> your PDF here or <span class="linkish">browse</span>
+                        <div class="muted">Max size: 15 MB • PDF only</div>
+                    </div>
+                </div>
+                <input id="file" name="file" type="file" accept="application/pdf,.pdf" required hidden />
+                <div id="fileName" class="muted" style="margin-top: 8px;"></div>
+                <div id="fileError" class="alert" style="display:none; margin-top: 8px;"></div>
             </div>
             <button type="submit" class="btn">Upload</button>
         </form>
 
-        <p class="note">After upload, you will be redirected. Check the dashboard table for status updates.</p>
+        <div id="progressNote" class="progress-note" style="display:none;">
+            <div class="progress-label">Queued → Processing</div>
+            <div class="progress-bar">
+                <div class="progress-bar-fill"></div>
+            </div>
+            <div class="muted small">You will be redirected to the dashboard to track status.</div>
+        </div>
     </div>
+
+    <script>
+        (function () {
+            const dropZone = document.getElementById('dropZone');
+            const fileInput = document.getElementById('file');
+            const fileName = document.getElementById('fileName');
+            const fileError = document.getElementById('fileError');
+            const progressNote = document.getElementById('progressNote');
+            const MAX_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
+
+            function showError(message) {
+                fileError.textContent = message;
+                fileError.style.display = 'block';
+            }
+
+            function clearError() {
+                fileError.style.display = 'none';
+                fileError.textContent = '';
+            }
+
+            function handleFiles(files) {
+                clearError();
+                const [file] = files;
+                if (!file) return;
+                if (!file.type || !file.type.includes('pdf')) {
+                    showError('Please select a PDF file.');
+                    fileInput.value = '';
+                    fileName.textContent = '';
+                    return;
+                }
+                if (file.size > MAX_SIZE_BYTES) {
+                    const mb = (file.size / (1024 * 1024)).toFixed(1);
+                    showError(`File is too large (${mb} MB). Max size is 15 MB.`);
+                    fileInput.value = '';
+                    fileName.textContent = '';
+                    return;
+                }
+                fileName.textContent = `Selected: ${file.name}`;
+                fileInput.files = files;
+            }
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                });
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.add('dragging'));
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => dropZone.classList.remove('dragging'));
+            });
+
+            dropZone.addEventListener('click', () => fileInput.click());
+            dropZone.addEventListener('drop', (e) => {
+                if (e.dataTransfer?.files?.length) {
+                    handleFiles(e.dataTransfer.files);
+                }
+            });
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+
+            document.getElementById('uploadForm').addEventListener('submit', () => {
+                progressNote.style.display = 'block';
+            });
+        })();
+    </script>
 </body>
 
 </html>

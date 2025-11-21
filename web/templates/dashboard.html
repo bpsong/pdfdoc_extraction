@@ -90,7 +90,7 @@
 
                     <!-- Special Note Section -->
                     <div class="special-note" id="specialNoteSection" style="display: none;">
-                        <h3>📄 Special Note</h3>
+                        <h3>Special Note</h3>
                         <p id="specialNoteContent"></p>
                     </div>
 
@@ -153,6 +153,21 @@
         const specialNoteContent = document.getElementById('specialNoteContent');
 
         let currentFocusElement = null;
+
+        // Normalize a status label into a CSS-friendly class suffix
+        function normalizeStatus(statusText) {
+            const cleaned = (statusText || 'unknown').toString().toLowerCase();
+            const normalized = cleaned.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            return normalized || 'unknown';
+        }
+
+        // Apply pill styling to a target element
+        function setStatusPill(element, statusText, baseClass) {
+            const normalized = normalizeStatus(statusText);
+            const base = baseClass || '';
+            element.textContent = statusText || 'Unknown';
+            element.className = `${base} status-pill status-${normalized}`.trim();
+        }
 
         // Show alert messages
         function showAlert(msg) {
@@ -331,7 +346,7 @@
             // Core fields
             modalFileId.textContent = data.file_id || '-';
             modalOriginalName.textContent = data.original_name || '-';
-            modalStatus.textContent = data.status || 'Processing';
+            setStatusPill(modalStatus, data.status || 'Processing', 'status-field-value');
             modalCreatedAt.textContent = data.timestamps?.created_sg || 'Not available';
             modalUpdatedAt.textContent = data.timestamps?.pending_sg || 'Not available';
 
@@ -397,7 +412,7 @@
             // Core fields
             modalFileId.textContent = data.file_id || '-';
             modalOriginalName.textContent = data.original_name || '-';
-            modalStatus.textContent = data.status || '-';
+            setStatusPill(modalStatus, data.status || '-', 'status-field-value');
             modalCreatedAt.textContent = data.timestamps?.created_sg || '-';
             modalUpdatedAt.textContent = data.timestamps?.pending_sg || '-';
 
@@ -612,7 +627,7 @@
                 td.colSpan = 6;
                 td.innerHTML = `
                     <div class="empty-state">
-                        <div class="empty-state-icon">📄</div>
+                        <div class="empty-state-icon">PDF</div>
                         <div class="empty-state-title">No files found</div>
                         <div class="empty-state-subtitle">Upload some PDF files to get started</div>
                     </div>
@@ -623,10 +638,12 @@
             }
             for (const f of files) {
                 const tr = document.createElement('tr');
+                const statusText = f.status || 'Unknown';
+                const statusClass = normalizeStatus(statusText);
                 tr.innerHTML = `
                     <td><button class="file-id-btn" onclick="showModal('${f.file_id}')" data-file-id="${f.file_id}">${f.file_id}</button></td>
                     <td>${f.original_name || ''}</td>
-                    <td>${f.status}</td>
+                    <td><span class="status-pill status-${statusClass}">${statusText}</span></td>
                     <td>${f.created_at || ''}</td>
                     <td>${f.updated_at || ''}</td>
                     <td>${f.error || ''}</td>
