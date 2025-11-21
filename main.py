@@ -188,12 +188,22 @@ def start_web_server(config: ConfigManager, logger: logging.Logger):
         if use_reload:
             cmd.append("--reload")
 
+        # Ensure the web process reads the same resolved config path
+        child_env = os.environ.copy()
+        try:
+            resolved_cfg = getattr(config, "_config_path", None)
+            if resolved_cfg:
+                child_env["CONFIG_PATH"] = str(resolved_cfg)
+        except Exception:
+            pass
+
         process = subprocess.Popen(
             cmd,
             shell=False,
             # Do not redirect stdout/stderr so subprocess log records are handled
             # by the application's logging configuration (console + file handlers).
             cwd=str(Path(__file__).parent),  # ensure project root
+            env=child_env,
         )
         logger.info(f"Uvicorn subprocess started with PID {process.pid}, listening on http://{host}:{port}")
         return process, uvicorn_log

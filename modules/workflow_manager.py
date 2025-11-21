@@ -69,7 +69,7 @@ class WorkflowManager:
             - The flow is started asynchronously (no await) by calling the
               loaded Prefect flow function directly.
             - Status transitions:
-                * Initially created via StatusManager.create_status(...)
+                * Initially created via StatusManager.create_status(...) (only if missing)
                 * Updated to "Workflow Triggered" before starting the flow
                 * On load failure: "Workflow Load Failed"
                 * On exception during trigger: "Workflow Trigger Failed"
@@ -80,7 +80,9 @@ class WorkflowManager:
         """
         try:
             # Create initial status for the file
-            self.status_manager.create_status(unique_id, original_filename, source, file_path)
+            existing = self.status_manager.get_status(unique_id)
+            if not existing:
+                self.status_manager.create_status(unique_id, original_filename, source, file_path)
             
             # Load the workflow
             flow_func = self.workflow_loader.load_workflow()

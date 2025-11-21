@@ -47,7 +47,7 @@ The system is organized around pipelines defined in configuration (YAML). For ea
 ## Logical components
 
 - Watch Folder Monitor: detects new PDFs and moves them to processing dir. This component adheres to the Single Responsibility Principle by focusing solely on file ingestion, decoupling it from the core processing logic.
-- Workflow Loader: selects a workflow based on matching rules and supplies tasks. This component is responsible for dynamic task instantiation and managing the sequence of operations, ensuring flexibility in pipeline definition.
+- Workflow Loader: builds the Prefect flow from the single configured `pipeline` list and supplies tasks. This component is responsible for dynamic task instantiation and managing the sequence of operations defined in configuration.
 - Standard Steps: pluggable tasks under `standard_step` (extraction, rules, storage, archiver, housekeeping). These are designed as independent, reusable units of work.
 - Config Manager: validates configuration at startup and enforces folder/file existence. It centralizes system configuration and ensures operational readiness.
 - Status Manager: records task lifecycle events for operational visibility. This provides a standardized mechanism for reporting progress and errors across the pipeline.
@@ -278,16 +278,15 @@ items:  # Field name from LlamaCloud schema (normalized)
 ## Testing strategy
 
 - Unit tests:
-  - Core components: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_file_processor.py`](test/core/test_file_processor.py:1), [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
-  - Standard steps: [`test/standard_step/rules/test_update_reference.py`](test/standard_step/rules/test_update_reference.py:1), [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1), [`test/standard_step/test_archiver.py`](test/standard_step/test_archiver.py:1)
+  - Core components: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
+  - Standard steps: [`test/standard_step/rules/test_rules.py`](test/standard_step/rules/test_rules.py:1), [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1), [`test/standard_step/test_standard_steps.py`](test/standard_step/test_standard_steps.py:1)
   - Workflow components: [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1), [`test/workflow/test_workflow_manager.py`](test/workflow/test_workflow_manager.py:1)
-  - Extraction logic: [`test/extraction/test_extraction.py`](test/extraction/test_extraction.py:1)
-  - Storage operations: [`test/storage/test_storage.py`](test/storage/test_storage.py:1)
-  - Authentication: [`test/core/test_auth_utils.py`](test/core/test_auth_utils.py:1)
+  - Extraction logic: [`test/extraction/test_extraction.py`](test/extraction/test_extraction.py:1), [`test/extraction/test_extraction_v2.py`](test/extraction/test_extraction_v2.py:1)
+  - Storage operations: [`test/storage/test_storage.py`](test/storage/test_storage.py:1), [`test/storage/test_storage_v2_csv.py`](test/storage/test_storage_v2_csv.py:1), [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1)
+  - Tools and validation: config checker suite under [`test/tools/config_check/`](test/tools/config_check/).
   - Utilities: [`test/utils/test_utilities.py`](test/utils/test_utilities.py:1)
   - Third-party integrations: [`test/third_party/llamacloud_connection_test.py`](test/third_party/llamacloud_connection_test.py:1)
 - Integration tests:
-  - End-to-end pipeline test using sample PDFs and a temporary filesystem (pytest fixtures)
   - API endpoint testing: [`test/integration/test_api_endpoints.py`](test/integration/test_api_endpoints.py:1)
   - Input processing workflows: [`test/integration/test_input_processing.py`](test/integration/test_input_processing.py:1)
 - Test utilities:
@@ -326,10 +325,10 @@ items:  # Field name from LlamaCloud schema (normalized)
   - User guide: [`docs/user_guide.md`](docs/user_guide.md:1)
   - Reference task: [`standard_step/rules/update_reference.py`](standard_step/rules/update_reference.py:1)
   - Tests:
-    - Core tests: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_file_processor.py`](test/core/test_file_processor.py:1)
-    - Workflow tests: [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1)
-    - Integration tests: [`test/integration/test_api_endpoints.py`](test/integration/test_api_endpoints.py:1)
-    - Standard step tests: [`test/standard_step/rules/test_update_reference.py`](test/standard_step/rules/test_update_reference.py:1)
+    - Core tests: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
+    - Workflow tests: [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1), [`test/workflow/test_workflow_manager.py`](test/workflow/test_workflow_manager.py:1)
+    - Integration tests: [`test/integration/test_api_endpoints.py`](test/integration/test_api_endpoints.py:1), [`test/integration/test_input_processing.py`](test/integration/test_input_processing.py:1)
+    - Standard step tests: [`test/standard_step/rules/test_rules.py`](test/standard_step/rules/test_rules.py:1), [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1), [`test/standard_step/test_standard_steps.py`](test/standard_step/test_standard_steps.py:1)
 - Recommended next steps for a takeover:
   - Run full test suite and add missing unit tests for edge cases
   - Add CI linting, type checking (mypy), and pre-commit hooks

@@ -119,7 +119,7 @@ Internet access is required for cloud-based extraction providers such as LlamaEx
 ### Components
 
 - **Watch Folder Monitor:** Detects new PDFs in the configured `watch_folder.dir` (the folder the system watches for new files). This directory must pre-exist; it is not auto-created.
-- **Workflow Manager and Loader:** Loads `config.yaml` and selects the matching workflow per file.  
+- **Workflow Manager and Loader:** Loads `config.yaml` and runs the single configured pipeline order for every file.  
 - **Standard Steps:** Executes ordered tasks for each file (extraction, rules, storage, archiver, housekeeping).  
 - **Storage:** Writes extracted data to CSV/JSON and moves PDFs to their final destination.  
 - **Logging:** Centralized application log with rotation.  
@@ -133,7 +133,7 @@ Internet access is required for cloud-based extraction providers such as LlamaEx
       UserWeb[End User: Web Interface] -->|Upload PDF| WebUpload[Web Upload Handler]
       Monitor -->|Trigger| WorkflowLoader[Workflow Loader]
       WebUpload -->|Trigger| WorkflowLoader
-      WorkflowLoader -->|Selects| Workflow[Workflow Manager]
+      WorkflowLoader -->|Builds| Workflow[Workflow Manager]
       Workflow -->|Executes| Steps[Standard Steps Chain]
       Steps -->|Extract| Extractor[LlamaExtract API]
       Steps -->|Apply Rules| Rules[Rules Engine (e.g., update_reference)]
@@ -326,6 +326,7 @@ web:
 #### 4.3.3. Workflows and Matching
 
 Workflows are defined by the ordered list under `pipeline:` and the task registry under `tasks:`. Each item in `pipeline` references a key in `tasks` which specifies `module`, `class`, and `params`.
+The current implementation runs the same pipeline for every file; dynamic workflow selection or matching by file metadata is not implemented.
 
 Example task categories include:
 
@@ -335,7 +336,7 @@ Example task categories include:
 - `storage.store_file_to_localdrive`: Persist the processed PDF.
 - `archiver.archive_pdf`: Archive the original input PDF.
 
-The housekeeping cleanup is a mandatory final step in every workflow, automatically invoked by the WorkflowLoader. It is not configurable via the pipeline and always runs last to ensure cleanup regardless of previous task outcomes.
+The housekeeping cleanup step is appended automatically by the WorkflowLoader and runs last for every file. In the current implementation it only deletes the processed PDF in the processing directory; it does not archive files or remove status records.
 
 ### 4.4. Managing Web Interface Passwords
 
@@ -786,19 +787,18 @@ pipeline:
 #### 4.7.8. housekeeping.cleanup
 
 - **type:** `"housekeeping.cleanup"`
-- **Purpose:** Performs final cleanup after workflow execution, ensuring resources are freed regardless of success or failure.
+- **Purpose:** Performs final cleanup after workflow execution by deleting the processed PDF from the processing directory so the folder does not accumulate UUID-named files.
 - **params:**
   - `processing_dir`: string (optional). Directory containing processed files. Defaults to "processing".
 - **Behavior:**
-  - Moves processed files from the processing directory to an archive directory, preserving original filenames.
-  - Cleans up associated status files.
-  - Logs all operations and any errors encountered.
-  - Raises exceptions on critical failures (e.g., file move errors).
-  - Executes unconditionally as the final step, even if previous tasks failed, to ensure cleanup and final status updates.
+  - Deletes the processed file referenced in the context if it exists in `processing_dir`.
+  - Logs successes and warnings for missing files but does not touch status files or archives.
+  - Raises exceptions on critical delete failures.
+  - Executes unconditionally as the final step, even if previous tasks failed, to keep the processing directory tidy.
 - **Notes:**
   - This task is automatically invoked by the WorkflowLoader as a mandatory final step in every Prefect flow.
   - It does not require definition in the `tasks` section or inclusion in the `pipeline` list of `config.yaml`.
-  - Ensures the processing directory remains clean and prevents accumulation of temporary files.
+  - Ensures the processing directory remains clean by removing only the processed PDF.
 #### 4.7.9. Validation and Failure Behavior
 
 - Config validation happens at startup via the `ConfigManager`:
@@ -1006,11 +1006,11 @@ pipeline:
   - archive_pdf
 ```
 
-Housekeeping runs automatically as the final step after the pipeline completes, ensuring cleanup regardless of success or failure. It is not included in the `tasks` registry or `pipeline` list.
+Housekeeping runs automatically as the final step after the pipeline completes to remove the processed PDF from the processing directory. It is not included in the `tasks` registry or `pipeline` list.
 
 Notes:
 - The pipeline is an ordered list of task names defined under `tasks:`.
-- Housekeeping runs automatically as the final step of the workflow, invoked directly by the WorkflowLoader. It is not configurable and does not require inclusion in the `tasks` registry or `pipeline` list.
+- Housekeeping runs automatically as the final step of the workflow, invoked directly by the WorkflowLoader. It deletes the processed PDF but does not archive files or modify status records.
 - Each task references a Python module and class from the `standard_step` package and receives `params`.
 - The three storage-related tasks are separate:
   - `store_metadata_csv` writes CSV to `data_dir` using `filename` template.
@@ -1021,8 +1021,8 @@ Notes:
 ### 4.9. Housekeeping and the Processing Folder
 
 - The `processing_dir` contains temporary files and status metadata during processing.
-- The housekeeping cleanup task automatically executes as the final step in every workflow, moving processed files to archive with original names, cleaning status files, and ensuring the directory remains tidy.
-- It always runs, regardless of pipeline success or failure, to guarantee cleanup.
+- The housekeeping cleanup task automatically executes as the final step in every workflow, deleting the processed PDF from `processing_dir` so the folder stays small. It does not archive files or remove status text files.
+- It always runs, regardless of pipeline success or failure, to guarantee the processing directory is cleared of that PDF.
 - Deleting old status files is safe; they are used for history and diagnostics.
 
 ---
@@ -1120,7 +1120,7 @@ A: The system validates API credentials (api_key and agent_id) before processing
 
 ### Glossary
 
-- **Workflow:** An ordered list of tasks configured in `config.yaml` applied to matching files.  
+- **Workflow:** An ordered list of tasks configured in `config.yaml` applied to every processed file.  
 - **Task (Standard Step):** A single operation in the pipeline, e.g., `extraction`, `rules.update_reference`, `storage.store_metadata_as_csv`, `storage.store_metadata_as_json`, `archiver.post_process`, `housekeeping.cleanup`.  
 - **Alias:** Display/output field name used as CSV headers/JSON keys and in reference files for consistency.  
 - **Watch Folder:** The `watch_folder.dir` monitored for new PDFs.  

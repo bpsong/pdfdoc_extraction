@@ -6,38 +6,38 @@
 
 A sophisticated PDF document processing system that leverages AI-powered extraction to convert unstructured PDF documents into structured data. Built with modern Python technologies and designed for enterprise document processing workflows.
 
-## 🚀 Key Features
+## Key Features
 
-### 🤖 AI-Powered Data Extraction
+### AI-Powered Data Extraction
 - **Llama Cloud Integration**: Advanced AI service for intelligent document understanding
 - **Structured Data Extraction**: Converts PDF content into structured JSON/CSV format
 - **Multi-format Support**: Handles invoices, receipts, forms, and various document types
 - **v2 Array-of-Objects Support**: Extract line items and tabular data from complex documents
 
-### 📁 Multiple Input Methods
+### Multiple Input Methods
 - **Watch Folder Monitoring**: Automated processing of dropped PDF files
 - **Web Upload Interface**: User-friendly web portal for manual uploads
 - **Real-time Processing**: Live status updates and progress tracking
 
-### ⚙️ Configurable Pipeline Architecture
+### Configurable Pipeline Architecture
 - **Modular Design**: Pluggable processing steps (extraction, storage, archiving, rules)
 - **Prefect Workflow Orchestration**: Reliable task execution and error handling
 - **Dynamic Configuration**: YAML-based pipeline definition
 - **Extensible Framework**: Easy to add new processing steps
 
-### 💾 Flexible Data Storage
+### Flexible Data Storage
 - **CSV Export**: Structured data in spreadsheet format
 - **JSON Export**: Hierarchical data preservation
 - **v2 Enhanced Storage**: Row-per-item expansion for tabular data
 - **Local File Management**: Organized storage with metadata tracking
 
-### 🌐 Modern Web Interface
+### Modern Web Interface
 - **FastAPI Backend**: High-performance REST API
 - **Interactive Dashboard**: Real-time processing status
 - **Enhanced Modal Dialogs**: Detailed progress visualization with timeline
 - **Responsive Design**: Mobile-friendly interface
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [Quick Start](#quick-start)
 - [Installation](#installation)
@@ -49,7 +49,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.13+
@@ -69,11 +69,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
    ```
 
 3. **Configure the system**
-   ```powershell
-   # Copy and modify the configuration file
-   copy config.yaml.example config.yaml
-   # Edit config.yaml with your settings
-   ```
+   Open `config.yaml` in the project root and set your host, credentials, and task parameters.
 
 4. **Run the application**
    ```bash
@@ -83,7 +79,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 5. **Access the web interface**
    Open your browser and navigate to `http://localhost:8000`
 
-## 📦 Installation
+## Installation
 
 ### System Requirements
 - **Operating System**: Windows 11 (primary), cross-platform compatibility
@@ -103,7 +99,7 @@ Key dependencies:
 - **Pandas**: Data manipulation and CSV processing
 - **Uvicorn**: ASGI server for production deployment
 
-## ⚙️ Configuration
+## Configuration
 
 ### Basic Configuration Structure
 
@@ -155,7 +151,7 @@ pipeline:
 - `CONFIG_PATH`: Custom path to configuration file
 - `USE_RELOAD`: Enable auto-reload for development (`true`/`false`)
 
-## 🎯 Usage
+## Usage
 
 ### Web Interface
 
@@ -183,7 +179,7 @@ C:\Python313\python.exe main.py --config-path custom_config.yaml
 C:\Python313\python.exe main.py --no-web
 ```
 
-## 🔌 API Reference
+## API Reference
 
 ### Authentication
 - `POST /login`: User authentication
@@ -273,7 +269,7 @@ pdfdoc_extraction/
 - **Error Handling**: Structured error handling with custom exceptions
 - **Testing**: Unit tests for all new features
 
-## 🧪 Testing
+## Testing
 
 ### Running Tests
 

@@ -166,8 +166,9 @@ def get_dependencies() -> tuple:
     Raises:
         None
     """
-    cfg_path = Path("config.yaml")
-    config = ConfigManager(config_path=cfg_path)
+    cfg_env = os.getenv("CONFIG_PATH")
+    cfg_path = Path(cfg_env) if cfg_env else Path("config.yaml")
+    config = ConfigManager(config_path=cfg_path.resolve())
     auth = AuthUtils(config)
     status_mgr = StatusManager(config)
     # WorkflowManager signature expects config_manager
