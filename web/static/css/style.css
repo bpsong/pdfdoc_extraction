@@ -195,71 +195,6 @@ input:focus {
     background: rgba(255, 255, 255, 0.03);
 }
 
-.drop-zone {
-    border: 1px dashed var(--border);
-    border-radius: 12px;
-    padding: 18px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    background: rgba(255, 255, 255, 0.02);
-    cursor: pointer;
-    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
-}
-
-.drop-zone-icon {
-    font-size: 1.5rem;
-}
-
-.drop-zone .linkish {
-    color: var(--primary);
-    text-decoration: underline;
-}
-
-.drop-zone .muted {
-    color: var(--muted);
-    font-size: 0.9rem;
-}
-
-.drop-zone.dragging {
-    border-color: var(--primary);
-    background: rgba(37, 99, 235, 0.08);
-    transform: translateY(-1px);
-}
-
-.progress-note {
-    margin-top: 16px;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.progress-label {
-    font-weight: 600;
-    margin-bottom: 8px;
-}
-
-.progress-bar {
-    width: 100%;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 999px;
-    overflow: hidden;
-    margin-bottom: 6px;
-}
-
-.progress-bar-fill {
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, var(--primary), var(--primary-700));
-    animation: progressPulse 2s ease-in-out infinite;
-}
-
-.small {
-    font-size: 0.85rem;
-}
-
 /* Modal Styles - File Status Dialog Implementation */
 /*
  * Modal dialog system for displaying comprehensive file processing status information.
@@ -587,20 +522,6 @@ input:focus {
     to {
         opacity: 1;
         transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes progressPulse {
-    0% {
-        transform: translateX(-20%);
-    }
-
-    50% {
-        transform: translateX(0);
-    }
-
-    100% {
-        transform: translateX(20%);
     }
 }
 
