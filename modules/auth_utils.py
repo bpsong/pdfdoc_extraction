@@ -1,7 +1,7 @@
 """Authentication utilities for a single-user setup.
 
 This module provides:
-  - Password verification using passlib's CryptContext with bcrypt.
+  - Password verification using bcrypt directly (no passlib dependency for checking).
   - JWT access token creation and verification using jose.
   - Integration with project configuration for credentials and JWT settings.
 
@@ -12,14 +12,10 @@ Security notes:
 """
 
 import logging
-import warnings
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
-# Suppress specific bcrypt version warning since it doesn't affect functionality
-warnings.filterwarnings('ignore', message='.*error reading bcrypt version.*')
-
-from passlib.context import CryptContext
+import bcrypt
 from jose import JWTError, jwt
 
 from .config_manager import ConfigManager
@@ -98,20 +94,13 @@ class AuthUtils:
         if not self.secret_key:
             raise AuthError("web.secret_key must be set in config")
             
-        # Configure password context with bcrypt settings to avoid version check
-        self.pwd_context = CryptContext(
-            schemes=["bcrypt"],
-            deprecated="auto",
-            bcrypt__rounds=12  # Explicitly set rounds instead of relying on version detection
-        )
-        
         self.logger.info(f"Configured username: {self.username}")
         self.logger.debug(f"Loaded password hash: {self.password_hash}")
         self.logger.debug(f"Using JWT algorithm: {self.algorithm}")
         self.logger.debug(f"Token expiration: {self.token_exp_minutes} minutes")
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify a plaintext password against a bcrypt hash.
+        """Verify a plaintext password against a bcrypt hash using bcrypt.checkpw.
 
         Args:
             plain_password: The plaintext password to verify.
@@ -120,18 +109,25 @@ class AuthUtils:
         Returns:
             True if the password matches the hash; False otherwise.
 
-        Troubleshooting:
-            - Common Issue: Password verification always returns False. Resolution: Verify the hashed_password is a valid bcrypt hash format (starts with $2b$, $2y$, or $2a$).
-            - Common Issue: bcrypt version warnings. Resolution: These are informational and don't affect functionality; the code handles version detection issues automatically.
-            - Common Issue: Performance issues with verification. Resolution: Ensure bcrypt rounds are set to 12; higher values increase security but slow verification.
+        Notes:
+            - bcrypt has a hard 72-byte limit on input; longer passwords will raise ValueError.
         """
+        if plain_password is None or hashed_password is None:
+            self.logger.warning("Password verification failed: missing input")
+            return False
+
         self.logger.debug(f"Verifying password (length={len(plain_password)})")
         try:
-            result = self.pwd_context.verify(plain_password, hashed_password)
-            self.logger.debug(f"Password verification result: {result}")
-            return result
-        except Exception as e:
-            self.logger.error(f"Password verification failed: {e}")
+            return bcrypt.checkpw(
+                plain_password.encode("utf-8"),
+                hashed_password.encode("utf-8"),
+            )
+        except ValueError as exc:
+            # Raised by bcrypt when the candidate exceeds the 72-byte limit
+            self.logger.error(f"Password verification failed: {exc}")
+            return False
+        except Exception as exc:
+            self.logger.error(f"Password verification failed: {exc}")
             return False
 
     def create_access_token(self, data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:

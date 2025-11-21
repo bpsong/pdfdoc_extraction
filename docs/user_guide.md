@@ -344,12 +344,12 @@ The web interface uses a simple username/password authentication system. Passwor
 
 Generating bcrypt password hashes:
 
-1.  Install the `bcrypt` package (if not already installed):
+1.  Install the `bcrypt` package (pinned for this project):
 
     Open a `Command Prompt` and run:
 
     ```
-    C:\Python313\python.exe -m pip install bcrypt
+    C:\Python313\python.exe -m pip install "bcrypt==5.0.0"
     ```
 
 2.  Generate a bcrypt hash using a Python one-liner:
@@ -375,6 +375,10 @@ Generating bcrypt password hashes:
     ```
 
 4.  Restart the system for changes to take effect (see section 4.1).
+
+Notes:
+- bcrypt enforces a hard 72-byte password limit; choose passwords under that length or generation/verification will fail.
+- Keep the `bcrypt` version aligned with `requirements.txt` (currently `5.0.0`) to avoid compatibility issues.
 
 Optional helper script:
 

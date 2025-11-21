@@ -8,6 +8,8 @@ Usage examples:
   C:\Python313\python.exe tools\generate_password_hash.py -p abc1234 -r 12
 
 Notes:
+- Project requirement: bcrypt==5.0.0 (see requirements.txt).
+- bcrypt enforces a 72-byte password limit; longer inputs will be rejected.
 - If --password is omitted, you will be prompted (default: abc1234 if left empty).
 - The output will be a string starting with "$2b$..." suitable for config.yaml:
     authentication:
