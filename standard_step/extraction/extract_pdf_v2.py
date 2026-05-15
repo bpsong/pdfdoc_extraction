@@ -191,9 +191,11 @@ class ExtractPdfV2Task(BaseTask):
                     error_msg = f"Multiple table fields configured: {table_fields}. Only one table field is supported."
                     self.logger.error(error_msg)
                     raise TaskError(error_msg)
-                self.table_field_key = table_fields[0]
-                self.item_fields = self.fields.get(self.table_field_key, {}).get('item_fields', {})
-                self.logger.info(f"Found table field: {self.table_field_key} with {len(self.item_fields)} item fields")
+                table_field_key = table_fields[0]
+                self.table_field_key = table_field_key
+                table_config = self.fields.get(table_field_key, {})
+                self.item_fields = table_config.get('item_fields', {}) if isinstance(table_config, dict) else {}
+                self.logger.info(f"Found table field: {table_field_key} with {len(self.item_fields)} item fields")
             else:
                 self.table_field_key = None
                 self.item_fields = {}

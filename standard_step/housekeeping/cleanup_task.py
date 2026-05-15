@@ -28,8 +28,8 @@ class CleanupTask(BaseTask):
         - Log success or warnings if the file is missing.
 
     Integration:
-        Runs as a final housekeeping step and does not return an updated
-        context. Uses BaseTask for initialization/logging.
+        Runs as a final housekeeping step and returns the context unchanged.
+        Uses BaseTask for initialization/logging.
 
     Args:
         config_manager (ConfigManager): Project configuration manager.
@@ -76,7 +76,7 @@ class CleanupTask(BaseTask):
         if not self.processing_dir:
             raise TaskError("CleanupTask missing required field: 'processing_dir'")
 
-    def run(self, context: Dict[str, Any]) -> None:
+    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Delete the processed file referenced by the context if it exists.
 
         Args:
@@ -89,22 +89,20 @@ class CleanupTask(BaseTask):
 
         Notes:
             - Side effects: Filesystem unlink of the processed file.
-            - This terminal step intentionally does not return a context.
+            - This terminal step returns the unchanged context.
         """
         self.validate_required_fields(context)
 
         file_path_str = context.get('file_path')
-        unique_id = context.get('id')
-
         if not file_path_str:
             self.logger.warning(f"Missing file_path in context for cleanup. Skipping.")
-            return
+            return context
 
         file_path = Path(str(file_path_str))  # Ensure it's a string for Path
 
         if not file_path.exists():
             self.logger.warning(f"File {file_path} not found for cleanup. Skipping.")
-            return
+            return context
 
         # Remove the UUID-named PDF document from the processing directory
         try:
@@ -116,4 +114,4 @@ class CleanupTask(BaseTask):
 
         # This task does not delete the status text file
 
-        # As this is the last step, do not return context
+        return context

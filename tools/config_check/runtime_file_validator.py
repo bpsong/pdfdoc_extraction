@@ -49,6 +49,7 @@ try:
     import pandas as pd
     PANDAS_AVAILABLE = True
 except ImportError:
+    pd = None  # type: ignore[assignment]
     PANDAS_AVAILABLE = False
 
 from .task_validator import TaskIssue
@@ -223,7 +224,7 @@ class RuntimeFileValidator:
         errors: List[TaskIssue] = []
         warnings: List[TaskIssue] = []
         
-        if not PANDAS_AVAILABLE:
+        if not PANDAS_AVAILABLE or pd is None:
             warnings.append(TaskIssue(
                 path="runtime_validation",
                 message="pandas is not available for CSV structure validation",

@@ -23,7 +23,7 @@ Architecture Reference:
     with the overall system, refer to docs/design_architecture.md.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, cast
 import os
 import json
 from pathlib import Path
@@ -31,6 +31,7 @@ import logging
 import uuid
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
+from email.message import EmailMessage
 from email.parser import BytesParser
 from email.policy import default
 from urllib.parse import parse_qs
@@ -314,7 +315,7 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty upload payload")
 
         header_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("latin-1", errors="ignore")
-        message = BytesParser(policy=default).parsebytes(header_bytes + body)
+        message = cast(EmailMessage, BytesParser(policy=cast(Any, default)).parsebytes(header_bytes + body))
 
         for part in message.iter_parts():
             if part.get_content_disposition() != "form-data":

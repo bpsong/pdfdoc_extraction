@@ -50,6 +50,7 @@ try:
     import pandas as pd
     PANDAS_AVAILABLE = True
 except ImportError:
+    pd = None  # type: ignore[assignment]
     PANDAS_AVAILABLE = False
 
 from .task_validator import TaskIssue
@@ -144,7 +145,7 @@ class RulesTaskValidator:
         if not reference_file:
             return findings
         
-        if not PANDAS_AVAILABLE:
+        if not PANDAS_AVAILABLE or pd is None:
             findings.append(TaskIssue(
                 path=f"tasks.{task_name}.params.reference_file",
                 message="pandas is required for CSV validation but is not available",

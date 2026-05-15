@@ -180,6 +180,11 @@ def _validate_task_imports(task_name: str, task_config: Dict[str, Any]) -> List[
     
     module_name = task_config.get("module")
     class_name = task_config.get("class")
+
+    if not isinstance(module_name, str) or not module_name:
+        return findings
+    if not isinstance(class_name, str) or not class_name:
+        return findings
     
     # Validate module import
     module_issue = _validate_module_import(module_name, task_name)
@@ -240,6 +245,15 @@ def _validate_class_existence(module_name: str, class_name: str, task_name: str)
     """Validate that a class exists in the specified module."""
     try:
         module = importlib.import_module(module_name)
+    except Exception as exc:
+        return TaskIssue(
+            path=f"tasks.{task_name}.class",
+            message=f"Error importing module '{module_name}' while checking class '{class_name}': {exc}",
+            code="task-import-class-access-error",
+            details={"module": module_name, "class": class_name, "task_name": task_name, "error": str(exc)}
+        )
+
+    try:
         getattr(module, class_name)
         return None
     except AttributeError:
@@ -259,13 +273,6 @@ def _validate_class_existence(module_name: str, class_name: str, task_name: str)
                 "task_name": task_name,
                 "available_attributes": available_attrs
             }
-        )
-    except Exception as exc:
-        return TaskIssue(
-            path=f"tasks.{task_name}.class",
-            message=f"Error accessing class '{class_name}' in module '{module_name}': {exc}",
-            code="task-import-class-access-error",
-            details={"module": module_name, "class": class_name, "task_name": task_name, "error": str(exc)}
         )
 
 

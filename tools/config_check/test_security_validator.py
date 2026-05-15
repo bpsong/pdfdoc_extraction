@@ -67,7 +67,7 @@ class TestSecurityValidator(unittest.TestCase):
         self.assertEqual(len(warnings), 2)
         
         # Check that both paths are flagged
-        paths_flagged = [w.details["path"] for w in warnings]
+        paths_flagged = [(w.details or {})["path"] for w in warnings]
         self.assertIn("/etc/sensitive-data", paths_flagged)
         self.assertIn("C:\\Windows\\Temp\\uploads", paths_flagged)
 
@@ -99,7 +99,7 @@ class TestSecurityValidator(unittest.TestCase):
         self.assertEqual(len(errors), 2)
         
         # Check that both task parameters are flagged
-        paths_flagged = [e.details["path"] for e in errors]
+        paths_flagged = [(e.details or {})["path"] for e in errors]
         self.assertIn("../../../sensitive/data", paths_flagged)
         self.assertIn("~/../../etc/passwd", paths_flagged)
 
@@ -126,7 +126,7 @@ class TestSecurityValidator(unittest.TestCase):
         self.assertEqual(len(issues), 2)
         
         # Check that both nested parameters are flagged
-        paths_flagged = [i.details["path"] for i in issues]
+        paths_flagged = [(i.details or {})["path"] for i in issues]
         self.assertIn("../../../var/log", paths_flagged)
         self.assertIn("../../output.json", paths_flagged)
 
@@ -153,7 +153,7 @@ class TestSecurityValidator(unittest.TestCase):
         # Check that dangerous patterns are detected
         all_patterns = []
         for issue in issues:
-            all_patterns.extend(issue.details.get("dangerous_patterns", []))
+            all_patterns.extend((issue.details or {}).get("dangerous_patterns", []))
         
         self.assertIn(";", all_patterns)
         self.assertIn("|", all_patterns)
@@ -178,7 +178,7 @@ class TestSecurityValidator(unittest.TestCase):
         # Check that environment variable patterns are detected
         all_patterns = []
         for issue in issues:
-            all_patterns.extend(issue.details.get("dangerous_patterns", []))
+            all_patterns.extend((issue.details or {}).get("dangerous_patterns", []))
         
         self.assertIn("$", all_patterns)
         self.assertIn("%", all_patterns)
@@ -201,7 +201,7 @@ class TestSecurityValidator(unittest.TestCase):
         self.assertEqual(len(info_messages), 1)  # Only Windows path triggers unsafe absolute path
         
         # Check that Windows system path is flagged as unsafe absolute path
-        paths_flagged = [i.details["path"] for i in info_messages]
+        paths_flagged = [(i.details or {})["path"] for i in info_messages]
         self.assertIn("C:\\Windows\\System32\\uploads", paths_flagged)
 
     def test_unsafe_relative_path_detection(self):
@@ -225,7 +225,7 @@ class TestSecurityValidator(unittest.TestCase):
         self.assertEqual(len(warnings), 2)
         
         # Check that both relative paths are flagged
-        paths_flagged = [w.details["path"] for w in warnings]
+        paths_flagged = [(w.details or {})["path"] for w in warnings]
         self.assertIn("../uploads", paths_flagged)
         self.assertIn("\\..\\output.json", paths_flagged)
 

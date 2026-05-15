@@ -66,13 +66,13 @@ def test_validate_required_fields_columns_exist():
     task = make_task()
     # Header missing update_field should error
     with patch("pandas.read_csv") as mock_read_csv:
-        mock_read_csv.return_value = pd.DataFrame(columns=["policy_number"])
+        mock_read_csv.return_value = pd.DataFrame(columns=pd.Index(["policy_number"]))
         with pytest.raises(TaskError, match="missing required update_field column"):
             task.validate_required_fields({})
 
     # Header missing selection column should error
     with patch("pandas.read_csv") as mock_read_csv:
-        mock_read_csv.return_value = pd.DataFrame(columns=["status"])
+        mock_read_csv.return_value = pd.DataFrame(columns=pd.Index(["status"]))
         with pytest.raises(TaskError, match="missing required selection column"):
             task.validate_required_fields({})
 
@@ -160,13 +160,13 @@ def test_error_handling_missing_columns():
     task = make_task()
     # Mock read_csv to return header missing status column
     with patch("pandas.read_csv") as mock_read_csv:
-        mock_read_csv.return_value = pd.DataFrame(columns=["policy_number"])
+        mock_read_csv.return_value = pd.DataFrame(columns=pd.Index(["policy_number"]))
         with pytest.raises(TaskError, match="missing required update_field column"):
             task.validate_required_fields({})
 
     # Mock read_csv to return header missing selection column(s)
     with patch("pandas.read_csv") as mock_read_csv:
-        mock_read_csv.return_value = pd.DataFrame(columns=["status"])
+        mock_read_csv.return_value = pd.DataFrame(columns=pd.Index(["status"]))
         with pytest.raises(TaskError, match="missing required selection column"):
             task.validate_required_fields({})
 

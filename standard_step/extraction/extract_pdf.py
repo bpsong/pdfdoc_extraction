@@ -66,18 +66,30 @@ class ExtractPdfTask(BaseTask):
         self.logger = logging.getLogger(__name__)
         self.status_manager = StatusManager(self.config_manager)
         
-        # Parameters are now directly available via self.params
-        self.api_key = self.params.get("api_key")
-        self.configuration_id = self.params.get("configuration_id")
-        self.tier = self.params.get("tier", "agentic")
-        self.parse_tier = self.params.get("parse_tier")
-        self.extraction_target = self.params.get("extraction_target", "per_doc")
-        self.cite_sources = self.params.get("cite_sources")
-        self.project_id = self.params.get("project_id")
-        self.organization_id = self.params.get("organization_id")
+        api_key = self.params.get("api_key")
+        self.api_key: Optional[str] = api_key if isinstance(api_key, str) else None
+        configuration_id = self.params.get("configuration_id")
+        self.configuration_id: Optional[str] = configuration_id if isinstance(configuration_id, str) else None
+        self.tier: str = str(self.params.get("tier") or "agentic")
+        parse_tier = self.params.get("parse_tier")
+        self.parse_tier: Optional[str] = parse_tier if isinstance(parse_tier, str) else None
+        self.extraction_target: str = str(self.params.get("extraction_target") or "per_doc")
+        cite_sources = self.params.get("cite_sources")
+        self.cite_sources: Optional[bool] = cite_sources if isinstance(cite_sources, bool) else None
+        project_id = self.params.get("project_id")
+        self.project_id: Optional[str] = project_id if isinstance(project_id, str) else None
+        organization_id = self.params.get("organization_id")
+        self.organization_id: Optional[str] = organization_id if isinstance(organization_id, str) else None
         self.poll_interval_seconds = float(self.params.get("poll_interval_seconds", 2.0))
         self.timeout_seconds = float(self.params.get("timeout_seconds", 1800.0))
-        self.fields = self.params.get("fields")
+        fields = self.params.get("fields")
+        self.fields: Dict[str, Any] = fields if isinstance(fields, dict) else {}
+
+    def _require_api_key(self) -> str:
+        """Return the configured API key after narrowing its type."""
+        if not self.api_key:
+            raise TaskError("API key not found in configuration for ExtractPdfTask.")
+        return self.api_key
 
     def on_start(self, context: dict):
         """Lifecycle hook executed when the task starts.
@@ -155,8 +167,9 @@ class ExtractPdfTask(BaseTask):
         self.logger.info(f"Extracting data from {normalized_file_path} using {config_label}...")
 
         try:
+            api_key = self._require_api_key()
             extracted_result = run_extract_v2_job(
-                api_key=self.api_key,
+                api_key=api_key,
                 file_path=normalized_file_path,
                 fields=self.fields,
                 configuration_id=self.configuration_id,

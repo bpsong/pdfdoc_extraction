@@ -208,6 +208,7 @@ class WorkflowLoader:
 
             # Execute mandatory housekeeping task
             self.logger.info("Executing mandatory housekeeping task.")
+            final_context = current_context
             try:
                 housekeeping_task_instance = CleanupTask(config_manager=self.config_manager)
                 housekeeping_task_instance.on_start(current_context)
@@ -240,5 +241,5 @@ class WorkflowLoader:
                 self.status_manager.update_status(current_context.get("id", "unknown"),
                                                   "Pipeline Completed with Critical Housekeeping Error",
                                                   error=str(e))
-                return final_context if 'final_context' in locals() else current_context
+                return final_context
         return dynamic_flow

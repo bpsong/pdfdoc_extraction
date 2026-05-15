@@ -18,7 +18,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -250,7 +250,7 @@ class UpdateReferenceTask(BaseTask):
     
     # Removed keyword-based behavior
     
-    def _build_selection_mask(self, df: pd.DataFrame, context: dict) -> "pd.Series[bool]":
+    def _build_selection_mask(self, df: pd.DataFrame, context: dict) -> pd.Series:
         """Build a boolean mask combining all clauses with logical AND.
 
         Each clause compares a CSV column against a value resolved from the
@@ -280,7 +280,7 @@ class UpdateReferenceTask(BaseTask):
                 else:
                     col_str = df[cl.column].astype(str).fillna("")
                     col_num = col_str.str.replace(",", "", regex=False).str.replace(" ", "", regex=False)
-                    col_num = pd.to_numeric(col_num, errors="coerce")
+                    col_num = cast(Any, pd.to_numeric(col_num, errors="coerce"))
                     clause_mask = ((col_num - ctx_num).abs() < 1e-9).fillna(False)
             elif cl.number is False:
                 # Forced string (case-insensitive exact)
@@ -293,7 +293,7 @@ class UpdateReferenceTask(BaseTask):
                 if ctx_num is not None:
                     col_str = df[cl.column].astype(str).fillna("")
                     col_num = col_str.str.replace(",", "", regex=False).str.replace(" ", "", regex=False)
-                    col_num = pd.to_numeric(col_num, errors="coerce")
+                    col_num = cast(Any, pd.to_numeric(col_num, errors="coerce"))
                     clause_mask = ((col_num - ctx_num).abs() < 1e-9).fillna(False)
                 else:
                     left = df[cl.column].astype(str).fillna("").str.lower()

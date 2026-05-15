@@ -162,8 +162,8 @@ def _optional_scope(
     *,
     project_id: Optional[str],
     organization_id: Optional[str],
-) -> Dict[str, str]:
-    scope: Dict[str, str] = {}
+) -> Dict[str, Any]:
+    scope: Dict[str, Any] = {}
     if project_id:
         scope["project_id"] = project_id
     if organization_id:
