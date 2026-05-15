@@ -564,7 +564,8 @@ Standard steps are predefined operations configured in workflows. Below are the 
 - **Behavior:**
   - Sends the PDF to the extraction provider.
   - Validates returned data against configured fields and types.
-  - Produces structured output using aliases as keys or headers.
+  - Normalizes extracted output to workflow field keys in `context["data"]`. Saved LlamaCloud configurations may return either field keys or aliases; both are accepted.
+  - Storage tasks can transform workflow field keys to configured aliases for CSV/JSON output.
 - **Notes:**
   - Field names and types must match the provider's schema.
   - Internet access over HTTPS is required.
@@ -728,7 +729,7 @@ pipeline:
   - Updates matching rows or appends new rows.
   - Saves the CSV, creating a backup if enabled.
 - **Notes:**
-  - Keep aliases consistent across extraction, storage, and reference files for proper matching.
+  - Use workflow field keys in `from_context` (for example, `purchase_order_number`). Use CSV `column` names to match the external reference file headers.
   - If a field value is not found in context (e.g., missing purchase_order_number), the task does not throw an error but simply does not match any rows, logging the issue and continuing with on_error: continue.
 
 **YAML configuration example:**

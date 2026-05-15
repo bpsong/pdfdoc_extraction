@@ -38,7 +38,8 @@ tasks:
     class: ExtractPdfTask
     params:
       api_key: "your_llama_cloud_api_key"
-      agent_id: "your_agent_id"
+      configuration_id: "your_extract_v2_configuration_id"  # optional
+      tier: "agentic"
       fields:
         supplier_name:
           alias: "Supplier name"
@@ -105,7 +106,8 @@ class ConfigManager:
         class: ExtractPdfTask
         params:
           api_key: "your_llama_cloud_api_key"
-          agent_id: "your_agent_id"
+          configuration_id: "your_extract_v2_configuration_id"  # optional
+          tier: "agentic"
           fields:
             supplier_name:
               alias: "Supplier name"

@@ -154,6 +154,32 @@ pipeline:
 For the phased SDK migration details, see
 [LlamaCloud Extract v2 Migration Plan](docs/llamacloud_extract_v2_migration.md).
 
+### Manual LlamaCloud Smoke Check
+
+After validating a saved Extract v2 configuration in the LlamaCloud UI, you can
+run a one-file SDK and workflow fit check against `sample_invoice.pdf`:
+
+```powershell
+C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+```
+
+If `configuration_id` is already set in `dev_config.yaml`, omit the override
+flag.
+
+The script writes:
+
+- `raw_extract_result.json`: raw `result.extract_result` from LlamaCloud.
+- `workflow_normalized_data.json`: data after matching returned keys to workflow
+  fields and applying configured types.
+- `workflow_fit_report.json`: missing workflow fields, extra raw keys,
+  validation errors, and pass/fail status.
+
+To re-check a saved raw result without another LlamaCloud call:
+
+```powershell
+C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --raw-json test\data\llamacloud_smoke\raw_extract_result.json
+```
+
 ### Environment Variables
 
 - `CONFIG_PATH`: Custom path to configuration file

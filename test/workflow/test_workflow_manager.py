@@ -46,18 +46,18 @@ def test_environment():
     watch_folder_dir = Path(str(config_manager.get('watch_folder.dir', 'test/test_data/watch_folder')))
     processing_dir = Path(str(config_manager.get('watch_folder.processing_dir', 'test/test_data/processing')))
     
-    # Get data_dir from store_csv task params
-    store_csv_params = config_manager.get('tasks.store_csv.params', {})
+    # Get data_dir from the configured CSV storage task params
+    store_csv_params = config_manager.get('tasks.store_metadata_csv.params', {})
     if not isinstance(store_csv_params, dict): store_csv_params = {} # Ensure it's a dict
     data_dir = Path(str(store_csv_params.get('data_dir', 'data')))
 
-    # Get files_dir from store_file task params
-    store_file_params = config_manager.get('tasks.store_file.params', {})
+    # Get files_dir from the configured file storage task params
+    store_file_params = config_manager.get('tasks.store_file_to_localdrive.params', {})
     if not isinstance(store_file_params, dict): store_file_params = {} # Ensure it's a dict
     files_dir = Path(str(store_file_params.get('files_dir', 'files')))
 
-    # Get archive_dir from archive_file task params
-    archive_file_params = config_manager.get('tasks.archive_file.params', {})
+    # Get archive_dir from the configured archive task params
+    archive_file_params = config_manager.get('tasks.archive_pdf.params', {})
     if not isinstance(archive_file_params, dict): archive_file_params = {} # Ensure it's a dict
     archive_dir = Path(str(archive_file_params.get('archive_dir', 'archive')))
 
@@ -76,9 +76,10 @@ def test_environment():
         shutil.rmtree(web_upload_dir)
     web_upload_dir.mkdir(parents=True, exist_ok=True)
     # Clean and create directories
-    # Do NOT remove data_dir and files_dir to preserve previously produced artifacts and avoid race deletions.
+    # Do NOT remove watch_folder_dir, data_dir, files_dir, or archive_dir to
+    # preserve fixture directories expected by config validation and avoid race deletions.
     for d in dirs_to_manage:
-        if d in (data_dir, files_dir):
+        if d in (watch_folder_dir, data_dir, files_dir, archive_dir):
             d.mkdir(parents=True, exist_ok=True)
             continue
         if d.exists():
@@ -99,9 +100,10 @@ def test_environment():
     yield config_manager, workflow_manager, status_manager, watch_folder_dir, processing_dir, data_dir, files_dir, archive_dir
 
     # Teardown: Clean up directories
-    # Preserve data_dir and files_dir artifacts after test; only clean transient watch/processing/archive.
+    # Preserve watch_folder_dir, data_dir, files_dir, and archive_dir artifacts
+    # after test; only clean transient processing.
     for d in dirs_to_manage:
-        if d in (data_dir, files_dir):
+        if d in (watch_folder_dir, data_dir, files_dir, archive_dir):
             continue
         if d.exists():
             shutil.rmtree(d)

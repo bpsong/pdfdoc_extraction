@@ -69,7 +69,6 @@ class ExtractPdfTask(BaseTask):
         # Parameters are now directly available via self.params
         self.api_key = self.params.get("api_key")
         self.configuration_id = self.params.get("configuration_id")
-        self.agent_id = self.params.get("agent_id")
         self.tier = self.params.get("tier", "agentic")
         self.parse_tier = self.params.get("parse_tier")
         self.extraction_target = self.params.get("extraction_target", "per_doc")
@@ -182,12 +181,13 @@ class ExtractPdfTask(BaseTask):
             processed_data = data.copy()
             for field_name, field_config in self.fields.items():
                 alias = field_config.get("alias")
-                if alias and alias in processed_data and isinstance(processed_data[alias], list):
+                source_key = alias if alias in processed_data else field_name
+                if source_key in processed_data and isinstance(processed_data[source_key], list):
                     field_type_str = field_config.get("type", "")
                     if "List[str]" in field_type_str or "Optional[List[str]]" in field_type_str:
-                        original_list = processed_data[alias]
+                        original_list = processed_data[source_key]
                         filtered_list = [item for item in original_list if item is not None]
-                        processed_data[alias] = filtered_list
+                        processed_data[source_key] = filtered_list
 
             # Update status: preprocessing done
             self.status_manager.update_status(unique_id, "Preprocessing done", step="Preprocessing done")
@@ -216,7 +216,6 @@ class ExtractPdfTask(BaseTask):
             # Update context with metadata
             context["metadata"] = {
                 "extraction_configuration_id": self.configuration_id,
-                "extraction_agent_id": self.agent_id,
                 "extraction_job_id": getattr(extracted_result, "job_id", None),
                 "extraction_metadata": getattr(extracted_result, "extraction_metadata", {}),
                 "extraction_status": "success"

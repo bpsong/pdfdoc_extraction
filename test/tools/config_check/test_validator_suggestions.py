@@ -15,7 +15,7 @@ def _build_config(upload_dir, watch_dir, storage_data_dir, pipeline_order):
             "class": "ExtractMetadata",
             "params": {
                 "api_key": "llx-test-key",
-                "agent_id": "agent-001",
+                "configuration_id": "cfg-test",
                 "fields": {
                     "supplier_name": {
                         "alias": "Supplier",

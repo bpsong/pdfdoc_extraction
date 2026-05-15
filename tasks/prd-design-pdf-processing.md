@@ -188,9 +188,9 @@ flowchart LR
 -   **Configuration:**
     -   Requires `api_key` for LlamaCloud.
     -   Accepts optional `configuration_id` for a saved Extract v2 configuration from the LlamaCloud UI.
-    -   If `configuration_id` is omitted, builds an inline Extract v2 schema from `fields`.
+    -   If `configuration_id` is omitted, builds an inline Extract v2 schema from workflow field keys in `fields`.
     -   Dynamically creates a Pydantic model based on `fields` defined in the `config.yaml` (e.g., `invoice_amount`, `invoice_no`, `supplier`).
-    -   Supports `type` (e.g., `float`, `str`, `List[str]`) and `alias` for each field, allowing flexible mapping from LlamaCloud Extract output to desired field names.
+    -   Supports `type` (e.g., `float`, `str`, `List[str]`) and `alias` for each field. LlamaCloud output may use either workflow field keys or aliases; the extraction task normalizes both to workflow field keys before downstream tasks run.
 -   **Configuration Source:** This task must obtain its configuration parameters from the centralized `ConfigManager` singleton at startup, which reads from `config.yaml`. It should not rely solely on parameters passed directly to the task.
 -   **Data Extraction:**
     -   Takes a `pdf_path` as input.
@@ -761,16 +761,16 @@ The v2 pipeline handles LlamaCloud Extract v2 responses containing arrays of obj
 ### 9.5.5 Configuration Example
 Add to extraction.fields in dev_config.yaml:
 ```yaml
-items:  # Field name from LlamaCloud schema (normalized)
-  alias: "Items"  # Matches LlamaCloud response
+items:  # Workflow field key, used in context["data"]
+  alias: "Items"  # Used as the CSV/JSON output label
   type: "List[Any]"  # Currently supported type (may require extending parser for Dict)
   is_table: true  # Marks this field as an array of objects
   item_fields:  # Optional: mapping for sub-fields within each item
     Description:
-      alias: "description"  # Used as-is in context and as CSV column name
+      alias: "description"  # Used as the item CSV/JSON output label
       type: "str"
     Quantity:
-      alias: "quantity"     # Used as-is in context and as CSV column name
+      alias: "quantity"     # Used as the item CSV/JSON output label
       type: "str"
 ```
 

@@ -725,7 +725,7 @@ class TestCheckFilesFlagIntegration:
                     "class": "ExtractMetadata",
                     "params": {
                         "api_key": "llx-test-key",
-                        "agent_id": "agent-001",
+                        "configuration_id": "cfg-test",
                         "fields": {
                             "field1": {
                                 "alias": "Field1",

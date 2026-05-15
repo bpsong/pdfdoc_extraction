@@ -1,0 +1,11 @@
+{
+    "id": "web-123",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Pipeline Started",
+    "timestamps": {
+        "Pipeline Started": "2026-05-15T00:58:13.223364Z"
+    },
+    "error": null,
+    "details": {}
+}

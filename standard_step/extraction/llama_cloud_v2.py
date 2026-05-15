@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from llama_cloud import LlamaCloud
 
 from modules.exceptions import TaskError
-
-
-TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED"}
 
 
 @dataclass
@@ -43,7 +39,7 @@ def build_extraction_configuration(
         cite_sources: Whether to request citation metadata.
 
     Returns:
-        Inline configuration dictionary accepted by ``client.extract.create``.
+        Inline configuration dictionary accepted by ``client.extract.run``.
     """
     configuration: Dict[str, Any] = {
         "data_schema": build_data_schema(fields),
@@ -60,22 +56,21 @@ def build_extraction_configuration(
 
 
 def build_data_schema(fields: Dict[str, Any]) -> Dict[str, Any]:
-    """Build a JSON schema from extraction fields using aliases as API keys."""
+    """Build a JSON schema from extraction fields using workflow field keys."""
     properties: Dict[str, Any] = {}
 
     for field_key, field_config in fields.items():
         if not isinstance(field_config, dict):
             continue
 
-        alias = field_config.get("alias", field_key)
         if field_config.get("is_table", False):
-            properties[alias] = _build_table_schema(field_config)
+            properties[field_key] = _build_table_schema(field_config)
         else:
-            properties[alias] = _schema_for_type(field_config.get("type", "str"))
+            properties[field_key] = _schema_for_type(field_config.get("type", "str"))
 
-        description = field_config.get("description")
+        description = field_config.get("description") or field_config.get("alias")
         if description:
-            properties[alias]["description"] = description
+            properties[field_key]["description"] = description
 
     return {
         "type": "object",
@@ -99,7 +94,13 @@ def run_extract_v2_job(
     timeout_seconds: float = 1800.0,
     logger: Optional[logging.Logger] = None,
 ) -> LlamaCloudExtractionResult:
-    """Upload a file, run an Extract v2 job, and return normalized output."""
+    """Upload a file, run an Extract v2 job, and return normalized output.
+
+    This follows the LlamaCloud UI's generated Python snippet: upload the file,
+    then call ``client.extract.run(...)`` with either a saved
+    ``configuration_id`` or an inline ``configuration``. The SDK handles polling
+    and returns the completed job.
+    """
     client = LlamaCloud(api_key=api_key)
 
     request_scope = _optional_scope(
@@ -127,19 +128,11 @@ def run_extract_v2_job(
             cite_sources=cite_sources,
         )
 
-    job = client.extract.create(**extract_kwargs)
-    started_at = time.monotonic()
-
-    while job.status not in TERMINAL_STATUSES:
-        if time.monotonic() - started_at > timeout_seconds:
-            raise TaskError(
-                f"LlamaCloud extraction job timed out after {timeout_seconds:.0f} seconds: {job.id}"
-            )
-
-        if logger:
-            logger.debug("LlamaCloud extraction job %s status: %s", job.id, job.status)
-        time.sleep(poll_interval_seconds)
-        job = client.extract.get(job.id, **request_scope)
+    job = client.extract.run(
+        **extract_kwargs,
+        polling_interval=poll_interval_seconds,
+        polling_timeout=timeout_seconds,
+    )
 
     if job.status != "COMPLETED":
         error_message = getattr(job, "error_message", None) or getattr(job, "error", None)
@@ -184,11 +177,10 @@ def _build_table_schema(field_config: Dict[str, Any]) -> Dict[str, Any]:
     for item_key, item_config in field_config.get("item_fields", {}).items():
         if not isinstance(item_config, dict):
             continue
-        alias = item_config.get("alias", item_key)
-        item_properties[alias] = _schema_for_type(item_config.get("type", "str"))
-        description = item_config.get("description")
+        item_properties[item_key] = _schema_for_type(item_config.get("type", "str"))
+        description = item_config.get("description") or item_config.get("alias")
         if description:
-            item_properties[alias]["description"] = description
+            item_properties[item_key]["description"] = description
 
     return {
         "type": "array",

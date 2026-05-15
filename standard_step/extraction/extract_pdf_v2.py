@@ -137,7 +137,6 @@ class ExtractPdfV2Task(BaseTask):
             # Extract required parameters
             self.api_key = params.get('api_key')
             self.configuration_id = params.get('configuration_id')
-            self.agent_id = params.get('agent_id')
             self.tier = params.get('tier', 'agentic')
             self.parse_tier = params.get('parse_tier')
             self.extraction_target = params.get('extraction_target', 'per_doc')
@@ -325,7 +324,6 @@ class ExtractPdfV2Task(BaseTask):
             # Preserve metadata
             context["metadata"] = {
                 "extraction_configuration_id": self.configuration_id,
-                "extraction_agent_id": self.agent_id,
                 "extraction_job_id": getattr(extracted_result, "job_id", None),
                 "extraction_metadata": metadata,
                 "extraction_status": "success"
@@ -482,16 +480,36 @@ class ExtractPdfV2Task(BaseTask):
             # Skip table fields - handled separately
             if is_table:
                 if field_key == table_field_key:
-                    table_data = self._process_table_field(data, alias, field_config)
+                    table_data = self._process_table_field(data, field_key, alias, field_config)
                     processed_data[field_key] = table_data
                 continue
 
             # Process scalar field
-            if alias in data:
-                value = self._process_scalar_field(data[alias], field_config)
+            found, value = self._get_extracted_value(data, field_key, alias)
+            if found:
+                value = self._process_scalar_field(value, field_config)
                 processed_data[field_key] = value
 
         return processed_data
+
+    @staticmethod
+    def _get_extracted_value(
+        data: Dict[str, Any],
+        field_key: str,
+        alias: str,
+    ) -> tuple[bool, Any]:
+        """Return extracted value by alias or field key.
+
+        LlamaCloud saved configurations may return JSON keys as schema field
+        names (for example, ``supplier_name``), while inline schemas may return
+        display aliases (for example, ``Supplier name``). The workflow accepts
+        both.
+        """
+        if alias in data:
+            return True, data[alias]
+        if field_key in data:
+            return True, data[field_key]
+        return False, None
 
     def _process_value(self, value: Any, type_str: str) -> Any:
         """Process a value with lightweight type parser supporting Optional, List, Dict, and nested types.
@@ -658,19 +676,22 @@ class ExtractPdfV2Task(BaseTask):
         field_type = field_config.get('type', 'str')
         return self._process_value(value, field_type)
 
-    def _process_table_field(self, data: Dict[str, Any], alias: str,
+    def _process_table_field(self, data: Dict[str, Any], field_key: str, alias: str,
                             field_config: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Process table field (array of objects) with subfield mapping.
 
         Args:
             data: Raw extracted data containing the table field.
+            field_key: Normalized workflow field key.
             alias: Field alias in the extracted data.
             field_config: Table field configuration including item_fields.
 
         Returns:
             List of dictionaries with normalized subfield names and cleaned values.
         """
-        table_data = data.get(alias, [])
+        found, table_data = self._get_extracted_value(data, field_key, alias)
+        if not found:
+            table_data = []
 
         if not isinstance(table_data, list):
             self.logger.warning(f"Table field {alias} is not a list, returning empty list")
@@ -690,8 +711,8 @@ class ExtractPdfV2Task(BaseTask):
             for subfield_key, subfield_config in item_fields.items():
                 subfield_alias = subfield_config.get('alias', subfield_key)
 
-                if subfield_alias in item:
-                    value = item[subfield_alias]
+                found, value = self._get_extracted_value(item, subfield_key, subfield_alias)
+                if found:
                     # Clean string values (replace newlines with spaces)
                     if isinstance(value, str):
                         value = re.sub(r'\n+', ' ', value.strip())

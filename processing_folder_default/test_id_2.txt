@@ -1,0 +1,13 @@
+{
+    "id": "test_id_2",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Completed: store_metadata_csv",
+    "timestamps": {
+        "Preparing to write CSV": "2026-05-15T01:08:42.116715Z",
+        "Writing CSV rows": "2026-05-15T01:08:42.117915Z",
+        "Task Completed: store_metadata_csv": "2026-05-15T01:08:42.118726Z"
+    },
+    "error": null,
+    "details": {}
+}

@@ -46,7 +46,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'purchase_order_number': {'alias': 'Purchase Order number', 'type': 'str'},
@@ -107,7 +107,7 @@ class TestExtractPdfV2Task:
         }
         sample_response.extraction_metadata = {
             "run_id": "3c13c955-34e8-4c36-b498-42a55bbc1db3",
-            "extraction_agent_id": "f311fd08-282f-4fef-8a41-f728242159e9",
+            "extraction_configuration_id": "test_configuration_id",
             "usage": {"total_tokens": 150, "input_tokens": 100, "output_tokens": 50}
         }
 
@@ -161,7 +161,7 @@ class TestExtractPdfV2Task:
 
         # Test metadata preservation
         assert "metadata" in result_context
-        assert result_context["metadata"]["extraction_agent_id"] == "test_agent_id"
+        assert result_context["metadata"]["extraction_configuration_id"] == "test_configuration_id"
         assert result_context["metadata"]["extraction_metadata"] == sample_response.extraction_metadata
 
         # Test status updates
@@ -180,7 +180,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'invoice_amount': {'alias': 'Invoice Amount', 'type': 'float'},
@@ -411,7 +411,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'items': {
@@ -499,7 +499,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'items': {
@@ -558,7 +558,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'items': {
@@ -646,7 +646,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'is_active': {'alias': 'Is Active', 'type': 'bool'},
@@ -739,7 +739,7 @@ class TestExtractPdfV2Task:
                 'extract_document_data': {
                     'params': {
                         'api_key': 'test_api_key',
-                        'agent_id': 'test_agent_id',
+                        'configuration_id': 'test_configuration_id',
                         'fields': {
                             'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
                             'quantity': {'alias': 'Quantity', 'type': 'int'},

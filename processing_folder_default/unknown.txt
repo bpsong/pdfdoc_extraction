@@ -4,7 +4,9 @@
     "file": "unknown",
     "status": "Task Started: store_file_to_localdrive",
     "timestamps": {
-        "Task Started: store_file_to_localdrive": "2025-09-05T13:14:25.953778Z"
+        "Task Started: store_file_to_localdrive": "2026-05-15T01:08:42.208282Z",
+        "Task Started: store_metadata_csv": "2026-05-15T01:08:42.135565Z",
+        "Task Started: store_metadata_json": "2026-05-15T01:08:42.178019Z"
     },
     "error": null,
     "details": {}

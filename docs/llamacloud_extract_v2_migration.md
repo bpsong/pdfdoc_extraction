@@ -31,7 +31,7 @@ from llama_cloud_services import LlamaExtract
 | `llama-cloud-services` | `llama-cloud>=2.1` |
 | `LlamaExtract(api_key=...)` | `LlamaCloud(api_key=...)` |
 | `client.get_agent(id=agent_id)` | saved `configuration_id` or inline `configuration` |
-| `agent.extract(file_path)` | upload with `client.files.create`, run with `client.extract.create` |
+| `agent.extract(file_path)` | upload with `client.files.create`, run with `client.extract.run` |
 | agent result `.data` | job `.extract_result` |
 | `extraction_metadata` on result | `client.extract.get(job.id, expand=["extract_metadata"])` |
 
@@ -56,8 +56,13 @@ params:
 ```
 
 If `configuration_id` is absent, the extraction task builds an inline Extract v2
-configuration from `fields`. Field `alias` values become JSON-schema property
-names sent to LlamaCloud, so aliases must match the desired extracted output.
+configuration from `fields`. Workflow field keys, such as `supplier_name`,
+become JSON-schema property names sent to LlamaCloud; aliases are kept as
+descriptions and output labels for storage.
+
+Saved LlamaCloud configurations may return either workflow field keys
+(`supplier_name`) or aliases (`Supplier name`). The extraction tasks accept both
+and normalize output to workflow field keys before downstream steps run.
 
 Optional runtime tuning:
 
@@ -89,13 +94,36 @@ Status: completed in the current working tree.
 
 ### Phase 2: LlamaCloud UI Validation
 
-Status: pending.
+Status: in progress.
 
 - Create or verify saved Extract v2 configurations in the LlamaCloud UI.
 - Add `configuration_id` to local/cloud configs when a saved configuration is
   preferred.
 - Run a single cloud-backed extraction manually through the UI workflow.
-- Compare extracted field names against configured aliases.
+- Compare extracted field names against configured workflow field keys and aliases.
+
+Manual SDK and workflow fit check, using `sample_invoice.pdf` by default:
+
+```powershell
+C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+```
+
+If `configuration_id` is already set in the selected config file, omit the
+`--configuration-id` flag.
+
+The script saves:
+
+- `raw_extract_result.json`: raw LlamaCloud `extract_result`.
+- `workflow_normalized_data.json`: payload after matching returned keys to
+  workflow fields and applying configured types.
+- `workflow_fit_report.json`: missing workflow fields, extra raw keys,
+  validation errors, and `fits_workflow`.
+
+To re-check a saved raw result without another LlamaCloud call:
+
+```powershell
+C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --raw-json test\data\llamacloud_smoke\raw_extract_result.json
+```
 
 ### Phase 3: Test and Legacy Cleanup
 
@@ -103,5 +131,4 @@ Status: pending.
 
 - Run the full pytest suite.
 - Update remaining tests to mock the v2 adapter rather than legacy agents.
-- Remove any remaining `agent_id` examples and compatibility metadata after
-  the cloud rollout is stable.
+- Remove any remaining legacy examples after the cloud rollout is stable.

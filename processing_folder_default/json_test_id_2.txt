@@ -1,0 +1,13 @@
+{
+    "id": "json_test_id_2",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Completed: store_metadata_json",
+    "timestamps": {
+        "Preparing to write JSON": "2026-05-15T01:08:42.169561Z",
+        "Writing JSON file": "2026-05-15T01:08:42.170240Z",
+        "Task Completed: store_metadata_json": "2026-05-15T01:08:42.171073Z"
+    },
+    "error": null,
+    "details": {}
+}

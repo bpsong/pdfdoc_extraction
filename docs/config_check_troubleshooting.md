@@ -408,7 +408,7 @@ Suggestion: Create the directory or update the path in config
 **Fixes**
 - **Simplify paths**: Reduce deeply nested context paths (4+ levels) to simpler references
 - **Flatten structure**: Consider flattening the extraction field structure to avoid deep nesting
-- **Use aliases**: Create simpler field aliases in extraction tasks to avoid complex path references
+- **Use workflow field keys**: Keep `from_context` references pointed at normalized workflow fields, and avoid unnecessary nested structures.
 - **Review necessity**: Ensure deeply nested paths are necessary for the business requirements
 
 ### Pipeline Performance Issues

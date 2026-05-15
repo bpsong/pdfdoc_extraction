@@ -185,7 +185,9 @@ Tasks should also update the `StatusManager` on failure to provide operational v
 
 The extraction and storage system uses LlamaCloud Extract v2 through the `llama-cloud` SDK. It handles responses containing arrays of objects (e.g., invoice line items), where certain fields return lists of sub-objects such as Items: [{Description, Quantity}, ...].
 
-The extraction task can either reference a saved LlamaCloud Extract v2 `configuration_id` or build an inline schema from `tasks.<name>.params.fields`. In inline mode, each field `alias` becomes the JSON-schema property name sent to LlamaCloud.
+The extraction task can either reference a saved LlamaCloud Extract v2 `configuration_id` or build an inline schema from `tasks.<name>.params.fields`. In inline mode, workflow field keys such as `supplier_name` become JSON-schema property names sent to LlamaCloud; aliases remain output labels for storage and reporting.
+
+Saved LlamaCloud configurations may return either workflow field keys or aliases. Extraction normalizes both forms back to workflow field keys in `context["data"]`.
 
 ### Schema Handling
 
@@ -236,16 +238,16 @@ Add to extraction.fields in config.yaml:
 api_key: "llx-REDACTED"
 configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
 tier: "agentic"
-items:  # Field name from LlamaCloud schema (normalized)
-  alias: "Items"  # Matches LlamaCloud response
+items:  # Workflow field key, used in context["data"]
+  alias: "Items"  # Used as the CSV/JSON output label
   type: "List[Any]"  # Currently supported type
   is_table: true  # Marks this field as an array of objects
   item_fields:  # Optional: mapping for sub-fields within each item
     Description:
-      alias: "description"  # Used as-is in context and as CSV column name
+      alias: "description"  # Used as the item CSV/JSON output label
       type: "str"
     Quantity:
-      alias: "quantity"     # Used as-is in context and as CSV column name
+      alias: "quantity"     # Used as the item CSV/JSON output label
       type: "str"
 ```
 

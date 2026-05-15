@@ -32,7 +32,19 @@ class TestExtractPdfTask:
     @pytest.fixture(autouse=True)
     def setup_and_teardown(self, monkeypatch):
         ConfigManager._instance = None
-        self.config_manager = ConfigManager(CONFIG_PATH)
+        self.config_manager = MagicMock()
+        self.config_manager.get_all.return_value = {
+            "tasks": {
+                "extract_document_data": {
+                    "params": {
+                        "fields": {
+                            "field1": {"type": "str", "alias": "field1"},
+                            "serial_numbers": {"type": "List[str]", "alias": "serial_numbers"},
+                        }
+                    }
+                }
+            }
+        }
 
         monkeypatch.setattr("modules.status_manager.StatusManager", MockStatusManager)
         monkeypatch.setattr("standard_step.extraction.extract_pdf.StatusManager", MockStatusManager)
@@ -61,7 +73,6 @@ class TestExtractPdfTask:
         task = ExtractPdfTask(
             config_manager=self.config_manager,
             api_key="dummy",
-            agent_id="dummy",
             fields={
                 "field1": {"type": "str", "alias": "field1"},
                 "serial_numbers": {"type": "List[str]", "alias": "serial_numbers"}
@@ -107,7 +118,6 @@ class TestExtractPdfTask:
         task = ExtractPdfTask(
             config_manager=self.config_manager,
             api_key="dummy_api_key",
-            agent_id="dummy_agent_id",
             fields={
                 "supplier_name": {"type": "str", "alias": "supplier_name"},
                 "client_name": {"type": "str", "alias": "client_name"},
@@ -155,7 +165,7 @@ class TestExtractPdfTask:
                     f"Field '{field}' expected type {expected_type} but got {type(value)}"
 
         assert "metadata" in result_context
-        assert result_context["metadata"]["extraction_agent_id"] == "dummy_agent_id"
+        assert result_context["metadata"]["extraction_configuration_id"] is None
         assert result_context["metadata"]["extraction_status"] == "success"
 
         # Align assertions with current implementation where status string equals descriptive step
