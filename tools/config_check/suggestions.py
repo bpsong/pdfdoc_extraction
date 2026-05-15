@@ -94,7 +94,7 @@ def _suggest_pipeline_storage_metadata(details: Dict[str, Any]) -> str:
     """Suggest adding metadata-producing extraction before v2 storage."""
     task_name = details.get("task_name", "the storage task")
     return (
-        f"Schedule a metadata-producing extraction task (e.g., extract_document_data_v2) before '{task_name}' or update the storage configuration."
+        f"Schedule a metadata-producing extraction task (e.g., extract_document_data) before '{task_name}' or update the storage configuration."
     )
 
 

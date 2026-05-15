@@ -47,11 +47,11 @@ logging:
 
 tasks:
   extract_document_data:
-    module: standard_step.extraction.extract_pdf
-    class: ExtractPdfTask
+    module: standard_step.extraction.extract_pdf_v2
+    class: ExtractPdfV2Task
     params:
       api_key: "your_llama_cloud_api_key"
-      agent_id: "your_agent_id"
+      configuration_id: "your_extract_v2_configuration_id"
       fields:
         supplier_name:
           alias: "Supplier name"

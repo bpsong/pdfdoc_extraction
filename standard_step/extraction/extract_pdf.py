@@ -107,12 +107,14 @@ class ExtractPdfTask(BaseTask):
             raise TaskError("Fields not found in configuration for ExtractPdfTask.")
 
     def run(self, context: dict) -> dict:
-        """Run the extraction against the configured agent and validate results.
+        """Run Extract v2 against the configured schema and validate results.
 
         Expects a file path in the context and validates configured field
-        definitions. It calls the remote agent to extract data, normalizes list
-        fields, validates using a dynamically created Pydantic model, and
-        writes validated values to context['data'] and metadata.
+        definitions. It calls the LlamaCloud Extract v2 adapter to extract
+        data, accepts returned keys by either configured alias or workflow field
+        key, normalizes list fields, validates using a dynamically created
+        Pydantic model, and writes validated values to context['data'] and
+        metadata.
 
         Args:
             context (dict): Pipeline context. Requires:
@@ -177,7 +179,8 @@ class ExtractPdfTask(BaseTask):
             # Extract data dictionary from result
             data = getattr(extracted_result, 'data', {}) or {}
 
-            # Preprocess data: filter None from lists for configured fields
+            # Preprocess data by alias or workflow field key. Saved LlamaCloud
+            # configurations may return either form.
             processed_data = data.copy()
             for field_name, field_config in self.fields.items():
                 alias = field_config.get("alias")
@@ -192,7 +195,8 @@ class ExtractPdfTask(BaseTask):
             # Update status: preprocessing done
             self.status_manager.update_status(unique_id, "Preprocessing done", step="Preprocessing done")
 
-            # Dynamically create Pydantic model for validation based on fields config
+            # Dynamically create a Pydantic model for validation. populate_by_name
+            # lets the workflow accept either aliases or workflow field keys.
             model_fields = {}
             for field_name, field_config in self.fields.items():
                 field_type_str = field_config.get("type", "Any")

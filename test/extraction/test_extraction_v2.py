@@ -111,13 +111,6 @@ class TestExtractPdfV2Task:
             "usage": {"total_tokens": 150, "input_tokens": 100, "output_tokens": 50}
         }
 
-        # Mock LlamaCloud Extract v2
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
-
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         # Test context
@@ -212,11 +205,6 @@ class TestExtractPdfV2Task:
         }
         sample_response.extraction_metadata = {"test": "metadata"}
 
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
-
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
@@ -249,11 +237,6 @@ class TestExtractPdfV2Task:
             # Missing "Items" field
         }
         sample_response.extraction_metadata = {"test": "metadata"}
-
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
 
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
@@ -337,11 +320,6 @@ class TestExtractPdfV2Task:
         }
         sample_response.extraction_metadata = {}
 
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
-
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
@@ -381,11 +359,6 @@ class TestExtractPdfV2Task:
             ]
         }
         sample_response.extraction_metadata = {}
-
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
 
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
@@ -449,11 +422,6 @@ class TestExtractPdfV2Task:
         sample_response.data = {"Supplier name": "Test"}
         sample_response.extraction_metadata = {}
 
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
-
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
@@ -485,11 +453,6 @@ class TestExtractPdfV2Task:
             ]
         }
         sample_response.extraction_metadata = {}
-
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
 
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
@@ -616,7 +579,7 @@ class TestExtractPdfV2Task:
         assert isinstance(items[1]["price"], float)
 
     def test_bool_coercion(self, monkeypatch):
-        """Test bool coercion with loose parsing matching v1 behavior."""
+        """Test bool coercion with loose parsing used by scalar extraction."""
         # Mock response with various string values for boolean coercion
         sample_response = MagicMock()
         sample_response.data = {
@@ -632,11 +595,6 @@ class TestExtractPdfV2Task:
             "Boolean Field": True      # Non-string should work normally
         }
         sample_response.extraction_metadata = {}
-
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
 
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
@@ -710,7 +668,7 @@ class TestExtractPdfV2Task:
         assert isinstance(data["supplier_name"], str)
 
     def test_int_coercion(self, monkeypatch):
-        """Test int coercion using float intermediate step matching v1 behavior."""
+        """Test int coercion using a float intermediate step for scalar extraction."""
         # Mock response with various string values for integer coercion
         sample_response = MagicMock()
         sample_response.data = {
@@ -725,11 +683,6 @@ class TestExtractPdfV2Task:
             "Int Field": 99            # Non-string should work normally
         }
         sample_response.extraction_metadata = {}
-
-        mock_agent = MagicMock()
-        mock_agent.extract.return_value = sample_response
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
 
         monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 

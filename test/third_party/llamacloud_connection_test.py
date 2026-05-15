@@ -39,9 +39,10 @@ def test_llamacloud_connection(api_key: str, configuration_id: str | None):
             first_configuration = next(iter(configurations), None)
             logger.info(f"First Extract v2 configuration: {first_configuration}")
 
-        # Optionally, test a simple extraction call with a dummy or real PDF path if available
+        # Optionally, test a simple extraction call with a real PDF path if available:
+        # file_obj = client.files.create(file=pdf_path, purpose="extract")
+        # result = client.extract.run(file_input_id=file_obj.id, configuration_id=configuration_id)
         # pdf_path = "path/to/sample.pdf"
-        # result = agent.extract(pdf_path)
         # logger.info(f"Extraction result: {result}")
 
         logger.info("LlamaCloud connection test succeeded.")

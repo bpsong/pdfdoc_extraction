@@ -35,11 +35,11 @@ TASK_SLUG = "store_metadata_csv_v2"
 
 class StoreMetadataAsCsvV2(BaseTask):
     """
-    Task to store normalized v2 extraction metadata as CSV.
+    Task to store v2 extraction metadata as CSV.
 
-    Expects context["data"] to be a dict (normalized extraction). Table fields
-    (arrays of objects) are preserved under their normalized names when the
-    extraction configuration marks them with is_table: true.
+    Expects context["data"] to be a dict keyed by workflow field names. Table
+    fields (arrays of objects) are expanded when the extraction configuration
+    marks them with is_table: true.
     """
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
@@ -65,8 +65,7 @@ class StoreMetadataAsCsvV2(BaseTask):
         if not self.filename_template:
             self.filename_template = self.config_manager.get("filename")
 
-        # extraction fields config (if present) - mapping of field_name -> config
-        # expect structure similar to extract_pdf_v2 fields
+        # Extraction fields config, if present: mapping of workflow field key -> config.
         self.extraction_fields = self.params.get("extraction", {}).get("fields", {}) or {}
 
         # If not found in params, try to get from config_manager
@@ -76,7 +75,7 @@ class StoreMetadataAsCsvV2(BaseTask):
             if extraction_config and isinstance(extraction_config, dict):
                 self.extraction_fields = extraction_config.get("fields", {})
             else:
-                # Fallback: try to locate extraction.fields config from extract task
+                # Fallback: locate extraction.fields config from known extraction task keys.
                 tasks_config = self.config_manager.get_all().get("tasks", {})
                 extract_task_def = (
                     tasks_config.get("extract_document_data")
@@ -120,19 +119,18 @@ class StoreMetadataAsCsvV2(BaseTask):
 
     def _detect_table_field(self, context: Dict[str, Any]) -> Optional[str]:
         """
-        Detect the normalized table field name from extraction_fields config.
+        Detect the table field key from extraction_fields config.
 
         Returns:
-            Normalized field name (key in context['data']) marked as is_table: true,
-            or None if none found.
+            Field key in context["data"] marked as is_table: true, or None if none found.
         """
-        # extraction_fields may be dict of field_name -> metadata dict
+        # extraction_fields is expected to map workflow field keys to metadata dicts.
         for field_key, cfg in self.extraction_fields.items():
             try:
                 if isinstance(cfg, dict) and cfg.get("is_table"):
-                    # normalized name could be provided via cfg.get("normalized_name") or cfg.get("name")
-                    normalized = cfg.get("normalized_name") or cfg.get("name") or field_key
-                    return normalized
+                    # Retain optional override support for older configs while preferring the field key.
+                    table_key = cfg.get("normalized_name") or cfg.get("name") or field_key
+                    return table_key
             except Exception:
                 continue
         # Fallback: inspect context data for list-of-dicts fields
@@ -235,7 +233,7 @@ class StoreMetadataAsCsvV2(BaseTask):
             # Prepare format mapping with preprocessing and sanitization for consistency
             format_map: Dict[str, Any] = {}
             if isinstance(data, dict):
-                # Use the same preprocessing and sanitization as v1 CSV and v2 JSON for consistency
+                # Use the same preprocessing and sanitization as JSON storage for consistency.
                 format_map = {
                     k: sanitize_filename(preprocess_filename_value(v)) if not isinstance(v, list) else sanitize_filename(",".join(map(preprocess_filename_value, v)))
                     for k, v in data.items()
@@ -280,11 +278,11 @@ class StoreMetadataAsCsvV2(BaseTask):
                             validated_items.append({"_null": True})
                     table_items = validated_items
 
-            # If no table field or table is empty, fall back to v1 behavior:
+            # If no table field or table is empty, write one scalar row.
             if not table_field or not table_items:
                 # Single row representing scalar fields. Lists become joined strings.
                 row: Dict[str, Any] = {}
-                # use extraction_fields order where possible, but include all data fields for v1 compatibility
+                # Use extraction_fields order where possible, then include any remaining data fields.
                 processed_fields = set()
 
                 # First, process fields defined in extraction_fields

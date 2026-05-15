@@ -2,8 +2,8 @@
 
 This module provides ExtractPdfV2Task, an enhanced pipeline step that handles
 both scalar fields and table fields (arrays of objects) from LlamaCloud Extract
-responses. It builds upon the v1 implementation but adds support for extracting
-structured data from tables and arrays within PDF documents.
+responses. It keeps the existing scalar extraction contract and adds support
+for structured data from tables and arrays within PDF documents.
 
 Key Features:
     - Extracts scalar fields with type conversion and normalization
@@ -11,13 +11,13 @@ Key Features:
     - Preserves extraction metadata including field citations and usage stats
     - Supports dynamic field configuration via ConfigManager
     - Updates StatusManager with granular status information
-    - Maintains backward compatibility with v1 extraction structure
+    - Maintains the existing scalar extraction context structure
 
 Notes:
     - Configuration is loaded from 'tasks.extract_document_data.params' section in config.yaml
     - Supports only one table field per extraction (PRD limitation)
     - Uses LlamaCloud Extract v2 for PDF processing
-    - Normalizes field names to snake_case for consistency
+    - Stores extracted values under workflow field keys from configuration
     - Filters None values from lists when applicable
 """
 
@@ -42,7 +42,7 @@ from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
 class ExtractPdfV2Task(BaseTask):
     """V2 PDF extraction task with array-of-objects support.
 
-    This task extends the v1 extraction functionality to handle table fields
+    This task extends the scalar extraction workflow to handle table fields
     containing arrays of objects. It processes LlamaCloud Extract responses that
     include both scalar fields and structured table data.
 
@@ -104,6 +104,19 @@ class ExtractPdfV2Task(BaseTask):
         self.task_slug = "extract_document_data"
         self.logger = get_logger(__name__)
         self.status_manager = StatusManager(self.config_manager)
+        self.api_key: Optional[str] = None
+        self.configuration_id: Optional[str] = None
+        self.tier: str = "agentic"
+        self.parse_tier: Optional[str] = None
+        self.extraction_target: str = "per_doc"
+        self.cite_sources: Optional[bool] = None
+        self.project_id: Optional[str] = None
+        self.organization_id: Optional[str] = None
+        self.poll_interval_seconds: float = 2.0
+        self.timeout_seconds: float = 1800.0
+        self.fields: Dict[str, Any] = {}
+        self.table_field_key: Optional[str] = None
+        self.item_fields: Dict[str, Any] = {}
 
     def on_start(self, context: dict) -> None:
         """Perform task initialization and early validation.
@@ -134,18 +147,28 @@ class ExtractPdfV2Task(BaseTask):
             if params is None:
                 params = {}
 
-            # Extract required parameters
-            self.api_key = params.get('api_key')
-            self.configuration_id = params.get('configuration_id')
-            self.tier = params.get('tier', 'agentic')
-            self.parse_tier = params.get('parse_tier')
-            self.extraction_target = params.get('extraction_target', 'per_doc')
-            self.cite_sources = params.get('cite_sources')
-            self.project_id = params.get('project_id')
-            self.organization_id = params.get('organization_id')
+            if not isinstance(params, dict):
+                params = {}
+
+            # Extract required parameters with explicit types for static analysis.
+            api_key = params.get('api_key')
+            self.api_key = api_key if isinstance(api_key, str) else None
+            configuration_id = params.get('configuration_id')
+            self.configuration_id = configuration_id if isinstance(configuration_id, str) else None
+            self.tier = str(params.get('tier') or 'agentic')
+            parse_tier = params.get('parse_tier')
+            self.parse_tier = parse_tier if isinstance(parse_tier, str) else None
+            self.extraction_target = str(params.get('extraction_target') or 'per_doc')
+            cite_sources = params.get('cite_sources')
+            self.cite_sources = cite_sources if isinstance(cite_sources, bool) else None
+            project_id = params.get('project_id')
+            self.project_id = project_id if isinstance(project_id, str) else None
+            organization_id = params.get('organization_id')
+            self.organization_id = organization_id if isinstance(organization_id, str) else None
             self.poll_interval_seconds = float(params.get('poll_interval_seconds', 2.0))
             self.timeout_seconds = float(params.get('timeout_seconds', 1800.0))
-            self.fields = params.get('fields', {})
+            fields = params.get('fields', {})
+            self.fields = fields if isinstance(fields, dict) else {}
 
             # Update status with correct format
             unique_id = str(context.get('id', 'unknown'))
@@ -192,6 +215,12 @@ class ExtractPdfV2Task(BaseTask):
                 pass
             raise TaskError(error_msg)
 
+    def _require_api_key(self) -> str:
+        """Return the configured API key after narrowing its type."""
+        if not self.api_key:
+            raise TaskError("API key not found in configuration")
+        return self.api_key
+
     def _extract_with_retry(self, file_path: str, max_retries: int = 3) -> Any:
         """Extract PDF with retry logic and exponential backoff.
 
@@ -211,9 +240,10 @@ class ExtractPdfV2Task(BaseTask):
         for attempt in range(max_retries):
             try:
                 self.logger.debug(f"Extraction attempt {attempt + 1}/{max_retries} for {file_path}")
+                api_key = self._require_api_key()
 
                 extracted_result = run_extract_v2_job(
-                    api_key=self.api_key,
+                    api_key=api_key,
                     file_path=file_path,
                     fields=self.fields,
                     configuration_id=self.configuration_id,
@@ -390,7 +420,9 @@ class ExtractPdfV2Task(BaseTask):
         """Validate required configuration parameters.
 
         Ensures that all required extraction parameters are present and valid,
-        including API key, agent ID, fields configuration, and file path.
+        including API key, fields configuration, and file path. A saved Extract
+        v2 configuration ID is optional because the task can build an inline
+        schema from configured fields.
 
         Args:
             context: Pipeline context containing file_path and other required data.
@@ -466,7 +498,7 @@ class ExtractPdfV2Task(BaseTask):
             table_field_alias: Alias name of the table field in the data.
 
         Returns:
-            Dictionary with normalized field names and processed values.
+            Dictionary keyed by configured workflow field names with processed values.
         """
         processed_data = {}
 
@@ -554,7 +586,7 @@ class ExtractPdfV2Task(BaseTask):
 
         # Custom coercion functions for enhanced type conversion
         def bool_coerce(val: Any) -> bool:
-            """Custom boolean coercion with loose parsing matching v1 behavior.
+            """Custom boolean coercion with loose parsing used by scalar extraction.
 
             For str values, checks lowercase: 'false', 'f', 'no', '0', 'off' -> False
             For non-str values, uses bool(value)
@@ -570,7 +602,7 @@ class ExtractPdfV2Task(BaseTask):
             return result
 
         def int_coerce(val: Any) -> int:
-            """Custom integer coercion using float intermediate step matching v1 behavior.
+            """Custom integer coercion using a float intermediate step for scalar extraction.
 
             First tries float(value) to handle decimals like "12.0" -> 12.0
             Then int(that) to get integer. Handles "00123" -> 123 via float stripping zeros.
@@ -664,7 +696,7 @@ class ExtractPdfV2Task(BaseTask):
         return value
 
     def _process_scalar_field(self, value: Any, field_config: Dict[str, Any]) -> Any:
-        """Process a scalar field with type conversion and normalization.
+        """Process a scalar field with configured type conversion.
 
         Args:
             value: Raw field value from extraction.
@@ -682,12 +714,12 @@ class ExtractPdfV2Task(BaseTask):
 
         Args:
             data: Raw extracted data containing the table field.
-            field_key: Normalized workflow field key.
+            field_key: Configured workflow field key.
             alias: Field alias in the extracted data.
             field_config: Table field configuration including item_fields.
 
         Returns:
-            List of dictionaries with normalized subfield names and cleaned values.
+            List of dictionaries keyed by configured subfield names with cleaned values.
         """
         found, table_data = self._get_extracted_value(data, field_key, alias)
         if not found:

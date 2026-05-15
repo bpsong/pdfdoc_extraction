@@ -1,17 +1,17 @@
 """Persist extracted metadata (v2) as a JSON file while preserving array-of-objects.
 
-This v2 task is intended to work with extract_pdf_v2 which normalizes
-array-of-objects to List[Any] under context["data"][normalized_field_name]
-(e.g., "items"). The task preserves list-of-objects for fields marked as
-is_table: true in the extraction.fields configuration while maintaining
-backwards compatibility for scalar fields.
+This v2 task is intended to work with extract_pdf_v2, which writes extracted
+values to context["data"] under configured workflow field keys (e.g.,
+"items"). The task preserves list-of-objects for fields marked as is_table:
+true in the extraction.fields configuration while keeping scalar fields as
+single JSON values.
 
 Behavior:
 - Reads configuration (data_dir, filename template) from task params via
   ConfigManager singleton.
 - Uses alias mapping from extraction.fields config when available.
 - For fields marked with is_table: true, it keeps the list-of-objects
-  structure intact under the alias/normalized field name.
+  structure intact under the configured output alias when available.
 - Generates a safe, unique filename (appending _1, _2, ...) to avoid
   overwrites.
 - Uses windows_long_path for all filesystem paths.
@@ -49,10 +49,10 @@ TASK_SLUG = "store_metadata_json_v2"
 class StoreMetadataAsJsonV2(BaseTask):
     """Write v2 extracted metadata to JSON while preserving list-of-objects.
 
-    This task expects the pipeline to put normalized extraction into
-    context["data"] (dict). Fields that are arrays of objects (tables)
-    should be preserved under their normalized names when the extraction
-    configuration marks them with is_table: true.
+    This task expects the pipeline to put extraction output into context["data"]
+    as a dict keyed by workflow field names. Fields that are arrays of objects
+    (tables) are preserved when the extraction configuration marks them with
+    is_table: true.
     """
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
@@ -81,9 +81,9 @@ class StoreMetadataAsJsonV2(BaseTask):
         self.data_dir: Path = Path(windows_long_path(str(data_dir_str)))
         self.filename_template: str = str(filename_template)
 
-        # Attempt to locate extraction.fields config for aliasing and is_table flags.
+        # Locate extraction.fields config for aliasing and is_table flags.
         tasks_config = self.config_manager.get_all().get("tasks", {})
-        # Try a few likely extract task keys used in project (backwards compatible)
+        # Retain older fixture/task keys so existing configs still resolve aliases.
         extract_task_def = (
             tasks_config.get("extract_document_data")
             or tasks_config.get("extract_document")
@@ -266,7 +266,7 @@ class StoreMetadataAsJsonV2(BaseTask):
                         # Coerce single scalar to single-item list to avoid losing data
                         processed[alias] = [value]
                 else:
-                    # For scalar fields or v1-style, keep the value as-is.
+                    # For scalar fields, keep the value as-is.
                     processed[alias] = value
 
             # Status: writing
