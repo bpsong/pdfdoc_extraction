@@ -128,7 +128,7 @@
   - [x] 16.2 Implement fallback logic that uses top-level params when nested overrides are absent and raises warnings for unknown keys inside storage blocks.
   - [x] 16.3 Author validation tests confirming precedence rules, fallback behavior, and warning emission for stray keys.
 - [x] 17.0 Detect missing extraction metadata for v2 storage tasks
-  - [x] 17.1 Cross-check pipeline composition so v2 storage tasks verify extraction.fields metadata is produced (e.g., ensure extract_document_data_v2 precedes storage tasks).
+  - [x] 17.1 Cross-check pipeline composition so v2 storage tasks verify extraction.fields metadata is produced (e.g., ensure an extraction task such as extract_document_data precedes storage tasks).
   - [x] 17.2 Emit warnings when metadata is unavailable and document remediation guidance in suggestion text.
   - [x] 17.3 Add integration tests covering pipelines with and without upstream metadata tasks.
 - [x] 18.0 Validate rules task optional knobs

@@ -318,6 +318,16 @@ C:\Python313\python.exe -m pytest -v test/core/test_config_manager.py
 C:\Python313\python.exe -m pytest -v --cov=modules
 ```
 
+Current full-suite verification for the LlamaCloud Extract v2 migration:
+`393 passed, 3 skipped, 4 warnings`. The skipped tests are POSIX-style
+permission checks that are intentionally skipped on Windows.
+
+The end-to-end workflow fixture config also passes config-check:
+
+```powershell
+C:\Python313\python.exe -m tools.config_check validate --config test\data\config.yaml --import-checks
+```
+
 ### Test Categories
 
 - **Unit Tests**: Individual component testing

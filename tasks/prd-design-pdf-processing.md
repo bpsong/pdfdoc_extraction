@@ -718,8 +718,8 @@ The v2 pipeline handles LlamaCloud Extract v2 responses containing arrays of obj
 - Maintain full backward compatibility with v1 pipeline; v2 is opt-in via configuration.
 
 ### 9.5.3 Schema Handling
-- **Discovery**: The extraction configuration (extraction.fields) marks fields as tables using `is_table: true` - uses the normalized field name as the context key.
-- **Normalization**: Array-of-objects are flattened into List[Any] with cleaned string values.
+- **Discovery**: The extraction configuration (`extraction.fields`) marks fields as tables using `is_table: true`; the workflow field key is used as the context key.
+- **Normalization**: Array-of-objects are cleaned and stored as `List[Any]` under `context["data"][workflow_field_key]`.
 - **Example LlamaCloud Extract v2 Response**:
   ```json
   {
@@ -737,7 +737,7 @@ The v2 pipeline handles LlamaCloud Extract v2 responses containing arrays of obj
   {
     "data": {
       "supplier_name": "ALLIGATOR SINGAPORE PTE LTD",
-      "items": [  # normalized field name from LlamaCloud schema
+      "items": [  # workflow field key from extraction.fields
         {"description": "ELECTRODE G-300 3.2MM 5KG", "quantity": "4.0 PKT"},
         {"description": "QUICK COUPLER SOCKET", "quantity": "2.0 PCS"}
       ]
@@ -746,11 +746,11 @@ The v2 pipeline handles LlamaCloud Extract v2 responses containing arrays of obj
   ```
 
 ### 9.5.4 Storage Semantics
-- **JSON Storage (v2)**: Preserves the list-of-dicts under the normalized field name (e.g., 'items'), with top-level fields mapped to aliases.
+- **JSON Storage (v2)**: Preserves list-of-dicts structure for table fields and writes configured fields under aliases when aliases are present.
 - **CSV Storage (v2)**:
   - **Row-per-item mode**: Emits N rows for N line items, repeating scalar fields in each row. Array fields marked with `is_table: true` have their contents expanded into separate columns (prefixed with 'item_').
   - **Field Classification**: Scalar (non-array) fields are repeated in each CSV row. Array fields marked with `is_table: true` are treated as containing multiple items to be expanded.
-  - **Column Naming**: Item-level columns use the alias as-is (e.g., 'description' becomes 'item_description').
+  - **Column Naming**: Scalar and item-level columns use configured aliases. Item-level columns are prefixed with `item_` (e.g., `description` becomes `item_description`).
 - **Example CSV (Row-per-item)**:
   ```
   supplier_name,invoice_amount,item_description,item_quantity  # item_ prefix + alias as-is

@@ -1,6 +1,6 @@
 # LlamaCloud Extract v2 Migration Plan
 
-This project is migrating from the legacy `llama-cloud-services` package and
+This project has migrated from the legacy `llama-cloud-services` package and
 agent-based Extract flow to the current `llama-cloud` Python SDK and Extract v2
 job flow.
 
@@ -86,21 +86,23 @@ Status: completed in the current working tree.
 
 - Replace documented dependency references with `llama-cloud>=2.1`.
 - Remove runtime imports of `llama-cloud-services`.
-- Route extraction through an Extract v2 adapter that uploads files, creates
-  jobs, polls terminal status, and normalizes results.
+- Route extraction through an Extract v2 adapter that uploads files, calls
+  `client.extract.run(...)`, and normalizes completed results.
 - Document the v2 configuration contract.
 - Update examples to use `configuration_id` or inline `fields`.
 - Keep cloud validation and test execution out of this phase.
 
 ### Phase 2: LlamaCloud UI Validation
 
-Status: in progress.
+Status: completed in the current working tree.
 
 - Create or verify saved Extract v2 configurations in the LlamaCloud UI.
 - Add `configuration_id` to local/cloud configs when a saved configuration is
   preferred.
 - Run a single cloud-backed extraction manually through the UI workflow.
 - Compare extracted field names against configured workflow field keys and aliases.
+- Verified the saved Extract v2 configuration against `sample_invoice.pdf` using
+  the smoke checker and saved raw JSON re-check.
 
 Manual SDK and workflow fit check, using `sample_invoice.pdf` by default:
 
@@ -127,8 +129,9 @@ C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.ya
 
 ### Phase 3: Test and Legacy Cleanup
 
-Status: pending.
+Status: completed in the current working tree.
 
-- Run the full pytest suite.
-- Update remaining tests to mock the v2 adapter rather than legacy agents.
-- Remove any remaining legacy examples after the cloud rollout is stable.
+- Full pytest suite passes: `393 passed, 3 skipped, 4 warnings`.
+- Extraction tests mock the v2 adapter rather than legacy agents.
+- Runtime code no longer imports `llama-cloud-services`; remaining legacy
+  references are migration-history notes.

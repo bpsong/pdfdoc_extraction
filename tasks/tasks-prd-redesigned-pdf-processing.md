@@ -171,23 +171,23 @@
 - [x] 8.0 Implement LlamaCloud Extract v2 Array-of-Objects Support
   - [x] 8.1 Create [`standard_step/extraction/extract_pdf_v2.py`](standard_step/extraction/extract_pdf_v2.py:1) that:
     - Accepts LlamaCloud schema where fields may be arrays of objects (e.g., Items -> [{Description, Quantity}, ...]).
-    - Discovers array field name via extraction.fields config (no hardcoding; use required 'is_table: true' - uses normalized field name as context key).
-    - Normalizes array-of-objects to List[Any] under context["data"][normalized_field_name] with type hints and cleaning (Note: may require extending type parser to support Dict).
+    - Discovers array field name via extraction.fields config (no hardcoding; use required `is_table: true`; uses workflow field key as context key).
+    - Normalizes array-of-objects to List[Any] under `context["data"][workflow_field_key]` with type hints and cleaning.
     - Preserves scalar fields, metadata handling, and StatusManager updates identical to v1.
     - Loads config via ConfigManager for the new item_fields configuration and other parameters.
   - [x] 8.2 Create unit tests [`test/extraction/test_extraction_v2.py`](test/extraction/test_extraction_v2.py:1):
     - Mocks LlamaCloud responses with sample array-of-objects JSON.
-    - Asserts normalized context["data"]["items"] as List[Any] (using normalized field name).
+    - Asserts normalized `context["data"]["items"]` as `List[Any]` using the workflow field key.
     - Verifies unchanged behavior for scalar fields and status updates.
   - [x] 8.3 Create parallel storage tasks:
     - [x] 8.3.1 [`standard_step/storage/store_metadata_as_json_v2.py`](standard_step/storage/store_metadata_as_json_v2.py:1):
       - Preserves top-level alias mapping.
-      - Keeps list-of-objects structure in JSON output under the normalized field name (e.g., 'items').
+      - Keeps list-of-objects structure in JSON output under the configured alias when present, otherwise the workflow field key.
     - [x] 8.3.2 [`standard_step/storage/store_metadata_as_csv_v2.py`](standard_step/storage/store_metadata_as_csv_v2.py:1):
       - Emits one CSV row per line item, repeating invoice-level fields.
       - Uses item field aliases as CSV column names (prefixed with 'item_', e.g., 'item_description', 'item_quantity').
   - [x] 8.4 Create companion tests under test/storage/:
-    - [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1): Verifies JSON keeps list-of-objects under the normalized field name.
+    - [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1): Verifies JSON preserves list-of-objects and alias mapping.
     - [`test/storage/test_storage_v2_csv.py`](test/storage/test_storage_v2_csv.py:1): Verifies CSV row-per-item mode.
   - [x] 8.5 Create dev config [`dev_config.yaml`](dev_config.yaml:1):
     - Wires v2 tasks into pipeline for testing without impacting production config.yaml.

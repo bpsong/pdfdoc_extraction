@@ -864,13 +864,13 @@ To use v2 features, update your `config.yaml` to:
 #### 4.10.3. Storage Behavior
 
 ##### JSON Storage (v2)
-- Preserves the list-of-objects structure under the normalized field name (e.g., 'items').
-- Top-level scalar fields are mapped to their configured aliases.
+- Preserves the list-of-objects structure for table fields.
+- Configured fields are written under their aliases when aliases are present; otherwise workflow field keys are preserved.
 - Maintains backward compatibility with scalar-only data.
 
 ##### CSV Storage (v2)
 - **Row-per-item mode**: Creates one CSV row for each item in the array, repeating invoice-level fields.
-- **Column naming**: Item columns use the alias prefixed with 'item_' (e.g., 'item_description', 'item_quantity').
+- **Column naming**: Scalar and item columns use configured aliases. Item columns are prefixed with `item_` (e.g., `item_description`, `item_quantity`).
 - **Fallback**: If no table field is configured or the list is empty, falls back to single-row format.
 - **Example CSV output**:
   ```csv

@@ -191,8 +191,8 @@ Saved LlamaCloud configurations may return either workflow field keys or aliases
 
 ### Schema Handling
 
-- **Array Field Discovery**: The extraction configuration marks fields as tables using `is_table: true` in the field definition. The normalized field name is used as the context key.
-- **Normalization**: Array-of-objects are flattened into List[Any] with cleaned string values under `context["data"][normalized_field_name]`.
+- **Array Field Discovery**: The extraction configuration marks fields as tables using `is_table: true` in the field definition. The workflow field key is used as the context key.
+- **Normalization**: Array-of-objects are cleaned and stored as `List[Any]` under `context["data"][workflow_field_key]`.
 - **Example LlamaCloud Extract v2 Response**:
   ```json
   {
@@ -210,7 +210,7 @@ Saved LlamaCloud configurations may return either workflow field keys or aliases
   {
     "data": {
       "supplier_name": "ALLIGATOR SINGAPORE PTE LTD",
-      "items": [  # normalized field name from LlamaCloud schema
+      "items": [  # workflow field key from extraction.fields
         {"description": "ELECTRODE G-300 3.2MM 5KG", "quantity": "4.0 PKT"},
         {"description": "QUICK COUPLER SOCKET", "quantity": "2.0 PCS"}
       ]
@@ -221,13 +221,13 @@ Saved LlamaCloud configurations may return either workflow field keys or aliases
 ### Storage Semantics
 
 #### JSON Storage (v2)
-- Preserves the list-of-dicts under the normalized field name (e.g., 'items').
-- Top-level fields are mapped to their configured aliases.
+- Preserves list-of-dicts structure for table fields.
+- Writes configured fields under their aliases when aliases are present; otherwise it preserves workflow field keys.
 - Maintains backward compatibility with scalar-only data.
 
 #### CSV Storage (v2)
 - **Row-per-item mode**: Emits N rows for N line items, repeating scalar fields in each row.
-- **Column naming**: Item-level columns use the alias prefixed with 'item_' (e.g., 'item_description', 'item_quantity').
+- **Column naming**: Scalar and item-level CSV headers use configured aliases. Item-level columns are prefixed with `item_` (e.g., `item_description`, `item_quantity`).
 - **Fallback behavior**: If no table field is configured or the list is empty, falls back to v1 single-row format with scalar fields.
 - **Field classification**: Scalar (non-array) fields are repeated in each CSV row. Array fields marked with `is_table: true` are expanded into separate columns.
 

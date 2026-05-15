@@ -377,7 +377,7 @@ Suggestion: Create the directory or update the path in config
 
 **Fixes**
 - Ensure at least one extraction task runs before any storage or archive steps, so tokens resolve correctly.
-- Schedule a metadata-producing extraction (for example `extract_document_data_v2`) ahead of v2 storage tasks that expect enriched metadata.
+- Schedule a metadata-producing extraction task, such as `extract_document_data`, ahead of v2 storage tasks that expect extraction field metadata.
 - Insert a context initializer task (for example `standard_step.context.generate_ids`) before referencing `{nanoid}` or other context-scoped tokens.
 - Expose table columns that need to appear in filenames as scalar extraction fields, or adjust the filename template to avoid table tokens.
 - Create the missing extraction field (preferably scalar) or remove the unknown placeholder if the value is not needed.

@@ -397,8 +397,8 @@ tasks:
   extract_data:
     params:
       fields:
-        - {name: "field1", alias: "Field 1", type: "str"}
-        - {name: "field2", alias: "Field 2", type: "str"}
+        field1: {alias: "Field 1", type: "str"}
+        field2: {alias: "Field 2", type: "str"}
         # ... 23 more fields
 
 # AFTER: Optimized (reduced to essential fields)
@@ -406,10 +406,10 @@ tasks:
   extract_data:
     params:
       fields:
-        - {name: "supplier_name", alias: "Supplier", type: "str"}
-        - {name: "invoice_number", alias: "Invoice Number", type: "str"}
-        - {name: "total_amount", alias: "Total Amount", type: "float"}
-        - {name: "invoice_date", alias: "Date", type: "str"}
+        supplier_name: {alias: "Supplier", type: "str"}
+        invoice_number: {alias: "Invoice Number", type: "str"}
+        total_amount: {alias: "Total Amount", type: "float"}
+        invoice_date: {alias: "Date", type: "str"}
 ```
 
 #### Rules Task Optimization
