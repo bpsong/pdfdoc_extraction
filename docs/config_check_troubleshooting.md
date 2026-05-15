@@ -67,13 +67,14 @@ Suggestion: Create the directory or update the path in config
 **Symptom**
 ```
 [ERROR] tasks.extract_metadata.params.api_key: Extraction tasks require 'api_key' to be provided as a non-empty string.
-[ERROR] tasks.extract_metadata.params.agent_id: Extraction tasks require 'agent_id' to be provided as a non-empty string.
 ```
 
 **Fixes**
-- Supply the credentials in `tasks.<name>.params` (they may be pulled from a secrets store at runtime, but the validator needs placeholders).
+- Supply `api_key` in `tasks.<name>.params` (it may be pulled from a secrets store at runtime, but the validator needs a placeholder).
 - Store the values in your deployment environment and reference them via templating if you cannot commit them to source control.
-- Verify the module path starts with `standard_step.extraction.` or `custom_step.extraction.`; these task families always require both credentials.
+- For LlamaCloud Extract v2, `configuration_id` is optional. If omitted, the task builds an inline schema from `fields`.
+- If you provide `configuration_id`, it must be a non-empty string from the LlamaCloud UI.
+- `agent_id` is legacy and is not required for new Extract v2 configuration.
 
 ## Multiple Table Extraction Fields
 

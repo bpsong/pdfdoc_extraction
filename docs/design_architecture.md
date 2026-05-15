@@ -179,17 +179,19 @@ Tasks should also update the `StatusManager` on failure to provide operational v
 - Backwards compatibility:
   - Storage templates and rename patterns should tolerate missing optional fields
 
-## v2 LlamaExtract Array-of-Objects Support
+## LlamaCloud Extract v2 Array-of-Objects Support
 
 ### Overview
 
-The v2 extraction and storage system extends the original implementation to handle LlamaExtract responses containing arrays of objects (e.g., invoice line items). This feature allows extraction of structured data where certain fields return lists of sub-objects, such as Items: [{Description, Quantity}, ...].
+The extraction and storage system uses LlamaCloud Extract v2 through the `llama-cloud` SDK. It handles responses containing arrays of objects (e.g., invoice line items), where certain fields return lists of sub-objects such as Items: [{Description, Quantity}, ...].
+
+The extraction task can either reference a saved LlamaCloud Extract v2 `configuration_id` or build an inline schema from `tasks.<name>.params.fields`. In inline mode, each field `alias` becomes the JSON-schema property name sent to LlamaCloud.
 
 ### Schema Handling
 
 - **Array Field Discovery**: The extraction configuration marks fields as tables using `is_table: true` in the field definition. The normalized field name is used as the context key.
 - **Normalization**: Array-of-objects are flattened into List[Any] with cleaned string values under `context["data"][normalized_field_name]`.
-- **Example LlamaExtract Response**:
+- **Example LlamaCloud Extract v2 Response**:
   ```json
   {
     "data": {
@@ -231,6 +233,9 @@ The v2 extraction and storage system extends the original implementation to hand
 
 Add to extraction.fields in config.yaml:
 ```yaml
+api_key: "llx-REDACTED"
+configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
+tier: "agentic"
 items:  # Field name from LlamaCloud schema (normalized)
   alias: "Items"  # Matches LlamaCloud response
   type: "List[Any]"  # Currently supported type

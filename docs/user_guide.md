@@ -43,7 +43,7 @@ Author: [Your Organization/Name]
        - [4.7.7. Assign Nanoid (standard_step/context)](#477-assign-nanoid-standard_stepcontext)
        - [4.7.8. housekeeping.cleanup](#478-housekeepingcleanup)
        - [4.7.9. Validation and Failure Behavior](#479-validation-and-failure-behavior)
-     - [4.10. v2 LlamaExtract Array-of-Objects Support](#410-v2-llamaextract-array-of-objects-support)
+     - [4.10. LlamaCloud Extract v2 Array-of-Objects Support](#410-llamacloud-extract-v2-array-of-objects-support)
   - [4.8. Example Workflows](#48-example-workflows)
   - [4.9. Housekeeping and the Processing Folder](#49-housekeeping-and-the-processing-folder)
   - [4.11. Config Check Validation Tool](#411-config-check-validation-tool)
@@ -110,7 +110,7 @@ Key features:
 - Consistent alias-based output for CSV/JSON  
   *(Alias means a friendly name used for data fields in outputs, such as column headers.)*
 
-Internet access is required for cloud-based extraction providers such as LlamaExtract.
+Internet access is required for cloud-based extraction providers such as LlamaCloud Extract v2.
 
 ---
 
@@ -135,7 +135,7 @@ Internet access is required for cloud-based extraction providers such as LlamaEx
       WebUpload -->|Trigger| WorkflowLoader
       WorkflowLoader -->|Builds| Workflow[Workflow Manager]
       Workflow -->|Executes| Steps[Standard Steps Chain]
-      Steps -->|Extract| Extractor[LlamaExtract API]
+      Steps -->|Extract| Extractor[LlamaCloud Extract v2 API]
       Steps -->|Apply Rules| Rules[Rules Engine (e.g., update_reference)]
       Steps -->|Store| Storage[File & Data Storage]
       Storage -->|Organized Files| Output[files/ and data/]
@@ -146,7 +146,7 @@ Internet access is required for cloud-based extraction providers such as LlamaEx
 
 1. Submission: You place a PDF in the watch folder.  
 2. Detection: The system sees the new file and chooses a workflow via match rules.  
-3. Extraction: Information is extracted (e.g., via LlamaExtract).  
+3. Extraction: Information is extracted through LlamaCloud Extract v2.  
 4. Rules: Optional business logic runs (e.g., update reference files).  
 5. Storage: The PDF and extracted metadata are written to `files/` (PDF) and `data/` (CSV/JSON).
 6. Post-process: The original input is archived or deleted per configuration.  
@@ -484,7 +484,7 @@ Updated Security Notes (summary from existing section):
 - Common startup errors include:
   - Invalid YAML syntax (check your config file with a YAML validator).
   - Missing folders (create required folders like `watch_folder`, `web_upload` before starting).
-  - Missing or invalid provider credentials (e.g., LlamaExtract `api_key` or `agent_id`).
+  - Missing or invalid provider credentials, such as a LlamaCloud `api_key`.
   - Permission errors (ensure the system user has read/write access to all configured directories).
 - Performance considerations for large files:
   - Files over 10MB may cause noticeable processing delays.
@@ -528,7 +528,7 @@ Updated Security Notes (summary from existing section):
   - Verify all required folders exist (watch_folder, web_upload must pre-exist).
   - Validate `config.yaml` syntax using a YAML validator.
   - Ensure internet access if using cloud extraction providers.
-  - Check that API credentials (api_key, agent_id) are valid and not expired.
+  - Check that the LlamaCloud `api_key` is valid and not expired. If using a saved Extract v2 configuration, also verify `configuration_id`.
   - Verify user permissions on all configured directories.
   - The system logs detailed startup progress including folder validation and cleanup task registration.
 - Recovery from crashes:
@@ -546,9 +546,13 @@ Standard steps are predefined operations configured in workflows. Below are the 
 - **type:** `"extraction"`
 - **Purpose:** Extracts structured data from PDF documents using external extraction services.
 - **params:**
-  - `provider`: string, currently `"llamaextract"` (the extraction service).
-  - `api_key`: string, required credential for the provider.
-  - `agent_id`: string, required credential for the provider.
+  - `provider`: string, currently LlamaCloud Extract v2 through the `llama-cloud` SDK.
+  - `api_key`: string, required LlamaCloud credential.
+  - `configuration_id`: optional saved Extract v2 configuration ID from the LlamaCloud UI. If omitted, the task builds an inline schema from `fields`.
+  - `tier`: optional Extract v2 tier, default `"agentic"`.
+  - `parse_tier`: optional Parse tier for inline extraction.
+  - `extraction_target`: optional target, default `"per_doc"`.
+  - `cite_sources`: optional boolean to request citation metadata.
   - `fields`: map of field keys to alias and type, e.g.:
 
     ```yaml
@@ -574,7 +578,9 @@ tasks:
     class: ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
-      agent_id: "YOUR-AGENT-ID"
+      configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
+      tier: "agentic"
+      extraction_target: "per_doc"
       fields:
         supplier_name:        { alias: "Supplier name",       type: "str" }
         client_name:          { alias: "Client name",         type: "str" }
@@ -816,9 +822,9 @@ pipeline:
   - Status is updated via `StatusManager`; pipeline flow may continue or stop per each task’s `on_error`.
 - **Tip:** Set `logging.log_level = DEBUG` in `config.yaml` for detailed diagnostics.
 
-### 4.10. v2 LlamaExtract Array-of-Objects Support
+### 4.10. LlamaCloud Extract v2 Array-of-Objects Support
 
-The v2 extraction and storage system extends the original implementation to handle LlamaExtract responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
+The v2 extraction and storage system handles LlamaCloud Extract v2 responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
 
 #### 4.10.1. Overview
 
@@ -833,6 +839,10 @@ To use v2 features, update your `config.yaml` to:
    extract_document_data:
      module: standard_step.extraction.extract_pdf_v2
      class: ExtractPdfV2Task
+     params:
+       api_key: "llx-REDACTED"
+       configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
+       tier: "agentic"
    ```
 
 2. Mark array fields with `is_table: true`:
@@ -891,7 +901,7 @@ To migrate from v1 to v2:
    class: StoreMetadataAsCsvV2
    ```
 
-4. Test with a small set of documents before full deployment.
+4. After the LlamaCloud UI configuration is ready, test with a small set of documents before full deployment.
 
 #### 4.10.5. Current Limitations
 
@@ -929,7 +939,9 @@ tasks:
     class:  ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
-      agent_id: "YOUR-AGENT-ID"
+      configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
+      tier: "agentic"
+      extraction_target: "per_doc"
       fields:
         supplier_name:        { alias: "Supplier name",       type: "str" }
         client_name:          { alias: "Client name",         type: "str" }
@@ -1053,7 +1065,7 @@ Administrators should share validator output with end users only when requesting
 ## 5. Frequently Asked Questions (FAQ)
 
 **Q: Does the program require internet access?**  
-A: Yes, for cloud providers such as LlamaExtract via HTTPS.
+A: Yes, for cloud providers such as LlamaCloud Extract v2 via HTTPS.
 
 **Q: Where are my processed files stored?**
 A: Processed PDF documents are saved by the "`store_file_to_localdrive`" task to the folder configured at `tasks.store_file_to_localdrive.params.files_dir`. Extracted metadata is saved separately:
@@ -1064,7 +1076,7 @@ A: Processed PDF documents are saved by the "`store_file_to_localdrive`" task to
 A: Storage tasks generate unique filenames automatically by appending a numeric suffix (`_1`, `_2`, …) to avoid overwriting, as implemented by the utility in [`modules.utils.generate_unique_filepath()`](modules/utils.py:95).
 
 **Q: What are provider limits?**  
-A: LlamaExtract/LlamaParse typical limits include max file size and processing time; consult your provider’s documentation. For previous defaults: up to 300MB per PDF and around 30 minutes per job.
+A: LlamaCloud Extract and LlamaParse limits include max file size and processing time; consult the current provider documentation for your workspace and tier.
 
 **Q: How do I edit the configuration file safely?**  
 A: Use a plain text editor, preserve indentation, back up before changes, and restart the system after saving.
@@ -1115,7 +1127,7 @@ A: Large files require more processing time due to increased I/O operations and 
 A: When field values required for matching are not found in the pipeline context, the task logs a warning and continues without matching any rows. The task will not throw an error but simply won't update the reference file. Check your extraction field configuration and ensure the required fields (like `purchase_order_number` or `invoice_amount`) are being extracted correctly.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
-A: The system validates API credentials (api_key and agent_id) before processing. If credentials are missing or invalid, the system logs specific error messages and updates the task status. Ensure your `api_key` and `agent_id` in the extraction task configuration are correct and not expired. Check the `app.log` file for detailed credential validation errors.
+A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.
 
 ---
 

@@ -115,8 +115,8 @@
   - [x] 12.5 Add inline documentation and docstrings throughout codebase
 
 - [x] 13.0 Enforce extraction credential prerequisites
-  - [x] 13.1 Extend validator to require api_key and agent_id for modules under standard_step.extraction.* (and custom equivalents), emitting targeted errors when either value is missing or blank.
-  - [x] 13.2 Add regression tests covering configs with and without credentials to ensure errors surface before runtime.
+  - [x] 13.1 Extend validator to require `api_key` for modules under standard_step.extraction.* (and custom equivalents), emitting targeted errors when it is missing or blank. `configuration_id` is optional for LlamaCloud Extract v2 inline-schema mode, but must be non-empty if provided.
+  - [x] 13.2 Add regression coverage for missing `api_key` and invalid optional `configuration_id` before runtime.
 - [x] 14.0 Warn about multiple table extractions
   - [x] 14.1 Add detection for multiple extraction.fields entries with is_table: true and surface a warning that v2 storage tasks currently support a single table payload.
   - [x] 14.2 Update token/extraction validation tests to cover multi-table configs and confirm warning text.

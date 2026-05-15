@@ -1,13 +1,13 @@
-"""Extract structured data from PDFs using a configured external agent.
+"""Extract structured data from PDFs using LlamaCloud Extract v2.
 
 This module provides ExtractPdfTask, a pipeline step that orchestrates
-document data extraction via the LlamaExtract service. It validates required
-parameters, calls the remote agent, post-processes the result, validates it
+document data extraction via LlamaCloud. It validates required
+parameters, runs an Extract v2 job, post-processes the result, validates it
 against a dynamically created Pydantic model, and merges the data into the
 pipeline context.
 
 Notes:
-    - Reads runtime parameters (api_key, agent_id, fields) from BaseTask.params.
+    - Reads runtime parameters (api_key, configuration_id, fields) from BaseTask.params.
     - Updates processing status via StatusManager on start/success/failure.
     - Interacts with the filesystem indirectly via the external service using
       the provided file path.
@@ -21,16 +21,16 @@ from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
 from modules.status_manager import StatusManager
-
-from llama_cloud_services import LlamaExtract
+from modules.utils import windows_long_path
+from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
 
 
 class ExtractPdfTask(BaseTask):
-    """Task that extracts domain data from a PDF using LlamaExtract.
+    """Task that extracts domain data from a PDF using LlamaCloud Extract v2.
 
     Responsibilities:
-        - Validate required parameters (api_key, agent_id, fields).
-        - Invoke LlamaExtract agent to extract data from the file path.
+        - Validate required parameters (api_key and fields).
+        - Run a LlamaCloud Extract v2 job against the file path.
         - Filter/normalize extracted lists to remove None values when needed.
         - Validate fields using a dynamically created Pydantic model.
         - Merge validated data into context['data'] and update metadata/status.
@@ -41,7 +41,7 @@ class ExtractPdfTask(BaseTask):
 
     Args:
         config_manager (ConfigManager): Project configuration manager.
-        **params: Expected keys include 'api_key', 'agent_id', and 'fields'.
+        **params: Expected keys include 'api_key', optional 'configuration_id', and 'fields'.
 
     Notes:
         - Side effects include remote API calls and status updates.
@@ -57,7 +57,7 @@ class ExtractPdfTask(BaseTask):
 
         Args:
             config_manager (ConfigManager): The application configuration manager.
-            **params: Runtime parameters: 'api_key', 'agent_id', and 'fields'.
+            **params: Runtime parameters: 'api_key', optional 'configuration_id', and 'fields'.
 
         Notes:
             Parameters are accessed via self.params provided by BaseTask.
@@ -68,7 +68,16 @@ class ExtractPdfTask(BaseTask):
         
         # Parameters are now directly available via self.params
         self.api_key = self.params.get("api_key")
+        self.configuration_id = self.params.get("configuration_id")
         self.agent_id = self.params.get("agent_id")
+        self.tier = self.params.get("tier", "agentic")
+        self.parse_tier = self.params.get("parse_tier")
+        self.extraction_target = self.params.get("extraction_target", "per_doc")
+        self.cite_sources = self.params.get("cite_sources")
+        self.project_id = self.params.get("project_id")
+        self.organization_id = self.params.get("organization_id")
+        self.poll_interval_seconds = float(self.params.get("poll_interval_seconds", 2.0))
+        self.timeout_seconds = float(self.params.get("timeout_seconds", 1800.0))
         self.fields = self.params.get("fields")
 
     def on_start(self, context: dict):
@@ -81,7 +90,7 @@ class ExtractPdfTask(BaseTask):
             context (dict): The pipeline context dict. Must contain 'id'.
 
         Raises:
-            TaskError: If any of api_key, agent_id, or fields are missing.
+            TaskError: If api_key or fields are missing.
 
         Notes:
             - Uses StatusManager to record both start and early failure states.
@@ -94,9 +103,6 @@ class ExtractPdfTask(BaseTask):
         if not self.api_key:
             self.status_manager.update_status(str(context.get('id', 'unknown')), "Task Failed: extract_document_data", step="ExtractPdfTask", error="API key not found in configuration for ExtractPdfTask.")
             raise TaskError("API key not found in configuration for ExtractPdfTask.")
-        if not self.agent_id:
-            self.status_manager.update_status(str(context.get('id', 'unknown')), "Task Failed: extract_document_data", step="ExtractPdfTask", error="Agent ID not found in configuration for ExtractPdfTask.")
-            raise TaskError("Agent ID not found in configuration for ExtractPdfTask.")
         if not self.fields:
             self.status_manager.update_status(str(context.get('id', 'unknown')), "Task Failed: extract_document_data", step="ExtractPdfTask", error="Fields not found in configuration for ExtractPdfTask.")
             raise TaskError("Fields not found in configuration for ExtractPdfTask.")
@@ -117,7 +123,7 @@ class ExtractPdfTask(BaseTask):
         Returns:
             dict: Updated context with:
                 - data (dict): Validated extracted values merged in.
-                - metadata (dict): Includes extraction_agent_id and status.
+                - metadata (dict): Includes extraction job/configuration details and status.
 
         Raises:
             TaskError: If file_path is missing, validation fails, or the
@@ -143,20 +149,26 @@ class ExtractPdfTask(BaseTask):
             self.status_manager.update_status(unique_id, "Task Failed: extract_document_data", step="ExtractPdfTask", error=error_msg)
             raise TaskError(error_msg)
 
-        self.logger.info(f"Extracting data from {file_path} using agent {self.agent_id}...")
+        normalized_file_path = windows_long_path(file_path)
+        config_label = self.configuration_id or "inline field schema"
+        self.logger.info(f"Extracting data from {normalized_file_path} using {config_label}...")
 
         try:
-            # Initialize LlamaExtract client
-            client = LlamaExtract(api_key=self.api_key)
-
-            # Get the agent by agent_id (use named parameter id=)
-            agent = client.get_agent(id=self.agent_id)
-
-            # Update status: agent acquired
-            self.status_manager.update_status(unique_id, "Agent acquired", step="Agent acquired")
-
-            # Call agent.extract with the PDF file path
-            extracted_result = agent.extract(file_path)
+            extracted_result = run_extract_v2_job(
+                api_key=self.api_key,
+                file_path=normalized_file_path,
+                fields=self.fields,
+                configuration_id=self.configuration_id,
+                tier=self.tier,
+                parse_tier=self.parse_tier,
+                extraction_target=self.extraction_target,
+                cite_sources=self.cite_sources,
+                project_id=self.project_id,
+                organization_id=self.organization_id,
+                poll_interval_seconds=self.poll_interval_seconds,
+                timeout_seconds=self.timeout_seconds,
+                logger=self.logger,
+            )
 
             # Update status: extraction completed
             self.status_manager.update_status(unique_id, "Extraction completed", step="Extraction completed")
@@ -203,7 +215,10 @@ class ExtractPdfTask(BaseTask):
 
             # Update context with metadata
             context["metadata"] = {
+                "extraction_configuration_id": self.configuration_id,
                 "extraction_agent_id": self.agent_id,
+                "extraction_job_id": getattr(extracted_result, "job_id", None),
+                "extraction_metadata": getattr(extracted_result, "extraction_metadata", {}),
                 "extraction_status": "success"
             }
 
@@ -239,8 +254,6 @@ class ExtractPdfTask(BaseTask):
         errors = []
         if not self.api_key:
             errors.append("API key is missing in configuration.")
-        if not self.agent_id:
-            errors.append("Agent ID is missing in configuration.")
         if not self.fields:
             errors.append("Fields are missing in configuration.")
 

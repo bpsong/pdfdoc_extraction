@@ -176,7 +176,7 @@ def test_end_to_end_workflow_execution(test_environment):
     if not os.getenv('LLAMA_CLOUD_API_KEY'):
         pytest.skip("LlamaCloud API key not available - skipping end-to-end test")
 
-    # Create a stub LlamaExtract client so the test does not require network access
+    # Create a stub LlamaCloud runner so the test does not require network access
     extracted_payload = {
         "Supplier name": "Liberty Insurance Pte Ltd",
         "Invoice amount": 70.0,
@@ -192,15 +192,13 @@ def test_end_to_end_workflow_execution(test_environment):
     class _DummyExtractionResult:
         def __init__(self, data):
             self.data = data
+            self.extraction_metadata = {}
+            self.job_id = "test-job"
 
     dummy_result = _DummyExtractionResult(extracted_payload)
-    dummy_agent = Mock()
-    dummy_agent.extract.return_value = dummy_result
-    dummy_client = Mock()
-    dummy_client.get_agent.return_value = dummy_agent
 
     final_status = None
-    with patch('standard_step.extraction.extract_pdf.LlamaExtract', return_value=dummy_client):
+    with patch('standard_step.extraction.extract_pdf.run_extract_v2_job', return_value=dummy_result):
         workflow_manager.trigger_workflow_for_file(str(sample_pdf), unique_id, original_filename, source)
 
         # Poll for completion (up to 120s)
@@ -224,7 +222,7 @@ def test_end_to_end_workflow_execution(test_environment):
 
     # Discover produced artifacts
     produced_json_files = sorted(data_dir.glob('*.json'))
-    assert produced_json_files, "No JSON files produced in data; the PDF may not have been sent to LlamaExtract."
+    assert produced_json_files, "No JSON files produced in data; the PDF may not have been sent to LlamaCloud."
     latest_json = max(produced_json_files, key=lambda p: p.stat().st_mtime)
     with open(latest_json, 'r', encoding='utf-8') as jf:
         produced = json.load(jf)

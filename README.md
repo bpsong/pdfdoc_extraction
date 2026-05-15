@@ -94,7 +94,7 @@ C:\Python313\python.exe -m pip install -r requirements.txt
 
 Key dependencies:
 - **FastAPI**: Modern web framework for the API and web interface
-- **Llama Cloud Services**: AI-powered document extraction
+- **LlamaCloud SDK (`llama-cloud`)**: AI-powered document extraction through Extract v2
 - **Prefect**: Workflow orchestration engine
 - **Pandas**: Data manipulation and CSV processing
 - **Uvicorn**: ASGI server for production deployment
@@ -123,9 +123,14 @@ authentication:
 tasks:
   extract_document_data:
     module: standard_step.extraction.extract_pdf_v2
-    class: ExtractPdfTask
+    class: ExtractPdfV2Task
     params:
       api_key: "your_llama_cloud_api_key"
+      # Optional: use a saved Extract v2 configuration from the LlamaCloud UI.
+      # If omitted, the task builds an inline schema from fields.
+      configuration_id: "your_extract_v2_configuration_id"
+      tier: "agentic"
+      extraction_target: "per_doc"
       fields:
         supplier_name:
           alias: "Supplier name"
@@ -145,6 +150,9 @@ tasks:
 pipeline:
   - extract_document_data
 ```
+
+For the phased SDK migration details, see
+[LlamaCloud Extract v2 Migration Plan](docs/llamacloud_extract_v2_migration.md).
 
 ### Environment Variables
 

@@ -184,22 +184,24 @@ flowchart LR
 ### 8.2. Standard Pipeline Tasks Details
 
 #### 8.2.1. `standard_step.extraction.extract_pdf`
--   **Purpose:** Extracts structured data from PDF documents using the LlamaExtract service.
+-   **Purpose:** Extracts structured data from PDF documents using LlamaCloud Extract v2 through the `llama-cloud` SDK.
 -   **Configuration:**
-    -   Requires `api_key` and `agent_id` for the LlamaExtract service.
+    -   Requires `api_key` for LlamaCloud.
+    -   Accepts optional `configuration_id` for a saved Extract v2 configuration from the LlamaCloud UI.
+    -   If `configuration_id` is omitted, builds an inline Extract v2 schema from `fields`.
     -   Dynamically creates a Pydantic model based on `fields` defined in the `config.yaml` (e.g., `invoice_amount`, `invoice_no`, `supplier`).
-    -   Supports `type` (e.g., `float`, `str`, `List[str]`) and `alias` for each field, allowing flexible mapping from LlamaExtract's output to desired field names.
+    -   Supports `type` (e.g., `float`, `str`, `List[str]`) and `alias` for each field, allowing flexible mapping from LlamaCloud Extract output to desired field names.
 -   **Configuration Source:** This task must obtain its configuration parameters from the centralized `ConfigManager` singleton at startup, which reads from `config.yaml`. It should not rely solely on parameters passed directly to the task.
 -   **Data Extraction:**
     -   Takes a `pdf_path` as input.
-    -   Uses the configured LlamaExtract agent to perform the extraction.
+    -   Uploads the PDF to LlamaCloud and creates an Extract v2 job.
 -   **Data Processing & Validation:**
     -   Handles raw extracted data, including potential `metadata`.
     -   Preprocesses data by filtering `None` values from lists if specified in the configuration (e.g., `List[str]`).
     -   Validates extracted data against the dynamically created Pydantic model, ensuring data integrity and type correctness.
     -   Logs validation errors.
 -   **Output:** Returns a dictionary with `data` (extracted fields) and `metadata` (if present).
--   **Error Handling:** Includes robust error handling for file not found, invalid paths, LlamaExtract client initialization failures, and data validation errors.
+-   **Error Handling:** Includes robust error handling for file not found, invalid paths, LlamaCloud client/job failures, and data validation errors.
 
 #### 8.2.2. `standard_step.storage.store_metadata_as_csv`
 -   **Purpose:** Stores extracted metadata into a CSV file.
@@ -331,10 +333,11 @@ logging:
 tasks:
   extract_document_data:
     module: standard_step.extraction.extract_pdf
-    class:  ExtractPdfTask
+      class:  ExtractPdfTask
     params:
       api_key:        "your llamacloud key"
-      agent_id:       "your lammaextract agent id not name"
+      configuration_id: "your Extract v2 configuration id"  # optional
+      tier:          "agentic"
       fields:
         supplier_name:
           alias: "Supplier name"
@@ -703,13 +706,13 @@ To ensure both watch folder and web upload sources trigger the dynamic Prefect w
 
 ---
 
-## 9.5 v2 Experimental Pipeline: LlamaExtract Array-of-Objects Support
+## 9.5 LlamaCloud Extract v2 Array-of-Objects Support
 
 ### 9.5.1 Overview
-The v2 experimental pipeline extends the system to handle LlamaExtract responses containing arrays of objects (e.g., invoice line items). This feature allows extraction of structured data where certain fields return lists of sub-objects, such as Items: [{Description, Quantity}, ...]. The v2 pipeline is implemented as parallel modules to the existing v1 pipeline, using a separate dev_config.yaml for safe testing without impacting production.
+The v2 pipeline handles LlamaCloud Extract v2 responses containing arrays of objects (e.g., invoice line items). This feature allows extraction of structured data where certain fields return lists of sub-objects, such as Items: [{Description, Quantity}, ...].
 
 ### 9.5.2 Goals
-- Enable extraction of array-of-objects from LlamaExtract responses without breaking existing scalar field extraction.
+- Enable extraction of array-of-objects from LlamaCloud Extract v2 responses without breaking existing scalar field extraction.
 - Normalize extracted line items into a consistent List[Any] structure under context["data"]["items"].
 - Provide flexible storage options: JSON preserving the list structure, and CSV with options for row-per-item or single-row with JSON column.
 - Maintain full backward compatibility with v1 pipeline; v2 is opt-in via configuration.
@@ -717,7 +720,7 @@ The v2 experimental pipeline extends the system to handle LlamaExtract responses
 ### 9.5.3 Schema Handling
 - **Discovery**: The extraction configuration (extraction.fields) marks fields as tables using `is_table: true` - uses the normalized field name as the context key.
 - **Normalization**: Array-of-objects are flattened into List[Any] with cleaned string values.
-- **Example LlamaExtract Response**:
+- **Example LlamaCloud Extract v2 Response**:
   ```json
   {
     "data": {

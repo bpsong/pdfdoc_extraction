@@ -47,12 +47,16 @@ class TestExtractPdfTask:
         MockStatusManager = setup_and_teardown
         MockStatusManager.status_updates = []
 
-        mock_llama_extract_instance = MagicMock()
-        mock_llama_extract_instance.get_agent.return_value.extract.return_value.data = {
+        sample_response = MagicMock()
+        sample_response.data = {
             "field1": "value1",
             "serial_numbers": ["123", None, "456"]
         }
-        monkeypatch.setattr("standard_step.extraction.extract_pdf.LlamaExtract", MagicMock(return_value=mock_llama_extract_instance))
+        sample_response.extraction_metadata = {}
+        monkeypatch.setattr(
+            "standard_step.extraction.extract_pdf.run_extract_v2_job",
+            MagicMock(return_value=sample_response),
+        )
 
         task = ExtractPdfTask(
             config_manager=self.config_manager,
@@ -76,8 +80,8 @@ class TestExtractPdfTask:
         assert MockStatusManager.status_updates[-1] == expected_end
 
     def test_extract_pdf(self, monkeypatch, setup_and_teardown):
-        mock_llama_extract_instance = MagicMock()
-        mock_llama_extract_instance.get_agent.return_value.extract.return_value.data = {
+        sample_response = MagicMock()
+        sample_response.data = {
             "supplier_name": "Test Supplier",
             "client_name": "Test Client",
             "client_address": "123 Test St",
@@ -88,7 +92,11 @@ class TestExtractPdfTask:
             "serial_numbers": ["SN123", None, "SN456"],
             "invoice_type": "Invoice",
         }
-        monkeypatch.setattr("standard_step.extraction.extract_pdf.LlamaExtract", MagicMock(return_value=mock_llama_extract_instance))
+        sample_response.extraction_metadata = {}
+        monkeypatch.setattr(
+            "standard_step.extraction.extract_pdf.run_extract_v2_job",
+            MagicMock(return_value=sample_response),
+        )
 
         unique_id = "test_invoice_id"
         context = {

@@ -111,14 +111,14 @@ class TestExtractPdfV2Task:
             "usage": {"total_tokens": 150, "input_tokens": 100, "output_tokens": 50}
         }
 
-        # Mock LlamaExtract
+        # Mock LlamaCloud Extract v2
         mock_agent = MagicMock()
         mock_agent.extract.return_value = sample_response
 
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         # Test context
         context = {
@@ -217,7 +217,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
         task = ExtractPdfV2Task(config_manager=self.config_manager)
@@ -255,7 +255,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
         task = ExtractPdfV2Task(config_manager=self.config_manager)
@@ -277,10 +277,8 @@ class TestExtractPdfV2Task:
 
     def test_invalid_pdf_path(self, monkeypatch):
         """Test error handling for invalid PDF file path."""
-        # Mock the LlamaExtract to avoid actual API calls
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = MagicMock()
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        # Mock the LlamaCloud runner to avoid actual API calls
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock())
 
         context = {
             "id": "test-uuid",
@@ -305,15 +303,10 @@ class TestExtractPdfV2Task:
     def test_api_failure(self, monkeypatch):
         """Test error handling when LlamaCloud API fails."""
         # Mock API to raise exception
-        def mock_extract(*args, **kwargs):
-            raise Exception("API connection failed")
-
-        mock_agent = MagicMock()
-        mock_agent.extract.side_effect = mock_extract
-        mock_client = MagicMock()
-        mock_client.get_agent.return_value = mock_agent
-
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr(
+            "standard_step.extraction.extract_pdf_v2.run_extract_v2_job",
+            MagicMock(side_effect=Exception("API connection failed")),
+        )
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
         task = ExtractPdfV2Task(config_manager=self.config_manager)
@@ -349,7 +342,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
         task = ExtractPdfV2Task(config_manager=self.config_manager)
@@ -394,7 +387,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
         task = ExtractPdfV2Task(config_manager=self.config_manager)
@@ -461,7 +454,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
         task = ExtractPdfV2Task(config_manager=self.config_manager)
@@ -498,7 +491,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         # Use custom config with int and float types for this test
         custom_config = {
@@ -645,7 +638,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         # Custom config with bool fields
         bool_config = {
@@ -738,7 +731,7 @@ class TestExtractPdfV2Task:
         mock_client = MagicMock()
         mock_client.get_agent.return_value = mock_agent
 
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.LlamaExtract", MagicMock(return_value=mock_client))
+        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         # Custom config with int fields
         int_config = {

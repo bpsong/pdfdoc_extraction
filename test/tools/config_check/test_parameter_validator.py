@@ -135,13 +135,13 @@ def test_extraction_requires_api_key():
 
     assert any(issue.code == "param-extraction-missing-api-key" for issue in result.errors)
 
-def test_extraction_requires_agent_id():
+def test_extraction_rejects_blank_configuration_id():
     tasks = _base_tasks()
-    tasks["extract_metadata"]["params"]["agent_id"] = "   "
+    tasks["extract_metadata"]["params"]["configuration_id"] = "   "
 
     result = validate_parameters({"tasks": tasks})
 
-    assert any(issue.code == "param-extraction-missing-agent-id" for issue in result.errors)
+    assert any(issue.code == "param-extraction-invalid-configuration-id" for issue in result.errors)
 
 def test_extraction_rejects_blank_api_key():
     tasks = _base_tasks()
@@ -151,7 +151,7 @@ def test_extraction_rejects_blank_api_key():
 
     assert any(issue.code == "param-extraction-missing-api-key" for issue in result.errors)
 
-def test_custom_extraction_requires_credentials():
+def test_custom_extraction_accepts_inline_schema_without_configuration_id():
     tasks = _base_tasks()
     tasks["custom_extract"] = {
         "module": "custom_step.extraction.invoice_task",
@@ -169,11 +169,7 @@ def test_custom_extraction_requires_credentials():
 
     result = validate_parameters({"tasks": tasks})
 
-    assert any(
-        issue.code == "param-extraction-missing-agent-id"
-        and issue.path == "tasks.custom_extract.params.agent_id"
-        for issue in result.errors
-    )
+    assert not any(issue.path.startswith("tasks.custom_extract.params") for issue in result.errors)
 
 
 def test_multiple_table_fields_emit_warning():
@@ -575,7 +571,6 @@ def test_extraction_without_module_requires_credentials():
     result_missing_module = validate_parameters({"tasks": tasks_missing_module})
     error_codes_missing_module = {issue.code for issue in result_missing_module.errors}
     assert "param-extraction-missing-api-key" in error_codes_missing_module
-    assert "param-extraction-missing-agent-id" in error_codes_missing_module
 
     tasks_module_none = {
         "adhoc_extraction": {
@@ -588,7 +583,6 @@ def test_extraction_without_module_requires_credentials():
     result_module_none = validate_parameters({"tasks": tasks_module_none})
     error_codes_module_none = {issue.code for issue in result_module_none.errors}
     assert "param-extraction-missing-api-key" in error_codes_module_none
-    assert "param-extraction-missing-agent-id" in error_codes_module_none
 
 
 def test_extraction_with_unknown_module_requires_credentials():
@@ -611,4 +605,3 @@ def test_extraction_with_unknown_module_requires_credentials():
     result = validate_parameters({"tasks": tasks})
     error_codes = {issue.code for issue in result.errors}
     assert "param-extraction-missing-api-key" in error_codes
-    assert "param-extraction-missing-agent-id" in error_codes

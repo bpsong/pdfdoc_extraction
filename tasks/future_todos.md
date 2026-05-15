@@ -5,7 +5,7 @@
 
 ## Upcoming Enhancements for config-check Tool
 
-- [x] Add module-aware extraction validation (standard_step.extraction.*) so config-check enforces presence of `api_key` and `agent_id` before runtime.
+- [x] Add module-aware extraction validation (standard_step.extraction.*) so config-check enforces presence of `api_key` before runtime and validates optional LlamaCloud Extract v2 `configuration_id` when provided.
 - [x] Have config-check warn when more than one extraction field is marked `is_table: true`, reflecting the single-table limitation baked into v2 storage tasks.
 - [x] Teach config-check the `store_file_to_localdrive` schema (require `files_dir`/`filename`, validate types) to stop runtime-only failures.
 - [x] Allow nested `storage.{data_dir, filename}` blocks for v2 storage tasks and fall back to top-level params; flag unknown keys for clarity.
@@ -53,7 +53,7 @@
 - [x] **Performance Impact Analysis**: Flag configurations that might cause performance issues (e.g., too many extraction fields, overly complex rules clauses)
 - [x] **Security Validation**: Check for potential security issues in file paths, ensure proper path traversal protection in directory configurations
 
-## Completed v2 LlamaExtract Array-of-Objects Implementation
+## Completed LlamaCloud Extract v2 Array-of-Objects Implementation
 
 ### v2 Migration Checklist . (Completed)
 - [x] **Validate tests**: All v2 unit tests pass (extraction, storage JSON/CSV, edge cases)

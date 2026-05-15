@@ -1,7 +1,7 @@
-"""V2 PDF extraction task with array-of-objects support for LlamaExtract responses.
+"""PDF extraction task with array-of-objects support for LlamaCloud Extract v2 responses.
 
 This module provides ExtractPdfV2Task, an enhanced pipeline step that handles
-both scalar fields and table fields (arrays of objects) from LlamaExtract
+both scalar fields and table fields (arrays of objects) from LlamaCloud Extract
 responses. It builds upon the v1 implementation but adds support for extracting
 structured data from tables and arrays within PDF documents.
 
@@ -16,7 +16,7 @@ Key Features:
 Notes:
     - Configuration is loaded from 'tasks.extract_document_data.params' section in config.yaml
     - Supports only one table field per extraction (PRD limitation)
-    - Uses LlamaExtract service for PDF processing
+    - Uses LlamaCloud Extract v2 for PDF processing
     - Normalizes field names to snake_case for consistency
     - Filters None values from lists when applicable
 """
@@ -36,14 +36,14 @@ from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
 from modules.status_manager import StatusManager
-from llama_cloud_services import LlamaExtract
+from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
 
 
 class ExtractPdfV2Task(BaseTask):
     """V2 PDF extraction task with array-of-objects support.
 
     This task extends the v1 extraction functionality to handle table fields
-    containing arrays of objects. It processes LlamaExtract responses that
+    containing arrays of objects. It processes LlamaCloud Extract responses that
     include both scalar fields and structured table data.
 
     The task follows the standard task creation guidelines with proper
@@ -53,7 +53,7 @@ class ExtractPdfV2Task(BaseTask):
         config_manager (ConfigManager): Central configuration manager instance.
         status_manager (StatusManager): Status tracking manager instance.
         api_key (str): LlamaCloud API key for authentication.
-        agent_id (str): LlamaExtract agent identifier.
+        configuration_id (Optional[str]): Saved LlamaCloud Extract v2 configuration identifier.
         fields (Dict[str, Any]): Field configuration including scalar and table fields.
         table_field_key (Optional[str]): Key of the table field (marked with is_table: true).
         item_fields (Dict[str, Any]): Subfield configuration for the table field.
@@ -62,7 +62,9 @@ class ExtractPdfV2Task(BaseTask):
     Configuration:
         The task loads configuration from the 'tasks.extract_document_data.params' section including:
         - api_key: LlamaCloud API authentication key
-        - agent_id: LlamaExtract agent identifier
+        - configuration_id: Optional saved LlamaCloud Extract v2 configuration identifier
+        - tier: Optional Extract v2 tier used for inline configuration
+        - parse_tier: Optional Parse tier used for inline configuration
         - fields: Field definitions with types, aliases, and table config
 
     Example:
@@ -71,7 +73,7 @@ class ExtractPdfV2Task(BaseTask):
           extract_document_data:
             params:
               api_key: "your_llama_cloud_api_key"
-              agent_id: "your_agent_id"
+              configuration_id: "your_configuration_id"
               fields:
                 supplier_name:
                   alias: "Supplier name"
@@ -94,7 +96,7 @@ class ExtractPdfV2Task(BaseTask):
 
         Args:
             config_manager: The application configuration manager.
-            **params: Runtime parameters including api_key, agent_id, fields.
+            **params: Runtime parameters including api_key, configuration_id, fields.
         """
         super().__init__(config_manager=config_manager, **params)
         self.config_manager = config_manager
@@ -119,7 +121,7 @@ class ExtractPdfV2Task(BaseTask):
         Side Effects:
             - Initializes context with standard keys
             - Updates StatusManager with task started status
-            - Loads and validates api_key, agent_id, and fields from config
+            - Loads and validates api_key and fields from config
             - Finds and stores table field configuration
         """
         try:
@@ -134,7 +136,16 @@ class ExtractPdfV2Task(BaseTask):
 
             # Extract required parameters
             self.api_key = params.get('api_key')
+            self.configuration_id = params.get('configuration_id')
             self.agent_id = params.get('agent_id')
+            self.tier = params.get('tier', 'agentic')
+            self.parse_tier = params.get('parse_tier')
+            self.extraction_target = params.get('extraction_target', 'per_doc')
+            self.cite_sources = params.get('cite_sources')
+            self.project_id = params.get('project_id')
+            self.organization_id = params.get('organization_id')
+            self.poll_interval_seconds = float(params.get('poll_interval_seconds', 2.0))
+            self.timeout_seconds = float(params.get('timeout_seconds', 1800.0))
             self.fields = params.get('fields', {})
 
             # Update status with correct format
@@ -190,7 +201,7 @@ class ExtractPdfV2Task(BaseTask):
             max_retries: Maximum number of retry attempts.
 
         Returns:
-            Extracted result from LlamaExtract API.
+            Extracted result from LlamaCloud Extract v2 API.
 
         Raises:
             TaskError: If all retry attempts fail.
@@ -202,12 +213,21 @@ class ExtractPdfV2Task(BaseTask):
             try:
                 self.logger.debug(f"Extraction attempt {attempt + 1}/{max_retries} for {file_path}")
 
-                # Initialize LlamaExtract client and agent
-                client = LlamaExtract(api_key=self.api_key)
-                agent = client.get_agent(id=self.agent_id)
-
-                # Perform extraction
-                extracted_result = agent.extract(file_path)
+                extracted_result = run_extract_v2_job(
+                    api_key=self.api_key,
+                    file_path=file_path,
+                    fields=self.fields,
+                    configuration_id=self.configuration_id,
+                    tier=self.tier,
+                    parse_tier=self.parse_tier,
+                    extraction_target=self.extraction_target,
+                    cite_sources=self.cite_sources,
+                    project_id=self.project_id,
+                    organization_id=self.organization_id,
+                    poll_interval_seconds=self.poll_interval_seconds,
+                    timeout_seconds=self.timeout_seconds,
+                    logger=self.logger,
+                )
 
                 self.logger.info(f"Extraction successful on attempt {attempt + 1}")
                 return extracted_result
@@ -231,7 +251,7 @@ class ExtractPdfV2Task(BaseTask):
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """Execute PDF extraction with array-of-objects support.
 
-        Extracts structured data from PDF using LlamaExtract service, handling
+        Extracts structured data from PDF using LlamaCloud Extract v2, handling
         both scalar fields and table fields (arrays of objects). Processes
         the response, normalizes field names, applies type conversions, and
         preserves metadata.
@@ -275,7 +295,8 @@ class ExtractPdfV2Task(BaseTask):
                 raise TaskError(error_msg)
             normalized_file_path = windows_long_path(file_path)
 
-            self.logger.info(f"Starting v2 extraction from {normalized_file_path} using agent {self.agent_id}")
+            config_label = self.configuration_id or "inline field schema"
+            self.logger.info(f"Starting v2 extraction from {normalized_file_path} using {config_label}")
 
             # Retry logic for API calls
             extracted_result = self._extract_with_retry(normalized_file_path)
@@ -303,7 +324,9 @@ class ExtractPdfV2Task(BaseTask):
 
             # Preserve metadata
             context["metadata"] = {
+                "extraction_configuration_id": self.configuration_id,
                 "extraction_agent_id": self.agent_id,
+                "extraction_job_id": getattr(extracted_result, "job_id", None),
                 "extraction_metadata": metadata,
                 "extraction_status": "success"
             }
@@ -380,14 +403,10 @@ class ExtractPdfV2Task(BaseTask):
         # Call parent validation
         super().validate_required_fields(context)
 
-        # Validate API key and agent ID are non-empty
+        # Validate API key is non-empty. A saved configuration is optional because
+        # the task can build an inline Extract v2 configuration from fields.
         if not self.api_key:
             error_msg = "API key not found in configuration"
-            self.logger.error(error_msg)
-            raise TaskError(error_msg)
-
-        if not self.agent_id:
-            error_msg = "Agent ID not found in configuration"
             self.logger.error(error_msg)
             raise TaskError(error_msg)
 
@@ -444,7 +463,7 @@ class ExtractPdfV2Task(BaseTask):
         type conversion, and structural transformations as needed.
 
         Args:
-            data: Raw extracted data from LlamaExtract response.
+            data: Raw extracted data from LlamaCloud Extract response.
             table_field_key: Key name of the table field in configuration.
             table_field_alias: Alias name of the table field in the data.
 

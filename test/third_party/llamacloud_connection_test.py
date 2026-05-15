@@ -2,7 +2,7 @@ import logging
 import pytest
 import yaml
 from pathlib import Path
-from llama_cloud_services import LlamaExtract
+from llama_cloud import LlamaCloud
 
 @pytest.fixture
 def test_config():
@@ -17,20 +17,27 @@ def api_key(test_config):
     return test_config['llamacloud']['api_key']
 
 @pytest.fixture
-def agent_id(test_config):
-    """Fixture to provide LlamaCloud agent ID from test config"""
-    return test_config['llamacloud']['agent_id']
+def configuration_id(test_config):
+    """Fixture to provide optional LlamaCloud Extract v2 configuration ID."""
+    return test_config.get('llamacloud', {}).get('configuration_id')
 
-def test_llamacloud_connection(api_key: str, agent_id: str):
+def test_llamacloud_connection(api_key: str, configuration_id: str | None):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("LlamaCloudConnectionTest")
 
     try:
-        logger.info("Initializing LlamaExtract client...")
-        client = LlamaExtract(api_key=api_key)
-        logger.info(f"Getting agent with ID: {agent_id}")
-        agent = client.get_agent(id=agent_id)
-        logger.info(f"Agent retrieved: {agent}")
+        logger.info("Initializing LlamaCloud client...")
+        client = LlamaCloud(api_key=api_key)
+
+        if configuration_id:
+            logger.info("Retrieving Extract v2 configuration...")
+            configuration = client.configurations.retrieve(configuration_id)
+            logger.info(f"Configuration retrieved: {configuration.id}")
+        else:
+            logger.info("Listing Extract v2 configurations...")
+            configurations = client.configurations.list(product_type=["extract_v2"], page_size=1)
+            first_configuration = next(iter(configurations), None)
+            logger.info(f"First Extract v2 configuration: {first_configuration}")
 
         # Optionally, test a simple extraction call with a dummy or real PDF path if available
         # pdf_path = "path/to/sample.pdf"
@@ -49,5 +56,5 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     API_KEY = config['llamacloud']['api_key']
-    AGENT_ID = config['llamacloud']['agent_id']
-    test_llamacloud_connection(API_KEY, AGENT_ID)
+    CONFIGURATION_ID = config.get('llamacloud', {}).get('configuration_id')
+    test_llamacloud_connection(API_KEY, CONFIGURATION_ID)

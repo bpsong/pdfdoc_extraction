@@ -22,7 +22,7 @@
 - [`web/static/css/style.css`](web/static/css/style.css:1) - Stylesheets for the web interface, enhanced with comprehensive modal dialog styling including responsive grid layouts, timeline visualization, and fallback inline styles.
 - [`web/static/js/status.js`](web/static/js/status.js:1) - JavaScript for dynamic status updates on the dashboard.
 - [`standard_step/extraction/extract_pdf.py`](standard_step/extraction/extract_pdf.py:1) - Implementation of the standard PDF data extraction task.
-- [`standard_step/extraction/extract_pdf_v2.py`](standard_step/extraction/extract_pdf_v2.py:1) - v2 extraction task supporting LlamaExtract array-of-objects (line items).
+- [`standard_step/extraction/extract_pdf_v2.py`](standard_step/extraction/extract_pdf_v2.py:1) - v2 extraction task supporting LlamaCloud Extract array-of-objects (line items).
 - [`standard_step/storage/store_metadata_as_csv.py`](standard_step/storage/store_metadata_as_csv.py:1) - Standard task for storing extracted metadata as CSV.
 - [`standard_step/storage/store_metadata_as_json.py`](standard_step/storage/store_metadata_as_json.py:1) - Standard task for storing extracted metadata as JSON.
 - [`standard_step/storage/store_metadata_as_json_v2.py`](standard_step/storage/store_metadata_as_json_v2.py:1) - v2 JSON storage task preserving array-of-objects structure.
@@ -51,7 +51,7 @@
 - [`test/third_party/llamacloud_connection_test.py`](test/third_party/llamacloud_connection_test.py:1) - Tests for third-party service connections (LlamaCloud).
 - [`tools/generate_password_hash.py`](tools/generate_password_hash.py:1) - CLI utility to generate bcrypt password hashes for configuration files.
 - [`dev_config.yaml`](dev_config.yaml:1) - Development configuration for testing v2 features without impacting production config.yaml.
-- [`docs/design_architecture.md`](docs/design_architecture.md:1) - Updated with v2 LlamaExtract array-of-objects support section.
+- [`docs/design_architecture.md`](docs/design_architecture.md:1) - Updated with LlamaCloud Extract v2 array-of-objects support section.
 - [`docs/user_guide.md`](docs/user_guide.md:1) - Updated with v2 configuration guide and migration instructions.
 - [`tasks/future_todos.md`](tasks/future_todos.md:1) - Updated with v2 migration checklist and completed implementation notes.
 
@@ -168,7 +168,7 @@
   - [x] 7.16 Enhance empty state design with improved messaging and visual appeal.
   - [x] 7.17 Add comprehensive documentation with JSDoc comments and technical explanations.
 
-- [x] 8.0 Implement v2 LlamaExtract Array-of-Objects Support
+- [x] 8.0 Implement LlamaCloud Extract v2 Array-of-Objects Support
   - [x] 8.1 Create [`standard_step/extraction/extract_pdf_v2.py`](standard_step/extraction/extract_pdf_v2.py:1) that:
     - Accepts LlamaCloud schema where fields may be arrays of objects (e.g., Items -> [{Description, Quantity}, ...]).
     - Discovers array field name via extraction.fields config (no hardcoding; use required 'is_table: true' - uses normalized field name as context key).

@@ -325,13 +325,24 @@ def _validate_extraction_params(
             errors,
             code='param-extraction-missing-api-key',
         )
-        _validate_extraction_credential(
-            params,
-            params_path,
-            'agent_id',
-            errors,
-            code='param-extraction-missing-agent-id',
-        )
+
+        configuration_id = params.get('configuration_id')
+        if configuration_id is not None and (
+            not isinstance(configuration_id, str) or not configuration_id.strip()
+        ):
+            errors.append(
+                ParameterIssue(
+                    path=f"{params_path}.configuration_id",
+                    message=(
+                        "If provided, extraction task 'configuration_id' must be a non-empty string."
+                    ),
+                    code='param-extraction-invalid-configuration-id',
+                    details={
+                        'config_key': f"{params_path}.configuration_id",
+                        'credential': 'configuration_id',
+                    },
+                )
+            )
 
     fields = params.get('fields')
     if not isinstance(fields, dict) or not fields:
