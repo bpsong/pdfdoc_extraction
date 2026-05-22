@@ -134,7 +134,7 @@ def test_validator_provides_parameter_suggestion(tmp_path):
     assert "Set data_dir" in param_issue.suggestion
 
 
-def test_validator_warns_on_multiple_table_fields(tmp_path):
+def test_validator_errors_on_multiple_table_fields(tmp_path):
     uploads = tmp_path / "uploads"
     uploads.mkdir()
     watch = tmp_path / "watch"
@@ -176,14 +176,14 @@ def test_validator_warns_on_multiple_table_fields(tmp_path):
     validator = ConfigValidator(base_dir=tmp_path)
     result = validator.validate_config_data(config)
 
-    warning = next(
-        (message for message in result.warnings if message.code == "param-extraction-multiple-tables"),
+    error = next(
+        (message for message in result.errors if message.code == "param-extraction-multiple-tables"),
         None,
     )
 
-    assert warning is not None
-    assert warning.suggestion is not None
-    assert "Leave only one field" in warning.suggestion
+    assert error is not None
+    assert error.suggestion is not None
+    assert "Leave only one field" in error.suggestion
 
 
 def test_validator_provides_unknown_token_scalar_hint(tmp_path):

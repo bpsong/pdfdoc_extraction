@@ -33,9 +33,10 @@ Functions:
     _validate_required_string(): Validates required string parameters
 
 Type System:
-    - Base types: str, int, float, bool, Any
+    - Base types: str, int, float, bool, Decimal, Any
     - Optional types: Optional[str], Optional[int], etc.
     - List types: List[str], List[Any], etc.
+    - Dict types: Dict[str, Any], Dict[str, str], etc.
     - Table fields with nested item_fields for complex data structures
 
 Windows Compatibility:
@@ -56,7 +57,19 @@ from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 from .pipeline_validator import MODULE_PREFIX_CLASSIFICATION
 from .rules_task_validator import validate_rules_task
 
-_ALLOWED_BASE_TYPES = {"str", "int", "float", "bool", "Any"}
+_ALLOWED_BASE_TYPES = {"str", "int", "float", "bool", "Decimal", "Any"}
+_EXTRACTION_OPTIONAL_STRING_PARAMS = (
+    "tier",
+    "parse_tier",
+    "extraction_target",
+    "project_id",
+    "organization_id",
+)
+_EXTRACTION_OPTIONAL_BOOL_PARAMS = ("cite_sources",)
+_EXTRACTION_OPTIONAL_POSITIVE_NUMBER_PARAMS = (
+    "poll_interval_seconds",
+    "timeout_seconds",
+)
 _RULES_REQUIRED_KEYS = ("reference_file", "update_field")
 _RULES_MIN_CLAUSES = 1
 _RULES_MAX_CLAUSES = 5
@@ -344,6 +357,8 @@ def _validate_extraction_params(
                 )
             )
 
+        _validate_extraction_runtime_options(params, params_path, errors)
+
     fields = params.get('fields')
     if not isinstance(fields, dict) or not fields:
         errors.append(
@@ -366,12 +381,12 @@ def _validate_extraction_params(
         _validate_field_spec(spec, field_path, errors, field_name)
 
     if len(table_fields) > 1:
-        warnings.append(
+        errors.append(
             ParameterIssue(
                 path=f"{params_path}.fields",
                 message=(
-                    "Multiple extraction fields are marked is_table: true; v2 storage tasks currently "
-                    "support only a single table payload."
+                    "Multiple extraction fields are marked is_table: true; ExtractPdfV2Task "
+                    "supports only a single table payload."
                 ),
                 code="param-extraction-multiple-tables",
                 details={
@@ -379,6 +394,42 @@ def _validate_extraction_params(
                     "fields": table_fields,
                 },
             )
+        )
+
+
+def _validate_extraction_runtime_options(
+    params: Dict[str, Any],
+    params_path: str,
+    errors: List[ParameterIssue],
+) -> None:
+    """Validate optional Extract v2 runtime settings used by extraction tasks."""
+
+    for key in _EXTRACTION_OPTIONAL_STRING_PARAMS:
+        _validate_optional_string_param(
+            params,
+            params_path,
+            key,
+            errors,
+            code=f"param-extraction-invalid-{key.replace('_', '-')}",
+            allow_blank=False,
+        )
+
+    for key in _EXTRACTION_OPTIONAL_BOOL_PARAMS:
+        _validate_optional_bool_param(
+            params,
+            params_path,
+            key,
+            errors,
+            code=f"param-extraction-invalid-{key.replace('_', '-')}",
+        )
+
+    for key in _EXTRACTION_OPTIONAL_POSITIVE_NUMBER_PARAMS:
+        _validate_optional_positive_number_param(
+            params,
+            params_path,
+            key,
+            errors,
+            code=f"param-extraction-invalid-{key.replace('_', '-')}",
         )
 
 
@@ -669,13 +720,17 @@ def _validate_optional_string_param(
     errors: List[ParameterIssue],
     *,
     code: Optional[str] = None,
+    allow_blank: bool = True,
 ) -> None:
     """Validate optional string parameter."""
     if not isinstance(params, dict):
         return
 
     value = params.get(key)
-    if value is not None and not isinstance(value, str):
+    if value is None:
+        return
+
+    if not isinstance(value, str) or (not allow_blank and not value.strip()):
         errors.append(
             ParameterIssue(
                 path=f"{params_path}.{key}",
@@ -706,6 +761,33 @@ def _validate_optional_bool_param(
                 message=f"Parameter '{key}' must be a boolean when provided",
                 code=code or "param-optional-invalid-type",
                 details={"config_key": f"{params_path}.{key}", "expected_type": "bool"},
+            )
+        )
+
+
+def _validate_optional_positive_number_param(
+    params: Any,
+    params_path: str,
+    key: str,
+    errors: List[ParameterIssue],
+    *,
+    code: Optional[str] = None,
+) -> None:
+    """Validate optional positive integer/float parameter."""
+    if not isinstance(params, dict):
+        return
+
+    value = params.get(key)
+    if value is None:
+        return
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.{key}",
+                message=f"Parameter '{key}' must be a positive number when provided",
+                code=code or "param-optional-invalid-number",
+                details={"config_key": f"{params_path}.{key}", "expected_type": "positive number"},
             )
         )
 
@@ -796,6 +878,38 @@ def _is_valid_field_type(type_value: str) -> bool:
 
     if type_value.startswith("List[") and type_value.endswith("]"):
         inner = type_value[len("List[") : -1]
-        return inner in _ALLOWED_BASE_TYPES or inner == "Any" or _is_valid_field_type(inner)
+        return inner in _ALLOWED_BASE_TYPES or _is_valid_field_type(inner)
+
+    if type_value.startswith("Dict[") and type_value.endswith("]"):
+        inner = type_value[len("Dict[") : -1]
+        parts = _split_top_level_type_args(inner)
+        if len(parts) != 2:
+            return False
+        key_type, value_type = parts
+        return _is_valid_field_type(key_type) and _is_valid_field_type(value_type)
 
     return False
+
+
+def _split_top_level_type_args(type_args: str) -> List[str]:
+    """Split comma-separated type arguments without splitting nested types."""
+    parts: List[str] = []
+    start = 0
+    depth = 0
+
+    for index, char in enumerate(type_args):
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth < 0:
+                return []
+        elif char == "," and depth == 0:
+            parts.append(type_args[start:index].strip())
+            start = index + 1
+
+    if depth != 0:
+        return []
+
+    parts.append(type_args[start:].strip())
+    return [part for part in parts if part]

@@ -172,7 +172,75 @@ def test_custom_extraction_accepts_inline_schema_without_configuration_id():
     assert not any(issue.path.startswith("tasks.custom_extract.params") for issue in result.errors)
 
 
-def test_multiple_table_fields_emit_warning():
+def test_extraction_accepts_current_v2_runtime_options():
+    tasks = _base_tasks()
+    tasks["extract_metadata"]["params"].update(
+        {
+            "tier": "agentic",
+            "parse_tier": "agentic",
+            "extraction_target": "per_doc",
+            "cite_sources": True,
+            "project_id": "project-test",
+            "organization_id": "org-test",
+            "poll_interval_seconds": 2.0,
+            "timeout_seconds": 1800.0,
+        }
+    )
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert result.errors == []
+
+
+def test_extraction_rejects_invalid_v2_runtime_options():
+    tasks = _base_tasks()
+    tasks["extract_metadata"]["params"].update(
+        {
+            "tier": "",
+            "parse_tier": 123,
+            "extraction_target": None,
+            "cite_sources": "true",
+            "project_id": "project-test",
+            "organization_id": 123,
+            "poll_interval_seconds": 0,
+            "timeout_seconds": "1800",
+        }
+    )
+
+    result = validate_parameters({"tasks": tasks})
+    codes = {issue.code for issue in result.errors}
+
+    assert "param-extraction-invalid-tier" in codes
+    assert "param-extraction-invalid-parse-tier" in codes
+    assert "param-extraction-invalid-cite-sources" in codes
+    assert "param-extraction-invalid-organization-id" in codes
+    assert "param-extraction-invalid-poll-interval-seconds" in codes
+    assert "param-extraction-invalid-timeout-seconds" in codes
+    assert "param-extraction-invalid-extraction-target" not in codes
+
+
+def test_extraction_field_types_match_v2_task_type_parser():
+    tasks = _base_tasks()
+    fields = tasks["extract_metadata"]["params"]["fields"]
+    fields["total_amount"] = {
+        "alias": "Total Amount",
+        "type": "Decimal",
+    }
+    fields["metadata"] = {
+        "alias": "Metadata",
+        "type": "Dict[str, Any]",
+    }
+    fields["nested_metadata"] = {
+        "alias": "Nested Metadata",
+        "type": "Optional[List[Dict[str, Any]]]",
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert result.errors == []
+
+
+def test_multiple_table_fields_emit_error():
     tasks = _base_tasks()
     fields = tasks["extract_metadata"]["params"]["fields"]
     fields["line_items"] = {
@@ -200,8 +268,7 @@ def test_multiple_table_fields_emit_warning():
 
     result = validate_parameters({"tasks": tasks})
 
-    assert result.errors == []
-    assert any(issue.code == "param-extraction-multiple-tables" for issue in result.warnings)
+    assert any(issue.code == "param-extraction-multiple-tables" for issue in result.errors)
 
 
 def test_storage_requires_data_dir_and_filename():
