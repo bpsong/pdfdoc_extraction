@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DocFlow AI – Review Queue</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .nav-link { display:flex; align-items:center; gap:0.75rem; padding:0.5rem 1rem; border-radius:0.5rem; font-size:0.875rem; font-weight:500; color:rgba(0,0,0,0.55); transition:background 0.15s, color 0.15s; }
+    .nav-link:hover { background:rgba(0,0,0,0.06); }
+    .nav-link.active { background:rgba(99,102,241,0.12); color:#4f46e5; }
+  </style>
+</head>
+<body class="bg-base-200 min-h-screen">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-56 bg-base-100 border-r border-base-200 flex flex-col py-4 px-3 gap-1 shrink-0">
+      <div class="flex items-center gap-2 px-4 py-3 mb-2">
+        <div class="w-7 h-7 bg-primary rounded-md flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <span class="font-bold text-base">DocFlow AI</span>
+      </div>
+      <a href="index.html" class="nav-link">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+        Upload &amp; Process
+      </a>
+      <a href="review-queue.html" class="nav-link active">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+        Review Queue
+      </a>
+      <a href="#" class="nav-link">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        Reports
+      </a>
+      <a href="#" class="nav-link">
+        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        Settings
+      </a>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 flex flex-col">
+      <header class="bg-base-100 border-b border-base-200 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h1 class="text-lg font-bold">Review Queue <span class="text-base-content/40 font-normal text-base">(Low Confidence)</span></h1>
+          <p class="text-sm text-base-content/60">Documents with fields below 90% confidence are sent to human operators.</p>
+        </div>
+        <button class="btn btn-ghost btn-circle">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        </button>
+      </header>
+
+      <div class="flex-1 p-6 flex flex-col gap-4">
+        <!-- Filter tabs -->
+        <div class="flex items-center gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm">All <span class="badge badge-sm ml-1">4</span></button>
+          <button class="btn btn-outline btn-sm">Low Confidence <span class="badge badge-sm ml-1">6</span></button>
+          <button class="btn btn-outline btn-sm">In Review <span class="badge badge-sm ml-1">1</span></button>
+          <button class="btn btn-outline btn-sm">Completed <span class="badge badge-sm ml-1">2</span></button>
+          <button class="btn btn-outline btn-sm gap-1 ml-auto">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"/></svg>
+            Filters
+          </button>
+        </div>
+
+        <!-- Search -->
+        <div class="relative">
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input type="text" placeholder="Search documents..." class="input input-bordered input-sm w-full pl-9" />
+        </div>
+
+        <!-- Queue table -->
+        <div class="card bg-base-100 shadow-sm flex-1">
+          <div class="card-body p-0">
+            <table class="table table-sm">
+              <thead>
+                <tr class="text-xs text-base-content/50 border-b border-base-200">
+                  <th class="px-4 py-3">Document</th>
+                  <th>Type</th>
+                  <th>Low Confidence Fields</th>
+                  <th>Lowest Confidence</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="hover cursor-pointer" onclick="window.location='human-review.html'">
+                  <td class="px-4 py-3 text-sm font-medium text-primary">INV-023.pdf</td>
+                  <td class="text-sm">Invoice</td>
+                  <td class="text-sm">Total Amount</td>
+                  <td class="text-sm">72%</td>
+                  <td><span class="badge badge-warning badge-sm">Pending</span></td>
+                </tr>
+                <tr class="hover cursor-pointer" onclick="window.location='human-review.html'">
+                  <td class="px-4 py-3 text-sm font-medium text-primary">DEL-010.pdf</td>
+                  <td class="text-sm">Delivery Note</td>
+                  <td class="text-sm">Delivery Date</td>
+                  <td class="text-sm">78%</td>
+                  <td><span class="badge badge-warning badge-sm">Pending</span></td>
+                </tr>
+                <tr class="hover cursor-pointer" onclick="window.location='human-review.html'">
+                  <td class="px-4 py-3 text-sm font-medium text-primary">PO-045.pdf</td>
+                  <td class="text-sm">Purchase Order</td>
+                  <td class="text-sm">Total Amount</td>
+                  <td class="text-sm">70%</td>
+                  <td><span class="badge badge-warning badge-sm">Pending</span></td>
+                </tr>
+                <tr class="hover cursor-pointer" onclick="window.location='human-review.html'">
+                  <td class="px-4 py-3 text-sm font-medium text-primary">RCPT-002.pdf</td>
+                  <td class="text-sm">Receipt</td>
+                  <td class="text-sm">Due Date</td>
+                  <td class="text-sm">68%</td>
+                  <td><span class="badge badge-warning badge-sm">Pending</span></td>
+                </tr>
+                <tr class="hover cursor-pointer" onclick="window.location='human-review.html'">
+                  <td class="px-4 py-3 text-sm font-medium text-primary">RCPT-041.pdf</td>
+                  <td class="text-sm">Receipt</td>
+                  <td class="text-sm">Merchant Name</td>
+                  <td class="text-sm">65%</td>
+                  <td><span class="badge badge-warning badge-sm">Pending</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <!-- Pagination -->
+            <div class="flex justify-center gap-1 py-4 border-t border-base-200">
+              <button class="btn btn-primary btn-sm btn-square">1</button>
+              <button class="btn btn-outline btn-sm btn-square">2</button>
+              <button class="btn btn-outline btn-sm btn-square">›</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

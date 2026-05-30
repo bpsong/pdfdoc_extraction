@@ -1,0 +1,332 @@
+## Relevant Files
+
+- `tasks/prd-refactor-unified-pdfdoc-processing.md` - Requirements source for the unified refactor.
+- `tasks/design-refactor-unified-pdfdoc-processing.md` - Implementation design source for this task list.
+- `config.yaml` - Runtime configuration to extend with database, app storage, review, validation, and UI settings.
+- `requirements.txt` - Dependency list to update if new runtime packages are needed.
+- `main.py` - Application startup path where database initialization will be wired.
+- `web/server.py` - FastAPI page route definitions for the new UI.
+- `modules/api_router.py` - API route definitions for ingestion, state, review, schema, validation, admin configuration, and resume endpoints.
+- `modules/config_manager.py` - Existing config manager to extend carefully for new settings.
+- `modules/workflow_loader.py` - Existing dynamic workflow loader to extend with task run tracking, pass-through, pause, fan-out, and resume support.
+- `modules/workflow_manager.py` - Existing workflow trigger layer to update for batch/document context and resume.
+- `modules/file_processor.py` - Existing upload ingestion path to update with SQLite batch/document creation.
+- `modules/watch_folder_monitor.py` - Existing watch-folder ingestion path to update with SQLite batch/document creation.
+- `modules/db/schema.sql` - New SQLite schema.
+- `modules/db/connection.py` - New SQLite connection utilities.
+- `modules/db/migrations.py` - New database initialization and migration runner.
+- `modules/db/repositories.py` - New repository classes for batches, documents, task runs, extraction, review, locks, audit, app settings, and config versions.
+- `modules/services/batch_service.py` - New batch creation, listing, and aggregate status service.
+- `modules/services/document_service.py` - New document state and document-detail service.
+- `modules/services/workflow_state_service.py` - New workflow task-run and state-transition service.
+- `modules/services/review_service.py` - New review claim, lock, draft, complete, and correction service.
+- `modules/services/audit_service.py` - New immutable audit-event service.
+- `modules/services/schema_service.py` - New schema load, normalize, validate, and schema editor support service.
+- `modules/services/config_validation_service.py` - New UI/API wrapper around existing config validation logic.
+- `modules/services/pipeline_validation_service.py` - New pipeline-focused validation service.
+- `modules/services/pipeline_config_service.py` - New admin pipeline draft, diff, validate, and publish service.
+- `modules/services/task_catalog_service.py` - New admin task discovery and import-status service.
+- `modules/services/admin_settings_service.py` - New role-aware non-secret settings and split settings service.
+- `modules/resume_manager.py` - New resume orchestration for paused documents.
+- `standard_step/review/review_gate.py` - New configurable review gate task.
+- `standard_step/split/llamacloud_split_adapter.py` - New isolated LlamaCloud Split adapter.
+- `standard_step/split/llamacloud_split.py` - New split pipeline task.
+- `standard_step/extraction/extract_pdf_v2.py` - Existing extraction task to update with SQLite persistence.
+- `web/templates/app_base.html` - New shared app layout modeled after the prototype.
+- `web/templates/upload_process.html` - New upload and process screen.
+- `web/templates/processing_overview.html` - New processing overview screen.
+- `web/templates/split_results.html` - New split results screen.
+- `web/templates/extraction_results.html` - New extraction results screen.
+- `web/templates/review_queue.html` - New review queue screen.
+- `web/templates/human_review.html` - New dynamic human review screen with PDF viewer.
+- `web/templates/schema_editor.html` - New non-Streamlit schema editor.
+- `web/templates/config_validation.html` - New configuration validation admin page.
+- `web/templates/admin_dashboard.html` - New admin home and configuration health page.
+- `web/templates/pipeline_config.html` - New admin pipeline task configuration page.
+- `web/templates/task_catalog.html` - New admin task catalog page.
+- `web/templates/review_gate_rules.html` - New admin review gate rules page.
+- `web/templates/split_settings.html` - New admin LlamaCloud Split settings page.
+- `web/templates/admin_audit.html` - New admin audit history page.
+- `web/templates/pipeline_dry_run.html` - New admin pipeline dry-run page.
+- `web/templates/reports.html` - New reports screen.
+- `web/templates/settings.html` - New settings screen.
+- `web/static/css/app.css` - New shared UI styles.
+- `web/static/js/app.js` - New shared UI JavaScript helpers.
+- `web/static/js/upload_process.js` - New upload page behavior.
+- `web/static/js/processing_overview.js` - New processing page polling and rendering.
+- `web/static/js/review_queue.js` - New review queue behavior.
+- `web/static/js/human_review.js` - New schema-driven review editor behavior.
+- `web/static/js/pdf_viewer.js` - New PDF viewer helper when PDF.js or custom viewer controls are added.
+- `web/static/js/schema_editor.js` - New schema editor behavior.
+- `web/static/js/config_validation.js` - New config validation page behavior.
+- `web/static/js/admin.js` - New shared admin UI helpers.
+- `web/static/js/pipeline_config.js` - New pipeline configuration page behavior.
+- `web/static/js/task_catalog.js` - New task catalog page behavior.
+- `web/static/js/review_gate_rules.js` - New review gate rules page behavior.
+- `web/static/js/split_settings.js` - New split settings page behavior.
+- `web/static/js/admin_audit.js` - New admin audit page behavior.
+- `web/static/js/pipeline_dry_run.js` - New pipeline dry-run page behavior.
+- `test/db/test_migrations.py` - New database migration tests.
+- `test/db/test_repositories.py` - New repository tests.
+- `test/services/test_batch_service.py` - New batch service tests.
+- `test/services/test_document_service.py` - New document service tests.
+- `test/services/test_workflow_state_service.py` - New workflow state service tests.
+- `test/services/test_review_service.py` - New review service tests.
+- `test/services/test_schema_service.py` - New schema service tests.
+- `test/services/test_config_validation_service.py` - New config validation service tests.
+- `test/services/test_pipeline_config_service.py` - New pipeline configuration service tests.
+- `test/services/test_task_catalog_service.py` - New task catalog service tests.
+- `test/services/test_admin_settings_service.py` - New admin settings service tests.
+- `test/services/test_resume_manager.py` - New resume manager tests.
+- `test/standard_step/review/test_review_gate.py` - New ReviewGateTask tests.
+- `test/standard_step/split/test_llamacloud_split_adapter.py` - New Split adapter tests.
+- `test/standard_step/split/test_llamacloud_split_task.py` - New Split task tests.
+- `test/integration/test_sqlite_ingestion.py` - New ingestion/state integration tests.
+- `test/integration/test_review_pause_resume.py` - New pause/resume integration tests.
+- `test/integration/test_config_validation_api.py` - New validation API tests.
+- `test/integration/test_new_ui_routes.py` - New authenticated UI route smoke tests.
+- `test/integration/test_admin_routes.py` - New operator/admin authorization route tests.
+- `test/integration/test_admin_pipeline_config_api.py` - New pipeline config API tests.
+- `test/integration/test_pipeline_dry_run.py` - New pipeline dry-run tests.
+
+## Notes
+
+- Follow `tasks/process-task-list.mdc`: implement one sub-task at a time, mark it complete, then pause for approval before starting the next sub-task.
+- Keep the existing file-based status system during the migration until SQLite-backed UI/API paths are working.
+- Do not remove existing tests. Update incrementally.
+- Do not use Streamlit in the refactored app.
+- Use FastAPI/Jinja templates for the first UI implementation.
+- Use existing CLI validation code where possible. The UI validator must call shared validation logic, not shell out to the CLI.
+- Keep the operator sidebar close to the prototype. Show admin-only pages through an admin role and a compact admin navigation group.
+- Enforce admin authorization server-side for schema editing, validation center, pipeline configuration, task catalog, review-gate rules, split settings, admin audit, and dry-run routes.
+- Use the Windows Python command for tests:
+
+```powershell
+C:\Python313\python.exe -m pytest -v
+```
+
+## Tasks
+
+- [ ] 1.0 Add SQLite database foundation
+  - Acceptance: Database initializes from `config.yaml`, schema is created in a temp database during tests, and existing app startup still works.
+  - [ ] 1.1 Add `database` and `app_storage` defaults to config handling without breaking existing configs.
+  - [ ] 1.2 Create `modules/db/schema.sql` with tables from the design document.
+  - [ ] 1.3 Create `modules/db/connection.py` with row factory, foreign keys, transaction helper, and JSON utility helpers.
+  - [ ] 1.4 Create `modules/db/migrations.py` with idempotent startup migration execution.
+  - [ ] 1.5 Wire database initialization into application startup.
+  - [ ] 1.6 Add `test/db/test_migrations.py` for temp database initialization and idempotency.
+
+- [ ] 2.0 Add repository layer
+  - Acceptance: Repository tests can create, read, update, and query every core state model without involving FastAPI or Prefect.
+  - [ ] 2.1 Implement `BatchRepository`.
+  - [ ] 2.2 Implement `DocumentRepository`.
+  - [ ] 2.3 Implement `DocumentFileRepository` or document-file methods inside `DocumentRepository`.
+  - [ ] 2.4 Implement `TaskRunRepository`.
+  - [ ] 2.5 Implement `ExtractionRepository`.
+  - [ ] 2.6 Implement `ReviewRepository` including lock records.
+  - [ ] 2.7 Implement `AuditRepository`.
+  - [ ] 2.8 Implement `AppSettingsRepository`.
+  - [ ] 2.9 Implement `ConfigVersionRepository` for admin drafts and published config versions.
+  - [ ] 2.10 Add `test/db/test_repositories.py`.
+
+- [ ] 3.0 Add service layer
+  - Acceptance: Services coordinate repositories and expose business operations used by API routes and tasks.
+  - [ ] 3.1 Implement `BatchService` for upload/watch batch creation and aggregate counts.
+  - [ ] 3.2 Implement `DocumentService` for root/child document creation and details.
+  - [ ] 3.3 Implement `WorkflowStateService` for task run start, completion, failure, pause, and current-task tracking.
+  - [ ] 3.4 Implement `AuditService` for immutable audit events.
+  - [ ] 3.5 Add service unit tests for batch, document, workflow state, and audit behavior.
+
+- [ ] 4.0 Integrate SQLite state into ingestion
+  - Acceptance: Web uploads and watch-folder ingestion create matching batch/document records while preserving existing processing behavior.
+  - [ ] 4.1 Update `FileProcessor.process_web_upload` or its caller to create batch and root document records.
+  - [ ] 4.2 Update watch-folder processing to create batch and root document records.
+  - [ ] 4.3 Add document and batch IDs to workflow context while preserving `id` backward compatibility.
+  - [ ] 4.4 Add `GET /api/batches`, `GET /api/batches/{batch_id}`, and `GET /api/batches/{batch_id}/documents`.
+  - [ ] 4.5 Add `test/integration/test_sqlite_ingestion.py`.
+
+- [ ] 5.0 Add task run tracking to workflow execution
+  - Acceptance: Every configured pipeline task records a task run with status, timestamps, and output summary.
+  - [ ] 5.1 Update `WorkflowLoader` to record task start before each task.
+  - [ ] 5.2 Update `WorkflowLoader` to record task completion and failure.
+  - [ ] 5.3 Update `WorkflowLoader` to update document current task index and key.
+  - [ ] 5.4 Add API endpoint `GET /api/documents/{document_id}/task-runs`.
+  - [ ] 5.5 Add tests for task run tracking around a mock workflow.
+
+- [ ] 6.0 Persist extraction results and fields
+  - Acceptance: `ExtractPdfV2Task` writes normalized extraction result and individual fields to SQLite while keeping existing context behavior.
+  - [ ] 6.1 Add extraction persistence helper using `ExtractionRepository`.
+  - [ ] 6.2 Update `ExtractPdfV2Task` to persist result and fields when `document_id` exists.
+  - [ ] 6.3 Preserve confidence as nullable when provider metadata has no numeric confidence.
+  - [ ] 6.4 Add `GET /api/documents/{document_id}/fields`.
+  - [ ] 6.5 Add or update extraction tests for SQLite persistence.
+
+- [ ] 7.0 Implement schema service
+  - Acceptance: Existing QA schema files can be loaded, normalized, validated, and used to validate corrected data.
+  - [ ] 7.1 Implement schema directory configuration.
+  - [ ] 7.2 Port schema loading concepts from `qa_extracted_data` without importing Streamlit.
+  - [ ] 7.3 Normalize scalar, object, scalar array, and object array fields into UI field definitions.
+  - [ ] 7.4 Validate corrected payloads against schema rules.
+  - [ ] 7.5 Add schema file hash/version helper for review traceability.
+  - [ ] 7.6 Add `test/services/test_schema_service.py`.
+
+- [ ] 8.0 Implement ReviewGateTask and pause behavior
+  - Acceptance: ReviewGateTask passes through when review is not required and pauses the document with a review item when required.
+  - [ ] 8.1 Create `standard_step/review/review_gate.py`.
+  - [ ] 8.2 Implement pass-through mode for all fields above threshold.
+  - [ ] 8.3 Implement low-confidence and missing-confidence review triggers.
+  - [ ] 8.4 Implement schema validation review trigger.
+  - [ ] 8.5 Implement split-confidence, business-rule flag, and always-review triggers.
+  - [ ] 8.6 Store review UI metadata on `review_items.metadata_json`.
+  - [ ] 8.7 Update `WorkflowLoader` to stop downstream execution when `pipeline_state == "paused"`.
+  - [ ] 8.8 Add `test/standard_step/review/test_review_gate.py`.
+
+- [ ] 9.0 Implement review service and APIs
+  - Acceptance: Operators can list, claim, draft, diff, complete, and release review items through API calls with lock enforcement.
+  - [ ] 9.1 Implement `ReviewService.claim`.
+  - [ ] 9.2 Implement lock expiry and release.
+  - [ ] 9.3 Implement draft save without resume.
+  - [ ] 9.4 Implement diff preview using ported diff logic.
+  - [ ] 9.5 Implement complete review with schema validation and correction persistence.
+  - [ ] 9.6 Add review API endpoints.
+  - [ ] 9.7 Add `test/services/test_review_service.py`.
+
+- [ ] 10.0 Implement resume manager
+  - Acceptance: Completing a review resumes the document from the next task without duplicating completed downstream work.
+  - [ ] 10.1 Create `modules/resume_manager.py`.
+  - [ ] 10.2 Build resume context from SQLite final/corrected values.
+  - [ ] 10.3 Add workflow entry point that starts from a configured task index.
+  - [ ] 10.4 Trigger resume after review completion.
+  - [ ] 10.5 Add duplicate-resume guard.
+  - [ ] 10.6 Add `test/services/test_resume_manager.py`.
+  - [ ] 10.7 Add `test/integration/test_review_pause_resume.py`.
+
+- [ ] 11.0 Add config, pipeline, and schema validation services
+  - Acceptance: UI/API validation uses shared Python logic and does not shell out to CLI commands.
+  - [ ] 11.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
+  - [ ] 11.2 Create `modules/services/pipeline_validation_service.py`.
+  - [ ] 11.3 Add validation for `ReviewGateTask` params and schema references.
+  - [ ] 11.4 Add validation for split task params and fan-out assumptions.
+  - [ ] 11.5 Add all-schema validation support through `SchemaService`.
+  - [ ] 11.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
+  - [ ] 11.7 Add `test/services/test_config_validation_service.py`.
+  - [ ] 11.8 Add `test/integration/test_config_validation_api.py`.
+
+- [ ] 12.0 Build shared prototype-modeled role-aware UI shell
+  - Acceptance: Authenticated `/app/*` pages share the compact sidebar/topbar layout modeled after the prototype, operators see operator navigation only, and admins see the additional admin navigation group.
+  - [ ] 12.1 Create `web/templates/app_base.html`.
+  - [ ] 12.2 Create `web/static/css/app.css`.
+  - [ ] 12.3 Create `web/static/js/app.js`.
+  - [ ] 12.4 Add authenticated `/app` route group in `web/server.py`.
+  - [ ] 12.5 Add admin role helper and server-side route guard.
+  - [ ] 12.6 Add placeholder templates for all operator and admin pages.
+  - [ ] 12.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
+  - [ ] 12.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
+
+- [ ] 13.0 Build Upload and Processing UI
+  - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in prototype-modeled pages.
+  - [ ] 13.1 Build `upload_process.html` and `upload_process.js`.
+  - [ ] 13.2 Add `POST /api/batches/upload`.
+  - [ ] 13.3 Build `processing_overview.html` and `processing_overview.js`.
+  - [ ] 13.4 Add polling for active batches.
+  - [ ] 13.5 Add upload and processing UI smoke tests where practical.
+
+- [ ] 14.0 Build Review Queue and Human Review UI
+  - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review.
+  - [ ] 14.1 Build `review_queue.html` and `review_queue.js`.
+  - [ ] 14.2 Build `human_review.html`.
+  - [ ] 14.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
+  - [ ] 14.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
+  - [ ] 14.5 Implement schema-driven scalar field rendering in `human_review.js`.
+  - [ ] 14.6 Implement object and nested object rendering.
+  - [ ] 14.7 Implement scalar array rendering.
+  - [ ] 14.8 Implement object array editable grid rendering for line items.
+  - [ ] 14.9 Wire save draft, diff preview, complete, and release actions.
+  - [ ] 14.10 Add review UI smoke tests where practical.
+
+- [ ] 15.0 Build Schema Editor UI
+  - Acceptance: Admin can create/edit/validate/save complex QA schemas without Streamlit, and operators cannot access schema editing.
+  - [ ] 15.1 Build `schema_editor.html`.
+  - [ ] 15.2 Build `schema_editor.js` field tree rendering.
+  - [ ] 15.3 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
+  - [ ] 15.4 Implement scalar field property editing.
+  - [ ] 15.5 Implement nested object field editing.
+  - [ ] 15.6 Implement scalar array and object array schema editing.
+  - [ ] 15.7 Add YAML preview.
+  - [ ] 15.8 Add active-review warning when schema changes may affect existing review items.
+  - [ ] 15.9 Add schema editor tests for API, service, and admin authorization behavior.
+
+- [ ] 16.0 Build Admin Validation Center UI
+  - Acceptance: Admin can validate active config, draft YAML, all schemas, and draft pipelines, then see actionable findings.
+  - [ ] 16.1 Build `config_validation.html`.
+  - [ ] 16.2 Build `config_validation.js`.
+  - [ ] 16.3 Render summary cards and findings table.
+  - [ ] 16.4 Redact secrets in any displayed YAML or JSON.
+  - [ ] 16.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
+  - [ ] 16.6 Link validation page from settings and the admin navigation group.
+  - [ ] 16.7 Add UI/API validation smoke tests.
+
+- [ ] 17.0 Build Admin Pipeline Configuration UI
+  - Acceptance: Admin can create a pipeline draft, reorder/enable/disable tasks, insert `ReviewGateTask`, validate, view diff, and publish with audit history.
+  - [ ] 17.1 Create `modules/services/pipeline_config_service.py`.
+  - [ ] 17.2 Build `pipeline_config.html`.
+  - [ ] 17.3 Build `pipeline_config.js`.
+  - [ ] 17.4 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
+  - [ ] 17.5 Implement ordered step rendering and reordering.
+  - [ ] 17.6 Implement task parameter forms and YAML preview.
+  - [ ] 17.7 Disable publish when blocking validation findings exist.
+  - [ ] 17.8 Record config version and admin audit event on publish.
+  - [ ] 17.9 Add `test/services/test_pipeline_config_service.py`.
+  - [ ] 17.10 Add `test/integration/test_admin_pipeline_config_api.py`.
+
+- [ ] 18.0 Build Admin Task Catalog, Review Gate Rules, and Split Settings
+  - Acceptance: Admin can inspect available task classes, configure review gate rules, and manage non-secret Split settings.
+  - [ ] 18.1 Create `modules/services/task_catalog_service.py`.
+  - [ ] 18.2 Build `task_catalog.html` and `task_catalog.js`.
+  - [ ] 18.3 Add `GET /api/admin/task-catalog`.
+  - [ ] 18.4 Build `review_gate_rules.html` and `review_gate_rules.js`.
+  - [ ] 18.5 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
+  - [ ] 18.6 Build `split_settings.html` and `split_settings.js`.
+  - [ ] 18.7 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
+  - [ ] 18.8 Add `test/services/test_task_catalog_service.py`.
+
+- [ ] 19.0 Build Admin Dashboard, Audit, Settings, and Dry Run
+  - Acceptance: Admin has a configuration-health home page, auditable configuration changes, editable non-secret settings, and a sample-pipeline dry run.
+  - [ ] 19.1 Build `admin_dashboard.html` and `admin.js`.
+  - [ ] 19.2 Add `GET /api/admin/summary`.
+  - [ ] 19.3 Create `modules/services/admin_settings_service.py`.
+  - [ ] 19.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
+  - [ ] 19.5 Build `admin_audit.html` and `admin_audit.js`.
+  - [ ] 19.6 Add `GET /api/admin/audit`.
+  - [ ] 19.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
+  - [ ] 19.8 Add `POST /api/admin/dry-run`.
+  - [ ] 19.9 Add `test/services/test_admin_settings_service.py`.
+  - [ ] 19.10 Add `test/integration/test_pipeline_dry_run.py`.
+
+- [ ] 20.0 Implement LlamaCloud Split
+  - Acceptance: Split task can mock-create child documents and split PDFs from 1-indexed page ranges, with the real API isolated behind an adapter.
+  - [ ] 20.1 Create `standard_step/split/llamacloud_split_adapter.py`.
+  - [ ] 20.2 Add mocked adapter tests.
+  - [ ] 20.3 Create `standard_step/split/llamacloud_split.py`.
+  - [ ] 20.4 Implement local child PDF creation.
+  - [ ] 20.5 Implement parent fan-out stop and child pipeline start.
+  - [ ] 20.6 Build `split_results.html` and `GET /api/batches/{batch_id}/split-results`.
+  - [ ] 20.7 Add split integration tests with mocked split response.
+
+- [ ] 21.0 Build extraction results, reports, and settings pages
+  - Acceptance: Operator/admin can inspect extraction fields, basic reports, and current runtime settings through the new UI.
+  - [ ] 21.1 Build `extraction_results.html`.
+  - [ ] 21.2 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
+  - [ ] 21.3 Build `reports.html` and `GET /api/reports/summary`.
+  - [ ] 21.4 Build `settings.html` and `GET /api/settings`.
+  - [ ] 21.5 Add tests for non-secret settings output.
+
+- [ ] 22.0 Migration cleanup and documentation
+  - Acceptance: New SQLite-backed UI/API is primary, file status compatibility remains documented or deprecated, and full suite passes.
+  - [ ] 22.1 Update README with new run and UI paths.
+  - [ ] 22.2 Update architecture docs with SQLite, review flow, and admin configuration flow.
+  - [ ] 22.3 Document migration from `qa_extracted_data`.
+  - [ ] 22.4 Document CLI and UI validation usage.
+  - [ ] 22.5 Document operator/admin UI roles.
+  - [ ] 22.6 Deprecate status-file reads from new UI paths.
+  - [ ] 22.7 Run full pytest suite.

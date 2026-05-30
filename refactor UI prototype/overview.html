@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DocFlow AI – Prototype Overview</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-base-200 min-h-screen p-8">
+  <div class="max-w-5xl mx-auto">
+    <div class="text-center mb-10">
+      <div class="flex items-center justify-center gap-3 mb-3">
+        <div class="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <h1 class="text-3xl font-bold">DocFlow AI</h1>
+      </div>
+      <p class="text-base-content/60">Click any screen below to open that page</p>
+    </div>
+
+    <div class="grid grid-cols-3 gap-6">
+
+      <!-- Screen 1 -->
+      <a href="index.html" class="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group">
+        <div class="card-body p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-primary badge-sm font-bold">1</div>
+            <h2 class="font-semibold text-sm group-hover:text-primary transition-colors">Upload PDF Batch</h2>
+          </div>
+          <p class="text-xs text-base-content/50 mb-4">Upload one or more PDF files for processing.</p>
+          <!-- Mini preview -->
+          <div class="bg-base-200 rounded-lg p-3 space-y-2">
+            <div class="bg-base-100 rounded p-2 flex items-center justify-center h-16">
+              <div class="text-center">
+                <svg class="w-6 h-6 text-primary mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                <p class="text-xs text-base-content/50">Drag and drop PDF files</p>
+              </div>
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 bg-base-100 rounded px-2 py-1">
+                <div class="w-3 h-3 bg-error/30 rounded-sm"></div>
+                <span class="text-xs flex-1 truncate">invoice_batch_2024_05.pdf</span>
+                <svg class="w-3 h-3 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <div class="flex items-center gap-2 bg-base-100 rounded px-2 py-1">
+                <div class="w-3 h-3 bg-error/30 rounded-sm"></div>
+                <span class="text-xs flex-1 truncate">shipment_docs_may.pdf</span>
+                <svg class="w-3 h-3 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+
+      <!-- Screen 2 -->
+      <a href="processing.html" class="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group">
+        <div class="card-body p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-primary badge-sm font-bold">2</div>
+            <h2 class="font-semibold text-sm group-hover:text-primary transition-colors">Processing Overview</h2>
+          </div>
+          <p class="text-xs text-base-content/50 mb-4">System splits documents and extracts data automatically.</p>
+          <div class="bg-base-200 rounded-lg p-3 space-y-3">
+            <!-- Pipeline steps mini -->
+            <div class="flex items-center justify-between">
+              <div class="flex flex-col items-center gap-0.5">
+                <div class="w-5 h-5 rounded-full bg-success flex items-center justify-center">
+                  <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <span class="text-xs text-base-content/50">Upload</span>
+              </div>
+              <div class="flex-1 h-px bg-primary mx-1"></div>
+              <div class="flex flex-col items-center gap-0.5">
+                <div class="w-5 h-5 rounded-full bg-primary flex items-center justify-center">
+                  <span class="loading loading-spinner loading-xs text-white" style="width:10px;height:10px"></span>
+                </div>
+                <span class="text-xs text-primary">Split</span>
+              </div>
+              <div class="flex-1 h-px bg-base-300 mx-1"></div>
+              <div class="flex flex-col items-center gap-0.5">
+                <div class="w-5 h-5 rounded-full bg-base-300"></div>
+                <span class="text-xs text-base-content/30">Extract</span>
+              </div>
+              <div class="flex-1 h-px bg-base-300 mx-1"></div>
+              <div class="flex flex-col items-center gap-0.5">
+                <div class="w-5 h-5 rounded-full bg-base-300"></div>
+                <span class="text-xs text-base-content/30">Review</span>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1"><span>Overall Progress</span><span class="text-primary font-bold">65%</span></div>
+              <progress class="progress progress-primary w-full h-1.5" value="65" max="100"></progress>
+            </div>
+          </div>
+        </div>
+      </a>
+
+      <!-- Screen 3 -->
+      <a href="split-results.html" class="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group">
+        <div class="card-body p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-primary badge-sm font-bold">3</div>
+            <h2 class="font-semibold text-sm group-hover:text-primary transition-colors">Split Results</h2>
+          </div>
+          <p class="text-xs text-base-content/50 mb-4">View how each uploaded PDF was split into individual documents.</p>
+          <div class="bg-base-200 rounded-lg p-3 space-y-2">
+            <div class="grid grid-cols-4 gap-1 text-center">
+              <div class="bg-base-100 rounded p-1.5"><p class="text-xs text-base-content/50">Files</p><p class="font-bold text-sm">3</p></div>
+              <div class="bg-base-100 rounded p-1.5"><p class="text-xs text-base-content/50">Docs</p><p class="font-bold text-sm">12</p></div>
+              <div class="bg-base-100 rounded p-1.5"><p class="text-xs text-base-content/50">OK</p><p class="font-bold text-sm text-success">12</p></div>
+              <div class="bg-base-100 rounded p-1.5"><p class="text-xs text-base-content/50">Fail</p><p class="font-bold text-sm text-error">0</p></div>
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between bg-base-100 rounded px-2 py-1 text-xs">
+                <span class="truncate">invoice_batch_2024_05.pdf</span>
+                <span class="badge badge-success badge-xs ml-1">Success</span>
+              </div>
+              <div class="flex items-center justify-between bg-base-100 rounded px-2 py-1 text-xs">
+                <span class="truncate">shipment_docs_may.pdf</span>
+                <span class="badge badge-success badge-xs ml-1">Success</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+
+      <!-- Screen 4 -->
+      <a href="extraction-results.html" class="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group">
+        <div class="card-body p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-secondary badge-sm font-bold">4</div>
+            <h2 class="font-semibold text-sm group-hover:text-primary transition-colors">Extraction Results</h2>
+          </div>
+          <p class="text-xs text-base-content/50 mb-4">View extracted data and confidence scores for each document.</p>
+          <div class="bg-base-200 rounded-lg p-3">
+            <table class="table table-xs w-full">
+              <thead><tr class="text-base-content/40"><th>Field</th><th>Value</th><th>Conf.</th></tr></thead>
+              <tbody>
+                <tr><td>Invoice #</td><td>INV-001</td><td><span class="badge badge-success badge-xs">90%</span></td></tr>
+                <tr><td>Vendor</td><td>ACME Corp</td><td><span class="badge badge-success badge-xs">98%</span></td></tr>
+                <tr><td>Total</td><td>$12,650</td><td><span class="badge badge-success badge-xs">93%</span></td></tr>
+                <tr><td>Customer</td><td>Global Ind.</td><td><span class="badge badge-warning badge-xs">85%</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </a>
+
+      <!-- Screen 5 -->
+      <a href="review-queue.html" class="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group">
+        <div class="card-body p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-secondary badge-sm font-bold">5</div>
+            <h2 class="font-semibold text-sm group-hover:text-primary transition-colors">Review Queue</h2>
+          </div>
+          <p class="text-xs text-base-content/50 mb-4">Documents with fields below 90% confidence are sent to human operators.</p>
+          <div class="bg-base-200 rounded-lg p-3 space-y-1.5">
+            <div class="flex gap-1 mb-2">
+              <span class="badge badge-primary badge-sm">All 4</span>
+              <span class="badge badge-outline badge-sm">Low Conf. 6</span>
+              <span class="badge badge-outline badge-sm">Done 2</span>
+            </div>
+            <div class="space-y-1">
+              <div class="flex items-center justify-between bg-base-100 rounded px-2 py-1 text-xs">
+                <span class="text-primary font-medium">INV-023.pdf</span>
+                <span class="badge badge-warning badge-xs">Pending</span>
+              </div>
+              <div class="flex items-center justify-between bg-base-100 rounded px-2 py-1 text-xs">
+                <span class="text-primary font-medium">DEL-010.pdf</span>
+                <span class="badge badge-warning badge-xs">Pending</span>
+              </div>
+              <div class="flex items-center justify-between bg-base-100 rounded px-2 py-1 text-xs">
+                <span class="text-primary font-medium">PO-045.pdf</span>
+                <span class="badge badge-warning badge-xs">Pending</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </a>
+
+      <!-- Screen 6 -->
+      <a href="human-review.html" class="card bg-base-100 shadow hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer group">
+        <div class="card-body p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <div class="badge badge-secondary badge-sm font-bold">6</div>
+            <h2 class="font-semibold text-sm group-hover:text-primary transition-colors">Human Review Interface</h2>
+          </div>
+          <p class="text-xs text-base-content/50 mb-4">Operators review and correct low-confidence fields.</p>
+          <div class="bg-base-200 rounded-lg p-3">
+            <table class="table table-xs w-full">
+              <thead><tr class="text-base-content/40"><th>Field</th><th>Extracted</th><th>Conf.</th><th>Corrected</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td>Invoice #</td><td>INV-023</td>
+                  <td><span class="badge badge-success badge-xs">95%</span></td>
+                  <td class="text-success">INV-022 ✓</td>
+                </tr>
+                <tr class="bg-warning/10">
+                  <td>Total</td><td class="text-warning">12,340</td>
+                  <td><span class="badge badge-warning badge-xs">72%</span></td>
+                  <td class="text-base-content/30">—</td>
+                </tr>
+                <tr class="bg-error/10">
+                  <td>Currency</td><td class="text-error">USD</td>
+                  <td><span class="badge badge-error badge-xs">68%</span></td>
+                  <td class="text-base-content/30">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </a>
+
+    </div>
+
+    <p class="text-center text-xs text-base-content/40 mt-8">DocFlow AI Prototype · Built with DaisyUI</p>
+  </div>
+</body>
+</html>
