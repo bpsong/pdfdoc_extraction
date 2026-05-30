@@ -1,0 +1,15 @@
+{
+    "id": "9e4d1d8b-1b1c-4483-bc16-4b7810436bba",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Pipeline Completed Successfully",
+    "timestamps": {
+        "Pipeline Started": "2026-05-30T08:43:08.096279Z",
+        "Task Completed: extract": "2026-05-30T08:43:08.038982Z",
+        "Task Paused: review_gate": "2026-05-30T08:43:08.062057Z",
+        "Task Completed: store": "2026-05-30T08:43:08.108621Z",
+        "Pipeline Completed Successfully": "2026-05-30T08:43:08.109089Z"
+    },
+    "error": null,
+    "details": {}
+}

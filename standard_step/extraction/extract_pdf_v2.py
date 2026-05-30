@@ -34,6 +34,8 @@ except ImportError:
         return logging.getLogger(name)
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
+from modules.db.connection import connect
+from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
 from modules.status_manager import StatusManager
 from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
@@ -361,6 +363,13 @@ class ExtractPdfV2Task(BaseTask):
                 "extraction_status": "success"
             }
 
+            self._persist_extraction_result(
+                context=context,
+                processed_data=processed_data,
+                metadata=metadata if isinstance(metadata, dict) else {},
+                provider_job_id=getattr(extracted_result, "job_id", None),
+            )
+
             # Update success status with details
             table_items_count = 0
             if table_field_key and table_field_key in context["data"]:
@@ -417,6 +426,121 @@ class ExtractPdfV2Task(BaseTask):
                 # Don't mask the original error
                 pass
             raise task_error
+
+    def _persist_extraction_result(
+        self,
+        *,
+        context: Dict[str, Any],
+        processed_data: Dict[str, Any],
+        metadata: Dict[str, Any],
+        provider_job_id: str | None,
+    ) -> None:
+        """Persist extraction result and normalized fields when document state exists."""
+        document_id = context.get("document_id")
+        if not document_id:
+            return
+
+        fields = self._build_persisted_fields(processed_data, metadata)
+        with connect(self.config_manager) as conn:
+            repository = ExtractionRepository(conn)
+            result = repository.save_result(
+                document_id=str(document_id),
+                task_run_id=context.get("task_run_id"),
+                provider="llamacloud_extract_v2",
+                provider_job_id=provider_job_id,
+                data=processed_data,
+                metadata={
+                    "configuration_id": self.configuration_id,
+                    "extraction_metadata": metadata,
+                },
+            )
+            repository.save_fields(
+                document_id=str(document_id),
+                extraction_result_id=result["id"],
+                fields=fields,
+            )
+        context["extraction_result_id"] = result["id"]
+
+    def _build_persisted_fields(
+        self,
+        processed_data: Dict[str, Any],
+        metadata: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        """Convert processed extraction output into extracted_fields rows."""
+        persisted_fields: List[Dict[str, Any]] = []
+        for field_key, value in processed_data.items():
+            field_config = self.fields.get(field_key, {})
+            alias = field_config.get("alias", field_key) if isinstance(field_config, dict) else field_key
+            confidence = self._extract_numeric_confidence(metadata, field_key, alias)
+            persisted_fields.append(
+                {
+                    "field_key": field_key,
+                    "field_alias": alias,
+                    "extracted_value": value,
+                    "final_value": value,
+                    "confidence": confidence,
+                    "confidence_label": self._extract_confidence_label(metadata, field_key, alias),
+                    "requires_review": False,
+                    "review_status": "not_required",
+                    "source": self._extract_field_source(metadata, field_key, alias),
+                }
+            )
+        return persisted_fields
+
+    @staticmethod
+    def _metadata_candidates(metadata: Dict[str, Any], field_key: str, alias: str) -> list[Any]:
+        """Return likely field-specific metadata objects from varied provider shapes."""
+        candidates: list[Any] = []
+        for container_key in ("fields", "field_metadata", "field_confidences", "confidence", "confidences"):
+            container = metadata.get(container_key)
+            if isinstance(container, dict):
+                for key in (field_key, alias):
+                    if key in container:
+                        candidates.append(container[key])
+            elif isinstance(container, list):
+                for item in container:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("field_key") == field_key or item.get("name") in {field_key, alias}:
+                        candidates.append(item)
+        return candidates
+
+    @classmethod
+    def _extract_numeric_confidence(cls, metadata: Dict[str, Any], field_key: str, alias: str) -> float | None:
+        """Extract numeric confidence, preserving NULL when confidence is absent or non-numeric."""
+        for candidate in cls._metadata_candidates(metadata, field_key, alias):
+            raw_value = candidate.get("confidence") if isinstance(candidate, dict) else candidate
+            if isinstance(raw_value, (int, float)):
+                return float(raw_value)
+            if isinstance(raw_value, str):
+                try:
+                    return float(raw_value)
+                except ValueError:
+                    continue
+        return None
+
+    @classmethod
+    def _extract_confidence_label(cls, metadata: Dict[str, Any], field_key: str, alias: str) -> str | None:
+        """Extract a textual confidence label when provider metadata includes one."""
+        for candidate in cls._metadata_candidates(metadata, field_key, alias):
+            if isinstance(candidate, dict):
+                for key in ("confidence_label", "label", "confidence_level"):
+                    value = candidate.get(key)
+                    if isinstance(value, str):
+                        return value
+            elif isinstance(candidate, str):
+                return candidate
+        return None
+
+    @classmethod
+    def _extract_field_source(cls, metadata: Dict[str, Any], field_key: str, alias: str) -> Dict[str, Any]:
+        """Extract field citation/source metadata when present."""
+        for candidate in cls._metadata_candidates(metadata, field_key, alias):
+            if isinstance(candidate, dict):
+                source = candidate.get("source") or candidate.get("citation") or candidate.get("citations")
+                if source is not None:
+                    return {"provider_source": source}
+        return {}
 
     def validate_required_fields(self, context: Dict[str, Any]) -> None:
         """Validate required configuration parameters.

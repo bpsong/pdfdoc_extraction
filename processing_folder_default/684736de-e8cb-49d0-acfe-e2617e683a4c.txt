@@ -1,0 +1,15 @@
+{
+    "id": "684736de-e8cb-49d0-acfe-e2617e683a4c",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Completed: extract_document_data",
+    "timestamps": {
+        "Task Started: extract_document_data": "2026-05-30T08:43:05.914615Z",
+        "Task Completed: extract_document_data": "2026-05-30T08:43:05.941750Z"
+    },
+    "error": null,
+    "details": {
+        "extracted_fields": 2,
+        "table_items": 0
+    }
+}

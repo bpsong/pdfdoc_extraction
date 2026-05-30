@@ -78,6 +78,9 @@
 - `test/services/test_task_catalog_service.py` - New task catalog service tests.
 - `test/services/test_admin_settings_service.py` - New admin settings service tests.
 - `test/services/test_resume_manager.py` - New resume manager tests.
+- `test/helpers_sqlite.py` - Shared temp configuration helper for SQLite-backed tests.
+- `test/workflow/test_workflow_task_run_tracking.py` - Workflow task-run tracking and pause tests.
+- `test/extraction/test_extraction_v2_sqlite_persistence.py` - Extraction SQLite persistence tests.
 - `test/standard_step/review/test_review_gate.py` - New ReviewGateTask tests.
 - `test/standard_step/split/test_llamacloud_split_adapter.py` - New Split adapter tests.
 - `test/standard_step/split/test_llamacloud_split_task.py` - New Split task tests.
@@ -149,61 +152,61 @@ C:\Python313\python.exe -m pytest -v
   - [x] 4.4 Add `GET /api/batches`, `GET /api/batches/{batch_id}`, and `GET /api/batches/{batch_id}/documents`.
   - [x] 4.5 Add `test/integration/test_sqlite_ingestion.py` covering both web upload and watch-folder ingestion.
 
-- [ ] 5.0 Add task run tracking to workflow execution
+- [x] 5.0 Add task run tracking to workflow execution
   - Acceptance: Every configured pipeline task records a task run with status, timestamps, and output summary.
-  - [ ] 5.1 Update `WorkflowLoader` to record task start before each task.
-  - [ ] 5.2 Update `WorkflowLoader` to record task completion and failure.
-  - [ ] 5.3 Update `WorkflowLoader` to update document current task index and key.
-  - [ ] 5.4 Add API endpoint `GET /api/documents/{document_id}/task-runs`.
-  - [ ] 5.5 Add tests for task run tracking around a mock workflow.
+  - [x] 5.1 Update `WorkflowLoader` to record task start before each task.
+  - [x] 5.2 Update `WorkflowLoader` to record task completion and failure.
+  - [x] 5.3 Update `WorkflowLoader` to update document current task index and key.
+  - [x] 5.4 Add API endpoint `GET /api/documents/{document_id}/task-runs`.
+  - [x] 5.5 Add tests for task run tracking around a mock workflow.
 
-- [ ] 6.0 Persist extraction results and fields
+- [x] 6.0 Persist extraction results and fields
   - Acceptance: `ExtractPdfV2Task` writes normalized extraction result and individual fields to SQLite while keeping existing context behavior.
-  - [ ] 6.1 Add extraction persistence helper using `ExtractionRepository`.
-  - [ ] 6.2 Update `ExtractPdfV2Task` to persist result and fields when `document_id` exists.
-  - [ ] 6.3 Preserve confidence as nullable when provider metadata has no numeric confidence.
-  - [ ] 6.4 Add `GET /api/documents/{document_id}/fields`.
-  - [ ] 6.5 Add or update extraction tests for SQLite persistence.
+  - [x] 6.1 Add extraction persistence helper using `ExtractionRepository`.
+  - [x] 6.2 Update `ExtractPdfV2Task` to persist result and fields when `document_id` exists.
+  - [x] 6.3 Preserve confidence as nullable when provider metadata has no numeric confidence.
+  - [x] 6.4 Add `GET /api/documents/{document_id}/fields`.
+  - [x] 6.5 Add or update extraction tests for SQLite persistence.
 
-- [ ] 7.0 Implement schema service
+- [x] 7.0 Implement schema service
   - Acceptance: Existing QA schema files can be loaded, normalized, validated, and used to validate corrected data.
-  - [ ] 7.1 Implement schema directory configuration.
-  - [ ] 7.2 Port schema loading concepts from `qa_extracted_data` without importing Streamlit. Source program location: `D:\python_code\qa_extracted_data`; relevant files: `D:\python_code\qa_extracted_data\utils\schema_loader.py`, `D:\python_code\qa_extracted_data\utils\schema_editor_view.py`, and `D:\python_code\qa_extracted_data\utils\model_builder.py`.
-  - [ ] 7.3 Normalize scalar, object, scalar array, and object array fields into UI field definitions.
-  - [ ] 7.4 Validate corrected payloads against schema rules.
-  - [ ] 7.5 Add schema file hash/version helper for review traceability.
-  - [ ] 7.6 Add `test/services/test_schema_service.py`.
+  - [x] 7.1 Implement schema directory configuration.
+  - [x] 7.2 Port schema loading concepts from `qa_extracted_data` without importing Streamlit. Source program location: `D:\python_code\qa_extracted_data`; relevant files: `D:\python_code\qa_extracted_data\utils\schema_loader.py`, `D:\python_code\qa_extracted_data\utils\schema_editor_view.py`, and `D:\python_code\qa_extracted_data\utils\model_builder.py`.
+  - [x] 7.3 Normalize scalar, object, scalar array, and object array fields into UI field definitions.
+  - [x] 7.4 Validate corrected payloads against schema rules.
+  - [x] 7.5 Add schema file hash/version helper for review traceability.
+  - [x] 7.6 Add `test/services/test_schema_service.py`.
 
-- [ ] 8.0 Implement ReviewGateTask and pause behavior
+- [x] 8.0 Implement ReviewGateTask and pause behavior
   - Acceptance: ReviewGateTask passes through when review is not required and pauses the document with a review item when required.
-  - [ ] 8.1 Create `standard_step/review/review_gate.py`.
-  - [ ] 8.2 Implement pass-through mode for all fields above threshold.
-  - [ ] 8.3 Implement low-confidence and missing-confidence review triggers.
-  - [ ] 8.4 Implement schema validation review trigger.
-  - [ ] 8.5 Implement split-confidence, business-rule flag, and always-review triggers.
-  - [ ] 8.6 Store review UI metadata on `review_items.metadata_json`.
-  - [ ] 8.7 Update `WorkflowLoader` to stop downstream execution when `pipeline_state == "paused"`.
-  - [ ] 8.8 Add `test/standard_step/review/test_review_gate.py`.
+  - [x] 8.1 Create `standard_step/review/review_gate.py`.
+  - [x] 8.2 Implement pass-through mode for all fields above threshold.
+  - [x] 8.3 Implement low-confidence and missing-confidence review triggers.
+  - [x] 8.4 Implement schema validation review trigger.
+  - [x] 8.5 Implement split-confidence, business-rule flag, and always-review triggers.
+  - [x] 8.6 Store review UI metadata on `review_items.metadata_json`.
+  - [x] 8.7 Update `WorkflowLoader` to stop downstream execution when `pipeline_state == "paused"`.
+  - [x] 8.8 Add `test/standard_step/review/test_review_gate.py`.
 
-- [ ] 9.0 Implement review service and APIs
+- [x] 9.0 Implement review service and APIs
   - Acceptance: Operators can list, claim, draft, diff, complete, and release review items through API calls with lock enforcement.
-  - [ ] 9.1 Implement `ReviewService.claim`.
-  - [ ] 9.2 Implement lock expiry and release.
-  - [ ] 9.3 Implement draft save without resume.
-  - [ ] 9.4 Implement diff preview using ported diff logic.
-  - [ ] 9.5 Implement complete review with schema validation and correction persistence.
-  - [ ] 9.6 Add review API endpoints.
-  - [ ] 9.7 Add `test/services/test_review_service.py`.
+  - [x] 9.1 Implement `ReviewService.claim`.
+  - [x] 9.2 Implement lock expiry and release.
+  - [x] 9.3 Implement draft save without resume.
+  - [x] 9.4 Implement diff preview using ported diff logic.
+  - [x] 9.5 Implement complete review with schema validation and correction persistence.
+  - [x] 9.6 Add review API endpoints.
+  - [x] 9.7 Add `test/services/test_review_service.py`.
 
-- [ ] 10.0 Implement resume manager
+- [x] 10.0 Implement resume manager
   - Acceptance: Completing a review resumes the document from the next task without duplicating completed downstream work.
-  - [ ] 10.1 Create `modules/resume_manager.py`.
-  - [ ] 10.2 Build resume context from SQLite final/corrected values.
-  - [ ] 10.3 Add workflow entry point that starts from a configured task index.
-  - [ ] 10.4 Trigger resume after review completion.
-  - [ ] 10.5 Add duplicate-resume guard.
-  - [ ] 10.6 Add `test/services/test_resume_manager.py`.
-  - [ ] 10.7 Add `test/integration/test_review_pause_resume.py`.
+  - [x] 10.1 Create `modules/resume_manager.py`.
+  - [x] 10.2 Build resume context from SQLite final/corrected values.
+  - [x] 10.3 Add workflow entry point that starts from a configured task index.
+  - [x] 10.4 Trigger resume after review completion.
+  - [x] 10.5 Add duplicate-resume guard.
+  - [x] 10.6 Add `test/services/test_resume_manager.py`.
+  - [x] 10.7 Add `test/integration/test_review_pause_resume.py`.
 
 - [ ] 11.0 Add config, pipeline, and schema validation services
   - Acceptance: UI/API validation uses shared Python logic and does not shell out to CLI commands.

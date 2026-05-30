@@ -310,12 +310,32 @@ class TaskRunRepository:
                 (utc_now(), error, json_dumps(output_data), task_run_id),
             )
 
+    def mark_paused(self, task_run_id: str, output_data: dict[str, Any] | None = None) -> None:
+        """Mark a task run paused after app-level workflow pause."""
+        with transaction(self.conn):
+            self.conn.execute(
+                "UPDATE task_runs SET status = 'paused', ended_at = ?, output_json = ? WHERE id = ?",
+                (utc_now(), json_dumps(output_data), task_run_id),
+            )
+
     def list_by_document(self, document_id: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             "SELECT * FROM task_runs WHERE document_id = ? ORDER BY task_index, started_at",
             (document_id,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def has_completed_at_or_after(self, document_id: str, task_index: int) -> bool:
+        """Return True when a downstream task has already completed."""
+        row = self.conn.execute(
+            """
+            SELECT 1 FROM task_runs
+            WHERE document_id = ? AND task_index >= ? AND status = 'completed'
+            LIMIT 1
+            """,
+            (document_id, task_index),
+        ).fetchone()
+        return row is not None
 
 
 class ExtractionRepository:
@@ -487,6 +507,32 @@ class ReviewRepository:
         sql += " ORDER BY created_at"
         return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
 
+    def find_open_for_document(
+        self,
+        document_id: str,
+        *,
+        created_by_task_run_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Find a non-completed review item for a document and optional task run."""
+        sql = """
+            SELECT * FROM review_items
+            WHERE document_id = ? AND status IN ('pending', 'in_review')
+        """
+        params: list[Any] = [document_id]
+        if created_by_task_run_id:
+            sql += " AND created_by_task_run_id = ?"
+            params.append(created_by_task_run_id)
+        sql += " ORDER BY created_at DESC LIMIT 1"
+        return _row_to_dict(self.conn.execute(sql, params).fetchone())
+
+    def update_metadata(self, review_item_id: str, metadata: dict[str, Any]) -> None:
+        """Replace review item metadata JSON."""
+        with transaction(self.conn):
+            self.conn.execute(
+                "UPDATE review_items SET metadata_json = ?, updated_at = ? WHERE id = ?",
+                (json_dumps(metadata), utc_now(), review_item_id),
+            )
+
     def claim(self, review_item_id: str, locked_by: str, *, timeout_minutes: int = 60) -> dict[str, Any]:
         now_dt = datetime.now(timezone.utc)
         expires_at = (now_dt + timedelta(minutes=timeout_minutes)).isoformat()
@@ -517,6 +563,11 @@ class ReviewRepository:
                 "UPDATE review_items SET status = 'pending', assigned_to = NULL, updated_at = ? WHERE id = ?",
                 (utc_now(), review_item_id),
             )
+
+    def delete_lock(self, review_item_id: str) -> None:
+        """Delete a review lock without changing review item status."""
+        with transaction(self.conn):
+            self.conn.execute("DELETE FROM review_locks WHERE review_item_id = ?", (review_item_id,))
 
     def complete(self, review_item_id: str, assigned_to: str | None = None) -> None:
         now = utc_now()

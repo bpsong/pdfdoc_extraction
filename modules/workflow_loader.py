@@ -21,7 +21,9 @@ from modules.config_manager import ConfigManager
 from modules.shutdown_manager import ShutdownManager
 from modules.status_manager import StatusManager
 from modules.base_task import BaseTask
+from modules.db.connection import connect
 from modules.exceptions import TaskError
+from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 
 class WorkflowLoader:
@@ -88,7 +90,32 @@ class WorkflowLoader:
             self.shutdown_manager.shutdown()
             raise SystemExit(1)
 
-    def load_workflow(self) -> Callable[[Dict[str, Any]], Any] | None:
+    @staticmethod
+    def _context_summary(context: Dict[str, Any]) -> Dict[str, Any]:
+        """Return a compact, JSON-friendly task run summary."""
+        data = context.get("data")
+        metadata = context.get("metadata")
+        return {
+            "id": context.get("id"),
+            "batch_id": context.get("batch_id"),
+            "document_id": context.get("document_id"),
+            "file_path": context.get("file_path"),
+            "pipeline_state": context.get("pipeline_state"),
+            "review_item_id": context.get("review_item_id"),
+            "error": context.get("error"),
+            "error_step": context.get("error_step"),
+            "data_keys": sorted(data.keys()) if isinstance(data, dict) else [],
+            "metadata_keys": sorted(metadata.keys()) if isinstance(metadata, dict) else [],
+        }
+
+    def _state_service(self, context: Dict[str, Any]) -> WorkflowStateService | None:
+        """Create a workflow state service when SQLite document context exists."""
+        if not context.get("batch_id") or not context.get("document_id"):
+            return None
+        conn = connect(self.config_manager)
+        return WorkflowStateService(conn, pipeline=self.cfg.get("pipeline", []))
+
+    def load_workflow(self, start_task_index: int = 0) -> Callable[[Dict[str, Any]], Any] | None:
         """Build and return a Prefect flow function for the configured pipeline.
 
         Purpose:
@@ -124,9 +151,12 @@ class WorkflowLoader:
         @flow(name="Dynamic PDF Processing Flow")
         def dynamic_flow(initial_context: Dict[str, Any]):
             current_context = initial_context
+            effective_start_index = int(current_context.pop("start_task_index", start_task_index) or 0)
             self.status_manager.update_status(current_context.get("id", "unknown"), "Pipeline Started")
 
-            for task_key in pipeline_config:
+            for task_index, task_key in enumerate(pipeline_config):
+                if task_index < effective_start_index:
+                    continue
                 step_cfg = self.task_defs.get(task_key)
                 if not step_cfg:
                     self.logger.critical(f"Unknown pipeline step: '{task_key}' not found in 'tasks' definition.")
@@ -146,7 +176,25 @@ class WorkflowLoader:
 
                 self.logger.info(f"Loading task '{task_name}' from '{module_name}.{class_name}'")
 
+                task_run_id = None
+                state_service = None
                 try:
+                    state_service = self._state_service(current_context)
+                    if state_service is not None:
+                        task_run = state_service.start_task(
+                            batch_id=str(current_context["batch_id"]),
+                            document_id=str(current_context["document_id"]),
+                            task_key=task_key,
+                            task_index=task_index,
+                            module_name=str(module_name),
+                            class_name=str(class_name),
+                            input_data=self._context_summary(current_context),
+                        )
+                        task_run_id = task_run["id"]
+                        current_context["task_run_id"] = task_run_id
+                        current_context["current_task_key"] = task_key
+                        current_context["current_task_index"] = task_index
+
                     # Import and instantiate the task class, passing config_manager and params
                     task_class = self._import_task_class(module_name, class_name)
                     task_instance = cast(BaseTask, task_class(config_manager=self.config_manager, **params))
@@ -172,7 +220,24 @@ class WorkflowLoader:
                     else:
                         current_context = current_context
 
+                    if task_run_id:
+                        current_context["task_run_id"] = task_run_id
+
+                    output_summary = self._context_summary(current_context)
+                    if current_context.get("pipeline_state") == "paused":
+                        if state_service is not None and task_run_id:
+                            state_service.pause_task(task_run_id, output_summary)
+                            state_service.pause_document(str(current_context["document_id"]))
+                        self.status_manager.update_status(
+                            current_context.get("id", "unknown"),
+                            f"Task Paused: {task_name}",
+                        )
+                        self.logger.info("Pipeline paused after task '%s'.", task_name)
+                        return current_context
+
                     if current_context.get("error"):
+                        if state_service is not None and task_run_id:
+                            state_service.fail_task(task_run_id, str(current_context["error"]), output_summary)
                         self.status_manager.update_status(current_context.get("id", "unknown"),
                                                           f"Task Failed: {task_name}",
                                                           error=current_context["error"])
@@ -182,6 +247,8 @@ class WorkflowLoader:
                         else:
                             self.logger.warning(f"Continuing pipeline despite error in task '{task_name}'.")
                     else:
+                        if state_service is not None and task_run_id:
+                            state_service.complete_task(task_run_id, output_summary)
                         self.status_manager.update_status(current_context.get("id", "unknown"),
                                                           f"Task Completed: {task_name}")
 
@@ -189,6 +256,8 @@ class WorkflowLoader:
                     self.logger.error(f"Task '{task_name}' failed with TaskError: {e}")
                     current_context["error"] = str(e)
                     current_context["error_step"] = task_name
+                    if state_service is not None and task_run_id:
+                        state_service.fail_task(task_run_id, str(e), self._context_summary(current_context))
                     self.status_manager.update_status(current_context.get("id", "unknown"),
                                                       f"Task Failed: {task_name}",
                                                       error=str(e))
@@ -199,12 +268,17 @@ class WorkflowLoader:
                     self.logger.error(f"Unexpected error in task '{task_name}': {e}")
                     current_context["error"] = f"Unexpected error: {e}"
                     current_context["error_step"] = task_name
+                    if state_service is not None and task_run_id:
+                        state_service.fail_task(task_run_id, str(e), self._context_summary(current_context))
                     self.status_manager.update_status(current_context.get("id", "unknown"),
                                                       f"Task Failed: {task_name}",
                                                       error=f"Unexpected error: {e}")
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to unexpected error in task '{task_name}'.")
                         break
+                finally:
+                    if state_service is not None:
+                        state_service.conn.close()
 
             # Execute mandatory housekeeping task
             self.logger.info("Executing mandatory housekeeping task.")

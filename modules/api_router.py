@@ -48,8 +48,12 @@ from .workflow_manager import WorkflowManager
 from .file_processor import FileProcessor
 from . import utils as utils_mod
 from .db.connection import connect
+from .db.connection import json_loads
+from .db.repositories import ExtractionRepository, TaskRunRepository
 from .db.migrations import initialize_database
 from .services.batch_service import BatchService
+from .services.review_service import ReviewService, ReviewServiceError
+from .resume_manager import ResumeManager
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
@@ -346,6 +350,19 @@ def build_router() -> APIRouter:
 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file field provided")
 
+    async def _json_body(request: Request) -> dict[str, Any]:
+        """Parse an optional JSON request body."""
+        body = await request.body()
+        if not body:
+            return {}
+        try:
+            payload = json.loads(body.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON payload")
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="JSON payload must be an object")
+        return payload
+
     @router.post("/api/login", response_model=TokenResponse)
     async def login(request: Request):
         """Authenticate a user and return an access token.
@@ -629,5 +646,110 @@ def build_router() -> APIRouter:
             if service.get_batch(batch_id) is None:
                 raise HTTPException(status_code=404, detail="Batch not found")
             return service.list_documents(batch_id)
+
+    @router.get("/api/documents/{document_id}/task-runs")
+    def list_document_task_runs(document_id: str, user: str = Depends(get_current_user)):
+        """List task runs for one document."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return TaskRunRepository(conn).list_by_document(document_id)
+
+    @router.get("/api/documents/{document_id}/fields")
+    def list_document_fields(document_id: str, user: str = Depends(get_current_user)):
+        """List persisted extracted fields for one document."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            fields = ExtractionRepository(conn).get_fields(document_id)
+        for field in fields:
+            for key in ("extracted_value_json", "corrected_value_json", "final_value_json", "source_json"):
+                field[key.replace("_json", "")] = json_loads(field.get(key))
+        return fields
+
+    @router.post("/api/documents/{document_id}/resume")
+    def resume_document(document_id: str, user: str = Depends(get_current_user)):
+        """Resume a reviewed document from the next configured pipeline task."""
+        config, _, _, _, _ = get_dependencies()
+        return {"resumed": ResumeManager(config).resume_document(document_id, user=user)}
+
+    @router.get("/api/review/items")
+    def list_review_items(
+        status: str | None = None,
+        queue_name: str | None = None,
+        user: str = Depends(get_current_user),
+    ):
+        """List review items with optional status and queue filters."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return ReviewService(conn, config).list_items(status=status, queue_name=queue_name)
+
+    @router.get("/api/review/items/{review_item_id}")
+    def get_review_item(review_item_id: str, user: str = Depends(get_current_user)):
+        """Return review item detail."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            detail = ReviewService(conn, config).get_detail(review_item_id)
+        if detail is None:
+            raise HTTPException(status_code=404, detail="Review item not found")
+        return detail
+
+    @router.post("/api/review/items/{review_item_id}/claim")
+    async def claim_review_item(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
+        """Claim a review item for the current user."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        operator = str(payload.get("user") or user)
+        try:
+            with connect(config) as conn:
+                return ReviewService(conn, config).claim(review_item_id, operator)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.post("/api/review/items/{review_item_id}/release")
+    async def release_review_item(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
+        """Release a review item lock."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        operator = str(payload.get("user") or user)
+        try:
+            with connect(config) as conn:
+                ReviewService(conn, config).release(review_item_id, operator)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        return {"released": True}
+
+    @router.post("/api/review/items/{review_item_id}/draft")
+    async def save_review_draft(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
+        """Save review draft corrections without resuming."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        operator = str(payload.get("user") or user)
+        corrections = cast(dict[str, Any], payload.get("corrections") or {})
+        try:
+            with connect(config) as conn:
+                return ReviewService(conn, config).save_draft(review_item_id, operator, corrections)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.post("/api/review/items/{review_item_id}/diff")
+    async def preview_review_diff(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
+        """Preview review correction differences."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        corrections = cast(dict[str, Any], payload.get("corrections") or {})
+        with connect(config) as conn:
+            return ReviewService(conn, config).diff_preview(review_item_id, corrections)
+
+    @router.post("/api/review/items/{review_item_id}/complete")
+    async def complete_review_item(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
+        """Complete review, persist corrections, and trigger resume."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        operator = str(payload.get("user") or user)
+        corrections = cast(dict[str, Any], payload.get("corrections") or {})
+        try:
+            with connect(config) as conn:
+                return ReviewService(conn, config).complete(review_item_id, operator, corrections)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
 
     return router

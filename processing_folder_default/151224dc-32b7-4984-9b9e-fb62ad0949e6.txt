@@ -1,0 +1,13 @@
+{
+    "id": "151224dc-32b7-4984-9b9e-fb62ad0949e6",
+    "original_filename": "unknown",
+    "file": "unknown",
+    "status": "Task Paused: review_gate",
+    "timestamps": {
+        "Pipeline Started": "2026-05-30T08:43:05.490042Z",
+        "Task Completed: first": "2026-05-30T08:43:05.528751Z",
+        "Task Paused: review_gate": "2026-05-30T08:43:05.581768Z"
+    },
+    "error": null,
+    "details": {}
+}

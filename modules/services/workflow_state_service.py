@@ -48,6 +48,10 @@ class WorkflowStateService:
         """Mark a task run failed."""
         self.task_runs.mark_failed(task_run_id, error, output_data)
 
+    def pause_task(self, task_run_id: str, output_data: dict[str, Any] | None = None) -> None:
+        """Mark a task run paused."""
+        self.task_runs.mark_paused(task_run_id, output_data)
+
     def pause_document(self, document_id: str, *, status: str = "review_required") -> None:
         """Pause a document for app-level human review."""
         self.documents.update_status(document_id, status)
@@ -66,3 +70,7 @@ class WorkflowStateService:
         if next_index >= len(self.pipeline):
             return None
         return next_index, self.pipeline[next_index]
+
+    def has_completed_at_or_after(self, document_id: str, task_index: int) -> bool:
+        """Return True when resume would duplicate completed downstream work."""
+        return self.task_runs.has_completed_at_or_after(document_id, task_index)
