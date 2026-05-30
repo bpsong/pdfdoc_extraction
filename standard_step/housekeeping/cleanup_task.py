@@ -16,6 +16,8 @@ from pathlib import Path
 
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
+from modules.db.connection import connect
+from modules.db.repositories import DocumentRepository
 from modules.exceptions import TaskError
 
 
@@ -77,34 +79,52 @@ class CleanupTask(BaseTask):
             raise TaskError("CleanupTask missing required field: 'processing_dir'")
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Delete the processed file referenced by the context if it exists.
+        """Delete transient processed files referenced by the context.
 
         Args:
             context (Dict[str, Any]): Pipeline context with:
                 - file_path (str or Path-like): Path to the processed file.
+                - cleanup_paths (list[str], optional): Preferred transient files
+                  to delete.
                 - id (str): Unique identifier (unused here).
 
         Raises:
             TaskError: If filesystem deletion fails.
 
         Notes:
-            - Side effects: Filesystem unlink of the processed file.
+            - Side effects: Filesystem unlink of transient processed files.
+            - Registered SQLite document artifacts are preserved.
             - This terminal step returns the unchanged context.
         """
         self.validate_required_fields(context)
 
-        file_path_str = context.get('file_path')
-        if not file_path_str:
-            self.logger.warning(f"Missing file_path in context for cleanup. Skipping.")
-            return context
+        cleanup_paths = context.get("cleanup_paths")
+        if cleanup_paths:
+            paths = [Path(str(path)) for path in cleanup_paths]
+        else:
+            file_path_str = context.get('file_path')
+            if not file_path_str:
+                self.logger.warning(f"Missing file_path in context for cleanup. Skipping.")
+                return context
+            paths = [Path(str(file_path_str))]
 
-        file_path = Path(str(file_path_str))  # Ensure it's a string for Path
+        for file_path in paths:
+            self._cleanup_path(file_path, context)
 
+        # This task does not delete the status text file
+
+        return context
+
+    def _cleanup_path(self, file_path: Path, context: Dict[str, Any]) -> None:
+        """Delete one transient path unless it is a registered artifact."""
         if not file_path.exists():
             self.logger.warning(f"File {file_path} not found for cleanup. Skipping.")
-            return context
+            return
 
-        # Remove the UUID-named PDF document from the processing directory
+        if self._is_registered_document_artifact(file_path, context):
+            self.logger.info(f"Preserving registered artifact during cleanup: {file_path}")
+            return
+
         try:
             file_path.unlink()
             self.logger.info(f"Removed processed file: {file_path}")
@@ -112,6 +132,18 @@ class CleanupTask(BaseTask):
             self.logger.error(f"Failed to remove processed file {file_path}: {e}")
             raise TaskError(f"Failed to cleanup processed file: {e}")
 
-        # This task does not delete the status text file
-
-        return context
+    def _is_registered_document_artifact(self, file_path: Path, context: Dict[str, Any]) -> bool:
+        """Return True when the path is registered in SQLite document_files."""
+        document_id = context.get("document_id")
+        if not document_id:
+            return False
+        try:
+            target = file_path.resolve()
+            with connect(self.config_manager) as conn:
+                documents = DocumentRepository(conn)
+                for record in documents.list_files(str(document_id)):
+                    if Path(str(record["file_path"])).resolve() == target:
+                        return True
+        except Exception as exc:
+            self.logger.debug("Failed to inspect document_files during cleanup: %s", exc)
+        return False

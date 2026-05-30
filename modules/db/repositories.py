@@ -220,6 +220,18 @@ class DocumentRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_children(self, parent_document_id: str) -> list[dict[str, Any]]:
+        """Return child documents for a split/source document."""
+        rows = self.conn.execute(
+            """
+            SELECT * FROM documents
+            WHERE parent_document_id = ?
+            ORDER BY page_start, created_at
+            """,
+            (parent_document_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def get(self, document_id: str) -> dict[str, Any] | None:
         return _row_to_dict(self.conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone())
 
@@ -246,6 +258,14 @@ class DocumentRepository:
                 WHERE id = ?
                 """,
                 (task_index, task_key, utc_now(), document_id),
+            )
+
+    def update_metadata(self, document_id: str, metadata: dict[str, Any]) -> None:
+        """Replace a document's metadata JSON."""
+        with transaction(self.conn):
+            self.conn.execute(
+                "UPDATE documents SET metadata_json = ?, updated_at = ? WHERE id = ?",
+                (json_dumps(metadata), utc_now(), document_id),
             )
 
 

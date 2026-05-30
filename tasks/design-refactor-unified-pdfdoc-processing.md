@@ -412,6 +412,7 @@ class BatchRepository:
 class DocumentRepository:
     create_root(...)
     create_child(...)
+    add_file(...)
     get(document_id: str)
     list_by_batch(batch_id: str)
     update_status(...)
@@ -472,6 +473,9 @@ Responsibilities:
 - Create child documents from split segments.
 - Update document status.
 - Retrieve document details with task runs, fields, and review status.
+- Register document files with explicit roles such as `source_original`, `split_pdf`, `export_pdf`, `export_json`, `export_csv`, and `source_archive`.
+- Treat child documents from split, or unsplit root documents, as leaf documents for extraction, review, export, and completion.
+- Preserve parent/root document traceability for the original bundled PDF without letting successful split roots continue into downstream extraction/export tasks.
 
 ### 7.3 Workflow State Service
 
@@ -482,8 +486,74 @@ Responsibilities:
 - Update `documents.current_task_index`.
 - Detect paused state.
 - Find the next task after a paused review gate.
+- Build child workflow context from child document state plus parent/root source metadata after split fan-out.
+- Keep child task state independent while preserving parent references through `parent_document_id`, root document metadata, and registered source artifacts.
 
-### 7.4 Review Service
+### 7.4 Fan-In / Workflow Finalization Service
+
+File: `modules/services/fan_in_service.py`
+
+Responsibilities:
+
+- Finalize a leaf document when its workflow reaches the end of the configured pipeline after mandatory housekeeping.
+- Recompute aggregate state for the leaf's root/source document and batch.
+- Treat child documents from split, or an unsplit root document, as leaf documents for completion counts.
+- Preserve the root/source document as durable lineage state; fan-in must never delete parent/root records or registered artifacts.
+- Mark a split root as still active while any child leaf is running, paused, or waiting for review.
+- Mark a split root `completed` only when all leaf descendants completed successfully.
+- Mark a split root `completed_with_errors` when all leaf descendants are terminal and at least one leaf failed.
+- Recompute batch counts from leaf documents only so the root source container is not double-counted.
+- Emit one idempotent audit event when a root fan-in completes.
+- Use one SQLite transaction or an explicit write guard so concurrent child completions cannot produce stale parent/batch counts.
+
+Suggested service shape:
+
+```python
+@dataclass(frozen=True)
+class FanInResult:
+    leaf_document_id: str
+    root_document_id: str
+    batch_id: str
+    leaf_status: str
+    root_status: str
+    batch_status: str
+    all_leaves_terminal: bool
+    completed_leaves: int
+    failed_leaves: int
+    total_leaves: int
+
+
+class FanInService:
+    def finalize_leaf(self, context: dict[str, Any]) -> FanInResult:
+        """Persist terminal leaf state and recompute root/batch aggregates."""
+```
+
+The service should infer the root document from `context["root_document_id"]`, `context["parent_document_id"]`, or the document row. For unsplit source documents, the document is both root and leaf.
+
+Terminal leaf states:
+
+- Success: `completed`.
+- Failure: `failed`.
+- Partial terminal success: `completed_with_errors` is allowed only for aggregate root/batch state, not as the default leaf success state.
+
+Non-terminal leaf states:
+
+- `processing`
+- `resuming`
+- `review_required`
+- `in_review`
+- `split_completed` on a root/source document with children
+
+Aggregate status priority:
+
+1. `review_required` if any leaf is waiting for or in human review.
+2. `processing` if any leaf is running/resuming or not terminal.
+3. `completed_with_errors` if all leaves are terminal and any leaf failed.
+4. `completed` if all leaves are terminal and all leaves completed successfully.
+
+Fan-in is state finalization only. It can make parent processing copies eligible for later retention cleanup by writing audit/metadata, but it must not delete files. Retention or housekeeping remains responsible for transient filesystem cleanup under explicit artifact rules.
+
+### 7.5 Review Service
 
 Responsibilities:
 
@@ -493,7 +563,7 @@ Responsibilities:
 - Mark review item complete.
 - Trigger resume after completion.
 
-### 7.5 Audit Service
+### 7.6 Audit Service
 
 Responsibilities:
 
@@ -501,7 +571,7 @@ Responsibilities:
 - Normalize before/after values.
 - Record operator and system events.
 
-### 7.6 Configuration Validation Service
+### 7.7 Configuration Validation Service
 
 File:
 
@@ -536,7 +606,7 @@ API-facing finding shape:
 }
 ```
 
-### 7.7 Pipeline Validation Service
+### 7.8 Pipeline Validation Service
 
 File:
 
@@ -554,7 +624,7 @@ Responsibilities:
 - Validate storage filename tokens against known extraction fields.
 - Return structured findings compatible with `ConfigValidationService`.
 
-### 7.8 Schema Service
+### 7.9 Schema Service
 
 File:
 
@@ -564,7 +634,7 @@ modules/services/schema_service.py
 
 Responsibilities are defined in Section 9.6. This service must also expose schema validation to both the schema editor UI and `ReviewGateTask`.
 
-### 7.9 Pipeline Configuration Service
+### 7.10 Pipeline Configuration Service
 
 File:
 
@@ -584,7 +654,7 @@ Responsibilities:
 - Publish a validated draft by writing the updated config and recording `config_versions`.
 - Append admin audit events for draft, validation, and publish actions.
 
-### 7.10 Task Catalog Service
+### 7.11 Task Catalog Service
 
 File:
 
@@ -600,7 +670,7 @@ Responsibilities:
 - Identify known standard tasks such as extraction, split, rules, storage, and `ReviewGateTask`.
 - Provide catalog entries for the pipeline configuration UI.
 
-### 7.11 Admin Settings Service
+### 7.12 Admin Settings Service
 
 File:
 
@@ -728,6 +798,31 @@ or add:
 ```python
 run_pipeline_for_document(document_id: str, start_task_index: int)
 ```
+
+### 8.6 Fan-In Finalization
+
+Fan-in must be triggered by orchestration after a leaf workflow reaches a terminal state. It should be called after mandatory housekeeping returns so cleanup errors can be reflected in the leaf status.
+
+Recommended integration point:
+
+```python
+final_context = run_housekeeping(current_context)
+fan_in_result = FanInService(conn).finalize_leaf(final_context)
+return final_context
+```
+
+Rules:
+
+- Do not run fan-in for a context with `pipeline_state = "fan_out"`; the root/source document has stopped after split and is waiting for child leaves.
+- Do not mark a paused leaf terminal. A paused leaf updates the aggregate as `review_required` or `in_review`, then waits for review completion/resume.
+- On successful leaf completion, set the leaf document status to `completed`.
+- On workflow or housekeeping error, set the leaf document status to `failed`.
+- After each leaf status update, recompute root/source and batch aggregate state from leaf descendants.
+- For split roots, keep the root/source record as a lineage container. It should move from `split_completed`/`processing` to `completed` or `completed_with_errors` only after all child leaves are terminal.
+- For unsplit roots, the root is also the leaf; fan-in updates the batch directly.
+- Write one audit event such as `fan_in_completed` when a root transitions into a terminal aggregate state. Repeated fan-in calls after that transition must be no-ops except for recomputing counts.
+
+Fan-in should not be implemented inside `CleanupTask`. Housekeeping handles explicit transient file deletion. Fan-in handles SQLite state finalization and aggregate status.
 
 ## 9. ReviewGateTask Design
 
@@ -940,6 +1035,7 @@ Implement:
 class SplitSegment:
     category: str | None
     confidence: str | None
+    pages: list[int]
     page_start: int
     page_end: int
     metadata: dict
@@ -955,7 +1051,14 @@ class LlamaCloudSplitAdapter:
         ...
 ```
 
-Keep API-specific parsing here.
+Keep API-specific parsing here. LlamaCloud Split returns category, confidence category, and a list of 1-indexed pages; it does not create split PDF files. Normalize provider responses in this adapter and keep raw provider fields in `metadata`/`raw_response` so beta API changes are isolated.
+
+Adapter call flow:
+
+- Upload the source PDF through the LlamaCloud Files API with `purpose="split"`.
+- Submit configured categories and `allow_uncategorized` behavior to the beta split API.
+- Poll for completion through the SDK or HTTP API inside the adapter only.
+- Return normalized `SplitSegment` values to the task; never write local files from the adapter.
 
 ### 11.2 Task
 
@@ -966,11 +1069,13 @@ Class: `LlamaCloudSplitTask(BaseTask)`
 Responsibilities:
 
 - Call adapter.
-- Persist raw split metadata to current root document metadata.
+- Persist raw split metadata to the current root document metadata or a registered source/split artifact record.
+- Register the root source PDF as `source_original` when it has not already been registered.
 - For each segment:
   - Create split PDF in configured split directory.
   - Create child document record.
-  - Add document file record.
+  - Add `split_pdf` document file record.
+  - Store 1-indexed page traceability on the child document and exact returned pages in child metadata.
 - Set parent document status to `split_completed`.
 - Set context:
 
@@ -979,11 +1084,44 @@ context["split_children"] = [child_document_id, ...]
 context["pipeline_state"] = "fan_out"
 ```
 
+The split task must run only for source/root documents. If split is disabled or not needed, it should leave the root document as the leaf document and allow the pipeline to continue normally.
+
+Child metadata should include:
+
+```json
+{
+  "root_document_id": "doc_root",
+  "source_original_filename": "bundle.pdf",
+  "source_file_path": "D:/.../bundle.pdf",
+  "source_file_artifact_id": "file_source",
+  "split_provider_job_id": "spl_123",
+  "split_segment_index": 0,
+  "split_pages": [1, 2, 3],
+  "split_category": "invoice",
+  "split_confidence": "high"
+}
+```
+
+Do not copy mutable parent extraction/review/export state into child documents. If pre-split tasks later produce immutable data needed by all children, copy it deliberately into `metadata_json.inherited_context` with an explicit version marker.
+
 ### 11.3 PDF Page Extraction
 
-Use `PyPDF2` or `pypdf` if already available or acceptable in requirements.
+Use `pypdf` for the first local PDF splitting implementation. It is pure Python, already available in the current development environment, and is sufficient for deterministic page extraction. Do not use `PyPDF2` for new code; that project line has been superseded by `pypdf`.
 
-Page ranges from LlamaCloud are expected to be 1-indexed. Convert to 0-indexed for local extraction.
+Page numbers from LlamaCloud are 1-indexed. Convert to 0-indexed only at the local PDF extraction boundary. Preserve the provider's exact 1-indexed `pages` list in metadata, and derive `page_start`/`page_end` as `min(pages)` and `max(pages)` for summary display and filtering.
+
+Local splitting helper shape:
+
+```python
+def create_split_pdf(
+    source_pdf_path: str,
+    output_pdf_path: str,
+    pages_1_indexed: list[int],
+) -> None:
+    """Create one child PDF from 1-indexed source pages."""
+```
+
+The helper should validate that every requested page exists, fail before creating a child document when the range is invalid, and write the child document record only after the PDF exists.
 
 ### 11.4 Fan-Out Execution
 
@@ -992,8 +1130,64 @@ Initial simple implementation:
 - Split task returns `pipeline_state = "fan_out"`.
 - Workflow stops parent document pipeline after split.
 - Workflow manager starts child document pipelines from next task index.
+- Child workflow context uses the child `document_id`, child PDF `file_path`, inherited `batch_id`, original source filename, split category, split confidence, and page traceability.
+- Child workflow context also includes `parent_document_id`, `root_document_id`, `source_original_filename`, `source_file_path`, `split_pages`, `page_start`, `page_end`, and any explicit immutable `inherited_context` snapshot.
+- Downstream extraction, review, rules, reference updates, storage, export, and archive tasks operate on the current child context and must not special-case the original root PDF.
 
 This is simpler than trying to continue multiple child flows inside the same parent Prefect run.
+
+### 11.5 Fan-In After Child Completion
+
+Fan-out creates independent leaf workflows; fan-in closes the loop once those leaf workflows finish.
+
+- Child workflow completion must call `FanInService.finalize_leaf(...)` after mandatory housekeeping.
+- The service must recompute aggregate root and batch state from leaf documents, not from the root source container.
+- The root/source document remains a durable parent record and should not be deleted or overwritten with child task state.
+- Root/source status remains `split_completed`, `processing`, or a review/active aggregate while any child leaf is unfinished.
+- Root/source status becomes `completed` only after every child leaf completed successfully.
+- Root/source status becomes `completed_with_errors` when every child leaf is terminal and at least one leaf failed.
+- Batch status follows the same leaf-derived aggregate. Batch `total_documents`, `completed_documents`, and `failed_documents` must count leaves only.
+- Fan-in must record an audit event for the root aggregate transition and must be idempotent across repeated or concurrent child workflow completion callbacks.
+- Parent/source processing-copy cleanup can become eligible after fan-in, but actual deletion remains a housekeeping/retention decision and must respect registered artifact roles.
+
+### 11.6 Update Reference Task After Split
+
+`standard_step.rules.update_reference.UpdateReferenceTask` mutates a configured CSV reference file, so it must be handled as a leaf-document side effect.
+
+- Run `update_reference` only in child/leaf workflows after the split task. The parent/root bundle must not execute it after successful fan-out.
+- Use the leaf document's extracted `context["data"]` plus inherited source fields when resolving `csv_match.clauses[*].from_context`.
+- Treat the CSV file and optional `.backup` as reference data, not workflow state.
+- Persist selected-row and updated-row counts through `task_runs.output_json`; add audit metadata when the audit service is available.
+- If child workflows are started in parallel, serialize writes to the same `reference_file` with a file-level lock or a dedicated reference-update service. The initial implementation may run child workflows sequentially to avoid introducing a shared CSV write race.
+- Resume must be idempotent: a repeated downstream resume must not repeat `update_reference` if the task already has a completed task-run for the same leaf document and task key unless an explicit rerun mode is requested.
+- Fan-in runs after the leaf workflow finishes, so `update_reference` completion or failure must be reflected on the leaf document before aggregate root/batch state is computed.
+
+### 11.7 Housekeeping After Split
+
+`standard_step.housekeeping.cleanup_task.CleanupTask` currently deletes the active `context["file_path"]`; that behavior is unsafe for split children because child `file_path` is the registered `split_pdf` artifact.
+
+Refactor housekeeping semantics during the SQLite migration:
+
+- Prefer `context["cleanup_paths"]` or transient artifact records over deleting `context["file_path"]`.
+- Delete only transient processing copies under the configured processing directory.
+- Never delete registered `source_original`, `split_pdf`, `export_pdf`, `export_json`, `export_csv`, or `source_archive` files from housekeeping.
+- Root/source housekeeping after fan-out can remove the transient upload/watch processing copy only after a durable source artifact exists.
+- Child housekeeping should normally leave the `split_pdf` in place until a retention task confirms it is no longer needed for review preview, retry, audit, or export traceability.
+- Record cleanup actions through task-run output and audit metadata instead of text status files.
+- Housekeeping must not decide whether all child documents are complete. That decision belongs to fan-in finalization after housekeeping returns.
+
+### 11.8 Artifact and Archive Semantics
+
+Split fan-out requires artifact roles to stay explicit:
+
+- `source_original`: the original uploaded or watched PDF for the root document.
+- `split_pdf`: a locally generated child PDF used as the active file for a child document.
+- `export_pdf`, `export_json`, `export_csv`: final business outputs for a leaf document.
+- `source_archive`: archived copy of the original source PDF.
+
+Source archival should happen once for the root/source document. Child split PDFs are working artifacts and should not be copied by the source archive task as if they were newly ingested originals. If the business workflow needs final child PDFs in an archive/export folder, use a distinct storage/export task that records `export_pdf` or another explicit role.
+
+Batch status should be computed from leaf documents. A root document that reached `split_completed` is successful only as a source container; the batch is not complete until all created child documents reach terminal states.
 
 ## 12. API Design
 
@@ -2707,6 +2901,7 @@ The UI refactor is acceptable when:
 - Audit remaining workflow-state dependencies in orchestration and all `standard_step/*` tasks before UI pages depend on those paths.
 - Implement split adapter and split task.
 - Add fan-out child document execution.
+- Add fan-in finalization so root/source and batch status are derived from leaf completion before UI pages depend on processing status.
 - Build validation services for config, pipeline, schemas, review-gate params, and split params.
 
 ### Phase 6
@@ -2729,7 +2924,7 @@ The UI refactor is acceptable when:
 ### Phase 8
 
 - Build reports and operator settings pages.
-- Complete the workflow-state audit checklist and verify every configured workflow step, including all `standard_step/*` tasks, has classified filesystem writes as workflow state, business output, input/archive artifact, reference/config data, or export.
+- Complete the workflow-state audit checklist and verify every configured workflow step, including all `standard_step/*` tasks, has classified filesystem writes as workflow state, business output, source input artifact, split working artifact, archive artifact, reference/config data, or export.
 - Replace `StatusManager` text-file writes in orchestration and standard steps with SQLite-backed task-run events, document state updates, audit events, extraction/review records, or document-file registrations.
 - Replace status-file API reads with SQLite batch/document/task-run queries.
 - Ensure representative workflows can run with text status-file creation disabled.
@@ -2752,6 +2947,7 @@ test/services/test_batch_service.py
 test/services/test_document_service.py
 test/services/test_workflow_state_service.py
 test/services/test_review_service.py
+test/services/test_fan_in_service.py
 test/services/test_schema_service.py
 test/services/test_config_validation_service.py
 test/services/test_pipeline_config_service.py
@@ -2762,7 +2958,9 @@ test/standard_step/review/test_review_gate.py
 test/standard_step/split/test_llamacloud_split_adapter.py
 test/standard_step/split/test_llamacloud_split_task.py
 test/integration/test_sqlite_ingestion.py
+test/integration/test_llamacloud_split_fanout.py
 test/integration/test_review_pause_resume.py
+test/integration/test_split_fan_in_finalization.py
 test/integration/test_config_validation_api.py
 test/integration/test_new_ui_routes.py
 test/integration/test_admin_routes.py
@@ -2779,17 +2977,19 @@ Test rules:
 - Do not depend on real API keys.
 - Verify no duplicate review item on repeated `ReviewGateTask` execution.
 - Verify corrected values are used by downstream storage.
+- Verify split fan-in marks the root and batch complete only after all leaf documents are terminal.
+- Verify fan-in is idempotent and does not delete parent/root state or registered artifacts.
 - Verify operators cannot access admin routes or APIs.
 - Verify admin pipeline publish records a config version and audit event.
 - Verify representative configured workflows do not require intermediate text status files for workflow state.
-- Verify generated PDFs, archives, JSON/CSV exports, reference CSVs, and config files are registered or documented as artifacts rather than used as workflow state.
+- Verify generated PDFs, split working PDFs, archives, JSON/CSV exports, reference CSVs, and config files are registered or documented as artifacts rather than used as workflow state.
 
 ## 16. Implementation Guardrails
 
 - Keep existing tests passing as much as possible during each phase.
 - Do not delete file-based status code until SQLite-backed UI/API is working.
 - Do not consider the migration complete while workflow orchestration or `standard_step/*` tasks require `StatusManager` text files for state, progress, pause/resume, recovery, or UI/API visibility.
-- Standard task filesystem outputs may remain where they are business outputs, archives, references, inputs, or exports, but those files must be registered in SQLite or documented as non-state artifacts when relevant.
+- Standard task filesystem outputs may remain where they are business outputs, split working PDFs, archives, references, inputs, or exports, but those files must be registered in SQLite or documented as non-state artifacts when relevant.
 - Do not remove or disable watch-folder ingestion; preserve `modules/watch_folder_monitor.py` behavior and adapt it to the shared ingestion/state services.
 - Do not put raw SQL in FastAPI route handlers.
 - Do not put UI-specific logic in pipeline tasks.
@@ -2815,6 +3015,7 @@ Start with these tasks:
 - [ ] Persist extraction result and fields from `ExtractPdfV2Task`.
 - [ ] Implement and test `ReviewGateTask` pass-through.
 - [ ] Implement and test `ReviewGateTask` pause.
+- [ ] Implement and test split fan-in finalization.
 - [ ] Add role-aware operator/admin route guards.
 - [ ] Add admin schema validation-all endpoint.
 - [ ] Add pipeline draft/validate/diff/publish endpoints.

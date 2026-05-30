@@ -70,11 +70,12 @@ class StatusManager:
             - Thread-safe via a class-level lock guarding initial creation.
             - The config argument is only used during first instantiation.
         """
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super(StatusManager, cls).__new__(cls)
-                    cls._instance._init(config)
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(StatusManager, cls).__new__(cls)
+                cls._instance._init(config)
+            elif getattr(cls._instance, "_config", None) is not config:
+                cls._instance._init(config)
         return cls._instance
 
     def _init(self, config: ConfigManager):

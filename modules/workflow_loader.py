@@ -45,11 +45,12 @@ class WorkflowLoader:
     _lock = threading.Lock()
 
     def __new__(cls, config_manager: ConfigManager):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._init(config_manager)
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._init(config_manager)
+            elif getattr(cls._instance, "config_manager", None) is not config_manager:
+                cls._instance._init(config_manager)
         return cls._instance
 
     def _init(self, config_manager: ConfigManager):
@@ -224,6 +225,17 @@ class WorkflowLoader:
                         current_context["task_run_id"] = task_run_id
 
                     output_summary = self._context_summary(current_context)
+                    if current_context.get("pipeline_state") == "fan_out":
+                        current_context.setdefault("fan_out_start_task_index", task_index + 1)
+                        if state_service is not None and task_run_id:
+                            state_service.complete_task(task_run_id, output_summary)
+                        self.status_manager.update_status(
+                            current_context.get("id", "unknown"),
+                            f"Task Completed with Fan-Out: {task_name}",
+                        )
+                        self.logger.info("Pipeline fan-out after task '%s'.", task_name)
+                        return current_context
+
                     if current_context.get("pipeline_state") == "paused":
                         if state_service is not None and task_run_id:
                             state_service.pause_task(task_run_id, output_summary)

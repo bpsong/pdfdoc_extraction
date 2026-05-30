@@ -126,7 +126,7 @@ SQLite must become the durable source of truth for application state.
 - File paths stored in the database must be absolute or resolvable from a configured app data root.
 - The system must not rely on status `.txt` files as workflow state after migration.
 - All configured workflow steps must read and write workflow state through SQLite-backed services, task-run records, document records, extraction/review records, audit records, or registered document-file records.
-- Remaining filesystem writes after migration must be durable business artifacts, input/archive files, reference/config files, or exports; they must not be required to reconstruct in-progress workflow state.
+- Remaining filesystem writes after migration must be durable business artifacts, source input files, split working files, archive files, reference/config files, cleanup/transient files, or exports; they must not be required to reconstruct in-progress workflow state.
 
 ### 7.2 Required Tables
 
@@ -139,8 +139,9 @@ The implementation may adjust names, but the model must support these concepts:
   - Represents a processable logical document.
   - Supports parent-child relationships for split documents.
   - Tracks document type, status, current pipeline step, source batch, and active file path.
+  - Distinguishes source/root documents from leaf documents by relationship and status. A root document that successfully fans out after split is a source container; child documents, or an unsplit root document, are the leaf documents that continue extraction, review, export, and completion.
 - `document_files`
-  - Tracks original PDFs, split PDFs, previews, exported files, and archived files.
+  - Tracks original PDFs, split PDFs, previews, exported files, and archived files with explicit file roles such as `source_original`, `split_pdf`, `export_pdf`, `export_json`, `export_csv`, and `source_archive`.
 - `task_runs`
   - Tracks every task execution with task key, status, start/end time, error, retry count, and output summary.
 - `extraction_results`
@@ -252,6 +253,34 @@ The pipeline engine must support tasks that produce child documents.
 - Each child document must continue through the configured pipeline from the appropriate next task.
 - Parent batch progress must aggregate child document progress.
 - Child documents must retain traceability to the original source PDF and page ranges.
+- A root document that successfully produces child documents must stop its own downstream pipeline after the split task with `pipeline_state = "fan_out"`.
+- Downstream extraction, review, rules, reference updates, export, and storage tasks must run against leaf documents only. The original bundled PDF must not be extracted, reference-updated, or exported as if it were a normal business document after split succeeds.
+- If the split task is disabled, skipped, or determines that no fan-out is required, the root document is treated as the leaf document and continues through the configured downstream tasks.
+- Batch completion must be derived from terminal leaf-document states, with the root/source document providing traceability and aggregate state.
+
+### 8.2.1 Fan-In Requirement
+
+The pipeline engine must support fan-in after split fan-out. Fan-in means that after each leaf document reaches a terminal workflow state, the system recomputes the aggregate state of its parent/root document and batch.
+
+- Fan-in must run after a leaf workflow completes housekeeping, or after a resumed leaf workflow reaches a terminal state.
+- Fan-in must not delete parent/root document state. Parent/root records are durable lineage and audit records for the original source PDF, split job, child relationships, and source artifacts.
+- A root document that produced child documents must remain `split_completed` or `processing` while any child leaf is still running or paused.
+- When all child leaves are terminal, the root document must be marked `completed` if all leaves succeeded, or `completed_with_errors` if one or more leaves failed.
+- Batch totals and progress must be computed from leaf documents, not by double-counting the root source container.
+- If any leaf is paused for review, the parent/root and batch aggregate status should reflect that review is pending rather than complete.
+- Fan-in must be idempotent. Repeated completion callbacks for the same leaf must not duplicate audit events, rerun downstream tasks, or change final artifacts.
+- Fan-in must be transactionally safe when child workflows finish close together. SQLite updates to leaf, parent/root, batch counts, and audit events must be performed in one transaction or under a clear write guard.
+- Any cleanup of temporary parent processing copies after fan-in must follow the artifact policy in section 8.5. Durable `source_original`, `split_pdf`, export, and archive artifacts must not be removed by fan-in.
+
+### 8.2.2 Leaf Document Parent State
+
+Every leaf document produced by split must carry enough parent/source state to run downstream tasks independently while retaining a durable reference back to the original source document.
+
+- Each child document must store `parent_document_id` and share the same `batch_id` as the root source document.
+- Child document metadata must include an immutable source snapshot such as root document ID, original filename, source file artifact ID/path, ingestion source, split provider job ID, split segment index, split category, split confidence, exact 1-indexed split pages, and derived page range.
+- Child workflow context must include parent/root identifiers and inherited source metadata so downstream tasks can use source fields in filename templates, audit logs, exports, and reference updates.
+- Child extraction, review, rules, export, and completion state must be independent per leaf document. Mutable parent task-run state, extraction data, review data, and export state must not be blindly copied into child documents; it must remain reachable through parent references when needed.
+- If a future workflow allows tasks before split to produce reusable immutable state, that inherited state must be copied explicitly into child metadata as an `inherited_context` snapshot with a schema/version marker.
 
 ### 8.3 Pause/Resume Requirement
 
@@ -278,6 +307,29 @@ Each task run must store:
 - Error details.
 - Input context summary.
 - Output context summary.
+
+### 8.5 Artifact, Export, and Archive Policy
+
+The system must keep source, working, export, and archive artifacts distinct.
+
+- The original uploaded or watched PDF is the `source_original` artifact for the root document.
+- A successful split creates one `split_pdf` artifact per child document. Split PDFs are processable working artifacts and must be registered in SQLite.
+- Final business outputs are created per leaf document, not per source bundle. Examples include `export_pdf`, `export_json`, and `export_csv`.
+- Source archival must archive the original root PDF exactly once per source document or batch ingestion event.
+- Split child PDFs must not be archived as if they were original source files. If a workflow requires retaining final child PDFs in an archive location, they must be recorded with a distinct export/archive file role.
+- Archive, storage, and export tasks must operate on the current document context and must write registered `document_files` records for durable artifacts.
+- Cleanup or retention tasks may remove working split PDFs only when SQLite records, export artifacts, and source archive policy confirm they are no longer needed.
+
+### 8.6 Rules, Reference Updates, and Housekeeping After Split
+
+Standard steps that mutate shared files or clean working files must be split-aware.
+
+- `standard_step.rules.update_reference.UpdateReferenceTask` must run against leaf document context after extraction/rules data is available. It must not update reference CSVs from a parent/root bundle after successful fan-out.
+- Reference CSV writes are durable reference-data mutations, not workflow state. Each update must be represented in SQLite through task-run output and/or audit metadata, including selected row count, updated row count, reference file path, and leaf document ID.
+- If child workflows may run concurrently, updates to the same reference CSV must be serialized through a file-level lock or a service-level write guard to avoid corrupting the reference file.
+- `standard_step.housekeeping.cleanup_task.CleanupTask` must clean only transient processing files. It must not delete registered `source_original`, `split_pdf`, `export_*`, or `source_archive` artifacts unless a later retention policy explicitly allows it.
+- Root/source housekeeping after fan-out may remove temporary ingestion copies only after the source original is registered or archived. Child housekeeping must preserve the child `split_pdf` while it is needed for review preview, export traceability, retry, or audit.
+- The preferred design is for housekeeping to consume explicit `cleanup_paths` or transient artifact records instead of blindly deleting the active `context["file_path"]`.
 
 ## 9. ReviewGateTask Requirements
 
@@ -613,10 +665,14 @@ The app must add an optional LlamaCloud Split task.
 
 - The task must upload the source PDF for split processing.
 - The task must use configured categories.
-- The task must persist split job ID, status, categories, page ranges, and confidence.
+- LlamaCloud Split must be treated as a split-decision provider only. It returns categories, page lists, and confidence; the app must create child PDF files locally.
+- The task must persist split job ID, status, categories, exact 1-indexed page lists, derived page ranges, and confidence.
 - The task must support uncategorized page behavior through configuration.
 - The task must create child document records for each segment.
-- The task must create split PDF files locally from returned page ranges.
+- The task must create split PDF files locally from returned 1-indexed page lists.
+- The task must register the original source PDF, split child PDFs, and split metadata using SQLite-backed document and document-file records.
+- The task must stop the parent/root workflow after successful fan-out and return `pipeline_state = "fan_out"` with the created child document IDs.
+- Child workflows must resume from the task immediately after the split task, using each child PDF as the current `file_path`.
 - The task must be disabled by default unless configured.
 
 ### 12.2 Beta API Isolation
@@ -777,7 +833,7 @@ The refactor is acceptable when:
 - Admin changes to schemas, pipeline configuration, validation runs, and settings are auditable.
 - Existing core extraction/storage behavior remains covered by tests.
 - All configured workflow steps can run with SQLite as the workflow-state store and without intermediate text status files.
-- Any remaining filesystem writes are documented as business artifacts, input/archive files, reference/config files, or exports rather than state required by the application workflow.
+- Any remaining filesystem writes are documented as business artifacts, source input files, split working files, archive files, reference/config files, or exports rather than state required by the application workflow.
 
 ## 19. Open Questions
 

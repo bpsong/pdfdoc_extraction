@@ -9,8 +9,8 @@
 - `web/server.py` - FastAPI page route definitions for the new UI.
 - `modules/api_router.py` - API route definitions for ingestion, state, review, schema, validation, admin configuration, and resume endpoints.
 - `modules/config_manager.py` - Existing config manager to extend carefully for new settings.
-- `modules/workflow_loader.py` - Existing dynamic workflow loader to extend with task run tracking, pass-through, pause, fan-out, and resume support.
-- `modules/workflow_manager.py` - Existing workflow trigger layer to update for batch/document context and resume.
+- `modules/workflow_loader.py` - Existing dynamic workflow loader to extend with task run tracking, pass-through, pause, fan-out, fan-in, and resume support.
+- `modules/workflow_manager.py` - Existing workflow trigger layer to update for batch/document context, fan-out child execution, fan-in finalization, and resume.
 - `modules/file_processor.py` - Existing upload ingestion path to update with SQLite batch/document creation.
 - `modules/watch_folder_monitor.py` - Existing watch-folder ingestion path to update with SQLite batch/document creation.
 - `modules/status_manager.py` - Existing text-file status compatibility layer to retire from primary workflow state by migration cleanup.
@@ -21,6 +21,7 @@
 - `modules/services/batch_service.py` - New batch creation, listing, and aggregate status service.
 - `modules/services/document_service.py` - New document state and document-detail service.
 - `modules/services/workflow_state_service.py` - New workflow task-run and state-transition service.
+- `modules/services/fan_in_service.py` - New split fan-in and leaf-derived aggregate finalization service.
 - `modules/services/review_service.py` - New review claim, lock, draft, complete, and correction service.
 - `modules/services/audit_service.py` - New immutable audit-event service.
 - `modules/services/schema_service.py` - New schema load, normalize, validate, and schema editor support service.
@@ -74,6 +75,7 @@
 - `test/services/test_document_service.py` - New document service tests.
 - `test/services/test_workflow_state_service.py` - New workflow state service tests.
 - `test/services/test_review_service.py` - New review service tests.
+- `test/services/test_fan_in_service.py` - New split fan-in aggregate finalization tests.
 - `test/services/test_schema_service.py` - New schema service tests.
 - `test/services/test_config_validation_service.py` - New config validation service tests.
 - `test/services/test_pipeline_config_service.py` - New pipeline configuration service tests.
@@ -86,6 +88,8 @@
 - `test/standard_step/review/test_review_gate.py` - New ReviewGateTask tests.
 - `test/standard_step/split/test_llamacloud_split_adapter.py` - New Split adapter tests.
 - `test/standard_step/split/test_llamacloud_split_task.py` - New Split task tests.
+- `test/integration/test_llamacloud_split_fanout.py` - New split fan-out, artifact, API, and parent/child workflow integration tests.
+- `test/integration/test_split_fan_in_finalization.py` - New split fan-in root/batch finalization integration tests.
 - `test/integration/test_sqlite_ingestion.py` - New ingestion/state integration tests.
 - `test/integration/test_review_pause_resume.py` - New pause/resume integration tests.
 - `test/integration/test_config_validation_api.py` - New validation API tests.
@@ -211,157 +215,176 @@ C:\Python313\python.exe -m pytest -v
   - [x] 10.6 Add `test/services/test_resume_manager.py`.
   - [x] 10.7 Add `test/integration/test_review_pause_resume.py`.
 
-- [ ] 11.0 Audit remaining workflow state and standard task file usage
+- [x] 11.0 Audit remaining workflow state and standard task file usage
   - Acceptance: The implementation has an explicit backend migration map before new UI pages depend on incomplete or text-file-backed state paths.
-  - [ ] 11.1 Inventory `StatusManager` and text status-file usage in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, `api_router`, and `standard_step/*`.
-  - [ ] 11.2 Classify every `standard_step/*` file operation as workflow state, business output, input artifact, archive artifact, export, reference data, or configuration data.
-  - [ ] 11.3 Identify required SQLite repositories/services or schema additions for generated files, output artifacts, task events, and state transitions.
-  - [ ] 11.4 Create `tasks/standard-step-sqlite-state-audit.md` with a migration checklist for replacing text-file workflow state while preserving existing task context compatibility.
-  - [ ] 11.5 Update the task list with any discovered subtasks before UI implementation begins.
+  - [x] 11.1 Inventory `StatusManager` and text status-file usage in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, `api_router`, and `standard_step/*`.
+  - [x] 11.2 Classify every `standard_step/*` file operation as workflow state, business output, source input artifact, split working artifact, archive artifact, export, reference data, cleanup/transient data, or configuration data.
+  - [x] 11.3 Identify required SQLite repositories/services or schema additions for generated files, output artifacts, task events, state transitions, and explicit document-file roles such as `source_original`, `split_pdf`, `export_pdf`, `export_json`, `export_csv`, and `source_archive`.
+  - [x] 11.4 Create `tasks/standard-step-sqlite-state-audit.md` with a migration checklist for replacing text-file workflow state while preserving existing task context compatibility.
+  - [x] 11.5 Document how storage/export/archive tasks should behave for root source documents, split child documents, and unsplit leaf documents.
+  - [x] 11.6 Document split-aware behavior for `standard_step.rules.update_reference.UpdateReferenceTask`, including leaf-only execution, reference CSV audit/task-run output, idempotent resume, and serialized writes if child workflows run concurrently.
+  - [x] 11.7 Document split-aware behavior for `standard_step.housekeeping.cleanup_task.CleanupTask`, including transient-only cleanup and preservation of registered source, split, export, and archive artifacts.
+  - [x] 11.8 Update the task list with any discovered subtasks before UI implementation begins.
 
-- [ ] 12.0 Implement LlamaCloud Split
-  - Acceptance: Split task can mock-create child documents and split PDFs from 1-indexed page ranges, with the real API isolated behind an adapter.
-  - [ ] 12.1 Create `standard_step/split/llamacloud_split_adapter.py`.
-  - [ ] 12.2 Add mocked adapter tests.
-  - [ ] 12.3 Create `standard_step/split/llamacloud_split.py`.
-  - [ ] 12.4 Implement local child PDF creation.
-  - [ ] 12.5 Implement parent fan-out stop and child pipeline start.
-  - [ ] 12.6 Add `GET /api/batches/{batch_id}/split-results`.
-  - [ ] 12.7 Add split integration tests with mocked split response.
+- [x] 12.0 Implement LlamaCloud Split
+  - Acceptance: Split task can mock-create child documents and split PDFs from 1-indexed page lists, with the real API isolated behind an adapter. Successful split stops the root workflow, starts child workflows from the task after split, and registers source/split artifacts in SQLite with explicit file roles.
+  - [x] 12.1 Create `standard_step/split/llamacloud_split_adapter.py` to upload with `purpose="split"`, call/poll LlamaCloud Split, and normalize decision-only results without writing local files.
+  - [x] 12.2 Add mocked adapter tests.
+  - [x] 12.3 Create `standard_step/split/llamacloud_split.py`.
+  - [x] 12.4 Add `pypdf` as the local child-PDF creation dependency and implement a focused helper that validates 1-indexed pages before writing a child PDF.
+  - [x] 12.5 Register `source_original` and `split_pdf` document-file records and persist split category, confidence, exact pages, and `page_start`/`page_end` traceability.
+  - [x] 12.6 Implement parent fan-out stop and child pipeline start from the task immediately after split.
+  - [x] 12.7 Ensure child workflow context uses the child document ID, child PDF path, inherited batch ID, parent/root document IDs, source original filename/path, split category/confidence, exact split pages, page traceability, and any explicit immutable inherited context snapshot.
+  - [x] 12.8 Add `GET /api/batches/{batch_id}/split-results`.
+  - [x] 12.9 Add split integration tests with mocked split response, child PDF creation, artifact registration, parent-state inheritance/reference behavior, and downstream child workflow start behavior.
+  - [x] 12.10 Add tests or test fixtures proving fan-out does not run `update_reference` on the parent/root workflow and housekeeping does not delete registered child `split_pdf` artifacts.
 
-- [ ] 13.0 Add config, pipeline, and schema validation services
+- [ ] 13.0 Implement split fan-in and aggregate finalization
+  - Acceptance: After every leaf workflow completion, SQLite root/source and batch state is recomputed from leaf documents only; parent/root lineage state is preserved; fan-in is idempotent and covered by unit and integration tests before UI pages depend on aggregate status.
+  - [ ] 13.1 Create `modules/services/fan_in_service.py` with a transaction-safe `finalize_leaf(context)` operation and a small result object.
+  - [ ] 13.2 Define leaf detection so split child documents and unsplit root documents count as leaves, while split root/source documents are lineage containers.
+  - [ ] 13.3 Mark successful leaf workflow completion as `completed` and failed workflow or housekeeping completion as `failed`.
+  - [ ] 13.4 Recompute parent/root aggregate status from leaf descendants with priority for review-required, processing, completed-with-errors, and completed states.
+  - [ ] 13.5 Recompute batch `total_documents`, `completed_documents`, `failed_documents`, status, and progress from leaf documents only, without double-counting root/source containers.
+  - [ ] 13.6 Add an idempotent `fan_in_completed` audit event when a root/source document transitions into a terminal aggregate state.
+  - [ ] 13.7 Call fan-in after mandatory housekeeping for normal leaf workflows and resumed leaf workflows; skip fan-in for parent contexts that return `pipeline_state == "fan_out"`.
+  - [ ] 13.8 Ensure fan-in does not delete parent/root state or registered `source_original`, `split_pdf`, export, or archive artifacts; any retention cleanup remains explicit housekeeping/retention behavior.
+  - [ ] 13.9 Add `test/services/test_fan_in_service.py` for all-success, partial-failure, paused/review, unsplit-root, idempotent, and leaf-only count cases.
+  - [ ] 13.10 Add `test/integration/test_split_fan_in_finalization.py` proving root/batch state finalizes only after the final leaf completes and remains correct when finalization is called more than once.
+
+- [ ] 14.0 Add config, pipeline, and schema validation services
   - Acceptance: UI/API validation uses shared Python logic and does not shell out to CLI commands.
-  - [ ] 13.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
-  - [ ] 13.2 Create `modules/services/pipeline_validation_service.py`.
-  - [ ] 13.3 Add validation for `ReviewGateTask` params and schema references.
-  - [ ] 13.4 Add validation for split task params and fan-out assumptions.
-  - [ ] 13.5 Add all-schema validation support through `SchemaService`.
-  - [ ] 13.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
-  - [ ] 13.7 Add `test/services/test_config_validation_service.py`.
-  - [ ] 13.8 Add `test/integration/test_config_validation_api.py`.
+  - [ ] 14.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
+  - [ ] 14.2 Create `modules/services/pipeline_validation_service.py`.
+  - [ ] 14.3 Add validation for `ReviewGateTask` params and schema references.
+  - [ ] 14.4 Add validation for split task params, fan-out assumptions, and fan-in aggregate-finalization requirements.
+  - [ ] 14.5 Add all-schema validation support through `SchemaService`.
+  - [ ] 14.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
+  - [ ] 14.7 Add `test/services/test_config_validation_service.py`.
+  - [ ] 14.8 Add `test/integration/test_config_validation_api.py`.
 
-- [ ] 14.0 Build shared prototype-modeled role-aware UI shell
+- [ ] 15.0 Build shared prototype-modeled role-aware UI shell
   - Acceptance: Authenticated `/app/*` pages share the compact DaisyUI-based sidebar/topbar layout modeled after the prototype, operators see operator navigation only, admins see the additional admin navigation group, and the UI layout plus IA flow mirror `refactor UI prototype/`.
-  - [ ] 14.1 Create `web/templates/app_base.html`.
-  - [ ] 14.2 Create `web/static/css/app.css`.
-  - [ ] 14.3 Create `web/static/js/app.js`.
-  - [ ] 14.4 Add authenticated `/app` route group in `web/server.py`.
-  - [ ] 14.5 Add admin role helper and server-side route guard.
-  - [ ] 14.6 Add placeholder templates for all operator and admin pages.
-  - [ ] 14.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
-  - [ ] 14.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
-  - [ ] 14.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
+  - [ ] 15.1 Create `web/templates/app_base.html`.
+  - [ ] 15.2 Create `web/static/css/app.css`.
+  - [ ] 15.3 Create `web/static/js/app.js`.
+  - [ ] 15.4 Add authenticated `/app` route group in `web/server.py`.
+  - [ ] 15.5 Add admin role helper and server-side route guard.
+  - [ ] 15.6 Add placeholder templates for all operator and admin pages.
+  - [ ] 15.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
+  - [ ] 15.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
+  - [ ] 15.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
 
-- [ ] 15.0 Build Upload and Processing UI
+- [ ] 16.0 Build Upload and Processing UI
   - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in DaisyUI pages that mirror the prototype layout and flow.
-  - [ ] 15.1 Build `upload_process.html` and `upload_process.js`.
-  - [ ] 15.2 Add `POST /api/batches/upload`.
-  - [ ] 15.3 Build `processing_overview.html` and `processing_overview.js`.
-  - [ ] 15.4 Add polling for active batches.
-  - [ ] 15.5 Build `split_results.html` and wire it to `GET /api/batches/{batch_id}/split-results`.
-  - [ ] 15.6 Add upload, processing, and split-results UI smoke tests where practical.
+  - [ ] 16.1 Build `upload_process.html` and `upload_process.js`.
+  - [ ] 16.2 Add `POST /api/batches/upload`.
+  - [ ] 16.3 Build `processing_overview.html` and `processing_overview.js`.
+  - [ ] 16.4 Add polling for active batches using fan-in finalized leaf-derived batch status.
+  - [ ] 16.5 Build `split_results.html` and wire it to `GET /api/batches/{batch_id}/split-results`.
+  - [ ] 16.6 Add upload, processing, and split-results UI smoke tests where practical.
 
-- [ ] 16.0 Build Schema Editor UI and schema APIs
+- [ ] 17.0 Build Schema Editor UI and schema APIs
   - Acceptance: Admin can create/edit/validate/save complex QA schemas without Streamlit, operators cannot access schema editing, and review UI can consume normalized schema API responses.
-  - [ ] 16.1 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
-  - [ ] 16.2 Build `schema_editor.html`.
-  - [ ] 16.3 Build `schema_editor.js` field tree rendering.
-  - [ ] 16.4 Implement scalar field property editing.
-  - [ ] 16.5 Implement nested object field editing.
-  - [ ] 16.6 Implement scalar array and object array schema editing.
-  - [ ] 16.7 Add YAML preview.
-  - [ ] 16.8 Add active-review warning when schema changes may affect existing review items.
-  - [ ] 16.9 Add schema editor tests for API, service, and admin authorization behavior.
+  - [ ] 17.1 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
+  - [ ] 17.2 Build `schema_editor.html`.
+  - [ ] 17.3 Build `schema_editor.js` field tree rendering.
+  - [ ] 17.4 Implement scalar field property editing.
+  - [ ] 17.5 Implement nested object field editing.
+  - [ ] 17.6 Implement scalar array and object array schema editing.
+  - [ ] 17.7 Add YAML preview.
+  - [ ] 17.8 Add active-review warning when schema changes may affect existing review items.
+  - [ ] 17.9 Add schema editor tests for API, service, and admin authorization behavior.
 
-- [ ] 17.0 Build Extraction Results UI and API
+- [ ] 18.0 Build Extraction Results UI and API
   - Acceptance: Operator/admin can inspect persisted extraction payloads and fields before entering review workflows.
-  - [ ] 17.1 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
-  - [ ] 17.2 Build `extraction_results.html`.
-  - [ ] 17.3 Wire extraction fields and source document preview links from SQLite-backed APIs.
-  - [ ] 17.4 Add extraction results API/UI smoke tests where practical.
+  - [ ] 18.1 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
+  - [ ] 18.2 Build `extraction_results.html`.
+  - [ ] 18.3 Wire extraction fields and source document preview links from SQLite-backed APIs.
+  - [ ] 18.4 Add extraction results API/UI smoke tests where practical.
 
-- [ ] 18.0 Build Review Queue and Human Review UI
+- [ ] 19.0 Build Review Queue and Human Review UI
   - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review in DaisyUI pages that mirror the prototype layout and IA.
-  - [ ] 18.1 Build `review_queue.html` and `review_queue.js`.
-  - [ ] 18.2 Build `human_review.html`.
-  - [ ] 18.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
-  - [ ] 18.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
-  - [ ] 18.5 Implement schema-driven scalar field rendering in `human_review.js`.
-  - [ ] 18.6 Implement object and nested object rendering.
-  - [ ] 18.7 Implement scalar array rendering.
-  - [ ] 18.8 Implement object array editable grid rendering for line items.
-  - [ ] 18.9 Wire save draft, diff preview, complete, and release actions.
-  - [ ] 18.10 Add review UI smoke tests where practical.
+  - [ ] 19.1 Build `review_queue.html` and `review_queue.js`.
+  - [ ] 19.2 Build `human_review.html`.
+  - [ ] 19.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
+  - [ ] 19.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
+  - [ ] 19.5 Implement schema-driven scalar field rendering in `human_review.js`.
+  - [ ] 19.6 Implement object and nested object rendering.
+  - [ ] 19.7 Implement scalar array rendering.
+  - [ ] 19.8 Implement object array editable grid rendering for line items.
+  - [ ] 19.9 Wire save draft, diff preview, complete, and release actions.
+  - [ ] 19.10 Add review UI smoke tests where practical.
 
-- [ ] 19.0 Build Admin Task Catalog service and API
+- [ ] 20.0 Build Admin Task Catalog service and API
   - Acceptance: Admin and pipeline configuration services can inspect available task classes, import status, and task metadata before pipeline editing is implemented.
-  - [ ] 19.1 Create `modules/services/task_catalog_service.py`.
-  - [ ] 19.2 Add `GET /api/admin/task-catalog`.
-  - [ ] 19.3 Build `task_catalog.html` and `task_catalog.js`.
-  - [ ] 19.4 Add `test/services/test_task_catalog_service.py`.
+  - [ ] 20.1 Create `modules/services/task_catalog_service.py`.
+  - [ ] 20.2 Add `GET /api/admin/task-catalog`.
+  - [ ] 20.3 Build `task_catalog.html` and `task_catalog.js`.
+  - [ ] 20.4 Add `test/services/test_task_catalog_service.py`.
 
-- [ ] 20.0 Build Admin Pipeline Configuration UI
+- [ ] 21.0 Build Admin Pipeline Configuration UI
   - Acceptance: Admin can create a pipeline draft, reorder/enable/disable tasks, insert `ReviewGateTask`, validate, view diff, and publish with audit history.
-  - [ ] 20.1 Create `modules/services/pipeline_config_service.py`.
-  - [ ] 20.2 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
-  - [ ] 20.3 Build `pipeline_config.html`.
-  - [ ] 20.4 Build `pipeline_config.js`.
-  - [ ] 20.5 Implement ordered step rendering and reordering.
-  - [ ] 20.6 Implement task parameter forms and YAML preview.
-  - [ ] 20.7 Disable publish when blocking validation findings exist.
-  - [ ] 20.8 Record config version and admin audit event on publish.
-  - [ ] 20.9 Add `test/services/test_pipeline_config_service.py`.
-  - [ ] 20.10 Add `test/integration/test_admin_pipeline_config_api.py`.
+  - [ ] 21.1 Create `modules/services/pipeline_config_service.py`.
+  - [ ] 21.2 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
+  - [ ] 21.3 Build `pipeline_config.html`.
+  - [ ] 21.4 Build `pipeline_config.js`.
+  - [ ] 21.5 Implement ordered step rendering and reordering.
+  - [ ] 21.6 Implement task parameter forms and YAML preview.
+  - [ ] 21.7 Disable publish when blocking validation findings exist.
+  - [ ] 21.8 Record config version and admin audit event on publish.
+  - [ ] 21.9 Add `test/services/test_pipeline_config_service.py`.
+  - [ ] 21.10 Add `test/integration/test_admin_pipeline_config_api.py`.
 
-- [ ] 21.0 Build Review Gate Rules and Split Settings
+- [ ] 22.0 Build Review Gate Rules and Split Settings
   - Acceptance: Admin can configure review gate rules and manage non-secret Split settings using the split/review backend already implemented.
-  - [ ] 21.1 Build `review_gate_rules.html` and `review_gate_rules.js`.
-  - [ ] 21.2 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
-  - [ ] 21.3 Build `split_settings.html` and `split_settings.js`.
-  - [ ] 21.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
-  - [ ] 21.5 Add review gate rule and split settings tests.
+  - [ ] 22.1 Build `review_gate_rules.html` and `review_gate_rules.js`.
+  - [ ] 22.2 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
+  - [ ] 22.3 Build `split_settings.html` and `split_settings.js`.
+  - [ ] 22.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
+  - [ ] 22.5 Add review gate rule and split settings tests.
 
-- [ ] 22.0 Build Admin Validation Center UI
+- [ ] 23.0 Build Admin Validation Center UI
   - Acceptance: Admin can validate active config, draft YAML, all schemas, and draft pipelines, then see actionable findings.
-  - [ ] 22.1 Build `config_validation.html`.
-  - [ ] 22.2 Build `config_validation.js`.
-  - [ ] 22.3 Render summary cards and findings table.
-  - [ ] 22.4 Redact secrets in any displayed YAML or JSON.
-  - [ ] 22.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
-  - [ ] 22.6 Link validation page from settings and the admin navigation group.
-  - [ ] 22.7 Add UI/API validation smoke tests.
+  - [ ] 23.1 Build `config_validation.html`.
+  - [ ] 23.2 Build `config_validation.js`.
+  - [ ] 23.3 Render summary cards and findings table.
+  - [ ] 23.4 Redact secrets in any displayed YAML or JSON.
+  - [ ] 23.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
+  - [ ] 23.6 Link validation page from settings and the admin navigation group.
+  - [ ] 23.7 Add UI/API validation smoke tests.
 
-- [ ] 23.0 Build Admin Dashboard, Audit, Settings, and Dry Run
+- [ ] 24.0 Build Admin Dashboard, Audit, Settings, and Dry Run
   - Acceptance: Admin has a configuration-health home page, auditable configuration changes, editable non-secret settings, and a sample-pipeline dry run.
-  - [ ] 23.1 Build `admin_dashboard.html` and `admin.js`.
-  - [ ] 23.2 Add `GET /api/admin/summary`.
-  - [ ] 23.3 Create `modules/services/admin_settings_service.py`.
-  - [ ] 23.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
-  - [ ] 23.5 Build `admin_audit.html` and `admin_audit.js`.
-  - [ ] 23.6 Add `GET /api/admin/audit`.
-  - [ ] 23.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
-  - [ ] 23.8 Add `POST /api/admin/dry-run`.
-  - [ ] 23.9 Add `test/services/test_admin_settings_service.py`.
-  - [ ] 23.10 Add `test/integration/test_pipeline_dry_run.py`.
+  - [ ] 24.1 Build `admin_dashboard.html` and `admin.js`.
+  - [ ] 24.2 Add `GET /api/admin/summary`.
+  - [ ] 24.3 Create `modules/services/admin_settings_service.py`.
+  - [ ] 24.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
+  - [ ] 24.5 Build `admin_audit.html` and `admin_audit.js`.
+  - [ ] 24.6 Add `GET /api/admin/audit`.
+  - [ ] 24.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
+  - [ ] 24.8 Add `POST /api/admin/dry-run`.
+  - [ ] 24.9 Add `test/services/test_admin_settings_service.py`.
+  - [ ] 24.10 Add `test/integration/test_pipeline_dry_run.py`.
 
-- [ ] 24.0 Build Reports and Operator Settings pages
+- [ ] 25.0 Build Reports and Operator Settings pages
   - Acceptance: Operator/admin can inspect basic reports and current non-secret runtime settings through the new UI.
-  - [ ] 24.1 Build `reports.html` and `GET /api/reports/summary`.
-  - [ ] 24.2 Build `settings.html` and `GET /api/settings`.
-  - [ ] 24.3 Add tests for non-secret settings output.
+  - [ ] 25.1 Build `reports.html` and `GET /api/reports/summary`.
+  - [ ] 25.2 Build `settings.html` and `GET /api/settings`.
+  - [ ] 25.3 Add tests for non-secret settings output.
 
-- [ ] 25.0 Migration cleanup and documentation
+- [ ] 26.0 Migration cleanup and documentation
   - Acceptance: New SQLite-backed UI/API is primary, all configured workflow-step state is read from and written to SQLite, intermediate text status files are not required to maintain workflow state, remaining file outputs are documented business artifacts only, and full suite passes.
-  - [ ] 25.1 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
-  - [ ] 25.2 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
-  - [ ] 25.3 Ensure storage/archive steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, instead of relying on status text details.
-  - [ ] 25.4 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
-  - [ ] 25.5 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, rules, storage, archiver, and housekeeping steps without intermediate status text files.
-  - [ ] 25.6 Document any remaining filesystem writes as durable business artifacts, input/archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
-  - [ ] 25.7 Deprecate or remove status-file reads from new UI paths.
-  - [ ] 25.8 Update README with new run and UI paths.
-  - [ ] 25.9 Update architecture docs with SQLite, review flow, admin configuration flow, and SQLite-only workflow state.
-  - [ ] 25.10 Document migration from `qa_extracted_data`.
-  - [ ] 25.11 Document CLI and UI validation usage.
-  - [ ] 25.12 Document operator/admin UI roles.
-  - [ ] 25.13 Run full pytest suite.
+  - [ ] 26.1 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
+  - [ ] 26.2 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
+  - [ ] 26.3 Ensure storage/archive/export steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, using explicit roles for source originals, split working PDFs, source archives, and final exports instead of relying on status text details.
+  - [ ] 26.4 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
+  - [ ] 26.5 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, `update_reference`, storage, archiver, and housekeeping steps without intermediate status text files.
+  - [ ] 26.6 Document any remaining filesystem writes as durable business artifacts, source input files, split working files, archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
+  - [ ] 26.7 Deprecate or remove status-file reads from new UI paths.
+  - [ ] 26.8 Update README with new run and UI paths.
+  - [ ] 26.9 Update architecture docs with SQLite, review flow, admin configuration flow, fan-in/fan-out flow, and SQLite-only workflow state.
+  - [ ] 26.10 Document migration from `qa_extracted_data`.
+  - [ ] 26.11 Document CLI and UI validation usage.
+  - [ ] 26.12 Document operator/admin UI roles.
+  - [ ] 26.13 Run full pytest suite.

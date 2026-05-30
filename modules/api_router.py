@@ -49,7 +49,7 @@ from .file_processor import FileProcessor
 from . import utils as utils_mod
 from .db.connection import connect
 from .db.connection import json_loads
-from .db.repositories import ExtractionRepository, TaskRunRepository
+from .db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
 from .db.migrations import initialize_database
 from .services.batch_service import BatchService
 from .services.review_service import ReviewService, ReviewServiceError
@@ -646,6 +646,72 @@ def build_router() -> APIRouter:
             if service.get_batch(batch_id) is None:
                 raise HTTPException(status_code=404, detail="Batch not found")
             return service.list_documents(batch_id)
+
+    @router.get("/api/batches/{batch_id}/split-results")
+    def get_split_results(batch_id: str, user: str = Depends(get_current_user)):
+        """Return split parent/child results for one batch."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            batch_service = BatchService(conn)
+            batch = batch_service.get_batch(batch_id)
+            if batch is None:
+                raise HTTPException(status_code=404, detail="Batch not found")
+            documents = DocumentRepository(conn)
+            batch_documents = documents.list_by_batch(batch_id)
+
+        roots = [doc for doc in batch_documents if not doc.get("parent_document_id")]
+        children_by_parent: Dict[str, list[dict[str, Any]]] = {}
+        for document in batch_documents:
+            parent_id = document.get("parent_document_id")
+            if parent_id:
+                children_by_parent.setdefault(str(parent_id), []).append(document)
+
+        sources = []
+        total_children = 0
+        failed_children = 0
+        for root in roots:
+            children = children_by_parent.get(str(root["id"]), [])
+            child_payloads = []
+            for child in children:
+                total_children += 1
+                if child.get("status") == "failed":
+                    failed_children += 1
+                child_metadata = json_loads(child.get("metadata_json"), {})
+                child_payloads.append(
+                    {
+                        "document_id": child["id"],
+                        "filename": child.get("original_filename"),
+                        "file_path": child.get("file_path"),
+                        "category": child.get("split_category"),
+                        "page_start": child.get("page_start"),
+                        "page_end": child.get("page_end"),
+                        "pages": child_metadata.get("split_pages") or [],
+                        "split_confidence": child.get("split_confidence"),
+                        "status": child.get("status"),
+                        "parent_document_id": child.get("parent_document_id"),
+                    }
+                )
+            source_status = "success" if root.get("status") == "split_completed" else root.get("status")
+            sources.append(
+                {
+                    "document_id": root["id"],
+                    "source_file": root.get("original_filename"),
+                    "file_path": root.get("file_path"),
+                    "documents_created": len(children),
+                    "status": source_status,
+                    "children": child_payloads,
+                }
+            )
+
+        return {
+            "summary": {
+                "total_files": len(roots),
+                "documents_created": total_children,
+                "successful": total_children - failed_children,
+                "failed": failed_children,
+            },
+            "sources": sources,
+        }
 
     @router.get("/api/documents/{document_id}/task-runs")
     def list_document_task_runs(document_id: str, user: str = Depends(get_current_user)):

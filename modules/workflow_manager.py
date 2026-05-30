@@ -17,6 +17,8 @@ from prefect import flow
 from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
 from modules.status_manager import StatusManager
+from modules.db.connection import connect, json_loads
+from modules.db.repositories import DocumentRepository
 
 class WorkflowManager:
     """Orchestrates workflow triggering for file processing.
@@ -117,7 +119,9 @@ class WorkflowManager:
             self.logger.info(
                 f"Workflow triggered for file: {original_filename} (ID: {unique_id}) from source: {source}"
             )
-            flow_func(initial_context)
+            final_context = flow_func(initial_context)
+            if isinstance(final_context, dict) and final_context.get("pipeline_state") == "fan_out":
+                self._trigger_child_workflows(final_context)
             self.logger.info(
                 f"Workflow completed for file: {original_filename} (ID: {unique_id}) from source: {source}"
             )
@@ -127,3 +131,65 @@ class WorkflowManager:
             self.logger.error(f"Failed to trigger workflow for {original_filename}: {e}")
             self.status_manager.update_status(unique_id, "Workflow Trigger Failed", error=str(e))
             return False
+
+    def _trigger_child_workflows(self, parent_context: Dict[str, Any]) -> None:
+        """Start child document workflows after a split fan-out."""
+        child_ids = [str(child_id) for child_id in parent_context.get("split_children") or []]
+        if not child_ids:
+            return
+
+        start_task_index = int(parent_context.get("fan_out_start_task_index") or 0)
+        with connect(self.config_manager) as conn:
+            documents = DocumentRepository(conn)
+            child_documents = [documents.get(child_id) for child_id in child_ids]
+
+        for child in child_documents:
+            if child is None:
+                continue
+            child_context = self._build_child_context(child, parent_context, start_task_index)
+            flow_func = self.workflow_loader.load_workflow(start_task_index=start_task_index)
+            if not flow_func:
+                self.logger.error("Failed to load child workflow for %s", child["id"])
+                continue
+            self.logger.info(
+                "Starting child workflow for document %s from task index %s",
+                child["id"],
+                start_task_index,
+            )
+            flow_func(child_context)
+
+    @staticmethod
+    def _build_child_context(
+        child: Dict[str, Any],
+        parent_context: Dict[str, Any],
+        start_task_index: int,
+    ) -> Dict[str, Any]:
+        """Build a workflow context for one split child document."""
+        metadata = json_loads(child.get("metadata_json"), {})
+        child_id = str(child["id"])
+        context: Dict[str, Any] = {
+            "id": child_id,
+            "batch_id": child["batch_id"],
+            "document_id": child_id,
+            "parent_document_id": child.get("parent_document_id"),
+            "root_document_id": metadata.get("root_document_id") or child.get("parent_document_id"),
+            "file_path": child["file_path"],
+            "original_filename": child.get("original_filename"),
+            "source": "split",
+            "source_original_filename": metadata.get("source_original_filename") or parent_context.get("original_filename"),
+            "source_file_path": metadata.get("source_file_path") or parent_context.get("file_path"),
+            "split_category": child.get("split_category"),
+            "split_confidence": child.get("split_confidence"),
+            "split_pages": metadata.get("split_pages") or [],
+            "page_start": child.get("page_start"),
+            "page_end": child.get("page_end"),
+            "start_task_index": start_task_index,
+            "metadata": {
+                "split": metadata,
+                "parent_document_id": child.get("parent_document_id"),
+                "root_document_id": metadata.get("root_document_id") or child.get("parent_document_id"),
+            },
+        }
+        if "inherited_context" in metadata:
+            context["metadata"]["inherited_context"] = metadata["inherited_context"]
+        return context

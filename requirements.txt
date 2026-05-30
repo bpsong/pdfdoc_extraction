@@ -5,6 +5,7 @@ python-jose==3.4.0
 PyYAML==6.0.2
 prefect==3.4.6
 llama-cloud>=2.1
+pypdf>=6.6
 pandas==2.2.3
 uvicorn==0.34.2
 pytest==8.3.5
