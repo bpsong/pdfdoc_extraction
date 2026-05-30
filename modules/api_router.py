@@ -47,6 +47,9 @@ from .status_manager import StatusManager
 from .workflow_manager import WorkflowManager
 from .file_processor import FileProcessor
 from . import utils as utils_mod
+from .db.connection import connect
+from .db.migrations import initialize_database
+from .services.batch_service import BatchService
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
@@ -170,6 +173,8 @@ def get_dependencies() -> tuple:
     cfg_env = os.getenv("CONFIG_PATH")
     cfg_path = Path(cfg_env) if cfg_env else Path("config.yaml")
     config = ConfigManager(config_path=cfg_path.resolve())
+    if bool(config.get("database.run_migrations_on_startup", True)):
+        initialize_database(config)
     auth = AuthUtils(config)
     status_mgr = StatusManager(config)
     # WorkflowManager signature expects config_manager
@@ -597,5 +602,32 @@ def build_router() -> APIRouter:
             timestamps=timestamps or None,
             details=record.get("details"),
         )
+
+    @router.get("/api/batches")
+    def list_batches(user: str = Depends(get_current_user)):
+        """List SQLite-backed ingestion batches."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return BatchService(conn).list_batches()
+
+    @router.get("/api/batches/{batch_id}")
+    def get_batch(batch_id: str, user: str = Depends(get_current_user)):
+        """Return one SQLite-backed ingestion batch."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            batch = BatchService(conn).get_batch(batch_id)
+        if batch is None:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        return batch
+
+    @router.get("/api/batches/{batch_id}/documents")
+    def list_batch_documents(batch_id: str, user: str = Depends(get_current_user)):
+        """List documents belonging to a SQLite-backed ingestion batch."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            service = BatchService(conn)
+            if service.get_batch(batch_id) is None:
+                raise HTTPException(status_code=404, detail="Batch not found")
+            return service.list_documents(batch_id)
 
     return router

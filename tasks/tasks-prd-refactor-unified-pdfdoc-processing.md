@@ -108,43 +108,43 @@ C:\Python313\python.exe -m pytest -v
 
 ## Tasks
 
-- [ ] 1.0 Add SQLite database foundation
+- [x] 1.0 Add SQLite database foundation
   - Acceptance: Database initializes from `config.yaml`, schema is created in a temp database during tests, and existing app startup still works.
-  - [ ] 1.1 Add `database` and `app_storage` defaults to config handling without breaking existing configs.
-  - [ ] 1.2 Create `modules/db/schema.sql` with tables from the design document.
-  - [ ] 1.3 Create `modules/db/connection.py` with row factory, foreign keys, transaction helper, and JSON utility helpers.
-  - [ ] 1.4 Create `modules/db/migrations.py` with idempotent startup migration execution.
-  - [ ] 1.5 Wire database initialization into application startup.
-  - [ ] 1.6 Add `test/db/test_migrations.py` for temp database initialization and idempotency.
+  - [x] 1.1 Add `database` and `app_storage` defaults to config handling without breaking existing configs.
+  - [x] 1.2 Create `modules/db/schema.sql` with tables from the design document.
+  - [x] 1.3 Create `modules/db/connection.py` with row factory, foreign keys, transaction helper, and JSON utility helpers.
+  - [x] 1.4 Create `modules/db/migrations.py` with idempotent startup migration execution.
+  - [x] 1.5 Wire database initialization into application startup.
+  - [x] 1.6 Add `test/db/test_migrations.py` for temp database initialization and idempotency.
 
-- [ ] 2.0 Add repository layer
+- [x] 2.0 Add repository layer
   - Acceptance: Repository tests can create, read, update, and query every core state model without involving FastAPI or Prefect.
-  - [ ] 2.1 Implement `BatchRepository`.
-  - [ ] 2.2 Implement `DocumentRepository`.
-  - [ ] 2.3 Implement `DocumentFileRepository` or document-file methods inside `DocumentRepository`.
-  - [ ] 2.4 Implement `TaskRunRepository`.
-  - [ ] 2.5 Implement `ExtractionRepository`.
-  - [ ] 2.6 Implement `ReviewRepository` including lock records.
-  - [ ] 2.7 Implement `AuditRepository`.
-  - [ ] 2.8 Implement `AppSettingsRepository`.
-  - [ ] 2.9 Implement `ConfigVersionRepository` for admin drafts and published config versions.
-  - [ ] 2.10 Add `test/db/test_repositories.py`.
+  - [x] 2.1 Implement `BatchRepository`.
+  - [x] 2.2 Implement `DocumentRepository`.
+  - [x] 2.3 Implement `DocumentFileRepository` or document-file methods inside `DocumentRepository`.
+  - [x] 2.4 Implement `TaskRunRepository`.
+  - [x] 2.5 Implement `ExtractionRepository`.
+  - [x] 2.6 Implement `ReviewRepository` including lock records.
+  - [x] 2.7 Implement `AuditRepository`.
+  - [x] 2.8 Implement `AppSettingsRepository`.
+  - [x] 2.9 Implement `ConfigVersionRepository` for admin drafts and published config versions.
+  - [x] 2.10 Add `test/db/test_repositories.py`.
 
-- [ ] 3.0 Add service layer
+- [x] 3.0 Add service layer
   - Acceptance: Services coordinate repositories and expose business operations used by API routes and tasks.
-  - [ ] 3.1 Implement `BatchService` for upload/watch batch creation, source metadata, and aggregate counts.
-  - [ ] 3.2 Implement `DocumentService` for root/child document creation and details.
-  - [ ] 3.3 Implement `WorkflowStateService` for task run start, completion, failure, pause, and current-task tracking.
-  - [ ] 3.4 Implement `AuditService` for immutable audit events.
-  - [ ] 3.5 Add service unit tests for batch, document, workflow state, and audit behavior.
+  - [x] 3.1 Implement `BatchService` for upload/watch batch creation, source metadata, and aggregate counts.
+  - [x] 3.2 Implement `DocumentService` for root/child document creation and details.
+  - [x] 3.3 Implement `WorkflowStateService` for task run start, completion, failure, pause, and current-task tracking.
+  - [x] 3.4 Implement `AuditService` for immutable audit events.
+  - [x] 3.5 Add service unit tests for batch, document, workflow state, and audit behavior.
 
-- [ ] 4.0 Integrate SQLite state into ingestion
+- [x] 4.0 Integrate SQLite state into ingestion
   - Acceptance: Web uploads and watch-folder ingestion create matching batch/document records while preserving existing processing, monitoring, archive, and error-folder behavior.
-  - [ ] 4.1 Update `FileProcessor.process_web_upload` or its caller to create batch and root document records.
-  - [ ] 4.2 Update watch-folder processing in `modules/watch_folder_monitor.py` to create batch and root document records without removing the existing watch-folder workflow.
-  - [ ] 4.3 Add document and batch IDs to workflow context while preserving `id` backward compatibility.
-  - [ ] 4.4 Add `GET /api/batches`, `GET /api/batches/{batch_id}`, and `GET /api/batches/{batch_id}/documents`.
-  - [ ] 4.5 Add `test/integration/test_sqlite_ingestion.py` covering both web upload and watch-folder ingestion.
+  - [x] 4.1 Update `FileProcessor.process_web_upload` or its caller to create batch and root document records.
+  - [x] 4.2 Update watch-folder processing in `modules/watch_folder_monitor.py` to create batch and root document records without removing the existing watch-folder workflow.
+  - [x] 4.3 Add document and batch IDs to workflow context while preserving `id` backward compatibility.
+  - [x] 4.4 Add `GET /api/batches`, `GET /api/batches/{batch_id}`, and `GET /api/batches/{batch_id}/documents`.
+  - [x] 4.5 Add `test/integration/test_sqlite_ingestion.py` covering both web upload and watch-folder ingestion.
 
 - [ ] 5.0 Add task run tracking to workflow execution
   - Acceptance: Every configured pipeline task records a task run with status, timestamps, and output summary.

@@ -47,7 +47,15 @@ class WorkflowManager:
         self.logger = logging.getLogger(__name__)
         self.status_manager = StatusManager(self.config_manager)
         
-    def trigger_workflow_for_file(self, file_path: str, unique_id: str, original_filename: str, source: str):
+    def trigger_workflow_for_file(
+        self,
+        file_path: str,
+        unique_id: str,
+        original_filename: str,
+        source: str,
+        batch_id: str | None = None,
+        document_id: str | None = None,
+    ):
         """Trigger a new Prefect flow instance for the given file.
 
         Creates the initial status, loads the workflow, assembles the initial
@@ -98,6 +106,10 @@ class WorkflowManager:
                 "original_filename": original_filename,
                 "source": source
             }
+            if batch_id:
+                initial_context["batch_id"] = batch_id
+            if document_id:
+                initial_context["document_id"] = document_id
             
             self.status_manager.update_status(unique_id, "Workflow Triggered")
 

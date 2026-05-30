@@ -28,6 +28,7 @@ from modules.api_router import build_router, get_dependencies
 from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
 from modules.auth_utils import AuthUtils, AuthError
+from modules.db.migrations import initialize_database
 
 
 def create_app() -> FastAPI:
@@ -70,6 +71,13 @@ def create_app() -> FastAPI:
     )
 
     logger = logging.getLogger("web.server")
+
+    try:
+        config, _, _, _, _ = get_dependencies()
+        if bool(config.get("database.run_migrations_on_startup", True)):
+            initialize_database(config)
+    except Exception as exc:
+        logger.warning("Database initialization during web startup failed: %s", exc)
 
     # Helper: read/validate JWT from cookie; return username or None
     async def get_current_user(request: Request) -> Optional[str]:

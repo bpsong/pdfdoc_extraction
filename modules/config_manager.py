@@ -57,6 +57,48 @@ import yaml
 import sys
 import logging
 from pathlib import Path
+from copy import deepcopy
+
+
+DEFAULT_CONFIG: dict = {
+    "database": {
+        "path": "data/app_state.sqlite3",
+        "run_migrations_on_startup": True,
+    },
+    "app_storage": {
+        "root_dir": "data/app",
+        "originals_dir": "data/app/originals",
+        "working_dir": "data/app/working",
+        "split_dir": "data/app/split",
+        "exports_dir": "data/app/exports",
+        "archive_dir": "data/app/archive",
+    },
+    "review": {
+        "lock_timeout_minutes": 60,
+        "default_queue_name": "default_review",
+    },
+    "validation": {
+        "config_validation_enabled": True,
+        "allow_ui_config_save": False,
+        "strict_mode_default": False,
+    },
+    "ui": {
+        "app_name": "DocFlow AI",
+        "page_size": 25,
+        "admin_enabled": True,
+    },
+}
+
+
+def _merge_defaults(config: dict, defaults: dict) -> dict:
+    """Return config with missing nested default keys filled in."""
+    merged = deepcopy(defaults)
+    for key, value in config.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_defaults(value, merged[key])
+        else:
+            merged[key] = value
+    return merged
 
 
 class ConfigManager:
@@ -220,6 +262,8 @@ class ConfigManager:
         if not isinstance(self.config, dict):
             self.logger.critical("Configuration file root must be a dictionary")
             sys.exit(1)
+
+        self.config = _merge_defaults(self.config, DEFAULT_CONFIG)
 
         # Validate static core paths
         self._validate_static_paths()

@@ -107,6 +107,7 @@ from modules.shutdown_manager import ShutdownManager
 from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.file_processor import FileProcessor
 from modules.workflow_manager import WorkflowManager
+from modules.db.migrations import initialize_database
 
 from modules.logging_config import setup_logging
 
@@ -230,6 +231,8 @@ def main():
 
     # Initialize ConfigManager singleton with the resolved path
     config_manager = ConfigManager(config_path=resolved_config_path)
+    if bool(config_manager.get("database.run_migrations_on_startup", True)):
+        initialize_database(config_manager)
     # Use centralized logging setup from modules.logging_config
     setup_logging(wrap_stdout_utf8=True)
 

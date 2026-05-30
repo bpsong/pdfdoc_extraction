@@ -21,6 +21,9 @@ from modules.config_manager import ConfigManager
 from modules.workflow_manager import WorkflowManager
 from modules.status_manager import StatusManager
 from modules.utils import windows_long_path, is_pdf_header
+from modules.db.connection import connect
+from modules.db.migrations import initialize_database
+from modules.services.batch_service import BatchService
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,36 @@ class FileProcessor:
         if web_upload_dir and not os.path.exists(web_upload_dir):
             os.makedirs(web_upload_dir, exist_ok=True)
             logger.info(f"Created web upload folder: {web_upload_dir}")
+
+    def _create_sqlite_ingestion_state(
+        self,
+        *,
+        filepath: str,
+        unique_id: str,
+        source: str,
+        original_filename: str,
+    ) -> tuple[str | None, str | None]:
+        """Create SQLite batch/document records when the configured app DB is available."""
+        if not hasattr(self.config_manager, "get_all"):
+            return None, None
+        try:
+            initialize_database(self.config_manager)
+            with connect(self.config_manager) as conn:
+                service = BatchService(conn)
+                created = service.create_ingestion_batch(
+                    source=source,
+                    file_path=filepath,
+                    original_filename=original_filename,
+                    document_id=unique_id,
+                    metadata={
+                        "legacy_id": unique_id,
+                        "ingestion_source": source,
+                    },
+                )
+                return created["batch"]["id"], created["document"]["id"]
+        except Exception as exc:
+            logger.warning("SQLite ingestion state creation failed: %s", exc)
+            return None, None
 
     def _validate_pdf_header(self, file_path: str) -> bool:
         """Delegate to the centralized is_pdf_header utility.
@@ -223,13 +256,34 @@ class FileProcessor:
             file_path=destination_path
         )
         logger.info(f"Created pending status record for {filename} with ID {unique_id}")
-        
-        # Trigger workflow for this file
-        self.workflow_manager.trigger_workflow_for_file(
-            file_path=destination_path,
+
+        batch_id, document_id = self._create_sqlite_ingestion_state(
+            filepath=destination_path,
             unique_id=unique_id,
+            source=source,
             original_filename=filename,
-            source=source
         )
+        
+        # Trigger workflow for this file. Some tests and third-party callers still
+        # inject a pre-refactor WorkflowManager-shaped object, so keep that
+        # compatibility while passing SQLite ids to the real manager.
+        workflow_kwargs = {
+            "file_path": destination_path,
+            "unique_id": unique_id,
+            "original_filename": filename,
+            "source": source,
+        }
+        if batch_id:
+            workflow_kwargs["batch_id"] = batch_id
+        if document_id:
+            workflow_kwargs["document_id"] = document_id
+        try:
+            self.workflow_manager.trigger_workflow_for_file(**workflow_kwargs)
+        except TypeError as exc:
+            if "unexpected keyword argument" not in str(exc):
+                raise
+            workflow_kwargs.pop("batch_id", None)
+            workflow_kwargs.pop("document_id", None)
+            self.workflow_manager.trigger_workflow_for_file(**workflow_kwargs)
         
         return True
