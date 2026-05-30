@@ -65,7 +65,10 @@ def test_initialization_and_loading_valid_config(temp_dir):
     create_dummy_file(temp_dir / 'logs' / 'app.log')
 
     manager = ConfigManager(config_path)
-    assert manager.config == config_content
+    for key, value in config_content.items():
+        assert manager.config[key] == value
+    assert manager.config["database"]["path"] == "data/app_state.sqlite3"
+    assert manager.config["review"]["default_queue_name"] == "default_review"
     assert ConfigManager._instance is not None
 
 def test_singleton_behavior(temp_dir):
@@ -400,7 +403,9 @@ def test_dynamic_path_validation_with_list_in_pipeline(temp_dir, caplog):
     create_dummy_file(temp_dir / 'logs' / 'app.log')
     
     manager = ConfigManager(config_path)
-    assert manager.config == config_content
+    for key, value in config_content.items():
+        assert manager.config[key] == value
+    assert manager.config["database"]["run_migrations_on_startup"] is True
     # Ensure no dynamic validation error messages present (updated wording)
     assert "does not exist or isn’t a directory" not in caplog.text
     assert "does not exist or isn’t a file" not in caplog.text

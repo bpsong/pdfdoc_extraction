@@ -70,10 +70,10 @@ def test_run_file_deletion_failure(tmp_path, cleanup_task):
             cleanup_task.run(context)
         cleanup_task.logger.error.assert_called()
 
-def test_run_does_not_return_context(tmp_path, cleanup_task):
+def test_run_returns_context_unchanged(tmp_path, cleanup_task):
     test_file = tmp_path / "testfile.pdf"
     test_file.write_text("dummy content")
     context = {"file_path": str(test_file), "id": "1234"}
     cleanup_task.params['processing_dir'] = tmp_path
     result = cleanup_task.run(context)
-    assert result is None
+    assert result is context
