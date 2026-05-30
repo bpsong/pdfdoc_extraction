@@ -2800,3 +2800,16 @@ Start with these tasks:
 - [ ] Add role-aware operator/admin route guards.
 - [ ] Add admin schema validation-all endpoint.
 - [ ] Add pipeline draft/validate/diff/publish endpoints.
+## UI Framework and Prototype Alignment
+
+Use DaisyUI as the primary CSS component framework for the refactored FastAPI/Jinja UI.
+
+The layout, navigation model, and information architecture flow must mirror `refactor UI prototype/`. Treat the prototype as the source for page structure, sidebar/topbar behavior, screen-to-screen flow, density, and operator/admin navigation grouping, not merely as loose styling inspiration.
+
+Implementation guidance:
+
+- Prefer DaisyUI components for navigation, menus, buttons, forms, tables, tabs, badges, alerts, modals, drawers, cards, and status indicators.
+- Use Tailwind utility classes where needed to compose DaisyUI components and match the prototype spacing, hierarchy, and responsive behavior.
+- Keep custom CSS limited to application-specific layout behavior such as PDF/review split panes, dense processing tables, scroll regions, responsive review workspaces, and prototype-specific refinements that DaisyUI does not cover cleanly.
+- Do not introduce Streamlit or a separate frontend application for the first UI implementation.
+- Keep each UI route focused on the actual usable operator/admin workflow shown in the prototype, not a marketing or explanatory landing page.

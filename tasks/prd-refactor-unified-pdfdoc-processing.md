@@ -837,3 +837,10 @@ The refactor is acceptable when:
 - Update documentation.
 - Add migration notes for existing deployments.
 - Run full test suite.
+## UI Framework and Prototype Alignment
+
+The refactored UI must use DaisyUI as the primary CSS component framework for the FastAPI/Jinja implementation.
+
+The UI layout, navigation model, and information architecture flow must mirror `refactor UI prototype/`. The prototype should be treated as the product reference for page structure, operator/admin navigation, workflow progression, screen density, and review workspace layout, not only as loose visual inspiration.
+
+Implementation should prefer DaisyUI components for navigation, menus, buttons, forms, tables, tabs, badges, alerts, modals, drawers, cards, and status indicators. Custom CSS should be limited to app-specific layout behavior such as PDF/review split panes, dense processing tables, scroll regions, responsive review workspaces, and prototype-specific refinements that DaisyUI does not cover cleanly.

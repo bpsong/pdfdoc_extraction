@@ -97,6 +97,9 @@
 - Do not remove existing tests. Update incrementally.
 - Do not use Streamlit in the refactored app.
 - Use FastAPI/Jinja templates for the first UI implementation.
+- Use DaisyUI as the primary CSS component framework for the refactored FastAPI/Jinja UI.
+- Mirror the layout, navigation, and information architecture flow from `refactor UI prototype/`; do not treat the prototype as only loose visual inspiration.
+- Prefer DaisyUI components for the shared shell, navigation, menus, buttons, forms, tables, tabs, badges, alerts, modals, drawers, and cards. Use custom CSS only for app-specific layout behavior such as PDF/review workspaces, dense tables, responsive split panes, and prototype-specific refinements.
 - Use existing CLI validation code where possible. The UI validator must call shared validation logic, not shell out to the CLI.
 - Keep the operator sidebar close to the prototype. Show admin-only pages through an admin role and a compact admin navigation group.
 - Enforce admin authorization server-side for schema editing, validation center, pipeline configuration, task catalog, review-gate rules, split settings, admin audit, and dry-run routes.
@@ -214,7 +217,7 @@ C:\Python313\python.exe -m pytest -v
   - [ ] 11.8 Add `test/integration/test_config_validation_api.py`.
 
 - [ ] 12.0 Build shared prototype-modeled role-aware UI shell
-  - Acceptance: Authenticated `/app/*` pages share the compact sidebar/topbar layout modeled after the prototype, operators see operator navigation only, and admins see the additional admin navigation group.
+  - Acceptance: Authenticated `/app/*` pages share the compact DaisyUI-based sidebar/topbar layout modeled after the prototype, operators see operator navigation only, admins see the additional admin navigation group, and the UI layout plus IA flow mirror `refactor UI prototype/`.
   - [ ] 12.1 Create `web/templates/app_base.html`.
   - [ ] 12.2 Create `web/static/css/app.css`.
   - [ ] 12.3 Create `web/static/js/app.js`.
@@ -223,9 +226,10 @@ C:\Python313\python.exe -m pytest -v
   - [ ] 12.6 Add placeholder templates for all operator and admin pages.
   - [ ] 12.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
   - [ ] 12.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
+  - [ ] 12.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
 
 - [ ] 13.0 Build Upload and Processing UI
-  - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in prototype-modeled pages.
+  - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in DaisyUI pages that mirror the prototype layout and flow.
   - [ ] 13.1 Build `upload_process.html` and `upload_process.js`.
   - [ ] 13.2 Add `POST /api/batches/upload`.
   - [ ] 13.3 Build `processing_overview.html` and `processing_overview.js`.
@@ -233,7 +237,7 @@ C:\Python313\python.exe -m pytest -v
   - [ ] 13.5 Add upload and processing UI smoke tests where practical.
 
 - [ ] 14.0 Build Review Queue and Human Review UI
-  - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review.
+  - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review in DaisyUI pages that mirror the prototype layout and IA.
   - [ ] 14.1 Build `review_queue.html` and `review_queue.js`.
   - [ ] 14.2 Build `human_review.html`.
   - [ ] 14.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
