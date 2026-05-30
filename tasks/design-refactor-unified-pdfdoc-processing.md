@@ -2704,23 +2704,32 @@ The UI refactor is acceptable when:
 
 ### Phase 5
 
-- Build review queue and human review UI.
-- Port validation, diff, and audit logic from `qa_extracted_data`.
+- Audit remaining workflow-state dependencies in orchestration and all `standard_step/*` tasks before UI pages depend on those paths.
+- Implement split adapter and split task.
+- Add fan-out child document execution.
+- Build validation services for config, pipeline, schemas, review-gate params, and split params.
 
 ### Phase 6
 
-- Build role-aware admin UI shell.
-- Build validation center, schema validation-all, pipeline configuration, task catalog, and review-gate rules.
+- Build role-aware shared UI shell.
+- Build upload and processing UI.
+- Build schema APIs and schema editor before human review UI consumes schema-driven field definitions.
+- Build extraction results API/page before review UI links to persisted fields.
+- Build review queue and human review UI.
+- Port remaining validation, diff, and audit UI behavior from `qa_extracted_data`.
 
 ### Phase 7
 
-- Implement split adapter and split task.
-- Add fan-out child document execution.
+- Build Task Catalog service/API before Pipeline Configuration.
+- Build Pipeline Configuration with draft, diff, validate, and publish.
+- Build Review Gate Rules and Split Settings.
+- Build Validation Center after validation services and admin configuration APIs exist.
+- Build admin dashboard, audit, settings, and pipeline dry-run.
 
 ### Phase 8
 
-- Replace old dashboard with prototype-modeled UI.
-- Audit every configured workflow step, including all `standard_step/*` tasks, and classify filesystem writes as workflow state, business output, input/archive artifact, reference/config data, or export.
+- Build reports and operator settings pages.
+- Complete the workflow-state audit checklist and verify every configured workflow step, including all `standard_step/*` tasks, has classified filesystem writes as workflow state, business output, input/archive artifact, reference/config data, or export.
 - Replace `StatusManager` text-file writes in orchestration and standard steps with SQLite-backed task-run events, document state updates, audit events, extraction/review records, or document-file registrations.
 - Replace status-file API reads with SQLite batch/document/task-run queries.
 - Ensure representative workflows can run with text status-file creation disabled.

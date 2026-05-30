@@ -809,43 +809,42 @@ The refactor is acceptable when:
 - Add pause/resume semantics.
 - Add tests for pass-through, pause, and resume.
 
-### Milestone 4: Human Review UI and API
+### Milestone 4: Backend Dependency Hardening
 
-- Port QA schema, validation, diff, audit, and locking behavior.
-- Build review queue and review editor in the new UI.
-- Build schema editor in the new UI.
-- Add UI/API access to config, pipeline, review gate, and schema validation.
-- Add API tests and UI smoke tests.
-
-### Milestone 5: Prototype-Aligned Operator UI
-
-- Replace the current dashboard with the prototype-modeled navigation and pages.
-- Add processing overview, extraction results, and split results screens.
-
-### Milestone 6: Admin Configuration UI
-
-- Add role-aware operator/admin navigation.
-- Build Validation Center with all-schema validation.
-- Build Pipeline Configuration with draft, diff, validate, and publish.
-- Build Task Catalog and Review Gate Rules screens.
-- Add admin audit visibility for configuration changes.
-- Add pipeline dry-run scaffolding.
-
-### Milestone 7: LlamaCloud Split
-
-- Add isolated Split adapter.
-- Add split task.
+- Audit every `standard_step/*` task and classify file operations before building UI on top of incomplete state paths.
+- Add isolated Split adapter and Split task.
 - Create child PDFs and child document records.
-- Add mocked adapter tests.
+- Add validation services for config, pipeline, schemas, review-gate params, and split params.
+- Add mocked Split and validation tests.
 
-### Milestone 8: Migration and Cleanup
+### Milestone 5: Prototype-Aligned Operator UI Foundation
 
-- Audit every `standard_step/*` task and replace text status-file state interactions with SQLite-backed state services or task-run events.
+- Add role-aware operator/admin navigation and shared DaisyUI/FastAPI shell.
+- Build upload and processing pages on SQLite batch/document/task-run APIs.
+- Build schema APIs and schema editor before the review editor depends on schema-driven fields.
+- Build extraction results API/page before review UI links to persisted fields.
+
+### Milestone 6: Human Review UI
+
+- Build review queue and review editor in the new UI.
+- Use normalized schema APIs, persisted extraction fields, review APIs, and secure PDF serving.
+- Add UI smoke tests for claim, draft, diff, complete, release, and resume.
+
+### Milestone 7: Admin Configuration UI
+
+- Build Task Catalog service/API before Pipeline Configuration.
+- Build Pipeline Configuration with draft, diff, validate, and publish.
+- Build Review Gate Rules and Split Settings screens.
+- Build Validation Center after the validation services and admin configuration APIs exist.
+- Add admin dashboard, audit visibility, settings, and pipeline dry-run scaffolding.
+
+### Milestone 8: Reports, Migration Cleanup, and Documentation
+
+- Add basic reports and operator settings pages.
 - Deprecate or remove file-based status as workflow state.
 - Replace old status APIs and UI reads with SQLite batch/document/task-run queries.
 - Add an integration test proving representative configured workflows run with text status-file creation disabled.
-- Update documentation.
-- Add migration notes for existing deployments.
+- Update documentation and migration notes for existing deployments.
 - Run full test suite.
 ## UI Framework and Prototype Alignment
 

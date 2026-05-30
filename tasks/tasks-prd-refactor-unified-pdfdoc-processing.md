@@ -2,6 +2,7 @@
 
 - `tasks/prd-refactor-unified-pdfdoc-processing.md` - Requirements source for the unified refactor.
 - `tasks/design-refactor-unified-pdfdoc-processing.md` - Implementation design source for this task list.
+- `tasks/standard-step-sqlite-state-audit.md` - New audit and migration checklist for standard workflow task file/state behavior.
 - `config.yaml` - Runtime configuration to extend with database, app storage, review, validation, and UI settings.
 - `requirements.txt` - Dependency list to update if new runtime packages are needed.
 - `main.py` - Application startup path where database initialization will be wired.
@@ -210,140 +211,157 @@ C:\Python313\python.exe -m pytest -v
   - [x] 10.6 Add `test/services/test_resume_manager.py`.
   - [x] 10.7 Add `test/integration/test_review_pause_resume.py`.
 
-- [ ] 11.0 Add config, pipeline, and schema validation services
-  - Acceptance: UI/API validation uses shared Python logic and does not shell out to CLI commands.
-  - [ ] 11.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
-  - [ ] 11.2 Create `modules/services/pipeline_validation_service.py`.
-  - [ ] 11.3 Add validation for `ReviewGateTask` params and schema references.
-  - [ ] 11.4 Add validation for split task params and fan-out assumptions.
-  - [ ] 11.5 Add all-schema validation support through `SchemaService`.
-  - [ ] 11.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
-  - [ ] 11.7 Add `test/services/test_config_validation_service.py`.
-  - [ ] 11.8 Add `test/integration/test_config_validation_api.py`.
+- [ ] 11.0 Audit remaining workflow state and standard task file usage
+  - Acceptance: The implementation has an explicit backend migration map before new UI pages depend on incomplete or text-file-backed state paths.
+  - [ ] 11.1 Inventory `StatusManager` and text status-file usage in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, `api_router`, and `standard_step/*`.
+  - [ ] 11.2 Classify every `standard_step/*` file operation as workflow state, business output, input artifact, archive artifact, export, reference data, or configuration data.
+  - [ ] 11.3 Identify required SQLite repositories/services or schema additions for generated files, output artifacts, task events, and state transitions.
+  - [ ] 11.4 Create `tasks/standard-step-sqlite-state-audit.md` with a migration checklist for replacing text-file workflow state while preserving existing task context compatibility.
+  - [ ] 11.5 Update the task list with any discovered subtasks before UI implementation begins.
 
-- [ ] 12.0 Build shared prototype-modeled role-aware UI shell
-  - Acceptance: Authenticated `/app/*` pages share the compact DaisyUI-based sidebar/topbar layout modeled after the prototype, operators see operator navigation only, admins see the additional admin navigation group, and the UI layout plus IA flow mirror `refactor UI prototype/`.
-  - [ ] 12.1 Create `web/templates/app_base.html`.
-  - [ ] 12.2 Create `web/static/css/app.css`.
-  - [ ] 12.3 Create `web/static/js/app.js`.
-  - [ ] 12.4 Add authenticated `/app` route group in `web/server.py`.
-  - [ ] 12.5 Add admin role helper and server-side route guard.
-  - [ ] 12.6 Add placeholder templates for all operator and admin pages.
-  - [ ] 12.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
-  - [ ] 12.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
-  - [ ] 12.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
-
-- [ ] 13.0 Build Upload and Processing UI
-  - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in DaisyUI pages that mirror the prototype layout and flow.
-  - [ ] 13.1 Build `upload_process.html` and `upload_process.js`.
-  - [ ] 13.2 Add `POST /api/batches/upload`.
-  - [ ] 13.3 Build `processing_overview.html` and `processing_overview.js`.
-  - [ ] 13.4 Add polling for active batches.
-  - [ ] 13.5 Add upload and processing UI smoke tests where practical.
-
-- [ ] 14.0 Build Review Queue and Human Review UI
-  - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review in DaisyUI pages that mirror the prototype layout and IA.
-  - [ ] 14.1 Build `review_queue.html` and `review_queue.js`.
-  - [ ] 14.2 Build `human_review.html`.
-  - [ ] 14.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
-  - [ ] 14.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
-  - [ ] 14.5 Implement schema-driven scalar field rendering in `human_review.js`.
-  - [ ] 14.6 Implement object and nested object rendering.
-  - [ ] 14.7 Implement scalar array rendering.
-  - [ ] 14.8 Implement object array editable grid rendering for line items.
-  - [ ] 14.9 Wire save draft, diff preview, complete, and release actions.
-  - [ ] 14.10 Add review UI smoke tests where practical.
-
-- [ ] 15.0 Build Schema Editor UI
-  - Acceptance: Admin can create/edit/validate/save complex QA schemas without Streamlit, and operators cannot access schema editing.
-  - [ ] 15.1 Build `schema_editor.html`.
-  - [ ] 15.2 Build `schema_editor.js` field tree rendering.
-  - [ ] 15.3 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
-  - [ ] 15.4 Implement scalar field property editing.
-  - [ ] 15.5 Implement nested object field editing.
-  - [ ] 15.6 Implement scalar array and object array schema editing.
-  - [ ] 15.7 Add YAML preview.
-  - [ ] 15.8 Add active-review warning when schema changes may affect existing review items.
-  - [ ] 15.9 Add schema editor tests for API, service, and admin authorization behavior.
-
-- [ ] 16.0 Build Admin Validation Center UI
-  - Acceptance: Admin can validate active config, draft YAML, all schemas, and draft pipelines, then see actionable findings.
-  - [ ] 16.1 Build `config_validation.html`.
-  - [ ] 16.2 Build `config_validation.js`.
-  - [ ] 16.3 Render summary cards and findings table.
-  - [ ] 16.4 Redact secrets in any displayed YAML or JSON.
-  - [ ] 16.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
-  - [ ] 16.6 Link validation page from settings and the admin navigation group.
-  - [ ] 16.7 Add UI/API validation smoke tests.
-
-- [ ] 17.0 Build Admin Pipeline Configuration UI
-  - Acceptance: Admin can create a pipeline draft, reorder/enable/disable tasks, insert `ReviewGateTask`, validate, view diff, and publish with audit history.
-  - [ ] 17.1 Create `modules/services/pipeline_config_service.py`.
-  - [ ] 17.2 Build `pipeline_config.html`.
-  - [ ] 17.3 Build `pipeline_config.js`.
-  - [ ] 17.4 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
-  - [ ] 17.5 Implement ordered step rendering and reordering.
-  - [ ] 17.6 Implement task parameter forms and YAML preview.
-  - [ ] 17.7 Disable publish when blocking validation findings exist.
-  - [ ] 17.8 Record config version and admin audit event on publish.
-  - [ ] 17.9 Add `test/services/test_pipeline_config_service.py`.
-  - [ ] 17.10 Add `test/integration/test_admin_pipeline_config_api.py`.
-
-- [ ] 18.0 Build Admin Task Catalog, Review Gate Rules, and Split Settings
-  - Acceptance: Admin can inspect available task classes, configure review gate rules, and manage non-secret Split settings.
-  - [ ] 18.1 Create `modules/services/task_catalog_service.py`.
-  - [ ] 18.2 Build `task_catalog.html` and `task_catalog.js`.
-  - [ ] 18.3 Add `GET /api/admin/task-catalog`.
-  - [ ] 18.4 Build `review_gate_rules.html` and `review_gate_rules.js`.
-  - [ ] 18.5 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
-  - [ ] 18.6 Build `split_settings.html` and `split_settings.js`.
-  - [ ] 18.7 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
-  - [ ] 18.8 Add `test/services/test_task_catalog_service.py`.
-
-- [ ] 19.0 Build Admin Dashboard, Audit, Settings, and Dry Run
-  - Acceptance: Admin has a configuration-health home page, auditable configuration changes, editable non-secret settings, and a sample-pipeline dry run.
-  - [ ] 19.1 Build `admin_dashboard.html` and `admin.js`.
-  - [ ] 19.2 Add `GET /api/admin/summary`.
-  - [ ] 19.3 Create `modules/services/admin_settings_service.py`.
-  - [ ] 19.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
-  - [ ] 19.5 Build `admin_audit.html` and `admin_audit.js`.
-  - [ ] 19.6 Add `GET /api/admin/audit`.
-  - [ ] 19.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
-  - [ ] 19.8 Add `POST /api/admin/dry-run`.
-  - [ ] 19.9 Add `test/services/test_admin_settings_service.py`.
-  - [ ] 19.10 Add `test/integration/test_pipeline_dry_run.py`.
-
-- [ ] 20.0 Implement LlamaCloud Split
+- [ ] 12.0 Implement LlamaCloud Split
   - Acceptance: Split task can mock-create child documents and split PDFs from 1-indexed page ranges, with the real API isolated behind an adapter.
-  - [ ] 20.1 Create `standard_step/split/llamacloud_split_adapter.py`.
-  - [ ] 20.2 Add mocked adapter tests.
-  - [ ] 20.3 Create `standard_step/split/llamacloud_split.py`.
-  - [ ] 20.4 Implement local child PDF creation.
-  - [ ] 20.5 Implement parent fan-out stop and child pipeline start.
-  - [ ] 20.6 Build `split_results.html` and `GET /api/batches/{batch_id}/split-results`.
-  - [ ] 20.7 Add split integration tests with mocked split response.
+  - [ ] 12.1 Create `standard_step/split/llamacloud_split_adapter.py`.
+  - [ ] 12.2 Add mocked adapter tests.
+  - [ ] 12.3 Create `standard_step/split/llamacloud_split.py`.
+  - [ ] 12.4 Implement local child PDF creation.
+  - [ ] 12.5 Implement parent fan-out stop and child pipeline start.
+  - [ ] 12.6 Add `GET /api/batches/{batch_id}/split-results`.
+  - [ ] 12.7 Add split integration tests with mocked split response.
 
-- [ ] 21.0 Build extraction results, reports, and settings pages
-  - Acceptance: Operator/admin can inspect extraction fields, basic reports, and current runtime settings through the new UI.
-  - [ ] 21.1 Build `extraction_results.html`.
-  - [ ] 21.2 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
-  - [ ] 21.3 Build `reports.html` and `GET /api/reports/summary`.
-  - [ ] 21.4 Build `settings.html` and `GET /api/settings`.
-  - [ ] 21.5 Add tests for non-secret settings output.
+- [ ] 13.0 Add config, pipeline, and schema validation services
+  - Acceptance: UI/API validation uses shared Python logic and does not shell out to CLI commands.
+  - [ ] 13.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
+  - [ ] 13.2 Create `modules/services/pipeline_validation_service.py`.
+  - [ ] 13.3 Add validation for `ReviewGateTask` params and schema references.
+  - [ ] 13.4 Add validation for split task params and fan-out assumptions.
+  - [ ] 13.5 Add all-schema validation support through `SchemaService`.
+  - [ ] 13.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
+  - [ ] 13.7 Add `test/services/test_config_validation_service.py`.
+  - [ ] 13.8 Add `test/integration/test_config_validation_api.py`.
 
-- [ ] 22.0 Migration cleanup and documentation
+- [ ] 14.0 Build shared prototype-modeled role-aware UI shell
+  - Acceptance: Authenticated `/app/*` pages share the compact DaisyUI-based sidebar/topbar layout modeled after the prototype, operators see operator navigation only, admins see the additional admin navigation group, and the UI layout plus IA flow mirror `refactor UI prototype/`.
+  - [ ] 14.1 Create `web/templates/app_base.html`.
+  - [ ] 14.2 Create `web/static/css/app.css`.
+  - [ ] 14.3 Create `web/static/js/app.js`.
+  - [ ] 14.4 Add authenticated `/app` route group in `web/server.py`.
+  - [ ] 14.5 Add admin role helper and server-side route guard.
+  - [ ] 14.6 Add placeholder templates for all operator and admin pages.
+  - [ ] 14.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
+  - [ ] 14.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
+  - [ ] 14.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
+
+- [ ] 15.0 Build Upload and Processing UI
+  - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in DaisyUI pages that mirror the prototype layout and flow.
+  - [ ] 15.1 Build `upload_process.html` and `upload_process.js`.
+  - [ ] 15.2 Add `POST /api/batches/upload`.
+  - [ ] 15.3 Build `processing_overview.html` and `processing_overview.js`.
+  - [ ] 15.4 Add polling for active batches.
+  - [ ] 15.5 Build `split_results.html` and wire it to `GET /api/batches/{batch_id}/split-results`.
+  - [ ] 15.6 Add upload, processing, and split-results UI smoke tests where practical.
+
+- [ ] 16.0 Build Schema Editor UI and schema APIs
+  - Acceptance: Admin can create/edit/validate/save complex QA schemas without Streamlit, operators cannot access schema editing, and review UI can consume normalized schema API responses.
+  - [ ] 16.1 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
+  - [ ] 16.2 Build `schema_editor.html`.
+  - [ ] 16.3 Build `schema_editor.js` field tree rendering.
+  - [ ] 16.4 Implement scalar field property editing.
+  - [ ] 16.5 Implement nested object field editing.
+  - [ ] 16.6 Implement scalar array and object array schema editing.
+  - [ ] 16.7 Add YAML preview.
+  - [ ] 16.8 Add active-review warning when schema changes may affect existing review items.
+  - [ ] 16.9 Add schema editor tests for API, service, and admin authorization behavior.
+
+- [ ] 17.0 Build Extraction Results UI and API
+  - Acceptance: Operator/admin can inspect persisted extraction payloads and fields before entering review workflows.
+  - [ ] 17.1 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
+  - [ ] 17.2 Build `extraction_results.html`.
+  - [ ] 17.3 Wire extraction fields and source document preview links from SQLite-backed APIs.
+  - [ ] 17.4 Add extraction results API/UI smoke tests where practical.
+
+- [ ] 18.0 Build Review Queue and Human Review UI
+  - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review in DaisyUI pages that mirror the prototype layout and IA.
+  - [ ] 18.1 Build `review_queue.html` and `review_queue.js`.
+  - [ ] 18.2 Build `human_review.html`.
+  - [ ] 18.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
+  - [ ] 18.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
+  - [ ] 18.5 Implement schema-driven scalar field rendering in `human_review.js`.
+  - [ ] 18.6 Implement object and nested object rendering.
+  - [ ] 18.7 Implement scalar array rendering.
+  - [ ] 18.8 Implement object array editable grid rendering for line items.
+  - [ ] 18.9 Wire save draft, diff preview, complete, and release actions.
+  - [ ] 18.10 Add review UI smoke tests where practical.
+
+- [ ] 19.0 Build Admin Task Catalog service and API
+  - Acceptance: Admin and pipeline configuration services can inspect available task classes, import status, and task metadata before pipeline editing is implemented.
+  - [ ] 19.1 Create `modules/services/task_catalog_service.py`.
+  - [ ] 19.2 Add `GET /api/admin/task-catalog`.
+  - [ ] 19.3 Build `task_catalog.html` and `task_catalog.js`.
+  - [ ] 19.4 Add `test/services/test_task_catalog_service.py`.
+
+- [ ] 20.0 Build Admin Pipeline Configuration UI
+  - Acceptance: Admin can create a pipeline draft, reorder/enable/disable tasks, insert `ReviewGateTask`, validate, view diff, and publish with audit history.
+  - [ ] 20.1 Create `modules/services/pipeline_config_service.py`.
+  - [ ] 20.2 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
+  - [ ] 20.3 Build `pipeline_config.html`.
+  - [ ] 20.4 Build `pipeline_config.js`.
+  - [ ] 20.5 Implement ordered step rendering and reordering.
+  - [ ] 20.6 Implement task parameter forms and YAML preview.
+  - [ ] 20.7 Disable publish when blocking validation findings exist.
+  - [ ] 20.8 Record config version and admin audit event on publish.
+  - [ ] 20.9 Add `test/services/test_pipeline_config_service.py`.
+  - [ ] 20.10 Add `test/integration/test_admin_pipeline_config_api.py`.
+
+- [ ] 21.0 Build Review Gate Rules and Split Settings
+  - Acceptance: Admin can configure review gate rules and manage non-secret Split settings using the split/review backend already implemented.
+  - [ ] 21.1 Build `review_gate_rules.html` and `review_gate_rules.js`.
+  - [ ] 21.2 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
+  - [ ] 21.3 Build `split_settings.html` and `split_settings.js`.
+  - [ ] 21.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
+  - [ ] 21.5 Add review gate rule and split settings tests.
+
+- [ ] 22.0 Build Admin Validation Center UI
+  - Acceptance: Admin can validate active config, draft YAML, all schemas, and draft pipelines, then see actionable findings.
+  - [ ] 22.1 Build `config_validation.html`.
+  - [ ] 22.2 Build `config_validation.js`.
+  - [ ] 22.3 Render summary cards and findings table.
+  - [ ] 22.4 Redact secrets in any displayed YAML or JSON.
+  - [ ] 22.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
+  - [ ] 22.6 Link validation page from settings and the admin navigation group.
+  - [ ] 22.7 Add UI/API validation smoke tests.
+
+- [ ] 23.0 Build Admin Dashboard, Audit, Settings, and Dry Run
+  - Acceptance: Admin has a configuration-health home page, auditable configuration changes, editable non-secret settings, and a sample-pipeline dry run.
+  - [ ] 23.1 Build `admin_dashboard.html` and `admin.js`.
+  - [ ] 23.2 Add `GET /api/admin/summary`.
+  - [ ] 23.3 Create `modules/services/admin_settings_service.py`.
+  - [ ] 23.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
+  - [ ] 23.5 Build `admin_audit.html` and `admin_audit.js`.
+  - [ ] 23.6 Add `GET /api/admin/audit`.
+  - [ ] 23.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
+  - [ ] 23.8 Add `POST /api/admin/dry-run`.
+  - [ ] 23.9 Add `test/services/test_admin_settings_service.py`.
+  - [ ] 23.10 Add `test/integration/test_pipeline_dry_run.py`.
+
+- [ ] 24.0 Build Reports and Operator Settings pages
+  - Acceptance: Operator/admin can inspect basic reports and current non-secret runtime settings through the new UI.
+  - [ ] 24.1 Build `reports.html` and `GET /api/reports/summary`.
+  - [ ] 24.2 Build `settings.html` and `GET /api/settings`.
+  - [ ] 24.3 Add tests for non-secret settings output.
+
+- [ ] 25.0 Migration cleanup and documentation
   - Acceptance: New SQLite-backed UI/API is primary, all configured workflow-step state is read from and written to SQLite, intermediate text status files are not required to maintain workflow state, remaining file outputs are documented business artifacts only, and full suite passes.
-  - [ ] 22.1 Update README with new run and UI paths.
-  - [ ] 22.2 Update architecture docs with SQLite, review flow, and admin configuration flow.
-  - [ ] 22.3 Document migration from `qa_extracted_data`.
-  - [ ] 22.4 Document CLI and UI validation usage.
-  - [ ] 22.5 Document operator/admin UI roles.
-  - [ ] 22.6 Audit every `standard_step/*` task and classify each file operation as workflow state, business output, input artifact, archive artifact, or reference/config data.
-  - [ ] 22.7 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
-  - [ ] 22.8 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
-  - [ ] 22.9 Ensure storage/archive steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, instead of relying on status text details.
-  - [ ] 22.10 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
-  - [ ] 22.11 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, rules, storage, archiver, and housekeeping steps without intermediate status text files.
-  - [ ] 22.12 Document any remaining filesystem writes as durable business artifacts, input/archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
-  - [ ] 22.13 Deprecate or remove status-file reads from new UI paths.
-  - [ ] 22.14 Run full pytest suite.
+  - [ ] 25.1 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
+  - [ ] 25.2 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
+  - [ ] 25.3 Ensure storage/archive steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, instead of relying on status text details.
+  - [ ] 25.4 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
+  - [ ] 25.5 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, rules, storage, archiver, and housekeeping steps without intermediate status text files.
+  - [ ] 25.6 Document any remaining filesystem writes as durable business artifacts, input/archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
+  - [ ] 25.7 Deprecate or remove status-file reads from new UI paths.
+  - [ ] 25.8 Update README with new run and UI paths.
+  - [ ] 25.9 Update architecture docs with SQLite, review flow, admin configuration flow, and SQLite-only workflow state.
+  - [ ] 25.10 Document migration from `qa_extracted_data`.
+  - [ ] 25.11 Document CLI and UI validation usage.
+  - [ ] 25.12 Document operator/admin UI roles.
+  - [ ] 25.13 Run full pytest suite.
