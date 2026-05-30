@@ -8,6 +8,7 @@ The goal is to refactor `pdfdoc_extraction` into a unified application with:
 
 - SQLite-backed state.
 - Batch and document tracking.
+- Preserved web-upload and watch-folder ingestion paths.
 - Optional LlamaCloud Split.
 - Pipeline fan-out.
 - Configurable `ReviewGateTask`.
@@ -34,7 +35,7 @@ FastAPI UI/API
 Target processing flow:
 
 ```text
-Ingest PDF
+Ingest PDF from web upload or configured watch folder
   -> create batch
   -> create root document
   -> run configured pipeline
@@ -150,6 +151,14 @@ app_storage:
   split_dir: "data/app/split"
   exports_dir: "data/app/exports"
   archive_dir: "data/app/archive"
+
+watch_folders:
+  enabled: true
+  input_dir: "data/watch/input"
+  processing_dir: "data/watch/processing"
+  archive_dir: "data/watch/archive"
+  error_dir: "data/watch/error"
+  poll_interval_seconds: 5
 
 review:
   lock_timeout_minutes: 60
@@ -451,6 +460,7 @@ Services coordinate repositories and business rules. API routes and tasks should
 Responsibilities:
 
 - Create batch for upload or watch folder ingestion.
+- Preserve the ingestion source as `web` or `watch_folder` and retain watch-folder metadata such as source path and original filename.
 - Create root document.
 - Recompute aggregate status.
 - Return UI-ready batch summaries.
@@ -622,6 +632,7 @@ Every task receives context like:
     "file_path": "D:\\...\\file.pdf",
     "original_filename": "invoice.pdf",
     "source": "web",
+    "source_path": "D:\\...\\watch\\input\\invoice.pdf",
     "data": {},
     "metadata": {},
     "error": None,
@@ -632,6 +643,7 @@ Every task receives context like:
 ```
 
 The old `id` field should point to `document_id` for backward compatibility.
+For watch-folder ingestion, `source` should be `watch_folder` and `source_path` should identify the discovered file path before it is moved into the app working/originals area.
 
 ### 8.2 Task Run Recording
 
@@ -2675,6 +2687,7 @@ The UI refactor is acceptable when:
 ### Phase 2
 
 - Update ingestion to create batch and document records.
+- Preserve existing watch-folder monitoring behavior while routing discovered PDFs through the same SQLite-backed batch/document creation path as uploads.
 - Keep old status files working.
 - Add API endpoints backed by SQLite.
 
@@ -2748,6 +2761,7 @@ Test rules:
 
 - Mock LlamaCloud calls.
 - Use temp directories and temp SQLite files.
+- Cover both web-upload and watch-folder ingestion in SQLite ingestion tests.
 - Do not depend on real API keys.
 - Verify no duplicate review item on repeated `ReviewGateTask` execution.
 - Verify corrected values are used by downstream storage.
@@ -2758,6 +2772,7 @@ Test rules:
 
 - Keep existing tests passing as much as possible during each phase.
 - Do not delete file-based status code until SQLite-backed UI/API is working.
+- Do not remove or disable watch-folder ingestion; preserve `modules/watch_folder_monitor.py` behavior and adapt it to the shared ingestion/state services.
 - Do not put raw SQL in FastAPI route handlers.
 - Do not put UI-specific logic in pipeline tasks.
 - Do not use Prefect's own UI pause as the primary human review mechanism.

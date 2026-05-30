@@ -93,6 +93,7 @@
 
 - Follow `tasks/process-task-list.mdc`: implement one sub-task at a time, mark it complete, then pause for approval before starting the next sub-task.
 - Keep the existing file-based status system during the migration until SQLite-backed UI/API paths are working.
+- Preserve watch-folder ingestion as a first-class input path. Do not remove or disable `modules/watch_folder_monitor.py`; adapt it to create the same SQLite batch/document records as web uploads while keeping existing archive/error behavior.
 - Do not remove existing tests. Update incrementally.
 - Do not use Streamlit in the refactored app.
 - Use FastAPI/Jinja templates for the first UI implementation.
@@ -131,19 +132,19 @@ C:\Python313\python.exe -m pytest -v
 
 - [ ] 3.0 Add service layer
   - Acceptance: Services coordinate repositories and expose business operations used by API routes and tasks.
-  - [ ] 3.1 Implement `BatchService` for upload/watch batch creation and aggregate counts.
+  - [ ] 3.1 Implement `BatchService` for upload/watch batch creation, source metadata, and aggregate counts.
   - [ ] 3.2 Implement `DocumentService` for root/child document creation and details.
   - [ ] 3.3 Implement `WorkflowStateService` for task run start, completion, failure, pause, and current-task tracking.
   - [ ] 3.4 Implement `AuditService` for immutable audit events.
   - [ ] 3.5 Add service unit tests for batch, document, workflow state, and audit behavior.
 
 - [ ] 4.0 Integrate SQLite state into ingestion
-  - Acceptance: Web uploads and watch-folder ingestion create matching batch/document records while preserving existing processing behavior.
+  - Acceptance: Web uploads and watch-folder ingestion create matching batch/document records while preserving existing processing, monitoring, archive, and error-folder behavior.
   - [ ] 4.1 Update `FileProcessor.process_web_upload` or its caller to create batch and root document records.
-  - [ ] 4.2 Update watch-folder processing to create batch and root document records.
+  - [ ] 4.2 Update watch-folder processing in `modules/watch_folder_monitor.py` to create batch and root document records without removing the existing watch-folder workflow.
   - [ ] 4.3 Add document and batch IDs to workflow context while preserving `id` backward compatibility.
   - [ ] 4.4 Add `GET /api/batches`, `GET /api/batches/{batch_id}`, and `GET /api/batches/{batch_id}/documents`.
-  - [ ] 4.5 Add `test/integration/test_sqlite_ingestion.py`.
+  - [ ] 4.5 Add `test/integration/test_sqlite_ingestion.py` covering both web upload and watch-folder ingestion.
 
 - [ ] 5.0 Add task run tracking to workflow execution
   - Acceptance: Every configured pipeline task records a task run with status, timestamps, and output summary.

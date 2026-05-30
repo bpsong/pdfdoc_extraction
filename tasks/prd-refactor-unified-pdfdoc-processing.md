@@ -16,6 +16,7 @@ The target application should keep the useful pipeline architecture from `pdfdoc
 ## 2. Goals
 
 - Make `pdfdoc_extraction` the main host application for ingestion, processing, review, and export.
+- Preserve watch-folder ingestion as a first-class input path alongside web upload, including configuration, monitoring, processing, archive/error handling, and SQLite state creation.
 - Introduce SQLite as the source of truth for batches, documents, task runs, extraction results, review queues, locks, audit events, and final outputs.
 - Provide a modern operator UI based on the existing prototype screens:
   - Upload and process.
@@ -666,6 +667,9 @@ The FastAPI backend must expose API endpoints for:
 ### 14.1 Existing `pdfdoc_extraction` Migration
 
 - Existing upload and watch folder behavior must keep working during migration.
+- Watch-folder monitoring must remain available after migration; the refactor must not replace it with web upload only.
+- PDFs discovered from configured watch folders must enter the same batch/document/workflow path as web uploads while retaining source metadata that identifies the watch-folder origin.
+- Existing watch-folder processing, archive, and error-folder semantics should be preserved unless a later task explicitly changes them.
 - Existing extraction tasks should be adapted to write SQLite state while still returning context.
 - Existing storage tasks should continue to work with the corrected final payload.
 - Existing tests should be updated incrementally instead of discarded.
@@ -750,6 +754,7 @@ The refactor is acceptable when:
 
 - A user can upload a PDF from the new UI.
 - A PDF dropped into the watch folder creates the same kind of batch/document records as a web upload.
+- Watch-folder ingestion remains configurable and operational after the SQLite/UI refactor.
 - Processing state is visible from SQLite-backed API endpoints.
 - A configured pipeline can include `ReviewGateTask` at an administrator-chosen position.
 - A document requiring review pauses before downstream tasks.
