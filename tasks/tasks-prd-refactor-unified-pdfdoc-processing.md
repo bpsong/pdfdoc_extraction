@@ -164,7 +164,7 @@ C:\Python313\python.exe -m pytest -v
 - [ ] 7.0 Implement schema service
   - Acceptance: Existing QA schema files can be loaded, normalized, validated, and used to validate corrected data.
   - [ ] 7.1 Implement schema directory configuration.
-  - [ ] 7.2 Port schema loading concepts from `qa_extracted_data` without importing Streamlit.
+  - [ ] 7.2 Port schema loading concepts from `qa_extracted_data` without importing Streamlit. Source program location: `D:\python_code\qa_extracted_data`; relevant files: `D:\python_code\qa_extracted_data\utils\schema_loader.py`, `D:\python_code\qa_extracted_data\utils\schema_editor_view.py`, and `D:\python_code\qa_extracted_data\utils\model_builder.py`.
   - [ ] 7.3 Normalize scalar, object, scalar array, and object array fields into UI field definitions.
   - [ ] 7.4 Validate corrected payloads against schema rules.
   - [ ] 7.5 Add schema file hash/version helper for review traceability.
