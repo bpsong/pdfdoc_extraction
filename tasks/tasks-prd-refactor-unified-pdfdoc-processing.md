@@ -12,6 +12,7 @@
 - `modules/workflow_manager.py` - Existing workflow trigger layer to update for batch/document context and resume.
 - `modules/file_processor.py` - Existing upload ingestion path to update with SQLite batch/document creation.
 - `modules/watch_folder_monitor.py` - Existing watch-folder ingestion path to update with SQLite batch/document creation.
+- `modules/status_manager.py` - Existing text-file status compatibility layer to retire from primary workflow state by migration cleanup.
 - `modules/db/schema.sql` - New SQLite schema.
 - `modules/db/connection.py` - New SQLite connection utilities.
 - `modules/db/migrations.py` - New database initialization and migration runner.
@@ -91,11 +92,12 @@
 - `test/integration/test_admin_routes.py` - New operator/admin authorization route tests.
 - `test/integration/test_admin_pipeline_config_api.py` - New pipeline config API tests.
 - `test/integration/test_pipeline_dry_run.py` - New pipeline dry-run tests.
+- `test/integration/test_sqlite_only_workflow_state.py` - New integration tests proving configured workflows no longer require intermediate text status files for state.
 
 ## Notes
 
 - Follow `tasks/process-task-list.mdc`: implement one sub-task at a time, mark it complete, then pause for approval before starting the next sub-task.
-- Keep the existing file-based status system during the migration until SQLite-backed UI/API paths are working.
+- Keep the existing file-based status system only during the migration until SQLite-backed UI/API paths are working. By the migration cleanup task, SQLite must be the sole workflow-state source of truth, and intermediate text status files must no longer be required for any configured workflow step.
 - Preserve watch-folder ingestion as a first-class input path. Do not remove or disable `modules/watch_folder_monitor.py`; adapt it to create the same SQLite batch/document records as web uploads while keeping existing archive/error behavior.
 - Do not remove existing tests. Update incrementally.
 - Do not use Streamlit in the refactored app.
@@ -330,11 +332,18 @@ C:\Python313\python.exe -m pytest -v
   - [ ] 21.5 Add tests for non-secret settings output.
 
 - [ ] 22.0 Migration cleanup and documentation
-  - Acceptance: New SQLite-backed UI/API is primary, file status compatibility remains documented or deprecated, and full suite passes.
+  - Acceptance: New SQLite-backed UI/API is primary, all configured workflow-step state is read from and written to SQLite, intermediate text status files are not required to maintain workflow state, remaining file outputs are documented business artifacts only, and full suite passes.
   - [ ] 22.1 Update README with new run and UI paths.
   - [ ] 22.2 Update architecture docs with SQLite, review flow, and admin configuration flow.
   - [ ] 22.3 Document migration from `qa_extracted_data`.
   - [ ] 22.4 Document CLI and UI validation usage.
   - [ ] 22.5 Document operator/admin UI roles.
-  - [ ] 22.6 Deprecate status-file reads from new UI paths.
-  - [ ] 22.7 Run full pytest suite.
+  - [ ] 22.6 Audit every `standard_step/*` task and classify each file operation as workflow state, business output, input artifact, archive artifact, or reference/config data.
+  - [ ] 22.7 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
+  - [ ] 22.8 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
+  - [ ] 22.9 Ensure storage/archive steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, instead of relying on status text details.
+  - [ ] 22.10 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
+  - [ ] 22.11 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, rules, storage, archiver, and housekeeping steps without intermediate status text files.
+  - [ ] 22.12 Document any remaining filesystem writes as durable business artifacts, input/archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
+  - [ ] 22.13 Deprecate or remove status-file reads from new UI paths.
+  - [ ] 22.14 Run full pytest suite.

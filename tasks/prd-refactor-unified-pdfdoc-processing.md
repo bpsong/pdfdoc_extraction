@@ -124,7 +124,9 @@ SQLite must become the durable source of truth for application state.
 - Schema migrations must be versioned and repeatable.
 - Database writes must be transactionally safe.
 - File paths stored in the database must be absolute or resolvable from a configured app data root.
-- The system must not rely on status `.txt` files as the primary state source after migration.
+- The system must not rely on status `.txt` files as workflow state after migration.
+- All configured workflow steps must read and write workflow state through SQLite-backed services, task-run records, document records, extraction/review records, audit records, or registered document-file records.
+- Remaining filesystem writes after migration must be durable business artifacts, input/archive files, reference/config files, or exports; they must not be required to reconstruct in-progress workflow state.
 
 ### 7.2 Required Tables
 
@@ -693,8 +695,11 @@ The final app should not depend on running `streamlit_app.py`.
 ### 14.3 Status File Migration
 
 - The first migration phase may keep status files as compatibility output.
-- SQLite must become the primary state source.
-- Once UI and APIs read from SQLite, status files may be deprecated.
+- SQLite must become the only required source for workflow state.
+- Once UI and APIs read from SQLite, status files must be deprecated or removed from primary workflow paths.
+- `StatusManager` calls in workflow orchestration and `standard_step/*` tasks must be audited and replaced with SQLite-backed task-run events, document state updates, audit events, or document-file registrations.
+- `/api/files`, `/api/status/{file_id}`, and new UI status reads must be backed by SQLite instead of enumerating or loading text status files.
+- A workflow must be able to run without creating intermediate status `.txt` files once migration cleanup is complete.
 - A one-time import tool should be considered for historical status files if needed.
 
 ## 15. Security Requirements
@@ -771,6 +776,8 @@ The refactor is acceptable when:
 - Admin can inspect task catalog entries and import/configuration errors.
 - Admin changes to schemas, pipeline configuration, validation runs, and settings are auditable.
 - Existing core extraction/storage behavior remains covered by tests.
+- All configured workflow steps can run with SQLite as the workflow-state store and without intermediate text status files.
+- Any remaining filesystem writes are documented as business artifacts, input/archive files, reference/config files, or exports rather than state required by the application workflow.
 
 ## 19. Open Questions
 
@@ -833,7 +840,10 @@ The refactor is acceptable when:
 
 ### Milestone 8: Migration and Cleanup
 
-- Deprecate file-based status as source of truth.
+- Audit every `standard_step/*` task and replace text status-file state interactions with SQLite-backed state services or task-run events.
+- Deprecate or remove file-based status as workflow state.
+- Replace old status APIs and UI reads with SQLite batch/document/task-run queries.
+- Add an integration test proving representative configured workflows run with text status-file creation disabled.
 - Update documentation.
 - Add migration notes for existing deployments.
 - Run full test suite.

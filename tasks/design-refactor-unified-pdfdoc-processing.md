@@ -133,7 +133,7 @@ Keep existing modules during migration:
 - `modules/watch_folder_monitor.py`
 - existing `standard_step` tasks
 
-The first implementation should add SQLite state beside the existing file-based status, then move API/UI reads to SQLite.
+The first implementation should add SQLite state beside the existing file-based status, then move API/UI reads to SQLite. By migration cleanup, SQLite-backed repositories and services must be the only required workflow-state path. Text status files may exist only as temporary compatibility output during migration, not as state needed by orchestration, UI/API reads, pause/resume, or recovery.
 
 ## 4. Configuration Design
 
@@ -2720,7 +2720,11 @@ The UI refactor is acceptable when:
 ### Phase 8
 
 - Replace old dashboard with prototype-modeled UI.
-- Deprecate status-file API reads.
+- Audit every configured workflow step, including all `standard_step/*` tasks, and classify filesystem writes as workflow state, business output, input/archive artifact, reference/config data, or export.
+- Replace `StatusManager` text-file writes in orchestration and standard steps with SQLite-backed task-run events, document state updates, audit events, extraction/review records, or document-file registrations.
+- Replace status-file API reads with SQLite batch/document/task-run queries.
+- Ensure representative workflows can run with text status-file creation disabled.
+- Deprecate or remove status-file API reads.
 
 ## 15. Testing Plan
 
@@ -2755,6 +2759,7 @@ test/integration/test_new_ui_routes.py
 test/integration/test_admin_routes.py
 test/integration/test_admin_pipeline_config_api.py
 test/integration/test_pipeline_dry_run.py
+test/integration/test_sqlite_only_workflow_state.py
 ```
 
 Test rules:
@@ -2767,11 +2772,15 @@ Test rules:
 - Verify corrected values are used by downstream storage.
 - Verify operators cannot access admin routes or APIs.
 - Verify admin pipeline publish records a config version and audit event.
+- Verify representative configured workflows do not require intermediate text status files for workflow state.
+- Verify generated PDFs, archives, JSON/CSV exports, reference CSVs, and config files are registered or documented as artifacts rather than used as workflow state.
 
 ## 16. Implementation Guardrails
 
 - Keep existing tests passing as much as possible during each phase.
 - Do not delete file-based status code until SQLite-backed UI/API is working.
+- Do not consider the migration complete while workflow orchestration or `standard_step/*` tasks require `StatusManager` text files for state, progress, pause/resume, recovery, or UI/API visibility.
+- Standard task filesystem outputs may remain where they are business outputs, archives, references, inputs, or exports, but those files must be registered in SQLite or documented as non-state artifacts when relevant.
 - Do not remove or disable watch-folder ingestion; preserve `modules/watch_folder_monitor.py` behavior and adapt it to the shared ingestion/state services.
 - Do not put raw SQL in FastAPI route handlers.
 - Do not put UI-specific logic in pipeline tasks.
