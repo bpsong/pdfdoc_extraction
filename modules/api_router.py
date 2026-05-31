@@ -52,6 +52,7 @@ from .db.connection import json_loads
 from .db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
 from .db.migrations import initialize_database
 from .services.batch_service import BatchService
+from .services.config_validation_service import ConfigValidationService
 from .services.review_service import ReviewService, ReviewServiceError
 from .resume_manager import ResumeManager
 
@@ -554,6 +555,32 @@ def build_router() -> APIRouter:
             file_status_result.append(FileStatus(**item))
         
         return file_status_result
+
+    @router.get("/api/config/validation")
+    def validate_active_config(user: str = Depends(get_current_user)):
+        """Validate the active configuration file for admin/UI diagnostics."""
+        config, _, _, _, _ = get_dependencies()
+        return ConfigValidationService(config).validate_active_config()
+
+    @router.post("/api/config/validation")
+    async def validate_config_payload(request: Request, user: str = Depends(get_current_user)):
+        """Validate a submitted config payload or YAML document."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        try:
+            return ConfigValidationService(config).validate_payload(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.post("/api/pipeline/validate")
+    async def validate_pipeline_payload(request: Request, user: str = Depends(get_current_user)):
+        """Validate pipeline-specific rules for a submitted config payload."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        try:
+            return ConfigValidationService(config).validate_pipeline(payload)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     @router.get("/api/status/{file_id}")
     def get_status(file_id: str, user: str = Depends(get_current_user)):

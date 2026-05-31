@@ -239,29 +239,29 @@ C:\Python313\python.exe -m pytest -v
   - [x] 12.9 Add split integration tests with mocked split response, child PDF creation, artifact registration, parent-state inheritance/reference behavior, and downstream child workflow start behavior.
   - [x] 12.10 Add tests or test fixtures proving fan-out does not run `update_reference` on the parent/root workflow and housekeeping does not delete registered child `split_pdf` artifacts.
 
-- [ ] 13.0 Implement split fan-in and aggregate finalization
+- [x] 13.0 Implement split fan-in and aggregate finalization
   - Acceptance: After every leaf workflow completion, SQLite root/source and batch state is recomputed from leaf documents only; parent/root lineage state is preserved; fan-in is idempotent and covered by unit and integration tests before UI pages depend on aggregate status.
-  - [ ] 13.1 Create `modules/services/fan_in_service.py` with a transaction-safe `finalize_leaf(context)` operation and a small result object.
-  - [ ] 13.2 Define leaf detection so split child documents and unsplit root documents count as leaves, while split root/source documents are lineage containers.
-  - [ ] 13.3 Mark successful leaf workflow completion as `completed` and failed workflow or housekeeping completion as `failed`.
-  - [ ] 13.4 Recompute parent/root aggregate status from leaf descendants with priority for review-required, processing, completed-with-errors, and completed states.
-  - [ ] 13.5 Recompute batch `total_documents`, `completed_documents`, `failed_documents`, status, and progress from leaf documents only, without double-counting root/source containers.
-  - [ ] 13.6 Add an idempotent `fan_in_completed` audit event when a root/source document transitions into a terminal aggregate state.
-  - [ ] 13.7 Call fan-in after mandatory housekeeping for normal leaf workflows and resumed leaf workflows; skip fan-in for parent contexts that return `pipeline_state == "fan_out"`.
-  - [ ] 13.8 Ensure fan-in does not delete parent/root state or registered `source_original`, `split_pdf`, export, or archive artifacts; any retention cleanup remains explicit housekeeping/retention behavior.
-  - [ ] 13.9 Add `test/services/test_fan_in_service.py` for all-success, partial-failure, paused/review, unsplit-root, idempotent, and leaf-only count cases.
-  - [ ] 13.10 Add `test/integration/test_split_fan_in_finalization.py` proving root/batch state finalizes only after the final leaf completes and remains correct when finalization is called more than once.
+  - [x] 13.1 Create `modules/services/fan_in_service.py` with a transaction-safe `finalize_leaf(context)` operation and a small result object.
+  - [x] 13.2 Define leaf detection so split child documents and unsplit root documents count as leaves, while split root/source documents are lineage containers.
+  - [x] 13.3 Mark successful leaf workflow completion as `completed` and failed workflow or housekeeping completion as `failed`.
+  - [x] 13.4 Recompute parent/root aggregate status from leaf descendants with priority for review-required, processing, completed-with-errors, and completed states.
+  - [x] 13.5 Recompute batch `total_documents`, `completed_documents`, `failed_documents`, status, and progress from leaf documents only, without double-counting root/source containers.
+  - [x] 13.6 Add an idempotent `fan_in_completed` audit event when a root/source document transitions into a terminal aggregate state.
+  - [x] 13.7 Call fan-in after mandatory housekeeping for normal leaf workflows and resumed leaf workflows; skip fan-in for parent contexts that return `pipeline_state == "fan_out"`.
+  - [x] 13.8 Ensure fan-in does not delete parent/root state or registered `source_original`, `split_pdf`, export, or archive artifacts; any retention cleanup remains explicit housekeeping/retention behavior.
+  - [x] 13.9 Add `test/services/test_fan_in_service.py` for all-success, partial-failure, paused/review, unsplit-root, idempotent, and leaf-only count cases.
+  - [x] 13.10 Add `test/integration/test_split_fan_in_finalization.py` proving root/batch state finalizes only after the final leaf completes and remains correct when finalization is called more than once.
 
-- [ ] 14.0 Add config, pipeline, and schema validation services
+- [x] 14.0 Add config, pipeline, and schema validation services
   - Acceptance: UI/API validation uses shared Python logic and does not shell out to CLI commands.
-  - [ ] 14.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
-  - [ ] 14.2 Create `modules/services/pipeline_validation_service.py`.
-  - [ ] 14.3 Add validation for `ReviewGateTask` params and schema references.
-  - [ ] 14.4 Add validation for split task params, fan-out assumptions, and fan-in aggregate-finalization requirements.
-  - [ ] 14.5 Add all-schema validation support through `SchemaService`.
-  - [ ] 14.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
-  - [ ] 14.7 Add `test/services/test_config_validation_service.py`.
-  - [ ] 14.8 Add `test/integration/test_config_validation_api.py`.
+  - [x] 14.1 Create `modules/services/config_validation_service.py` wrapping `tools/config_check`.
+  - [x] 14.2 Create `modules/services/pipeline_validation_service.py`.
+  - [x] 14.3 Add validation for `ReviewGateTask` params and schema references.
+  - [x] 14.4 Add validation for split task params, fan-out assumptions, and fan-in aggregate-finalization requirements.
+  - [x] 14.5 Add all-schema validation support through `SchemaService`.
+  - [x] 14.6 Add API endpoints `GET /api/config/validation`, `POST /api/config/validation`, and `POST /api/pipeline/validate`.
+  - [x] 14.7 Add `test/services/test_config_validation_service.py`.
+  - [x] 14.8 Add `test/integration/test_config_validation_api.py`.
 
 - [ ] 15.0 Build shared prototype-modeled role-aware UI shell
   - Acceptance: Authenticated `/app/*` pages share the compact DaisyUI-based sidebar/topbar layout modeled after the prototype, operators see operator navigation only, admins see the additional admin navigation group, and the UI layout plus IA flow mirror `refactor UI prototype/`.

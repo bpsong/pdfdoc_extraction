@@ -23,6 +23,7 @@ from modules.status_manager import StatusManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect
 from modules.exceptions import TaskError
+from modules.services.fan_in_service import FanInService
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 
@@ -240,6 +241,7 @@ class WorkflowLoader:
                         if state_service is not None and task_run_id:
                             state_service.pause_task(task_run_id, output_summary)
                             state_service.pause_document(str(current_context["document_id"]))
+                            FanInService(state_service.conn).finalize_leaf(current_context)
                         self.status_manager.update_status(
                             current_context.get("id", "unknown"),
                             f"Task Paused: {task_name}",
@@ -321,11 +323,26 @@ class WorkflowLoader:
                 else:
                     self.status_manager.update_status(final_context.get("id", "unknown"),
                                                       "Pipeline Completed Successfully")
+                self._finalize_leaf(final_context)
                 return final_context
             except Exception as e:
                 self.logger.critical(f"Housekeeping task failed: {e}")
+                current_context["error"] = str(e)
                 self.status_manager.update_status(current_context.get("id", "unknown"),
                                                   "Pipeline Completed with Critical Housekeeping Error",
                                                   error=str(e))
+                self._finalize_leaf(current_context)
                 return final_context
         return dynamic_flow
+
+    def _finalize_leaf(self, context: Dict[str, Any]) -> None:
+        """Run fan-in finalization for SQLite-backed leaf contexts."""
+        if context.get("pipeline_state") == "fan_out":
+            return
+        if not context.get("document_id") and not context.get("id"):
+            return
+        try:
+            with connect(self.config_manager) as conn:
+                FanInService(conn).finalize_leaf(context)
+        except Exception:
+            self.logger.exception("Fan-in finalization failed for %s", context.get("document_id") or context.get("id"))
