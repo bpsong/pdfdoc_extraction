@@ -85,11 +85,18 @@
 
     function setActiveNav() {
         const path = window.location.pathname;
+        const routeAlias = path === "/app/processing" || path.startsWith("/app/batches") || path.startsWith("/app/documents")
+            ? "/app/upload"
+            : null;
         let bestMatch = null;
         document.querySelectorAll(".nav-link[href]").forEach((link) => {
             link.classList.remove("active");
             const href = link.getAttribute("href");
             if (!href) {
+                return;
+            }
+            if (routeAlias && href === routeAlias) {
+                bestMatch = { href, link };
                 return;
             }
             const exact = path === href;

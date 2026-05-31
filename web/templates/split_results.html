@@ -1,42 +1,60 @@
 {% extends "app_base.html" %}
 
 {% block content %}
-<div class="app-workspace">
+<div id="split-results-workspace" class="app-workspace" data-batch-id="{{ batch_id|default('') }}">
     <div class="page-grid grid-cols-1 md:grid-cols-4">
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Files</div>
-            <div class="stat-value text-2xl">0</div>
+            <div id="split-total-files" class="stat-value text-2xl">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Documents</div>
-            <div class="stat-value text-2xl">0</div>
+            <div id="split-documents-created" class="stat-value text-2xl">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Successful</div>
-            <div class="stat-value text-2xl text-success">0</div>
+            <div id="split-successful" class="stat-value text-2xl text-success">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Failed</div>
-            <div class="stat-value text-2xl text-error">0</div>
+            <div id="split-failed" class="stat-value text-2xl text-error">0</div>
         </div>
     </div>
 
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Source File</th>
-                    <th>Created Documents</th>
-                    <th>Category</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No split results</td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="font-semibold">Results</h2>
+                <button id="download-split-results" class="btn btn-outline btn-sm" type="button" disabled>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download All
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr class="text-xs text-base-content/50">
+                            <th>Source File</th>
+                            <th>Documents Created</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="split-results-table-body">
+                        <tr>
+                            <td colspan="4" class="text-center text-base-content/50 py-10">No split results</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/split_results.js" defer></script>
 {% endblock %}

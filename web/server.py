@@ -375,12 +375,14 @@ def create_app() -> FastAPI:
     async def app_upload_page(request: Request):
         """Serve the prototype-modeled upload and process page."""
 
+        config, _, _, _, _ = get_dependencies()
         return await render_app_page(
             request,
             "upload_process.html",
             page_title="Upload & Process",
             page_subtitle="Upload PDF files to split, extract data, and review results.",
             active_nav="upload",
+            max_upload_mb=config.get("web.max_upload_mb", config.get("ui.max_upload_mb", 50)),
         )
 
     @app.get("/app/processing", response_class=HTMLResponse)

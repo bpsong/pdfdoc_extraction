@@ -222,7 +222,11 @@ class FileProcessor:
                      filepath: str,
                      unique_id: str,
                      source: str,
-                     original_filename: Optional[str] = None) -> bool:
+                     original_filename: Optional[str] = None,
+                     *,
+                     batch_id: Optional[str] = None,
+                     document_id: Optional[str] = None,
+                     create_sqlite_state: bool = True) -> bool:
         """Process a file already in the processing directory with a UUID name.
 
         Intended for files that have been placed/renamed to their UUID form (e.g., '<uuid>.pdf').
@@ -232,6 +236,9 @@ class FileProcessor:
             unique_id (str): UUID identifier associated with the file.
             source (str): Origin label of the file (e.g., 'web', 'watch_folder').
             original_filename (Optional[str]): Original filename, if available.
+            batch_id: Existing SQLite batch ID for grouped ingestion.
+            document_id: Existing SQLite document ID for grouped ingestion.
+            create_sqlite_state: Whether to create SQLite records when IDs are not provided.
 
         Returns:
             bool: True if status creation and workflow trigger were initiated successfully.
@@ -257,12 +264,13 @@ class FileProcessor:
         )
         logger.info(f"Created pending status record for {filename} with ID {unique_id}")
 
-        batch_id, document_id = self._create_sqlite_ingestion_state(
-            filepath=destination_path,
-            unique_id=unique_id,
-            source=source,
-            original_filename=filename,
-        )
+        if create_sqlite_state and not (batch_id and document_id):
+            batch_id, document_id = self._create_sqlite_ingestion_state(
+                filepath=destination_path,
+                unique_id=unique_id,
+                source=source,
+                original_filename=filename,
+            )
         
         # Trigger workflow for this file. Some tests and third-party callers still
         # inject a pre-refactor WorkflowManager-shaped object, so keep that

@@ -76,7 +76,8 @@ class BatchRepository:
             SELECT
                 COUNT(*) AS total,
                 SUM(CASE WHEN status IN ('completed', 'review_completed') THEN 1 ELSE 0 END) AS completed,
-                SUM(CASE WHEN status IN ('failed') THEN 1 ELSE 0 END) AS failed
+                SUM(CASE WHEN status IN ('failed') THEN 1 ELSE 0 END) AS failed,
+                SUM(CASE WHEN status IN ('queued', 'received') THEN 1 ELSE 0 END) AS queued
             FROM documents
             WHERE batch_id = ?
             """,
@@ -85,10 +86,13 @@ class BatchRepository:
         total = int(row["total"] or 0)
         completed = int(row["completed"] or 0)
         failed = int(row["failed"] or 0)
+        queued = int(row["queued"] or 0)
         if failed:
             status = "failed"
         elif total and completed == total:
             status = "completed"
+        elif total and queued == total:
+            status = "queued"
         elif total:
             status = "processing"
         else:

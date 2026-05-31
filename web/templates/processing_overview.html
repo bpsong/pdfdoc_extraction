@@ -1,58 +1,72 @@
 {% extends "app_base.html" %}
 
 {% block content %}
-<div class="app-workspace">
+<div id="processing-workspace" class="app-workspace" data-batch-id="{{ batch_id|default('') }}">
     <section class="card bg-base-100 shadow-sm">
         <div class="card-body">
             <div class="flex items-center justify-between gap-3 mb-4">
                 <h2 class="font-semibold">Pipeline Status</h2>
-                {% if batch_id is defined %}
+                {% if batch_id is defined and batch_id %}
                 <span class="badge badge-outline badge-sm">{{ batch_id }}</span>
+                {% else %}
+                <span class="badge badge-ghost badge-sm">Active batches</span>
                 {% endif %}
             </div>
-            <div class="grid grid-cols-4 gap-3 text-center">
-                <div>
-                    <div class="w-10 h-10 mx-auto rounded-full bg-success flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M5 13l4 4L19 7" />
-                        </svg>
-                    </div>
-                    <p class="mt-2 text-xs font-medium">Uploaded</p>
+            <div id="pipeline-step-list" class="pipeline-steps">
+                <div class="pipeline-step" data-step="uploaded"></div>
+                <div class="pipeline-connector"></div>
+                <div class="pipeline-step" data-step="splitting"></div>
+                <div class="pipeline-connector"></div>
+                <div class="pipeline-step" data-step="extracting"></div>
+                <div class="pipeline-connector"></div>
+                <div class="pipeline-step" data-step="review"></div>
+                <div class="pipeline-connector"></div>
+                <div class="pipeline-step" data-step="output"></div>
+            </div>
+
+            <div class="mt-6">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-sm font-semibold">Overall Progress</span>
+                    <span id="overall-progress-label" class="text-sm font-bold text-primary">0%</span>
                 </div>
-                <div>
-                    <div class="w-10 h-10 mx-auto rounded-full bg-base-300"></div>
-                    <p class="mt-2 text-xs font-medium text-base-content/50">Splitting</p>
-                </div>
-                <div>
-                    <div class="w-10 h-10 mx-auto rounded-full bg-base-300"></div>
-                    <p class="mt-2 text-xs font-medium text-base-content/50">Extracting</p>
-                </div>
-                <div>
-                    <div class="w-10 h-10 mx-auto rounded-full bg-base-300"></div>
-                    <p class="mt-2 text-xs font-medium text-base-content/50">Review</p>
-                </div>
+                <progress id="overall-progress-bar" class="progress progress-primary w-full" value="0" max="100"></progress>
+                <p id="processing-refresh-note" class="text-xs text-base-content/50 mt-1">Waiting for processing data</p>
             </div>
         </div>
     </section>
 
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Document</th>
-                    <th>Status</th>
-                    <th>Current Task</th>
-                    <th>Progress</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No active documents</td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="font-semibold">Processing Queue</h2>
+                <a id="split-results-link" href="#" class="btn btn-primary btn-sm hidden">View Split Results</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr class="text-xs text-base-content/50">
+                            <th>File Name</th>
+                            <th>Status</th>
+                            <th>Splitting</th>
+                            <th>Extracting</th>
+                            <th>Review</th>
+                            <th>Output</th>
+                            <th>Progress</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="processing-table-body">
+                        <tr>
+                            <td colspan="8" class="text-center text-base-content/50 py-10">No active documents</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/processing_overview.js" defer></script>
 {% endblock %}

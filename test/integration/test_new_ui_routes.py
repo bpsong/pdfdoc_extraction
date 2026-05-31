@@ -112,3 +112,21 @@ def test_operator_app_routes_render_shared_shell_without_admin_navigation(monkey
         assert "Admin Home" not in response.text
         assert 'href="/app/admin' not in response.text
 
+
+def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    upload = client.get("/app/upload")
+    processing = client.get("/app/batches/batch-1")
+    split_results = client.get("/app/batches/batch-1/split-results")
+
+    assert upload.status_code == 200
+    assert 'id="upload-drop-zone"' in upload.text
+    assert "/static/js/upload_process.js" in upload.text
+    assert processing.status_code == 200
+    assert 'id="processing-workspace"' in processing.text
+    assert "/static/js/processing_overview.js" in processing.text
+    assert split_results.status_code == 200
+    assert 'id="split-results-workspace"' in split_results.text
+    assert "/static/js/split_results.js" in split_results.text

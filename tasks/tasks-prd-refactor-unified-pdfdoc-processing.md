@@ -275,14 +275,14 @@ C:\Python313\python.exe -m pytest -v
   - [x] 15.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
   - [x] 15.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
 
-- [ ] 16.0 Build Upload and Processing UI
+- [x] 16.0 Build Upload and Processing UI
   - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in DaisyUI pages that mirror the prototype layout and flow.
-  - [ ] 16.1 Build `upload_process.html` and `upload_process.js`.
-  - [ ] 16.2 Add `POST /api/batches/upload`.
-  - [ ] 16.3 Build `processing_overview.html` and `processing_overview.js`.
-  - [ ] 16.4 Add polling for active batches using fan-in finalized leaf-derived batch status.
-  - [ ] 16.5 Build `split_results.html` and wire it to `GET /api/batches/{batch_id}/split-results`.
-  - [ ] 16.6 Add upload, processing, and split-results UI smoke tests where practical.
+  - [x] 16.1 Build `upload_process.html` and `upload_process.js`.
+  - [x] 16.2 Add `POST /api/batches/upload`.
+  - [x] 16.3 Build `processing_overview.html` and `processing_overview.js`.
+  - [x] 16.4 Add polling for active batches using fan-in finalized leaf-derived batch status.
+  - [x] 16.5 Build `split_results.html` and wire it to `GET /api/batches/{batch_id}/split-results`.
+  - [x] 16.6 Add upload, processing, and split-results UI smoke tests where practical.
 
 - [ ] 17.0 Build Schema Editor UI and schema APIs
   - Acceptance: Admin can create/edit/validate/save complex QA schemas without Streamlit, operators cannot access schema editing, and review UI can consume normalized schema API responses.

@@ -1,8 +1,8 @@
 {% extends "app_base.html" %}
 
 {% block content %}
-<div class="app-workspace">
-    <section class="card bg-base-100 shadow-sm">
+<div id="upload-workspace" class="app-workspace" data-max-upload-mb="{{ max_upload_mb|default(50) }}">
+    <section id="upload-drop-zone" class="card bg-base-100 shadow-sm upload-dropzone" tabindex="0">
         <div class="card-body items-center text-center py-12">
             <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                 <svg class="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -19,8 +19,9 @@
                         d="M12 4v12m0-12l-4 4m4-4l4 4M4 20h16" />
                 </svg>
                 Choose Files
-                <input type="file" class="hidden" accept="application/pdf,.pdf" multiple />
+                <input id="pdf-file-input" type="file" class="hidden" accept="application/pdf,.pdf" multiple />
             </label>
+            <p class="text-xs text-base-content/40 mt-3">PDF only, up to {{ max_upload_mb|default(50) }} MB per file</p>
         </div>
     </section>
 
@@ -28,11 +29,19 @@
         <div class="card-body gap-3">
             <div class="flex items-center justify-between">
                 <h2 class="font-semibold">Selected Files</h2>
-                <span class="badge badge-ghost badge-sm">0 files</span>
+                <span id="selected-file-count" class="badge badge-ghost badge-sm">0 files</span>
             </div>
-            <div class="empty-panel">No files selected</div>
+            <div id="upload-alert" class="alert alert-error hidden text-sm"></div>
+            <div id="selected-file-list" class="upload-file-list">
+                <div class="empty-panel">No files selected</div>
+            </div>
+            <div class="divider my-1"></div>
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm text-base-content/60">
+                <span id="selected-file-summary">Total files: 0 | Total size: 0 B</span>
+                <span id="upload-status" class="text-xs text-base-content/50"></span>
+            </div>
             <div class="flex justify-end">
-                <button class="btn btn-primary btn-sm" disabled>
+                <button id="start-processing-button" class="btn btn-primary btn-sm" disabled>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                         aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -44,4 +53,8 @@
         </div>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/upload_process.js" defer></script>
 {% endblock %}

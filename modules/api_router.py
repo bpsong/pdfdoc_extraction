@@ -313,8 +313,12 @@ def build_router() -> APIRouter:
         content_type: str
         data: bytes
 
-    async def _parse_multipart_upload(request: Request) -> ParsedUpload:
-        """Parse the multipart body and extract the uploaded file."""
+    async def _parse_multipart_uploads(
+        request: Request,
+        *,
+        field_names: set[str] | None = None,
+    ) -> list[ParsedUpload]:
+        """Parse the multipart body and extract one or more uploaded files."""
 
         content_type = request.headers.get("content-type", "")
         if "multipart/form-data" not in content_type.lower():
@@ -326,11 +330,13 @@ def build_router() -> APIRouter:
 
         header_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("latin-1", errors="ignore")
         message = cast(EmailMessage, BytesParser(policy=cast(Any, default)).parsebytes(header_bytes + body))
+        accepted_names = field_names or {"file"}
+        uploads: list[ParsedUpload] = []
 
         for part in message.iter_parts():
             if part.get_content_disposition() != "form-data":
                 continue
-            if part.get_param("name", header="content-disposition") != "file":
+            if part.get_param("name", header="content-disposition") not in accepted_names:
                 continue
             filename = part.get_filename() or "uploaded_file"
             # get_payload(decode=True) may return bytes or (rarely) str/other types depending on part.
@@ -347,9 +353,16 @@ def build_router() -> APIRouter:
                 except Exception:
                     file_bytes = b""
             content = part.get_content_type() or "application/octet-stream"
-            return ParsedUpload(filename=filename, content_type=content, data=file_bytes)
+            uploads.append(ParsedUpload(filename=filename, content_type=content, data=file_bytes))
 
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file field provided")
+        if not uploads:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file field provided")
+        return uploads
+
+    async def _parse_multipart_upload(request: Request) -> ParsedUpload:
+        """Parse the multipart body and extract the uploaded file."""
+
+        return (await _parse_multipart_uploads(request, field_names={"file"}))[0]
 
     async def _json_body(request: Request) -> dict[str, Any]:
         """Parse an optional JSON request body."""
@@ -470,6 +483,102 @@ def build_router() -> APIRouter:
         except Exception as e:
             logger.error(f"Error uploading file: {e}")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    @router.post("/api/batches/upload")
+    async def upload_pdf_batch(
+        request: Request,
+        background_tasks: BackgroundTasks,
+        user: str = Depends(get_current_user),
+    ):
+        """Upload one or more PDFs as a single SQLite-backed processing batch."""
+        config, _, _, _, file_processor = get_dependencies()
+        uploads = await _parse_multipart_uploads(request, field_names={"files", "file"})
+        processing_dir = str(config.get("watch_folder.processing_dir") or "")
+        if not processing_dir:
+            raise HTTPException(status_code=500, detail="Processing directory misconfigured")
+        Path(processing_dir).mkdir(parents=True, exist_ok=True)
+
+        file_descriptors: list[dict[str, Any]] = []
+        saved_paths: list[str] = []
+        try:
+            for index, upload in enumerate(uploads):
+                original_filename = os.path.basename(upload.filename or f"uploaded_{index + 1}.pdf")
+                if not original_filename.lower().endswith(".pdf"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"{original_filename} is not a PDF file",
+                    )
+                if not upload.data.startswith(b"%PDF-"):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"{original_filename} has an invalid PDF header",
+                    )
+
+                document_id = str(uuid.uuid4())
+                final_path = str(Path(processing_dir, f"{document_id}.pdf").resolve())
+                with open(final_path, "wb") as out_file:
+                    out_file.write(upload.data)
+                saved_paths.append(final_path)
+                file_descriptors.append(
+                    {
+                        "document_id": document_id,
+                        "file_path": final_path,
+                        "original_filename": original_filename,
+                        "status": "queued",
+                        "metadata": {
+                            "legacy_id": document_id,
+                            "ingestion_source": "web",
+                            "uploaded_by": user,
+                            "content_type": upload.content_type,
+                            "size_bytes": len(upload.data),
+                        },
+                    }
+                )
+
+            with connect(config) as conn:
+                created = BatchService(conn).create_ingestion_batch_with_documents(
+                    source="web",
+                    files=file_descriptors,
+                    metadata={"uploaded_by": user, "file_count": len(file_descriptors)},
+                    status="queued",
+                )
+
+            batch = created["batch"]
+            documents = created["documents"]
+            for descriptor, document in zip(file_descriptors, documents):
+                background_tasks.add_task(
+                    file_processor.process_file,
+                    filepath=descriptor["file_path"],
+                    unique_id=document["id"],
+                    source="web",
+                    original_filename=descriptor["original_filename"],
+                    batch_id=batch["id"],
+                    document_id=document["id"],
+                    create_sqlite_state=False,
+                )
+
+            return {
+                "batch_id": batch["id"],
+                "document_ids": [document["id"] for document in documents],
+                "status": "queued",
+            }
+        except HTTPException:
+            for path in saved_paths:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except OSError:
+                    logger.warning("Failed to remove rejected upload file: %s", path)
+            raise
+        except Exception as exc:
+            for path in saved_paths:
+                try:
+                    if os.path.exists(path):
+                        os.remove(path)
+                except OSError:
+                    logger.warning("Failed to remove upload file after error: %s", path)
+            logger.error("Batch upload failed: %s", exc)
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     @router.get("/api/files", response_model=List[FileStatus])
     def list_files(user: str = Depends(get_current_user)):
