@@ -1,0 +1,22 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div class="review-workspace">
+    <section class="pdf-panel flex items-center justify-center text-base-content/50">
+        Source PDF
+    </section>
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            {% if review_item_id is defined %}
+            <span class="badge badge-outline w-fit">{{ review_item_id }}</span>
+            {% endif %}
+            <h2 class="font-semibold">Review Fields</h2>
+            <div class="empty-panel">No fields loaded</div>
+            <div class="flex justify-end gap-2">
+                <button class="btn btn-outline btn-sm" disabled>Save Draft</button>
+                <button class="btn btn-primary btn-sm" disabled>Complete Review</button>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

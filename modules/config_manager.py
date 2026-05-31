@@ -86,6 +86,11 @@ DEFAULT_CONFIG: dict = {
         "app_name": "DocFlow AI",
         "page_size": 25,
         "admin_enabled": True,
+        "operator_sidebar": ["upload", "review", "reports", "settings"],
+    },
+    "auth": {
+        "roles_enabled": True,
+        "default_admin_users": [],
     },
 }
 

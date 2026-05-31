@@ -1,0 +1,47 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div class="app-workspace">
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body items-center text-center py-12">
+            <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
+                <svg class="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+            </div>
+            <p class="font-semibold text-base-content/80">Drag and drop PDF files here</p>
+            <p class="text-sm text-base-content/50 mb-4">or</p>
+            <label class="btn btn-primary btn-sm px-6">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 4v12m0-12l-4 4m4-4l4 4M4 20h16" />
+                </svg>
+                Choose Files
+                <input type="file" class="hidden" accept="application/pdf,.pdf" multiple />
+            </label>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body gap-3">
+            <div class="flex items-center justify-between">
+                <h2 class="font-semibold">Selected Files</h2>
+                <span class="badge badge-ghost badge-sm">0 files</span>
+            </div>
+            <div class="empty-panel">No files selected</div>
+            <div class="flex justify-end">
+                <button class="btn btn-primary btn-sm" disabled>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5 13l4 4L19 7" />
+                    </svg>
+                    Start Processing
+                </button>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}

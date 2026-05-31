@@ -1,0 +1,58 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div class="app-workspace">
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex items-center justify-between gap-3 mb-4">
+                <h2 class="font-semibold">Pipeline Status</h2>
+                {% if batch_id is defined %}
+                <span class="badge badge-outline badge-sm">{{ batch_id }}</span>
+                {% endif %}
+            </div>
+            <div class="grid grid-cols-4 gap-3 text-center">
+                <div>
+                    <div class="w-10 h-10 mx-auto rounded-full bg-success flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <p class="mt-2 text-xs font-medium">Uploaded</p>
+                </div>
+                <div>
+                    <div class="w-10 h-10 mx-auto rounded-full bg-base-300"></div>
+                    <p class="mt-2 text-xs font-medium text-base-content/50">Splitting</p>
+                </div>
+                <div>
+                    <div class="w-10 h-10 mx-auto rounded-full bg-base-300"></div>
+                    <p class="mt-2 text-xs font-medium text-base-content/50">Extracting</p>
+                </div>
+                <div>
+                    <div class="w-10 h-10 mx-auto rounded-full bg-base-300"></div>
+                    <p class="mt-2 text-xs font-medium text-base-content/50">Review</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="app-table-region">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Document</th>
+                    <th>Status</th>
+                    <th>Current Task</th>
+                    <th>Progress</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="4" class="text-center text-base-content/50 py-10">No active documents</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

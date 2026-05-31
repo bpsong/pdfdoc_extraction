@@ -1,0 +1,21 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div class="app-workspace">
+    <div class="page-grid grid-cols-1 md:grid-cols-3">
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Processed</div>
+            <div class="stat-value text-2xl">0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Reviewed</div>
+            <div class="stat-value text-2xl">0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Failed</div>
+            <div class="stat-value text-2xl text-error">0</div>
+        </div>
+    </div>
+    <div class="empty-panel">No report data</div>
+</div>
+{% endblock %}

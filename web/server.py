@@ -13,7 +13,7 @@ from pathlib import Path
 import os
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import json
 from urllib.parse import parse_qs
@@ -129,6 +129,70 @@ def create_app() -> FastAPI:
                 headers={"Location": "/login"},
             )
         return username
+
+    def _as_string_list(value: Any) -> list[str]:
+        """Normalize a config value into a list of non-empty strings."""
+
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value] if value else []
+        if isinstance(value, (list, tuple, set)):
+            return [str(item) for item in value if str(item)]
+        return []
+
+    def _is_admin_user(username: str, config: Any) -> bool:
+        """Return whether a username has admin access for app UI routes."""
+
+        if not bool(config.get("ui.admin_enabled", True)):
+            return False
+        if not bool(config.get("auth.roles_enabled", True)):
+            return True
+
+        admin_users = set(_as_string_list(config.get("auth.default_admin_users", [])))
+        admin_users.update(_as_string_list(config.get("ui.default_admin_users", [])))
+        if admin_users:
+            return username in admin_users
+
+        configured_username = config.get("authentication.username")
+        return bool(configured_username and username == str(configured_username))
+
+    async def render_app_page(
+        request: Request,
+        template_name: str,
+        *,
+        page_title: str,
+        page_subtitle: str = "",
+        active_nav: str = "",
+        admin_required: bool = False,
+        **extra_context: Any,
+    ) -> HTMLResponse:
+        """Render an authenticated app page with role-aware shared context."""
+
+        username = await get_current_active_user(request)
+        config, _, _, _, _ = get_dependencies()
+        is_admin = _is_admin_user(username, config)
+        if admin_required and not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin role required",
+            )
+
+        return templates.TemplateResponse(
+            template_name,
+            {
+                "request": request,
+                "is_authenticated": True,
+                "username": username,
+                "is_admin": is_admin,
+                "user_role": "admin" if is_admin else "operator",
+                "app_name": config.get("ui.app_name", "DocFlow AI"),
+                "page_title": page_title,
+                "page_subtitle": page_subtitle,
+                "active_nav": active_nav,
+                **extra_context,
+            },
+        )
 
     # --- Routes ---
 
@@ -299,6 +363,256 @@ def create_app() -> FastAPI:
             if e.status_code == status.HTTP_307_TEMPORARY_REDIRECT:
                 return RedirectResponse(url="/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
             raise
+
+    @app.get("/app", response_class=HTMLResponse)
+    async def app_root(request: Request):
+        """Redirect authenticated app users to the upload workspace."""
+
+        await get_current_active_user(request)
+        return RedirectResponse(url="/app/upload", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    @app.get("/app/upload", response_class=HTMLResponse)
+    async def app_upload_page(request: Request):
+        """Serve the prototype-modeled upload and process page."""
+
+        return await render_app_page(
+            request,
+            "upload_process.html",
+            page_title="Upload & Process",
+            page_subtitle="Upload PDF files to split, extract data, and review results.",
+            active_nav="upload",
+        )
+
+    @app.get("/app/processing", response_class=HTMLResponse)
+    async def app_processing_page(request: Request):
+        """Serve the processing overview page."""
+
+        return await render_app_page(
+            request,
+            "processing_overview.html",
+            page_title="Processing Overview",
+            page_subtitle="Track splitting, extraction, review, and completion state.",
+            active_nav="upload",
+        )
+
+    @app.get("/app/batches/{batch_id}/split-results", response_class=HTMLResponse)
+    async def app_split_results_page(request: Request, batch_id: str):
+        """Serve split results for a batch."""
+
+        return await render_app_page(
+            request,
+            "split_results.html",
+            page_title="Split Results",
+            page_subtitle="Inspect source PDFs and generated child documents.",
+            active_nav="upload",
+            batch_id=batch_id,
+        )
+
+    @app.get("/app/batches/{batch_id}", response_class=HTMLResponse)
+    async def app_batch_processing_page(request: Request, batch_id: str):
+        """Serve processing overview scoped to one batch."""
+
+        return await render_app_page(
+            request,
+            "processing_overview.html",
+            page_title="Processing Overview",
+            page_subtitle="Track splitting, extraction, review, and completion state.",
+            active_nav="upload",
+            batch_id=batch_id,
+        )
+
+    @app.get("/app/documents/{document_id}/extraction", response_class=HTMLResponse)
+    async def app_extraction_results_page(request: Request, document_id: str):
+        """Serve persisted extraction results for one document."""
+
+        return await render_app_page(
+            request,
+            "extraction_results.html",
+            page_title="Extraction Results",
+            page_subtitle="Inspect extracted fields and confidence values.",
+            active_nav="upload",
+            document_id=document_id,
+        )
+
+    @app.get("/app/review", response_class=HTMLResponse)
+    async def app_review_queue_page(request: Request):
+        """Serve the review queue page."""
+
+        return await render_app_page(
+            request,
+            "review_queue.html",
+            page_title="Review Queue",
+            page_subtitle="Work documents that require human review.",
+            active_nav="review",
+        )
+
+    @app.get("/app/review/{review_item_id}", response_class=HTMLResponse)
+    async def app_human_review_page(request: Request, review_item_id: str):
+        """Serve the human review workspace."""
+
+        return await render_app_page(
+            request,
+            "human_review.html",
+            page_title="Human Review",
+            page_subtitle="Review source PDF content and corrected field values.",
+            active_nav="review",
+            review_item_id=review_item_id,
+        )
+
+    @app.get("/app/reports", response_class=HTMLResponse)
+    async def app_reports_page(request: Request):
+        """Serve the operator reports page."""
+
+        return await render_app_page(
+            request,
+            "reports.html",
+            page_title="Reports",
+            page_subtitle="Review processing and review activity.",
+            active_nav="reports",
+        )
+
+    @app.get("/app/settings/validation", response_class=HTMLResponse)
+    async def app_config_validation_page(request: Request):
+        """Serve the admin validation center page."""
+
+        return await render_app_page(
+            request,
+            "config_validation.html",
+            page_title="Validation Center",
+            page_subtitle="Review configuration, schema, and pipeline findings.",
+            active_nav="validation",
+            admin_required=True,
+        )
+
+    @app.get("/app/settings", response_class=HTMLResponse)
+    async def app_settings_page(request: Request):
+        """Serve the operator settings page."""
+
+        return await render_app_page(
+            request,
+            "settings.html",
+            page_title="Settings",
+            page_subtitle="View runtime settings for the current application.",
+            active_nav="settings",
+        )
+
+    @app.get("/app/schemas", response_class=HTMLResponse)
+    async def app_schema_editor_page(request: Request):
+        """Serve the admin schema editor page."""
+
+        return await render_app_page(
+            request,
+            "schema_editor.html",
+            page_title="Schema Editor",
+            page_subtitle="Manage schemas used by extraction review workflows.",
+            active_nav="schemas",
+            admin_required=True,
+        )
+
+    @app.get("/app/schemas/{schema_name}", response_class=HTMLResponse)
+    async def app_named_schema_editor_page(request: Request, schema_name: str):
+        """Serve the admin schema editor page for one schema."""
+
+        return await render_app_page(
+            request,
+            "schema_editor.html",
+            page_title="Schema Editor",
+            page_subtitle="Manage schemas used by extraction review workflows.",
+            active_nav="schemas",
+            admin_required=True,
+            schema_name=schema_name,
+        )
+
+    @app.get("/app/admin", response_class=HTMLResponse)
+    async def app_admin_dashboard_page(request: Request):
+        """Serve the admin dashboard."""
+
+        return await render_app_page(
+            request,
+            "admin_dashboard.html",
+            page_title="Admin",
+            page_subtitle="Configuration health and governance overview.",
+            active_nav="admin_home",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/pipeline", response_class=HTMLResponse)
+    async def app_pipeline_config_page(request: Request):
+        """Serve the admin pipeline configuration page."""
+
+        return await render_app_page(
+            request,
+            "pipeline_config.html",
+            page_title="Pipeline",
+            page_subtitle="Configure task order, enablement, and parameters.",
+            active_nav="pipeline",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/tasks", response_class=HTMLResponse)
+    async def app_task_catalog_page(request: Request):
+        """Serve the admin task catalog page."""
+
+        return await render_app_page(
+            request,
+            "task_catalog.html",
+            page_title="Task Catalog",
+            page_subtitle="Inspect available workflow task classes.",
+            active_nav="tasks",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/review-gate", response_class=HTMLResponse)
+    async def app_review_gate_rules_page(request: Request):
+        """Serve the admin review gate rules page."""
+
+        return await render_app_page(
+            request,
+            "review_gate_rules.html",
+            page_title="Review Gate",
+            page_subtitle="Configure review thresholds and review triggers.",
+            active_nav="review_gate",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/split", response_class=HTMLResponse)
+    async def app_split_settings_page(request: Request):
+        """Serve the admin split settings page."""
+
+        return await render_app_page(
+            request,
+            "split_settings.html",
+            page_title="Split Settings",
+            page_subtitle="Configure split categories and adapter settings.",
+            active_nav="split",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/audit", response_class=HTMLResponse)
+    async def app_admin_audit_page(request: Request):
+        """Serve the admin audit history page."""
+
+        return await render_app_page(
+            request,
+            "admin_audit.html",
+            page_title="Admin Audit",
+            page_subtitle="Inspect configuration and governance events.",
+            active_nav="audit",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/dry-run", response_class=HTMLResponse)
+    async def app_pipeline_dry_run_page(request: Request):
+        """Serve the admin pipeline dry-run page."""
+
+        return await render_app_page(
+            request,
+            "pipeline_dry_run.html",
+            page_title="Pipeline Dry Run",
+            page_subtitle="Run sample documents through draft pipeline decisions.",
+            active_nav="dry_run",
+            admin_required=True,
+        )
 
     # Exception handler for authentication redirects
     from fastapi.responses import JSONResponse

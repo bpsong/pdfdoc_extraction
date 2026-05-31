@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ ui_theme|default('light') }}">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}{{ page_title|default('DocFlow AI') }} - {{ app_name|default('DocFlow AI') }}{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="/static/css/app.css" rel="stylesheet" />
+    {% block head %}{% endblock %}
+</head>
+
+<body class="bg-base-200 min-h-screen">
+    {% set current_path = request.url.path if request is defined else '' %}
+    {% set app_label = app_name|default('DocFlow AI') %}
+    {% set display_username = username|default('User') %}
+    {% set is_admin_user = is_admin|default(false) %}
+
+    <div class="flex min-h-screen">
+        <aside class="w-56 bg-base-100 border-r border-base-200 flex flex-col py-4 px-3 gap-1 shrink-0">
+            <a href="/app/upload" class="flex items-center gap-2 px-4 py-3 mb-2 rounded-lg">
+                <div class="w-7 h-7 bg-primary rounded-md flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <span class="font-bold text-base truncate">{{ app_label }}</span>
+            </a>
+
+            <nav class="flex flex-col gap-1" aria-label="Primary navigation">
+                <a href="/app/upload"
+                    class="nav-link{% if active_nav|default('') == 'upload' or current_path in ['/app/upload', '/app/processing'] or current_path.startswith('/app/batches') or current_path.startswith('/app/documents') %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span>Upload &amp; Process</span>
+                </a>
+
+                <a href="/app/review"
+                    class="nav-link{% if active_nav|default('') == 'review' or current_path.startswith('/app/review') %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                    </svg>
+                    <span>Review Queue</span>
+                </a>
+
+                <a href="/app/reports"
+                    class="nav-link{% if active_nav|default('') == 'reports' or current_path.startswith('/app/reports') %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    <span>Reports</span>
+                </a>
+
+                <a href="/app/settings"
+                    class="nav-link{% if active_nav|default('') == 'settings' or current_path == '/app/settings' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            {% if is_admin_user %}
+            <div class="divider my-3 text-xs text-base-content/40">Admin</div>
+            <nav class="flex flex-col gap-1" aria-label="Admin navigation">
+                <a href="/app/admin"
+                    class="nav-link{% if active_nav|default('') == 'admin_home' or current_path == '/app/admin' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 12l2-2m0 0l7-7 7 7m-9 2v8m4-8v8m5 0a2 2 0 002-2v-7.172a2 2 0 00-.586-1.414l-6-6a2 2 0 00-2.828 0l-6 6A2 2 0 005 10.828V18a2 2 0 002 2h10z" />
+                    </svg>
+                    <span>Admin Home</span>
+                </a>
+                <a href="/app/schemas"
+                    class="nav-link{% if active_nav|default('') == 'schemas' or current_path.startswith('/app/schemas') %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 7h16M4 12h16M4 17h10" />
+                    </svg>
+                    <span>Schemas</span>
+                </a>
+                <a href="/app/settings/validation"
+                    class="nav-link{% if active_nav|default('') == 'validation' or current_path == '/app/settings/validation' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m5 2a8 8 0 11-16 0 8 8 0 0116 0z" />
+                    </svg>
+                    <span>Validation</span>
+                </a>
+                <a href="/app/admin/pipeline"
+                    class="nav-link{% if active_nav|default('') == 'pipeline' or current_path == '/app/admin/pipeline' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h10M4 18h7" />
+                    </svg>
+                    <span>Pipeline</span>
+                </a>
+                <a href="/app/admin/tasks"
+                    class="nav-link{% if active_nav|default('') == 'tasks' or current_path == '/app/admin/tasks' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 5h6M9 12h6M9 19h6M5 5h.01M5 12h.01M5 19h.01" />
+                    </svg>
+                    <span>Tasks</span>
+                </a>
+                <a href="/app/admin/review-gate"
+                    class="nav-link{% if active_nav|default('') == 'review_gate' or current_path == '/app/admin/review-gate' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Review Gate</span>
+                </a>
+                <a href="/app/admin/split"
+                    class="nav-link{% if active_nav|default('') == 'split' or current_path == '/app/admin/split' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M8 7h8M8 12h8M8 17h8M5 4h14v16H5z" />
+                    </svg>
+                    <span>Split Settings</span>
+                </a>
+                <a href="/app/admin/audit"
+                    class="nav-link{% if active_nav|default('') == 'audit' or current_path == '/app/admin/audit' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 17v-2a4 4 0 014-4h4m0 0l-3-3m3 3l-3 3M5 4h8a2 2 0 012 2v2M5 4v16h14v-4" />
+                    </svg>
+                    <span>Audit</span>
+                </a>
+                <a href="/app/admin/dry-run"
+                    class="nav-link{% if active_nav|default('') == 'dry_run' or current_path == '/app/admin/dry-run' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M14.752 11.168l-5.197-3.03A1 1 0 008 9.002v5.996a1 1 0 001.555.832l5.197-2.966a1 1 0 000-1.696z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M21 12A9 9 0 113 12a9 9 0 0118 0z" />
+                    </svg>
+                    <span>Dry Run</span>
+                </a>
+            </nav>
+            {% endif %}
+
+            <div class="mt-auto px-4 pt-4 text-xs text-base-content/50">
+                Signed in as <span class="font-medium text-base-content/70">{{ display_username }}</span>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0">
+            <header class="bg-base-100 border-b border-base-200 px-6 py-4 flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <h1 class="text-lg font-bold truncate">{{ page_title|default('Dashboard') }}</h1>
+                    {% if page_subtitle is defined and page_subtitle %}
+                    <p class="text-sm text-base-content/60 truncate">{{ page_subtitle }}</p>
+                    {% endif %}
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    {% block header_actions %}{% endblock %}
+                    <button class="btn btn-ghost btn-circle" type="button" aria-label="Notifications">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                    </button>
+                    <div class="dropdown dropdown-end">
+                        <button class="btn btn-ghost btn-sm" type="button" tabindex="0">
+                            {{ display_username }}
+                        </button>
+                        <ul class="dropdown-content menu bg-base-100 rounded-box shadow z-[1] w-40 p-2" tabindex="0">
+                            <li><a href="/app/settings">Settings</a></li>
+                            <li><a href="/logout">Logout</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex-1 p-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js" defer></script>
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

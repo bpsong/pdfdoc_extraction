@@ -263,17 +263,17 @@ C:\Python313\python.exe -m pytest -v
   - [x] 14.7 Add `test/services/test_config_validation_service.py`.
   - [x] 14.8 Add `test/integration/test_config_validation_api.py`.
 
-- [ ] 15.0 Build shared prototype-modeled role-aware UI shell
+- [x] 15.0 Build shared prototype-modeled role-aware UI shell
   - Acceptance: Authenticated `/app/*` pages share the compact DaisyUI-based sidebar/topbar layout modeled after the prototype, operators see operator navigation only, admins see the additional admin navigation group, and the UI layout plus IA flow mirror `refactor UI prototype/`.
-  - [ ] 15.1 Create `web/templates/app_base.html`.
-  - [ ] 15.2 Create `web/static/css/app.css`.
-  - [ ] 15.3 Create `web/static/js/app.js`.
-  - [ ] 15.4 Add authenticated `/app` route group in `web/server.py`.
-  - [ ] 15.5 Add admin role helper and server-side route guard.
-  - [ ] 15.6 Add placeholder templates for all operator and admin pages.
-  - [ ] 15.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
-  - [ ] 15.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
-  - [ ] 15.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
+  - [x] 15.1 Create `web/templates/app_base.html`.
+  - [x] 15.2 Create `web/static/css/app.css`.
+  - [x] 15.3 Create `web/static/js/app.js`.
+  - [x] 15.4 Add authenticated `/app` route group in `web/server.py`.
+  - [x] 15.5 Add admin role helper and server-side route guard.
+  - [x] 15.6 Add placeholder templates for all operator and admin pages.
+  - [x] 15.7 Add `test/integration/test_new_ui_routes.py` for route access and auth behavior.
+  - [x] 15.8 Add `test/integration/test_admin_routes.py` for operator/admin authorization boundaries.
+  - [x] 15.9 Define and apply the DaisyUI/Tailwind asset strategy for FastAPI/Jinja templates while preserving the prototype's layout and IA.
 
 - [ ] 16.0 Build Upload and Processing UI
   - Acceptance: User can upload multiple PDFs, create a batch, and see processing state in DaisyUI pages that mirror the prototype layout and flow.

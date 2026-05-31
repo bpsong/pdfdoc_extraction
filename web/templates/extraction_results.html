@@ -1,0 +1,29 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div class="app-workspace">
+    {% if document_id is defined %}
+    <div class="alert bg-base-100 border-base-300">
+        <span class="text-sm">Document {{ document_id }}</span>
+    </div>
+    {% endif %}
+
+    <section class="app-table-region">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Field</th>
+                    <th>Extracted Value</th>
+                    <th>Confidence</th>
+                    <th>Review</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="4" class="text-center text-base-content/50 py-10">No extraction fields</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

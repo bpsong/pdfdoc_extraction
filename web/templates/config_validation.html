@@ -1,0 +1,37 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div class="app-workspace">
+    <div class="page-grid grid-cols-1 md:grid-cols-3">
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Blocking</div>
+            <div class="stat-value text-2xl text-error">0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Warnings</div>
+            <div class="stat-value text-2xl text-warning">0</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Validated</div>
+            <div class="stat-value text-2xl">0</div>
+        </div>
+    </div>
+    <section class="app-table-region">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Severity</th>
+                    <th>Code</th>
+                    <th>Path</th>
+                    <th>Message</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="4" class="text-center text-base-content/50 py-10">No validation findings</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+</div>
+{% endblock %}

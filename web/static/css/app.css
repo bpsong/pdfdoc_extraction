@@ -1,0 +1,113 @@
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.55);
+    transition: background 0.15s, color 0.15s;
+}
+
+.nav-link:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.nav-link.active {
+    background: rgba(99, 102, 241, 0.12);
+    color: #4f46e5;
+}
+
+.nav-link svg {
+    flex-shrink: 0;
+}
+
+.page-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.metric-card {
+    min-height: 6rem;
+}
+
+.app-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.app-table-region {
+    overflow-x: auto;
+    border: 1px solid hsl(var(--b3));
+    border-radius: 0.5rem;
+    background: hsl(var(--b1));
+}
+
+.empty-panel {
+    min-height: 14rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed hsl(var(--b3));
+    border-radius: 0.5rem;
+    background: hsl(var(--b1));
+    color: hsl(var(--bc) / 0.55);
+}
+
+.placeholder-row {
+    height: 0.75rem;
+    border-radius: 9999px;
+    background: hsl(var(--b3));
+}
+
+.review-workspace {
+    display: grid;
+    grid-template-columns: minmax(20rem, 1fr) minmax(24rem, 1.1fr);
+    gap: 1rem;
+    min-height: calc(100vh - 8rem);
+}
+
+.pdf-panel {
+    min-height: 32rem;
+    border: 1px solid hsl(var(--b3));
+    border-radius: 0.5rem;
+    background: hsl(var(--b1));
+}
+
+.status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: currentColor;
+}
+
+@media (max-width: 900px) {
+    aside.w-56 {
+        width: 4.75rem !important;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    aside.w-56 .nav-link {
+        justify-content: center;
+        padding-left: 0.625rem;
+        padding-right: 0.625rem;
+    }
+
+    aside.w-56 .nav-link span,
+    aside.w-56 .divider,
+    aside.w-56 .mt-auto,
+    aside.w-56 a span.font-bold {
+        display: none;
+    }
+
+    main header {
+        flex-wrap: wrap;
+    }
+
+    .review-workspace {
+        grid-template-columns: 1fr;
+    }
+}
