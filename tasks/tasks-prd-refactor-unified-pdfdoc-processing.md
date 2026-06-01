@@ -317,12 +317,12 @@ C:\Python313\python.exe -m pytest -v
   - [x] 19.9 Wire save draft, diff preview, complete, and release actions.
   - [x] 19.10 Add review UI smoke tests where practical.
 
-- [ ] 20.0 Build Admin Task Catalog service and API
+- [x] 20.0 Build Admin Task Catalog service and API
   - Acceptance: Admin and pipeline configuration services can inspect available task classes, import status, and task metadata before pipeline editing is implemented.
-  - [ ] 20.1 Create `modules/services/task_catalog_service.py`.
-  - [ ] 20.2 Add `GET /api/admin/task-catalog`.
-  - [ ] 20.3 Build `task_catalog.html` and `task_catalog.js`.
-  - [ ] 20.4 Add `test/services/test_task_catalog_service.py`.
+  - [x] 20.1 Create `modules/services/task_catalog_service.py`.
+  - [x] 20.2 Add `GET /api/admin/task-catalog`.
+  - [x] 20.3 Build `task_catalog.html` and `task_catalog.js`.
+  - [x] 20.4 Add `test/services/test_task_catalog_service.py`.
 
 - [ ] 21.0 Build Admin Pipeline Configuration UI
   - Acceptance: Admin can create a pipeline draft, reorder/enable/disable tasks, insert `ReviewGateTask`, validate, view diff, and publish with audit history.

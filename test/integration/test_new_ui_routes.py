@@ -5,6 +5,7 @@ from typing import Any
 from fastapi.testclient import TestClient
 
 import web.server as web_server
+import modules.api_router as api_router
 from modules.auth_utils import AuthError
 
 
@@ -59,6 +60,7 @@ def build_client(monkeypatch, *, username: str = "operator", admin_users: list[s
         return config, auth, None, None, None
 
     monkeypatch.setattr(web_server, "get_dependencies", fake_get_dependencies)
+    monkeypatch.setattr(api_router, "get_dependencies", fake_get_dependencies)
     app = web_server.create_app()
     return TestClient(app)
 
@@ -168,3 +170,14 @@ def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="schema-editor-workspace"' in response.text
     assert "/static/js/schema_editor.js" in response.text
+
+
+def test_task_catalog_page_includes_task_20_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/admin/tasks")
+
+    assert response.status_code == 200
+    assert 'id="task-catalog-workspace"' in response.text
+    assert "/static/js/task_catalog.js" in response.text

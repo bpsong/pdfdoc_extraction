@@ -63,3 +63,25 @@ def test_admin_fallback_uses_configured_single_user_when_admin_list_is_empty(mon
 
     assert response.status_code == 200
     assert "Admin Home" in response.text
+
+
+def test_admin_task_catalog_api_requires_admin(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/api/admin/task-catalog")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin role required"
+
+
+def test_admin_task_catalog_api_returns_catalog(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/api/admin/task-catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["total"] >= 1
+    assert any(task["class_name"] == "ReviewGateTask" for task in payload["tasks"])

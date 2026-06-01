@@ -1,23 +1,94 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="task-catalog-refresh" type="button">Refresh</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Task</th>
-                    <th>Module</th>
-                    <th>Class</th>
-                    <th>Import Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No tasks loaded</td>
-                </tr>
-            </tbody>
-        </table>
-    </section>
+<div class="app-workspace" id="task-catalog-workspace">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="card bg-base-100 shadow-sm metric-card">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/50">Total Tasks</div>
+                <div class="text-2xl font-bold" id="task-catalog-total">0</div>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm metric-card">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/50">Configured</div>
+                <div class="text-2xl font-bold" id="task-catalog-configured">0</div>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm metric-card">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/50">Importable</div>
+                <div class="text-2xl font-bold text-success" id="task-catalog-available">0</div>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm metric-card">
+            <div class="card-body p-4">
+                <div class="text-xs text-base-content/50">Import Issues</div>
+                <div class="text-2xl font-bold text-error" id="task-catalog-failed">0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex items-center gap-2 flex-wrap">
+        <label class="input input-bordered input-sm flex items-center gap-2 min-w-64 flex-1">
+            <svg class="w-4 h-4 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input type="search" class="grow" id="task-catalog-search" placeholder="Search tasks, modules, classes..." />
+        </label>
+        <select class="select select-bordered select-sm" id="task-catalog-category">
+            <option value="all">All categories</option>
+        </select>
+        <select class="select select-bordered select-sm" id="task-catalog-status">
+            <option value="all">All import states</option>
+            <option value="ok">Importable</option>
+            <option value="failed">Import failed</option>
+            <option value="configured">Configured</option>
+        </select>
+    </div>
+
+    <div class="task-catalog-layout">
+        <section class="app-table-region task-catalog-table">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Task</th>
+                        <th>Category</th>
+                        <th>Module</th>
+                        <th>Class</th>
+                        <th>Import Status</th>
+                        <th>Configured As</th>
+                    </tr>
+                </thead>
+                <tbody id="task-catalog-body">
+                    <tr>
+                        <td colspan="6" class="text-center text-base-content/50 py-10">Loading task catalog...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <aside class="card bg-base-100 shadow-sm task-catalog-detail">
+            <div class="panel-header">
+                <div class="min-w-0">
+                    <h2 class="font-semibold truncate" id="task-detail-title">Task Details</h2>
+                    <p class="text-xs text-base-content/50 truncate" id="task-detail-subtitle">Select a task to inspect metadata.</p>
+                </div>
+            </div>
+            <div class="card-body p-4" id="task-detail-body">
+                <div class="empty-panel">No task selected</div>
+            </div>
+        </aside>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/task_catalog.js?v=task20" defer></script>
 {% endblock %}

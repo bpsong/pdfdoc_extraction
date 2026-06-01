@@ -55,6 +55,7 @@ from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.review_service import ReviewService, ReviewServiceError
 from .services.schema_service import SchemaService
+from .services.task_catalog_service import TaskCatalogService
 from .resume_manager import ResumeManager
 
 
@@ -800,6 +801,13 @@ def build_router() -> APIRouter:
             return ConfigValidationService(config).validate_pipeline(payload)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/api/admin/task-catalog")
+    def get_admin_task_catalog(user: str = Depends(get_current_user)):
+        """Return available workflow task classes for admin pipeline editing."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        return TaskCatalogService(config).catalog()
 
     @router.get("/api/schemas")
     def list_schemas(user: str = Depends(get_current_user)):
