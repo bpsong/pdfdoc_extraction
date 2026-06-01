@@ -40,9 +40,11 @@ def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_
     class Result:
         data = {"Supplier": "Acme", "Total": "12.50"}
         extraction_metadata = {
-            "fields": {
-                "Supplier": {"confidence": "high"},
-                "Total": {"confidence": 0.67, "confidence_label": "medium"},
+            "field_metadata": {
+                "document_metadata": {
+                    "Supplier": {"confidence_score": 0.96, "confidence_label": "high"},
+                    "Total": {"confidence_score": 0.67, "confidence_label": "medium"},
+                }
             }
         }
         job_id = "job-123"
@@ -68,6 +70,8 @@ def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_
     assert result and result["provider_job_id"] == "job-123"
     assert result_context["extraction_result_id"] == result["id"]
     assert json_loads(fields["supplier"]["final_value_json"]) == "Acme"
-    assert fields["supplier"]["confidence"] is None
+    assert fields["supplier"]["confidence"] == 0.96
+    assert fields["supplier"]["confidence_label"] == "high"
     assert fields["invoice_total"]["confidence"] == 0.67
+    assert fields["invoice_total"]["confidence_label"] == "medium"
     assert json_loads(fields["invoice_total"]["final_value_json"]) == 12.5

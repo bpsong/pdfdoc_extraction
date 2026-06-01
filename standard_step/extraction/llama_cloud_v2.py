@@ -28,6 +28,7 @@ def build_extraction_configuration(
     parse_tier: Optional[str] = None,
     extraction_target: str = "per_doc",
     cite_sources: Optional[bool] = None,
+    confidence_scores: Optional[bool] = True,
 ) -> Dict[str, Any]:
     """Build an inline Extract v2 configuration from task field settings.
 
@@ -37,6 +38,7 @@ def build_extraction_configuration(
         parse_tier: Optional parse tier to use before extraction.
         extraction_target: Extract target, usually ``per_doc``.
         cite_sources: Whether to request citation metadata.
+        confidence_scores: Whether to request field confidence metadata.
 
     Returns:
         Inline configuration dictionary accepted by ``client.extract.run``.
@@ -51,6 +53,8 @@ def build_extraction_configuration(
         configuration["parse_tier"] = parse_tier
     if cite_sources is not None:
         configuration["cite_sources"] = cite_sources
+    if confidence_scores is not None:
+        configuration["confidence_scores"] = confidence_scores
 
     return configuration
 
@@ -88,6 +92,7 @@ def run_extract_v2_job(
     parse_tier: Optional[str] = None,
     extraction_target: str = "per_doc",
     cite_sources: Optional[bool] = None,
+    confidence_scores: Optional[bool] = True,
     project_id: Optional[str] = None,
     organization_id: Optional[str] = None,
     poll_interval_seconds: float = 2.0,
@@ -126,6 +131,7 @@ def run_extract_v2_job(
             parse_tier=parse_tier,
             extraction_target=extraction_target,
             cite_sources=cite_sources,
+            confidence_scores=confidence_scores,
         )
 
     job = client.extract.run(
@@ -220,3 +226,79 @@ def _unwrap_optional(type_str: str) -> str:
     while clean_type.startswith("Optional[") and clean_type.endswith("]"):
         clean_type = clean_type[9:-1].strip()
     return clean_type
+
+
+def metadata_candidates(metadata: Dict[str, Any], field_key: str, alias: str) -> list[Any]:
+    """Return likely metadata objects for a field from supported provider shapes."""
+    candidates: list[Any] = []
+    names = {field_key, alias}
+
+    field_metadata = metadata.get("field_metadata")
+    if isinstance(field_metadata, dict):
+        document_metadata = field_metadata.get("document_metadata")
+        if isinstance(document_metadata, dict):
+            _extend_named_metadata(candidates, document_metadata, names)
+
+    document_metadata = metadata.get("document_metadata")
+    if isinstance(document_metadata, dict):
+        _extend_named_metadata(candidates, document_metadata, names)
+
+    for container_key in ("fields", "field_metadata", "field_confidences", "confidence", "confidences"):
+        container = metadata.get(container_key)
+        if isinstance(container, dict):
+            _extend_named_metadata(candidates, container, names)
+        elif isinstance(container, list):
+            for item in container:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("field_key") == field_key or item.get("name") in names or item.get("field_name") in names:
+                    candidates.append(item)
+    return candidates
+
+
+def extract_numeric_confidence(metadata: Dict[str, Any], field_key: str, alias: str) -> float | None:
+    """Extract numeric confidence, preserving NULL when confidence is absent."""
+    for candidate in metadata_candidates(metadata, field_key, alias):
+        raw_value = candidate
+        if isinstance(candidate, dict):
+            for key in ("confidence", "confidence_score", "score", "confidence_value"):
+                if key in candidate:
+                    raw_value = candidate[key]
+                    break
+        if isinstance(raw_value, (int, float)):
+            return float(raw_value)
+        if isinstance(raw_value, str):
+            try:
+                return float(raw_value)
+            except ValueError:
+                continue
+    return None
+
+
+def extract_confidence_label(metadata: Dict[str, Any], field_key: str, alias: str) -> str | None:
+    """Extract a textual confidence label when provider metadata includes one."""
+    for candidate in metadata_candidates(metadata, field_key, alias):
+        if isinstance(candidate, dict):
+            for key in ("confidence_label", "label", "confidence_level", "level"):
+                value = candidate.get(key)
+                if isinstance(value, str):
+                    return value
+        elif isinstance(candidate, str):
+            return candidate
+    return None
+
+
+def extract_field_source(metadata: Dict[str, Any], field_key: str, alias: str) -> Dict[str, Any]:
+    """Extract field citation/source metadata when present."""
+    for candidate in metadata_candidates(metadata, field_key, alias):
+        if isinstance(candidate, dict):
+            source = candidate.get("source") or candidate.get("citation") or candidate.get("citations")
+            if source is not None:
+                return {"provider_source": source}
+    return {}
+
+
+def _extend_named_metadata(candidates: list[Any], container: Dict[str, Any], names: set[str]) -> None:
+    for key in names:
+        if key in container:
+            candidates.append(container[key])

@@ -46,6 +46,14 @@
         });
     }
 
+    async function apiPut(url, payload) {
+        return apiRequest(url, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload || {}),
+        });
+    }
+
     function formatDateTime(isoString) {
         if (!isoString) {
             return "";
@@ -115,6 +123,7 @@
     window.DocFlow = {
         apiGet,
         apiPost,
+        apiPut,
         formatDateTime,
         showToast,
         setActiveNav,

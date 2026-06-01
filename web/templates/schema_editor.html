@@ -1,25 +1,76 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button id="schema-create-button" class="btn btn-primary btn-sm" type="button">New Schema</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    {% if schema_name is defined and schema_name %}
-    <div class="alert bg-base-100 border-base-300">
-        <span class="text-sm">Schema {{ schema_name }}</span>
-    </div>
-    {% endif %}
-    <section class="grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] gap-4">
-        <div class="card bg-base-100 shadow-sm">
-            <div class="card-body">
-                <h2 class="font-semibold">Schemas</h2>
-                <div class="empty-panel min-h-48">No schemas loaded</div>
-            </div>
+<div id="schema-editor-workspace" class="schema-editor-workspace" data-schema-name="{{ schema_name|default('') }}">
+    <section class="schema-list-panel bg-base-100 border border-base-300 rounded-lg">
+        <div class="schema-panel-header">
+            <h2 class="font-semibold text-sm">Schemas</h2>
+            <span id="schema-count" class="badge badge-ghost badge-sm">0</span>
         </div>
-        <div class="card bg-base-100 shadow-sm">
-            <div class="card-body">
-                <h2 class="font-semibold">Fields</h2>
-                <div class="empty-panel">No schema selected</div>
-            </div>
+        <div id="schema-list" class="schema-list">
+            <div class="empty-panel">No schemas</div>
         </div>
     </section>
+
+    <section class="schema-detail-panel bg-base-100 border border-base-300 rounded-lg">
+        <div class="schema-panel-header">
+            <div class="min-w-0">
+                <h2 id="schema-detail-title" class="font-semibold text-sm truncate">Schema</h2>
+                <p id="schema-detail-hash" class="text-xs text-base-content/50 truncate"></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="schema-duplicate-button" class="btn btn-outline btn-sm" type="button" disabled>Duplicate</button>
+                <button id="schema-save-button" class="btn btn-primary btn-sm" type="button" disabled>Save</button>
+            </div>
+        </div>
+
+        <div id="schema-warning" class="alert alert-warning hidden text-sm"></div>
+        <div id="schema-error" class="alert alert-error hidden text-sm"></div>
+
+        <div class="schema-meta-grid">
+            <label class="form-control">
+                <span class="label-text">Name</span>
+                <input id="schema-name-input" class="input input-bordered input-sm" type="text" placeholder="invoice.yaml" />
+            </label>
+            <label class="form-control">
+                <span class="label-text">Title</span>
+                <input id="schema-title-input" class="input input-bordered input-sm" type="text" />
+            </label>
+            <label class="form-control md:col-span-2">
+                <span class="label-text">Description</span>
+                <input id="schema-description-input" class="input input-bordered input-sm" type="text" />
+            </label>
+        </div>
+
+        <div class="schema-toolbar">
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="string">String</button>
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="number">Number</button>
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="boolean">Boolean</button>
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="enum">Enum</button>
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="object">Object</button>
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="array">Array</button>
+        </div>
+
+        <div id="schema-field-tree" class="schema-field-tree">
+            <div class="empty-panel">No fields</div>
+        </div>
+    </section>
+
+    <section class="schema-preview-panel bg-base-100 border border-base-300 rounded-lg">
+        <div class="schema-panel-header">
+            <h2 class="font-semibold text-sm">YAML Preview</h2>
+            <button id="schema-validate-button" class="btn btn-outline btn-sm" type="button" disabled>Validate</button>
+        </div>
+        <pre id="schema-yaml-preview" class="schema-yaml-preview"></pre>
+        <div id="schema-validation-results" class="schema-validation-results text-sm"></div>
+    </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/schema_editor.js" defer></script>
 {% endblock %}

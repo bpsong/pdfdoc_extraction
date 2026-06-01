@@ -19,10 +19,17 @@ from pydantic import create_model
 from pydantic import BaseModel, ValidationError, Field, ConfigDict
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
+from modules.db.connection import connect
+from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
 from modules.status_manager import StatusManager
 from modules.utils import windows_long_path
-from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
+from standard_step.extraction.llama_cloud_v2 import (
+    extract_confidence_label,
+    extract_field_source,
+    extract_numeric_confidence,
+    run_extract_v2_job,
+)
 
 
 class ExtractPdfTask(BaseTask):
@@ -76,6 +83,8 @@ class ExtractPdfTask(BaseTask):
         self.extraction_target: str = str(self.params.get("extraction_target") or "per_doc")
         cite_sources = self.params.get("cite_sources")
         self.cite_sources: Optional[bool] = cite_sources if isinstance(cite_sources, bool) else None
+        confidence_scores = self.params.get("confidence_scores", True)
+        self.confidence_scores: Optional[bool] = confidence_scores if isinstance(confidence_scores, bool) else None
         project_id = self.params.get("project_id")
         self.project_id: Optional[str] = project_id if isinstance(project_id, str) else None
         organization_id = self.params.get("organization_id")
@@ -177,6 +186,7 @@ class ExtractPdfTask(BaseTask):
                 parse_tier=self.parse_tier,
                 extraction_target=self.extraction_target,
                 cite_sources=self.cite_sources,
+                confidence_scores=self.confidence_scores,
                 project_id=self.project_id,
                 organization_id=self.organization_id,
                 poll_interval_seconds=self.poll_interval_seconds,
@@ -238,6 +248,13 @@ class ExtractPdfTask(BaseTask):
                 "extraction_status": "success"
             }
 
+            self._persist_extraction_result(
+                context=context,
+                processed_data=validated_data,
+                metadata=getattr(extracted_result, "extraction_metadata", {}) or {},
+                provider_job_id=getattr(extracted_result, "job_id", None),
+            )
+
             # Unified timestamp convention
             self.status_manager.update_status(unique_id, "Task Completed: extract_document_data", step="Task Completed: extract_document_data")
             self.logger.info(f"Extraction successful for {unique_id}")
@@ -257,6 +274,65 @@ class ExtractPdfTask(BaseTask):
             raise TaskError(error_msg)
 
         return context
+
+    def _persist_extraction_result(
+        self,
+        *,
+        context: Dict[str, Any],
+        processed_data: Dict[str, Any],
+        metadata: Dict[str, Any],
+        provider_job_id: str | None,
+    ) -> None:
+        """Persist extraction result and confidence metadata for review workflows."""
+        document_id = context.get("document_id")
+        if not document_id:
+            return
+
+        fields = self._build_persisted_fields(processed_data, metadata)
+        with connect(self.config_manager) as conn:
+            repository = ExtractionRepository(conn)
+            result = repository.save_result(
+                document_id=str(document_id),
+                task_run_id=context.get("task_run_id"),
+                provider="llamacloud_extract",
+                provider_job_id=provider_job_id,
+                data=processed_data,
+                metadata={
+                    "configuration_id": self.configuration_id,
+                    "extraction_metadata": metadata,
+                },
+            )
+            repository.save_fields(
+                document_id=str(document_id),
+                extraction_result_id=result["id"],
+                fields=fields,
+            )
+        context["extraction_result_id"] = result["id"]
+
+    def _build_persisted_fields(
+        self,
+        processed_data: Dict[str, Any],
+        metadata: Dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Convert validated extraction output into extracted_fields rows."""
+        persisted_fields: list[dict[str, Any]] = []
+        for field_key, value in processed_data.items():
+            field_config = self.fields.get(field_key, {})
+            alias = field_config.get("alias", field_key) if isinstance(field_config, dict) else field_key
+            persisted_fields.append(
+                {
+                    "field_key": field_key,
+                    "field_alias": alias,
+                    "extracted_value": value,
+                    "final_value": value,
+                    "confidence": extract_numeric_confidence(metadata, field_key, alias),
+                    "confidence_label": extract_confidence_label(metadata, field_key, alias),
+                    "requires_review": False,
+                    "review_status": "not_required",
+                    "source": extract_field_source(metadata, field_key, alias),
+                }
+            )
+        return persisted_fields
 
     def validate_required_fields(self, context: dict):
         """Validate presence of required runtime parameters.

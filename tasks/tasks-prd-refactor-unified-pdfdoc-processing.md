@@ -284,17 +284,17 @@ C:\Python313\python.exe -m pytest -v
   - [x] 16.5 Build `split_results.html` and wire it to `GET /api/batches/{batch_id}/split-results`.
   - [x] 16.6 Add upload, processing, and split-results UI smoke tests where practical.
 
-- [ ] 17.0 Build Schema Editor UI and schema APIs
+- [x] 17.0 Build Schema Editor UI and schema APIs
   - Acceptance: Admin can create/edit/validate/save complex QA schemas without Streamlit, operators cannot access schema editing, and review UI can consume normalized schema API responses.
-  - [ ] 17.1 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
-  - [ ] 17.2 Build `schema_editor.html`.
-  - [ ] 17.3 Build `schema_editor.js` field tree rendering.
-  - [ ] 17.4 Implement scalar field property editing.
-  - [ ] 17.5 Implement nested object field editing.
-  - [ ] 17.6 Implement scalar array and object array schema editing.
-  - [ ] 17.7 Add YAML preview.
-  - [ ] 17.8 Add active-review warning when schema changes may affect existing review items.
-  - [ ] 17.9 Add schema editor tests for API, service, and admin authorization behavior.
+  - [x] 17.1 Add schema endpoints `GET /api/schemas`, `GET /api/schemas/{schema_name}`, `POST /api/schemas`, `PUT /api/schemas/{schema_name}`, `POST /api/schemas/{schema_name}/validate`, and `POST /api/schemas/{schema_name}/duplicate`.
+  - [x] 17.2 Build `schema_editor.html`.
+  - [x] 17.3 Build `schema_editor.js` field tree rendering.
+  - [x] 17.4 Implement scalar field property editing.
+  - [x] 17.5 Implement nested object field editing.
+  - [x] 17.6 Implement scalar array and object array schema editing.
+  - [x] 17.7 Add YAML preview.
+  - [x] 17.8 Add active-review warning when schema changes may affect existing review items.
+  - [x] 17.9 Add schema editor tests for API, service, and admin authorization behavior.
 
 - [ ] 18.0 Build Extraction Results UI and API
   - Acceptance: Operator/admin can inspect persisted extraction payloads and fields before entering review workflows.

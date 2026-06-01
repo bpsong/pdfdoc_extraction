@@ -49,11 +49,12 @@ from .file_processor import FileProcessor
 from . import utils as utils_mod
 from .db.connection import connect
 from .db.connection import json_loads
-from .db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
+from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
 from .db.migrations import initialize_database
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.review_service import ReviewService, ReviewServiceError
+from .services.schema_service import SchemaService
 from .resume_manager import ResumeManager
 
 
@@ -217,6 +218,39 @@ def get_current_user(token: Optional[str] = Depends(cookie_or_header_token), aut
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
 
+def _as_string_list(value: Any) -> list[str]:
+    """Normalize config role values into strings."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value if str(item)]
+    return []
+
+
+def is_admin_user(username: str, config: Any) -> bool:
+    """Return whether a user can access admin APIs."""
+    if not bool(config.get("ui.admin_enabled", True)):
+        return False
+    if not bool(config.get("auth.roles_enabled", True)):
+        return True
+
+    admin_users = set(_as_string_list(config.get("auth.default_admin_users", [])))
+    admin_users.update(_as_string_list(config.get("ui.default_admin_users", [])))
+    if admin_users:
+        return username in admin_users
+
+    configured_username = config.get("authentication.username")
+    return bool(configured_username and username == str(configured_username))
+
+
+def require_admin_user(user: str, config: Any) -> None:
+    """Raise a 403 when the current user lacks admin access."""
+    if not is_admin_user(user, config):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+
 # Background task function to process the uploaded file
 def process_file_in_background(file_processor: FileProcessor, temp_path: str, file_id: str, original_filename: Optional[str]) -> None:
     """Process the uploaded file in the background.
@@ -376,6 +410,34 @@ def build_router() -> APIRouter:
         if not isinstance(payload, dict):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="JSON payload must be an object")
         return payload
+
+    def _schema_active_review_warning(schema_name: str, config: ConfigManager) -> dict[str, Any] | None:
+        """Return a warning when open review items reference a schema."""
+        with connect(config) as conn:
+            reviews = ReviewRepository(conn).list_queue()
+        open_items = []
+        for item in reviews:
+            if item.get("status") not in {"pending", "in_review"}:
+                continue
+            metadata = json_loads(item.get("metadata_json"), {})
+            if metadata.get("schema_file") == schema_name:
+                open_items.append(item["id"])
+        if not open_items:
+            return None
+        return {
+            "message": "Schema changes may affect active review items.",
+            "active_review_count": len(open_items),
+            "review_item_ids": open_items,
+        }
+
+    def _schema_payload(payload: dict[str, Any]) -> dict[str, Any]:
+        schema = payload.get("schema")
+        if schema is None:
+            schema = {key: value for key, value in payload.items() if key not in {"name", "new_name"}}
+        if not isinstance(schema, dict):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Schema payload must be an object")
+        schema.setdefault("fields", {})
+        return schema
 
     @router.post("/api/login", response_model=TokenResponse)
     async def login(request: Request):
@@ -690,6 +752,101 @@ def build_router() -> APIRouter:
             return ConfigValidationService(config).validate_pipeline(payload)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/api/schemas")
+    def list_schemas(user: str = Depends(get_current_user)):
+        """List configured review schemas."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        return {"schemas": SchemaService(config).list_schemas()}
+
+    @router.post("/api/schemas")
+    async def create_schema(request: Request, user: str = Depends(get_current_user)):
+        """Create a new review schema file."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        schema_name = str(payload.get("name") or "").strip()
+        if not schema_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Schema name is required")
+        service = SchemaService(config)
+        try:
+            schema = service.save_schema(schema_name, _schema_payload(payload), overwrite=False)
+        except FileExistsError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return {"schema": schema, "content": service.schema_content(schema_name)}
+
+    @router.post("/api/schemas/{schema_name}/validate")
+    async def validate_schema_payload(schema_name: str, request: Request, user: str = Depends(get_current_user)):
+        """Validate a schema draft without saving it."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        schema = _schema_payload(payload)
+        service = SchemaService(config)
+        findings = service.validate_schema(schema)
+        return {
+            "valid": not findings,
+            "findings": findings,
+            "active_review_warning": _schema_active_review_warning(schema_name, config),
+        }
+
+    @router.post("/api/schemas/{schema_name}/duplicate")
+    async def duplicate_schema(schema_name: str, request: Request, user: str = Depends(get_current_user)):
+        """Duplicate an existing review schema."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        new_name = str(payload.get("new_name") or payload.get("name") or "").strip()
+        if not new_name:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New schema name is required")
+        service = SchemaService(config)
+        try:
+            schema = service.duplicate_schema(schema_name, new_name)
+        except FileExistsError as exc:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return {"schema": schema, "content": service.schema_content(new_name)}
+
+    @router.get("/api/schemas/{schema_name}")
+    def get_schema(schema_name: str, user: str = Depends(get_current_user)):
+        """Return one normalized review schema and raw content."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        service = SchemaService(config)
+        schema = service.normalize_schema(schema_name)
+        if schema is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schema not found")
+        return {
+            "schema": schema,
+            "raw_schema": service.load_schema(schema_name),
+            "content": service.schema_content(schema_name),
+            "active_review_warning": _schema_active_review_warning(schema_name, config),
+        }
+
+    @router.put("/api/schemas/{schema_name}")
+    async def update_schema(schema_name: str, request: Request, user: str = Depends(get_current_user)):
+        """Update an existing review schema file."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        service = SchemaService(config)
+        if service.load_schema(schema_name) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schema not found")
+        payload = await _json_body(request)
+        try:
+            schema = service.save_schema(schema_name, _schema_payload(payload), overwrite=True)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return {
+            "schema": schema,
+            "content": service.schema_content(schema_name),
+            "active_review_warning": _schema_active_review_warning(schema_name, config),
+        }
 
     @router.get("/api/status/{file_id}")
     def get_status(file_id: str, user: str = Depends(get_current_user)):

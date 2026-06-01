@@ -38,7 +38,12 @@ from modules.db.connection import connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
 from modules.status_manager import StatusManager
-from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
+from standard_step.extraction.llama_cloud_v2 import (
+    extract_confidence_label,
+    extract_field_source,
+    extract_numeric_confidence,
+    run_extract_v2_job,
+)
 
 
 class ExtractPdfV2Task(BaseTask):
@@ -112,6 +117,7 @@ class ExtractPdfV2Task(BaseTask):
         self.parse_tier: Optional[str] = None
         self.extraction_target: str = "per_doc"
         self.cite_sources: Optional[bool] = None
+        self.confidence_scores: Optional[bool] = True
         self.project_id: Optional[str] = None
         self.organization_id: Optional[str] = None
         self.poll_interval_seconds: float = 2.0
@@ -163,6 +169,8 @@ class ExtractPdfV2Task(BaseTask):
             self.extraction_target = str(params.get('extraction_target') or 'per_doc')
             cite_sources = params.get('cite_sources')
             self.cite_sources = cite_sources if isinstance(cite_sources, bool) else None
+            confidence_scores = params.get('confidence_scores', True)
+            self.confidence_scores = confidence_scores if isinstance(confidence_scores, bool) else None
             project_id = params.get('project_id')
             self.project_id = project_id if isinstance(project_id, str) else None
             organization_id = params.get('organization_id')
@@ -255,6 +263,7 @@ class ExtractPdfV2Task(BaseTask):
                     parse_tier=self.parse_tier,
                     extraction_target=self.extraction_target,
                     cite_sources=self.cite_sources,
+                    confidence_scores=self.confidence_scores,
                     project_id=self.project_id,
                     organization_id=self.organization_id,
                     poll_interval_seconds=self.poll_interval_seconds,
@@ -490,57 +499,24 @@ class ExtractPdfV2Task(BaseTask):
     @staticmethod
     def _metadata_candidates(metadata: Dict[str, Any], field_key: str, alias: str) -> list[Any]:
         """Return likely field-specific metadata objects from varied provider shapes."""
-        candidates: list[Any] = []
-        for container_key in ("fields", "field_metadata", "field_confidences", "confidence", "confidences"):
-            container = metadata.get(container_key)
-            if isinstance(container, dict):
-                for key in (field_key, alias):
-                    if key in container:
-                        candidates.append(container[key])
-            elif isinstance(container, list):
-                for item in container:
-                    if not isinstance(item, dict):
-                        continue
-                    if item.get("field_key") == field_key or item.get("name") in {field_key, alias}:
-                        candidates.append(item)
-        return candidates
+        from standard_step.extraction.llama_cloud_v2 import metadata_candidates
+
+        return metadata_candidates(metadata, field_key, alias)
 
     @classmethod
     def _extract_numeric_confidence(cls, metadata: Dict[str, Any], field_key: str, alias: str) -> float | None:
         """Extract numeric confidence, preserving NULL when confidence is absent or non-numeric."""
-        for candidate in cls._metadata_candidates(metadata, field_key, alias):
-            raw_value = candidate.get("confidence") if isinstance(candidate, dict) else candidate
-            if isinstance(raw_value, (int, float)):
-                return float(raw_value)
-            if isinstance(raw_value, str):
-                try:
-                    return float(raw_value)
-                except ValueError:
-                    continue
-        return None
+        return extract_numeric_confidence(metadata, field_key, alias)
 
     @classmethod
     def _extract_confidence_label(cls, metadata: Dict[str, Any], field_key: str, alias: str) -> str | None:
         """Extract a textual confidence label when provider metadata includes one."""
-        for candidate in cls._metadata_candidates(metadata, field_key, alias):
-            if isinstance(candidate, dict):
-                for key in ("confidence_label", "label", "confidence_level"):
-                    value = candidate.get(key)
-                    if isinstance(value, str):
-                        return value
-            elif isinstance(candidate, str):
-                return candidate
-        return None
+        return extract_confidence_label(metadata, field_key, alias)
 
     @classmethod
     def _extract_field_source(cls, metadata: Dict[str, Any], field_key: str, alias: str) -> Dict[str, Any]:
         """Extract field citation/source metadata when present."""
-        for candidate in cls._metadata_candidates(metadata, field_key, alias):
-            if isinstance(candidate, dict):
-                source = candidate.get("source") or candidate.get("citation") or candidate.get("citations")
-                if source is not None:
-                    return {"provider_source": source}
-        return {}
+        return extract_field_source(metadata, field_key, alias)
 
     def validate_required_fields(self, context: Dict[str, Any]) -> None:
         """Validate required configuration parameters.

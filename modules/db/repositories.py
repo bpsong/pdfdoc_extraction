@@ -471,6 +471,33 @@ class ExtractionRepository:
                     (json_dumps(corrected_value), json_dumps(corrected_value), now, document_id, field_key),
                 )
 
+    def set_review_requirements(self, document_id: str, required_field_keys: list[str]) -> None:
+        """Mark which extracted fields require human review for the current gate run."""
+        now = utc_now()
+        required = set(required_field_keys)
+        with transaction(self.conn):
+            rows = self.conn.execute(
+                "SELECT field_key FROM extracted_fields WHERE document_id = ?",
+                (document_id,),
+            ).fetchall()
+            for row in rows:
+                field_key = str(row["field_key"])
+                requires_review = field_key in required
+                self.conn.execute(
+                    """
+                    UPDATE extracted_fields
+                    SET requires_review = ?, review_status = ?, updated_at = ?
+                    WHERE document_id = ? AND field_key = ?
+                    """,
+                    (
+                        1 if requires_review else 0,
+                        "required" if requires_review else "not_required",
+                        now,
+                        document_id,
+                        field_key,
+                    ),
+                )
+
 
 class ReviewRepository:
     """Persistence helpers for review queue items and locks."""

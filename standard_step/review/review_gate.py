@@ -50,6 +50,7 @@ class ReviewGateTask(BaseTask):
             fields = extraction_repository.get_fields(str(document_id))
             document = document_repository.get(str(document_id)) or {}
             reasons, highlight_fields = self._review_reasons(context, fields, document)
+            extraction_repository.set_review_requirements(str(document_id), highlight_fields)
 
             if not reasons:
                 context["review_required"] = False
@@ -139,13 +140,21 @@ class ReviewGateTask(BaseTask):
         editable_fields = [str(field["field_key"]) for field in fields]
         if self.review_scope == "low_confidence_fields" and not self.allow_edit_high_confidence:
             editable_fields = highlight_fields
+        high_confidence_fields = [
+            str(field["field_key"])
+            for field in fields
+            if field.get("confidence") is not None and float(field["confidence"]) >= self.confidence_threshold
+        ]
         schema_hash = SchemaService(self.config_manager).schema_hash(str(self.schema_file)) if self.schema_file else None
         return {
             "schema_file": self.schema_file,
             "schema_version": schema_hash,
             "review_scope": self.review_scope,
+            "confidence_threshold": self.confidence_threshold,
             "editable_fields": editable_fields,
             "highlight_fields": highlight_fields,
+            "low_confidence_fields": highlight_fields,
+            "high_confidence_fields": sorted(high_confidence_fields),
             "reasons": reasons,
             "allow_operator_to_edit_high_confidence_fields": self.allow_edit_high_confidence,
             "resume_policy": self.resume_policy,

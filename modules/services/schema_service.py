@@ -26,6 +26,8 @@ SUPPORTED_FIELD_TYPES = {
     "object",
 }
 
+SCHEMA_SUFFIXES = {".yaml", ".yml", ".json"}
+
 
 class SchemaService:
     """Load QA schema files and expose canonical validation helpers."""
@@ -58,7 +60,7 @@ class SchemaService:
             if not directory.exists():
                 continue
             for path in sorted(directory.glob("*")):
-                if path.suffix.lower() not in {".yaml", ".yml", ".json"}:
+                if path.suffix.lower() not in SCHEMA_SUFFIXES:
                     continue
                 schema = self.load_schema(path.name)
                 schemas.append(
@@ -70,6 +72,38 @@ class SchemaService:
                     }
                 )
         return schemas
+
+    def save_schema(
+        self,
+        schema_name: str,
+        schema: dict[str, Any],
+        *,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Validate and save a schema file, returning normalized schema data."""
+        findings = self.validate_schema(schema)
+        if findings:
+            raise ValueError(f"Schema validation failed: {findings}")
+
+        path = self._writable_schema_path(schema_name)
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"Schema already exists: {path.name}")
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content = self._serialize_schema(path, schema)
+        path.write_text(content, encoding="utf-8")
+        normalized = self.normalize_schema(path.name)
+        return normalized or {}
+
+    def duplicate_schema(self, schema_name: str, new_schema_name: str) -> dict[str, Any]:
+        """Create a copy of one schema under a new name."""
+        source_path = self._resolve_schema_path(schema_name)
+        if source_path is None or not source_path.exists():
+            raise FileNotFoundError(f"Schema not found: {schema_name}")
+        schema = self.load_schema(schema_name)
+        if schema is None:
+            raise ValueError("Schema file could not be loaded.")
+        return self.save_schema(new_schema_name, schema, overwrite=False)
 
     def load_schema(self, schema_name: str) -> dict[str, Any] | None:
         """Load a YAML or JSON schema by configured-relative name."""
@@ -87,6 +121,13 @@ class SchemaService:
         schema.setdefault("description", "")
         schema.setdefault("fields", {})
         return schema
+
+    def schema_content(self, schema_name: str) -> str | None:
+        """Return the raw schema file text for editor previews."""
+        path = self._resolve_schema_path(schema_name)
+        if path is None or not path.exists():
+            return None
+        return path.read_text(encoding="utf-8")
 
     def normalize_schema(self, schema_name: str) -> dict[str, Any] | None:
         """Return schema metadata and canonical UI field definitions."""
@@ -148,6 +189,26 @@ class SchemaService:
             if path.exists():
                 return path
         return self.schema_directories()[0] / schema_name
+
+    def _writable_schema_path(self, schema_name: str) -> Path:
+        name = self._safe_schema_name(schema_name)
+        return self.schema_directories()[0] / name
+
+    @staticmethod
+    def _safe_schema_name(schema_name: str) -> str:
+        candidate = Path(schema_name)
+        if candidate.name != schema_name or candidate.is_absolute() or not candidate.name:
+            raise ValueError("Schema name must be a file name, not a path.")
+        suffix = candidate.suffix.lower()
+        if suffix not in SCHEMA_SUFFIXES:
+            raise ValueError("Schema name must end with .yaml, .yml, or .json.")
+        return candidate.name
+
+    @staticmethod
+    def _serialize_schema(path: Path, schema: dict[str, Any]) -> str:
+        if path.suffix.lower() == ".json":
+            return json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=False) + "\n"
+        return yaml.safe_dump(schema, sort_keys=False, allow_unicode=True)
 
     def _normalize_fields(self, fields: dict[str, Any], parent_path: str = "") -> list[dict[str, Any]]:
         normalized: list[dict[str, Any]] = []

@@ -3,7 +3,12 @@ from pathlib import Path
 import pytest
 from unittest.mock import MagicMock
 from modules.config_manager import ConfigManager
+from modules.db.connection import connect, json_loads
+from modules.db.migrations import initialize_database
+from modules.db.repositories import ExtractionRepository, TaskRunRepository
+from modules.services.batch_service import BatchService
 from standard_step.extraction.extract_pdf import ExtractPdfTask
+from test.helpers_sqlite import TempConfig
 from typing import List, Optional
 
 TEST_DIR = Path(__file__).parent
@@ -171,3 +176,79 @@ class TestExtractPdfTask:
         # Align assertions with current implementation where status string equals descriptive step
         assert MockStatusManager.status_updates[-1][1] == "Task Completed: extract_document_data"
         assert MockStatusManager.status_updates[-1][2] == "Task Completed: extract_document_data"
+
+
+def test_extract_pdf_persists_confidence_for_review_gate(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    params = {
+        "api_key": "test-key",
+        "fields": {
+            "supplier": {"alias": "Supplier", "type": "str"},
+            "invoice_total": {"alias": "Total", "type": "float"},
+        },
+    }
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {"tasks": {"extract_document_data": {"params": params}}},
+    )
+    initialize_database(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+        task_run = TaskRunRepository(conn).create_started(
+            batch_id=created["batch"]["id"],
+            document_id=created["document"]["id"],
+            task_key="extract_document_data",
+            task_index=0,
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
+        )
+
+    class Result:
+        data = {"Supplier": "Acme", "Total": "12.50"}
+        extraction_metadata = {
+            "field_metadata": {
+                "document_metadata": {
+                    "Supplier": {"confidence_score": 0.94, "confidence_label": "high"},
+                    "Total": {"confidence_score": 0.61, "confidence_label": "low"},
+                }
+            }
+        }
+        job_id = "job-v1"
+
+    runner = MagicMock(return_value=Result())
+    monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", runner)
+    monkeypatch.setattr("standard_step.extraction.extract_pdf.StatusManager", MockStatusManager)
+    MockStatusManager.status_updates = []
+
+    task = ExtractPdfTask(config_manager=config, **params)
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "file_path": str(pdf_path),
+    }
+
+    task.on_start(context)
+    result_context = task.run(context)
+
+    with connect(config) as conn:
+        repository = ExtractionRepository(conn)
+        result = repository.get_latest_result(created["document"]["id"])
+        fields = {field["field_key"]: field for field in repository.get_fields(created["document"]["id"])}
+
+    assert result and result["provider_job_id"] == "job-v1"
+    assert result_context["extraction_result_id"] == result["id"]
+    assert json_loads(fields["supplier"]["final_value_json"]) == "Acme"
+    assert fields["supplier"]["confidence"] == 0.94
+    assert fields["supplier"]["confidence_label"] == "high"
+    assert fields["invoice_total"]["confidence"] == 0.61
+    assert fields["invoice_total"]["confidence_label"] == "low"
+    assert json_loads(fields["invoice_total"]["final_value_json"]) == 12.5
+    assert runner.call_args.kwargs["confidence_scores"] is True

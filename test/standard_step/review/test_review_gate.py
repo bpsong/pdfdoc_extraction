@@ -59,6 +59,10 @@ def test_review_gate_passes_when_all_rules_are_satisfied(tmp_path):
 
     assert result["review_required"] is False
     assert result["review_gate_status"] == "passed"
+    with connect(config) as conn:
+        fields = ExtractionRepository(conn).get_fields(created["document"]["id"])
+    assert fields[0]["requires_review"] == 0
+    assert fields[0]["review_status"] == "not_required"
 
 
 def test_review_gate_pauses_for_low_confidence_and_does_not_duplicate_open_item(tmp_path):
@@ -78,9 +82,14 @@ def test_review_gate_pauses_for_low_confidence_and_does_not_duplicate_open_item(
     with connect(config) as conn:
         reviews = ReviewRepository(conn).list_queue()
         metadata = json_loads(reviews[0]["metadata_json"])
+        fields = ExtractionRepository(conn).get_fields(created["document"]["id"])
 
     assert first["pipeline_state"] == "paused"
     assert second["review_item_id"] == first["review_item_id"]
     assert len(reviews) == 1
     assert metadata["highlight_fields"] == ["supplier"]
+    assert metadata["low_confidence_fields"] == ["supplier"]
+    assert metadata["high_confidence_fields"] == []
     assert metadata["schema_file"] == "invoice.yaml"
+    assert fields[0]["requires_review"] == 1
+    assert fields[0]["review_status"] == "required"

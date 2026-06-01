@@ -168,6 +168,106 @@
     background: currentColor;
 }
 
+.schema-editor-workspace {
+    display: grid;
+    grid-template-columns: 18rem minmax(0, 1fr) minmax(22rem, 0.8fr);
+    gap: 1rem;
+    min-height: calc(100vh - 8rem);
+}
+
+.schema-list-panel,
+.schema-detail-panel,
+.schema-preview-panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.schema-panel-header {
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.schema-list {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow: auto;
+}
+
+.schema-list-item {
+    text-align: left;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    background: oklch(var(--b1));
+}
+
+.schema-list-item.active {
+    border-color: oklch(var(--p));
+    background: oklch(var(--p) / 0.08);
+}
+
+.schema-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+    padding: 1rem;
+}
+
+.schema-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0 1rem 1rem;
+}
+
+.schema-field-tree {
+    padding: 0 1rem 1rem;
+    overflow: auto;
+}
+
+.schema-field-row {
+    display: grid;
+    grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(7rem, 0.8fr) auto auto;
+    gap: 0.5rem;
+    align-items: end;
+    padding: 0.75rem;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    background: oklch(var(--b1));
+}
+
+.schema-field-children {
+    grid-column: 1 / -1;
+    margin-left: 1rem;
+    padding-left: 1rem;
+    border-left: 2px solid oklch(var(--b3));
+}
+
+.schema-yaml-preview {
+    flex: 1;
+    min-height: 26rem;
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    background: oklch(var(--b2));
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.schema-validation-results {
+    padding: 1rem;
+    border-top: 1px solid oklch(var(--b3));
+}
+
 @media (max-width: 900px) {
     aside.w-56 {
         width: 4.75rem !important;
@@ -206,5 +306,19 @@
 
     .review-workspace {
         grid-template-columns: 1fr;
+    }
+
+    .schema-editor-workspace {
+        grid-template-columns: 1fr;
+    }
+
+    .schema-field-row,
+    .schema-meta-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .schema-field-children {
+        margin-left: 0;
+        padding-left: 0.75rem;
     }
 }
