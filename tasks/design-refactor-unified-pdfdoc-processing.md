@@ -1790,6 +1790,7 @@ Extraction table columns:
 ```text
 Field
 Extracted Value
+Final Value
 Confidence
 Review Status
 ```
@@ -1816,7 +1817,7 @@ Response:
     "filename": "INV-001.pdf",
     "document_type": "invoice",
     "status": "review_required",
-    "preview_url": "/api/documents/doc_123/file/preview"
+    "preview_url": "/api/documents/doc_123/file/pdf"
   },
   "siblings": [
     {"id": "doc_prev", "label": "INV-000.pdf"},
