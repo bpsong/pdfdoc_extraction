@@ -132,6 +132,17 @@ def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -
     assert "/static/js/split_results.js" in split_results.text
 
 
+def test_extraction_results_page_includes_task_18_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/documents/doc-1/extraction")
+
+    assert response.status_code == 200
+    assert 'id="extraction-results-workspace"' in response.text
+    assert "/static/js/extraction_results.js" in response.text
+
+
 def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)

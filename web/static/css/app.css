@@ -280,6 +280,80 @@
     border-top: 1px solid oklch(var(--b3));
 }
 
+.extraction-results-workspace {
+    display: grid;
+    grid-template-columns: minmax(20rem, 0.8fr) minmax(0, 1.2fr);
+    gap: 1rem;
+}
+
+.extraction-preview-panel,
+.extraction-fields-panel,
+.extraction-payload-panel {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.extraction-preview-panel {
+    min-height: calc(100vh - 8rem);
+}
+
+.extraction-payload-panel {
+    grid-column: 2;
+}
+
+.panel-header {
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.confidence-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.extraction-preview-body {
+    flex: 1;
+    min-height: 28rem;
+    background: oklch(var(--b2));
+}
+
+.extraction-pdf-frame {
+    width: 100%;
+    height: 100%;
+    min-height: 28rem;
+    border: 0;
+    display: block;
+}
+
+.extraction-file-list {
+    border-top: 1px solid oklch(var(--b3));
+}
+
+.extraction-file-row {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.extraction-raw-payload {
+    min-height: 16rem;
+    max-height: 28rem;
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    background: oklch(var(--b2));
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
 @media (max-width: 900px) {
     aside.w-56 {
         width: 4.75rem !important;
@@ -332,5 +406,11 @@
     .schema-field-children {
         margin-left: 0;
         padding-left: 0.75rem;
+    }
+
+    .extraction-results-workspace,
+    .extraction-payload-panel {
+        grid-template-columns: 1fr;
+        grid-column: auto;
     }
 }

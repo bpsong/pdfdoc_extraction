@@ -1,29 +1,70 @@
 {% extends "app_base.html" %}
 
 {% block content %}
-<div class="app-workspace">
-    {% if document_id is defined %}
-    <div class="alert bg-base-100 border-base-300">
-        <span class="text-sm">Document {{ document_id }}</span>
-    </div>
-    {% endif %}
+<div id="extraction-results-workspace" class="extraction-results-workspace" data-document-id="{{ document_id|default('') }}">
+    <section class="extraction-preview-panel bg-base-100 border border-base-300 rounded-lg">
+        <div class="panel-header">
+            <div class="min-w-0">
+                <h2 id="extraction-document-title" class="font-semibold text-sm truncate">Document</h2>
+                <p id="extraction-document-status" class="text-xs text-base-content/50 truncate"></p>
+            </div>
+            <a id="extraction-review-link" href="/app/review" class="btn btn-warning btn-sm hidden">Review</a>
+        </div>
+        <div id="extraction-preview-body" class="extraction-preview-body">
+            <div class="empty-panel">Loading preview</div>
+        </div>
+        <div id="extraction-file-list" class="extraction-file-list"></div>
+    </section>
 
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Field</th>
-                    <th>Extracted Value</th>
-                    <th>Confidence</th>
-                    <th>Review</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No extraction fields</td>
-                </tr>
-            </tbody>
-        </table>
+    <section class="extraction-fields-panel bg-base-100 border border-base-300 rounded-lg">
+        <div class="panel-header">
+            <div class="min-w-0">
+                <h2 class="font-semibold text-sm">Extracted Fields</h2>
+                <p id="extraction-job-label" class="text-xs text-base-content/50 truncate"></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="previous-document-button" class="btn btn-outline btn-sm" type="button" disabled>Previous</button>
+                <button id="next-document-button" class="btn btn-outline btn-sm" type="button" disabled>Next</button>
+            </div>
+        </div>
+
+        <div class="confidence-legend">
+            <span class="badge badge-success badge-sm">High >= 90%</span>
+            <span class="badge badge-warning badge-sm">Medium 70-89%</span>
+            <span class="badge badge-error badge-sm">Low &lt; 70%</span>
+            <span class="badge badge-ghost badge-sm">N/A</span>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr class="text-xs text-base-content/50">
+                        <th>Field</th>
+                        <th>Extracted Value</th>
+                        <th>Final Value</th>
+                        <th>Confidence</th>
+                        <th>Review Status</th>
+                    </tr>
+                </thead>
+                <tbody id="extraction-fields-table-body">
+                    <tr>
+                        <td colspan="5" class="text-center text-base-content/50 py-10">No extraction fields</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="extraction-payload-panel bg-base-100 border border-base-300 rounded-lg">
+        <div class="panel-header">
+            <h2 class="font-semibold text-sm">Raw Payload</h2>
+            <span id="extraction-provider-label" class="badge badge-ghost badge-sm">No provider</span>
+        </div>
+        <pre id="extraction-raw-payload" class="extraction-raw-payload"></pre>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/extraction_results.js?v=task18" defer></script>
 {% endblock %}

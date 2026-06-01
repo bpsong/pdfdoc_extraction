@@ -296,12 +296,12 @@ C:\Python313\python.exe -m pytest -v
   - [x] 17.8 Add active-review warning when schema changes may affect existing review items.
   - [x] 17.9 Add schema editor tests for API, service, and admin authorization behavior.
 
-- [ ] 18.0 Build Extraction Results UI and API
+- [x] 18.0 Build Extraction Results UI and API
   - Acceptance: Operator/admin can inspect persisted extraction payloads and fields before entering review workflows.
-  - [ ] 18.1 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
-  - [ ] 18.2 Build `extraction_results.html`.
-  - [ ] 18.3 Wire extraction fields and source document preview links from SQLite-backed APIs.
-  - [ ] 18.4 Add extraction results API/UI smoke tests where practical.
+  - [x] 18.1 Add extraction result API endpoint `GET /api/documents/{document_id}/extraction`.
+  - [x] 18.2 Build `extraction_results.html`.
+  - [x] 18.3 Wire extraction fields and source document preview links from SQLite-backed APIs.
+  - [x] 18.4 Add extraction results API/UI smoke tests where practical.
 
 - [ ] 19.0 Build Review Queue and Human Review UI
   - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review in DaisyUI pages that mirror the prototype layout and IA.

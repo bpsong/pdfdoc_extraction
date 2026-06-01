@@ -37,7 +37,7 @@ from email.policy import default
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
@@ -249,6 +249,54 @@ def require_admin_user(user: str, config: Any) -> None:
     """Raise a 403 when the current user lacks admin access."""
     if not is_admin_user(user, config):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+
+def _confidence_band(confidence: Any) -> str:
+    """Map numeric confidence to UI badge bands."""
+    if confidence is None:
+        return "missing"
+    try:
+        value = float(confidence)
+    except (TypeError, ValueError):
+        return "missing"
+    if value >= 0.90:
+        return "high"
+    if value >= 0.70:
+        return "medium"
+    return "low"
+
+
+def _parsed_field_payload(field: dict[str, Any]) -> dict[str, Any]:
+    """Return a UI-ready extracted field payload."""
+    confidence = field.get("confidence")
+    return {
+        "id": field.get("id"),
+        "field_key": field.get("field_key"),
+        "field_alias": field.get("field_alias"),
+        "extracted_value": json_loads(field.get("extracted_value_json")),
+        "corrected_value": json_loads(field.get("corrected_value_json")),
+        "final_value": json_loads(field.get("final_value_json")),
+        "confidence": confidence,
+        "confidence_label": field.get("confidence_label"),
+        "confidence_band": _confidence_band(confidence),
+        "requires_review": bool(field.get("requires_review")),
+        "review_status": field.get("review_status"),
+        "source": json_loads(field.get("source_json"), {}),
+        "created_at": field.get("created_at"),
+        "updated_at": field.get("updated_at"),
+    }
+
+
+def _parsed_file_payload(file_record: dict[str, Any]) -> dict[str, Any]:
+    """Return a UI-ready document file payload."""
+    return {
+        "id": file_record.get("id"),
+        "file_type": file_record.get("file_type"),
+        "file_path": file_record.get("file_path"),
+        "filename": Path(str(file_record.get("file_path") or "")).name,
+        "created_at": file_record.get("created_at"),
+        "metadata": json_loads(file_record.get("metadata_json"), {}),
+    }
 
 
 # Background task function to process the uploaded file
@@ -1012,6 +1060,90 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         with connect(config) as conn:
             return TaskRunRepository(conn).list_by_document(document_id)
+
+    @router.get("/api/documents/{document_id}/extraction")
+    def get_document_extraction(document_id: str, user: str = Depends(get_current_user)):
+        """Return persisted extraction details for one document."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            documents = DocumentRepository(conn)
+            extractions = ExtractionRepository(conn)
+            reviews = ReviewRepository(conn)
+            document = documents.get(document_id)
+            if document is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+
+            latest_result = extractions.get_latest_result(document_id)
+            fields = [_parsed_field_payload(field) for field in extractions.get_fields(document_id)]
+            files = [_parsed_file_payload(file_record) for file_record in documents.list_files(document_id)]
+            open_review = reviews.find_open_for_document(document_id)
+            siblings = [
+                {
+                    "id": sibling["id"],
+                    "label": sibling.get("original_filename") or Path(str(sibling.get("file_path") or "")).name or sibling["id"],
+                    "status": sibling.get("status"),
+                }
+                for sibling in documents.list_by_batch(str(document["batch_id"]))
+            ]
+
+        filename = document.get("original_filename") or Path(str(document.get("file_path") or "")).name
+        return {
+            "document": {
+                "id": document["id"],
+                "batch_id": document.get("batch_id"),
+                "parent_document_id": document.get("parent_document_id"),
+                "filename": filename,
+                "document_type": document.get("document_type"),
+                "status": document.get("status"),
+                "file_path": document.get("file_path"),
+                "page_start": document.get("page_start"),
+                "page_end": document.get("page_end"),
+                "split_category": document.get("split_category"),
+                "split_confidence": document.get("split_confidence"),
+                "preview_url": f"/api/documents/{document_id}/file/pdf",
+                "metadata": json_loads(document.get("metadata_json"), {}),
+            },
+            "files": files,
+            "siblings": siblings,
+            "latest_extraction": {
+                "id": latest_result.get("id"),
+                "provider": latest_result.get("provider"),
+                "provider_job_id": latest_result.get("provider_job_id"),
+                "task_run_id": latest_result.get("task_run_id"),
+                "data": json_loads(latest_result.get("data_json"), {}),
+                "metadata": json_loads(latest_result.get("metadata_json"), {}),
+                "created_at": latest_result.get("created_at"),
+            }
+            if latest_result
+            else None,
+            "fields": fields,
+            "review_item_id": open_review.get("id") if open_review else None,
+        }
+
+    @router.get("/api/documents/{document_id}/file/pdf")
+    def get_document_pdf_file(document_id: str, user: str = Depends(get_current_user)):
+        """Serve the current document PDF for preview from registered SQLite state."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            documents = DocumentRepository(conn)
+            document = documents.get(document_id)
+            if document is None:
+                raise HTTPException(status_code=404, detail="Document not found")
+            files = documents.list_files(document_id)
+
+        candidate_paths = [
+            file_record.get("file_path")
+            for file_record in files
+            if file_record.get("file_type") in {"split_pdf", "source_original", "original_pdf"}
+        ]
+        candidate_paths.append(document.get("file_path"))
+        for raw_path in candidate_paths:
+            if not raw_path:
+                continue
+            path = Path(str(raw_path))
+            if path.exists() and path.is_file():
+                return FileResponse(str(path), media_type="application/pdf", filename=path.name)
+        raise HTTPException(status_code=404, detail="PDF file not found")
 
     @router.get("/api/documents/{document_id}/fields")
     def list_document_fields(document_id: str, user: str = Depends(get_current_user)):
