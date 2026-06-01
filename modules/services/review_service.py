@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 import sqlite3
 from typing import Any
 
@@ -29,7 +30,10 @@ class ReviewService:
 
     def list_items(self, *, status: str | None = None, queue_name: str | None = None) -> list[dict[str, Any]]:
         """List review queue items."""
-        return self.reviews.list_queue(status=status, queue_name=queue_name)
+        return [
+            self._queue_item_payload(item)
+            for item in self.reviews.list_queue(status=status, queue_name=queue_name)
+        ]
 
     def get_detail(self, review_item_id: str) -> dict[str, Any] | None:
         """Return review item with document, fields, and lock state."""
@@ -38,12 +42,14 @@ class ReviewService:
             return None
         document_id = str(item["document_id"])
         metadata = json_loads(item.get("metadata_json"), {})
+        document = self.documents.get(document_id)
         return {
-            "review_item": item,
+            "review_item": self._review_item_payload(item),
             "metadata": metadata,
-            "document": self.documents.get(document_id),
-            "fields": self.extractions.get_fields(document_id),
+            "document": self._document_payload(document),
+            "fields": [self._field_payload(field) for field in self.extractions.get_fields(document_id)],
             "lock": self.reviews.get_lock(review_item_id),
+            "schema": self._schema_payload(metadata.get("schema_file")),
         }
 
     def create_review_item(
@@ -219,3 +225,98 @@ class ReviewService:
         for field in self.extractions.get_fields(document_id):
             values[str(field["field_key"])] = json_loads(field.get("final_value_json"))
         return values
+
+    def _queue_item_payload(self, item: dict[str, Any]) -> dict[str, Any]:
+        """Return a UI-ready queue item with document and confidence summary."""
+        review_item = self._review_item_payload(item)
+        document = self.documents.get(str(item["document_id"]))
+        fields = [self._field_payload(field) for field in self.extractions.get_fields(str(item["document_id"]))]
+        metadata = review_item["metadata"]
+
+        highlighted = {
+            str(key)
+            for key in metadata.get("highlight_fields") or metadata.get("low_confidence_fields") or []
+        }
+        review_fields = [
+            field for field in fields if field["field_key"] in highlighted or field.get("requires_review")
+        ]
+        if not review_fields and fields:
+            review_fields = fields
+
+        numeric_confidences = [
+            float(field["confidence"])
+            for field in review_fields
+            if isinstance(field.get("confidence"), (int, float))
+        ]
+        field_labels = [
+            str(field.get("field_alias") or field.get("field_key"))
+            for field in review_fields
+            if field.get("field_key")
+        ]
+
+        return {
+            **review_item,
+            "document": self._document_payload(document),
+            "review_field_labels": field_labels,
+            "review_field_count": len(review_fields),
+            "lowest_confidence": min(numeric_confidences) if numeric_confidences else None,
+            "lock": self.reviews.get_lock(str(item["id"])),
+        }
+
+    @staticmethod
+    def _review_item_payload(item: dict[str, Any]) -> dict[str, Any]:
+        """Return a review item row with parsed metadata."""
+        payload = dict(item)
+        payload["metadata"] = json_loads(item.get("metadata_json"), {})
+        return payload
+
+    @staticmethod
+    def _document_payload(document: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Return a compact document payload for review UI screens."""
+        if document is None:
+            return None
+        filename = document.get("original_filename") or Path(str(document.get("file_path") or "")).name
+        payload = dict(document)
+        payload["filename"] = filename
+        payload["metadata"] = json_loads(document.get("metadata_json"), {})
+        payload["preview_url"] = f"/api/documents/{document['id']}/file/pdf"
+        return payload
+
+    @staticmethod
+    def _field_payload(field: dict[str, Any]) -> dict[str, Any]:
+        """Return a normalized field payload for schema-driven review editing."""
+        payload = dict(field)
+        payload["extracted_value"] = json_loads(field.get("extracted_value_json"))
+        payload["corrected_value"] = json_loads(field.get("corrected_value_json"))
+        payload["final_value"] = json_loads(field.get("final_value_json"))
+        payload["source"] = json_loads(field.get("source_json"), {})
+        payload["requires_review"] = bool(field.get("requires_review"))
+        payload["confidence_band"] = ReviewService._confidence_band(field.get("confidence"))
+        return payload
+
+    def _schema_payload(self, schema_name: Any) -> dict[str, Any] | None:
+        """Load the normalized review schema referenced by the review metadata."""
+        if not schema_name or self.config_manager is None:
+            return None
+        service = SchemaService(self.config_manager)
+        schema = service.normalize_schema(str(schema_name))
+        if schema is None:
+            schema_path_name = Path(str(schema_name)).name
+            if schema_path_name != str(schema_name):
+                schema = service.normalize_schema(schema_path_name)
+        return schema
+
+    @staticmethod
+    def _confidence_band(confidence: Any) -> str:
+        """Map numeric confidence values to UI bands."""
+        if confidence is None:
+            return "missing"
+        try:
+            value = float(confidence)
+        except (TypeError, ValueError):
+            return "missing"
+        if value >= 0.9:
+            return "high"
+        if value >= 0.7:
+            return "medium"
+        return "low"

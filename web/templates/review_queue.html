@@ -1,12 +1,26 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="review-refresh-button" type="button">
+    Refresh
+</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
+<div class="app-workspace" id="review-queue-workspace">
     <div class="flex items-center gap-2 flex-wrap">
-        <button class="btn btn-primary btn-sm">All <span class="badge badge-sm ml-1">0</span></button>
-        <button class="btn btn-outline btn-sm">Low Confidence <span class="badge badge-sm ml-1">0</span></button>
-        <button class="btn btn-outline btn-sm">In Review <span class="badge badge-sm ml-1">0</span></button>
-        <button class="btn btn-outline btn-sm">Completed <span class="badge badge-sm ml-1">0</span></button>
+        <button class="btn btn-primary btn-sm review-filter" data-filter="all" type="button">
+            All <span class="badge badge-sm ml-1" id="review-count-all">0</span>
+        </button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="low_confidence" type="button">
+            Low Confidence <span class="badge badge-sm ml-1" id="review-count-low">0</span>
+        </button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="in_review" type="button">
+            In Review <span class="badge badge-sm ml-1" id="review-count-in-review">0</span>
+        </button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="completed" type="button">
+            Completed <span class="badge badge-sm ml-1" id="review-count-completed">0</span>
+        </button>
     </div>
 
     <label class="input input-bordered input-sm flex items-center gap-2">
@@ -15,7 +29,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
         </svg>
-        <input type="search" class="grow" placeholder="Search documents..." />
+        <input type="search" class="grow" id="review-search-input" placeholder="Search documents..." />
     </label>
 
     <section class="app-table-region">
@@ -24,16 +38,23 @@
                 <tr>
                     <th>Document</th>
                     <th>Type</th>
-                    <th>Review Reason</th>
+                    <th>Low Confidence Fields</th>
+                    <th>Lowest Confidence</th>
+                    <th>Queue</th>
                     <th>Status</th>
+                    <th class="text-right">Actions</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="review-queue-body">
                 <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No review items</td>
+                    <td colspan="7" class="text-center text-base-content/50 py-10">Loading review items...</td>
                 </tr>
             </tbody>
         </table>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/review_queue.js?v=task19" defer></script>
 {% endblock %}

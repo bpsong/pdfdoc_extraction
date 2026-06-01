@@ -1,22 +1,64 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<div class="flex items-center gap-2">
+    <a href="/app/review" class="btn btn-outline btn-sm">Back to Queue</a>
+    <button class="btn btn-outline btn-sm" id="review-claim-button" type="button">Claim</button>
+    <button class="btn btn-outline btn-sm" id="review-release-button" type="button" disabled>Release</button>
+    <button class="btn btn-outline btn-sm" id="review-save-button" type="button" disabled>Save Draft</button>
+    <button class="btn btn-primary btn-sm" id="review-complete-button" type="button" disabled>Complete Review</button>
+</div>
+{% endblock %}
+
 {% block content %}
-<div class="review-workspace">
-    <section class="pdf-panel flex items-center justify-center text-base-content/50">
-        Source PDF
-    </section>
-    <section class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            {% if review_item_id is defined %}
-            <span class="badge badge-outline w-fit">{{ review_item_id }}</span>
-            {% endif %}
-            <h2 class="font-semibold">Review Fields</h2>
-            <div class="empty-panel">No fields loaded</div>
-            <div class="flex justify-end gap-2">
-                <button class="btn btn-outline btn-sm" disabled>Save Draft</button>
-                <button class="btn btn-primary btn-sm" disabled>Complete Review</button>
+<div class="review-workspace" id="human-review-workspace" data-review-item-id="{{ review_item_id|default('') }}"
+    data-review-operator="{{ username|default('') }}">
+    <section class="card bg-base-100 shadow-sm min-w-0">
+        <div class="panel-header">
+            <div class="min-w-0">
+                <h2 class="font-semibold truncate" id="review-document-title">Source PDF</h2>
+                <p class="text-xs text-base-content/50 truncate" id="review-document-subtitle">Preview loads after review details are available.</p>
             </div>
+            <a class="btn btn-outline btn-xs hidden" id="review-pdf-open-link" href="#" target="_blank" rel="noreferrer">Open</a>
+        </div>
+        <div class="review-pdf-body" id="review-pdf-body">
+            <div class="empty-panel">Source PDF unavailable</div>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm min-w-0 review-editor-panel">
+        <div class="panel-header">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h2 class="font-semibold">Review Fields</h2>
+                    <span class="badge badge-outline" id="review-item-badge">{{ review_item_id|default('') }}</span>
+                    <span class="badge hidden" id="review-status-badge"></span>
+                </div>
+                <p class="text-xs text-base-content/50 truncate" id="review-reason-summary">Loading review details...</p>
+            </div>
+            <button class="btn btn-outline btn-xs" id="review-diff-button" type="button" disabled>Preview Diff</button>
+        </div>
+
+        <div class="review-lock-banner hidden" id="review-lock-banner"></div>
+
+        <div class="review-editor-scroll">
+            <div id="review-fields-container" class="review-fields-container">
+                <div class="empty-panel">No fields loaded</div>
+            </div>
+        </div>
+
+        <div class="review-diff-panel hidden" id="review-diff-panel">
+            <div class="flex items-center justify-between gap-2 mb-2">
+                <h3 class="font-semibold text-sm">Diff Preview</h3>
+                <button class="btn btn-ghost btn-xs" id="review-diff-close-button" type="button">Close</button>
+            </div>
+            <div id="review-diff-body" class="text-sm"></div>
         </div>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pdf_viewer.js?v=task19" defer></script>
+<script src="/static/js/human_review.js?v=task19" defer></script>
 {% endblock %}

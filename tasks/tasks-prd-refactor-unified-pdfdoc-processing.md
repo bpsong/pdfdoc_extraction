@@ -303,19 +303,19 @@ C:\Python313\python.exe -m pytest -v
   - [x] 18.3 Wire extraction fields and source document preview links from SQLite-backed APIs, including the shared `/api/documents/{document_id}/file/pdf` endpoint.
   - [x] 18.4 Add extraction results API/UI smoke tests where practical.
 
-- [ ] 19.0 Build Review Queue and Human Review UI
+- [x] 19.0 Build Review Queue and Human Review UI
   - Acceptance: Operator can claim a review item, view the source PDF, edit schema-driven fields, preview diff, save draft, and complete review in DaisyUI pages that mirror the prototype layout and IA.
-  - [ ] 19.1 Build `review_queue.html` and `review_queue.js`.
-  - [ ] 19.2 Build `human_review.html`.
+  - [x] 19.1 Build `review_queue.html` and `review_queue.js`.
+  - [x] 19.2 Build `human_review.html`.
   - [x] 19.3 Add secure PDF file-serving endpoint `GET /api/documents/{document_id}/file/pdf`.
     - Implemented during 18.3 because extraction preview required the shared PDF endpoint.
-  - [ ] 19.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
-  - [ ] 19.5 Implement schema-driven scalar field rendering in `human_review.js`.
-  - [ ] 19.6 Implement object and nested object rendering.
-  - [ ] 19.7 Implement scalar array rendering.
-  - [ ] 19.8 Implement object array editable grid rendering for line items.
-  - [ ] 19.9 Wire save draft, diff preview, complete, and release actions.
-  - [ ] 19.10 Add review UI smoke tests where practical.
+  - [x] 19.4 Implement iframe PDF viewer fallback and reserve `pdf_viewer.js` for enhanced PDF.js controls.
+  - [x] 19.5 Implement schema-driven scalar field rendering in `human_review.js`.
+  - [x] 19.6 Implement object and nested object rendering.
+  - [x] 19.7 Implement scalar array rendering.
+  - [x] 19.8 Implement object array editable grid rendering for line items.
+  - [x] 19.9 Wire save draft, diff preview, complete, and release actions.
+  - [x] 19.10 Add review UI smoke tests where practical.
 
 - [ ] 20.0 Build Admin Task Catalog service and API
   - Acceptance: Admin and pipeline configuration services can inspect available task classes, import status, and task metadata before pipeline editing is implemented.

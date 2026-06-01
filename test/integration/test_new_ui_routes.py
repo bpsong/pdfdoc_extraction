@@ -143,6 +143,22 @@ def test_extraction_results_page_includes_task_18_assets(monkeypatch) -> None:
     assert "/static/js/extraction_results.js" in response.text
 
 
+def test_review_pages_include_task_19_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    queue = client.get("/app/review")
+    review = client.get("/app/review/review-1")
+
+    assert queue.status_code == 200
+    assert 'id="review-queue-workspace"' in queue.text
+    assert "/static/js/review_queue.js" in queue.text
+    assert review.status_code == 200
+    assert 'id="human-review-workspace"' in review.text
+    assert "/static/js/pdf_viewer.js" in review.text
+    assert "/static/js/human_review.js" in review.text
+
+
 def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
