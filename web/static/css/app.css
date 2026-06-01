@@ -235,7 +235,7 @@
 
 .schema-field-row {
     display: grid;
-    grid-template-columns: minmax(8rem, 1fr) minmax(7rem, 0.8fr) minmax(7rem, 0.8fr) auto auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.5rem;
     align-items: end;
     padding: 0.75rem;
@@ -245,11 +245,23 @@
     background: oklch(var(--b1));
 }
 
+.schema-field-row > .label {
+    min-height: 2rem;
+}
+
+.schema-field-row > button {
+    justify-self: start;
+}
+
 .schema-field-children {
     grid-column: 1 / -1;
     margin-left: 1rem;
     padding-left: 1rem;
     border-left: 2px solid oklch(var(--b3));
+}
+
+.schema-field-children > .flex {
+    flex-wrap: wrap;
 }
 
 .schema-yaml-preview {
