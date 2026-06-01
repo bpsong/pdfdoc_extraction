@@ -98,7 +98,7 @@ def test_validate_pipeline_reports_split_param_and_fanout_warnings(tmp_path: Pat
         "params": {"enabled": True, "allow_uncategorized": "drop"},
         "on_error": "stop",
     }
-    config["pipeline"] = ["extract", "split"]
+    config["pipeline"] = ["split", "extract"]
     service = _service(tmp_path, config)
 
     result = service.validate_pipeline({"config": config})
@@ -106,7 +106,50 @@ def test_validate_pipeline_reports_split_param_and_fanout_warnings(tmp_path: Pat
     assert result["valid"] is False
     assert "split-missing-categories-or-configuration" in _codes(result)
     assert "split-invalid-allow-uncategorized" in _codes(result)
-    assert "split-final-pipeline-step" in _codes(result)
+
+
+def test_validate_pipeline_enforces_singleton_and_order_rules(tmp_path: Path) -> None:
+    config = _base_config(tmp_path)
+    config["tasks"].update(
+        {
+            "extract_two": {
+                "module": "custom_step.extraction.other_extract",
+                "class": "OtherExtractTask",
+                "params": {"fields": {"supplier": {"type": "str"}}},
+            },
+            "split": {
+                "module": "standard_step.split.llamacloud_split",
+                "class": "LlamaCloudSplitTask",
+                "params": {"enabled": False},
+            },
+            "review": {
+                "module": "standard_step.review.review_gate",
+                "class": "ReviewGateTask",
+                "params": {"confidence_threshold": 0.8},
+            },
+            "store_a": {
+                "module": "standard_step.storage.store_file_to_localdrive",
+                "class": "StoreFileToLocaldrive",
+                "params": {"files_dir": "files"},
+            },
+            "store_b": {
+                "module": "standard_step.storage.store_file_to_localdrive",
+                "class": "StoreFileToLocaldrive",
+                "params": {"files_dir": "files"},
+            },
+        }
+    )
+    config["pipeline"] = ["review", "extract", "extract_two", "split", "store_a", "store_b"]
+    service = _service(tmp_path, config)
+
+    result = service.validate_pipeline({"config": config})
+
+    assert result["valid"] is False
+    codes = _codes(result)
+    assert "pipeline-multiple-extract-tasks" in codes
+    assert "pipeline-split-after-extract" in codes
+    assert "pipeline-review-before-extract" in codes
+    assert "pipeline-duplicate-task-type" in codes
 
 
 def test_validate_payload_accepts_yaml_payload(tmp_path: Path) -> None:

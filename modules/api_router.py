@@ -53,6 +53,7 @@ from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRep
 from .db.migrations import initialize_database
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
+from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
 from .services.review_service import ReviewService, ReviewServiceError
 from .services.schema_service import SchemaService
 from .services.task_catalog_service import TaskCatalogService
@@ -808,6 +809,83 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         return TaskCatalogService(config).catalog()
+
+    def _pipeline_model_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
+        """Return an optional pipeline model from API payload shapes."""
+        if not payload:
+            return None
+        model = payload.get("model", payload)
+        if not isinstance(model, dict):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pipeline model must be an object")
+        return model
+
+    @router.get("/api/admin/pipeline")
+    def get_admin_pipeline(user: str = Depends(get_current_user)):
+        """Return active and draft pipeline configuration for admin editing."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            service = PipelineConfigService(config, conn)
+            payload = service.get_pipeline()
+        payload["catalog"] = TaskCatalogService(config).catalog()
+        return payload
+
+    @router.put("/api/admin/pipeline/draft")
+    async def save_admin_pipeline_draft(request: Request, user: str = Depends(get_current_user)):
+        """Create or update a pipeline draft."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        model = _pipeline_model_payload(payload)
+        try:
+            with connect(config) as conn:
+                service = PipelineConfigService(config, conn)
+                draft = service.create_draft(user=user) if model is None else service.save_draft(model, user=user)
+                return {"draft": draft}
+        except PipelineConfigError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.post("/api/admin/pipeline/diff")
+    async def diff_admin_pipeline(request: Request, user: str = Depends(get_current_user)):
+        """Return active-vs-draft pipeline diff."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        model = _pipeline_model_payload(payload)
+        try:
+            with connect(config) as conn:
+                return PipelineConfigService(config, conn).diff(model)
+        except PipelineConfigError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.post("/api/admin/pipeline/validate")
+    async def validate_admin_pipeline(request: Request, user: str = Depends(get_current_user)):
+        """Validate a pipeline draft."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        model = _pipeline_model_payload(payload)
+        try:
+            with connect(config) as conn:
+                return PipelineConfigService(config, conn).validate_draft(model, user=user, audit=True)
+        except PipelineConfigError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.post("/api/admin/pipeline/publish")
+    async def publish_admin_pipeline(request: Request, user: str = Depends(get_current_user)):
+        """Publish a validated pipeline draft."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        model = _pipeline_model_payload(payload)
+        try:
+            with connect(config) as conn:
+                return PipelineConfigService(config, conn).publish(model, user=user)
+        except PipelineConfigError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"message": str(exc), "findings": exc.findings},
+            )
 
     @router.get("/api/schemas")
     def list_schemas(user: str = Depends(get_current_user)):

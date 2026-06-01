@@ -1,12 +1,87 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="pipeline-refresh-button" type="button">Refresh</button>
+<button class="btn btn-primary btn-sm" id="pipeline-publish-button" type="button" disabled>Publish</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <section class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            <h2 class="font-semibold">Pipeline Steps</h2>
+<div class="pipeline-config-workspace" id="pipeline-config-workspace">
+    <section class="card bg-base-100 shadow-sm pipeline-active-panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="font-semibold">Active Pipeline</h2>
+                <p class="text-xs text-base-content/50" id="pipeline-active-summary">0 steps</p>
+            </div>
+        </div>
+        <div class="pipeline-active-list" id="pipeline-active-list">
+            <div class="empty-panel">Loading active pipeline</div>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm pipeline-draft-panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="font-semibold">Draft Pipeline</h2>
+                <p class="text-xs text-base-content/50" id="pipeline-draft-summary">0 steps</p>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn btn-outline btn-sm" id="pipeline-save-draft-button" type="button">Save Draft</button>
+                <button class="btn btn-outline btn-sm" id="pipeline-validate-button" type="button">Validate</button>
+            </div>
+        </div>
+        <div class="pipeline-add-row">
+            <select class="select select-bordered select-sm min-w-0 flex-1" id="pipeline-add-task-select">
+                <option value="">Add task</option>
+            </select>
+            <button class="btn btn-outline btn-sm" id="pipeline-add-task-button" type="button">Add</button>
+        </div>
+        <div class="pipeline-step-list" id="pipeline-draft-list">
             <div class="empty-panel">No draft pipeline loaded</div>
         </div>
     </section>
+
+    <section class="card bg-base-100 shadow-sm pipeline-editor-panel">
+        <div class="panel-header">
+            <div class="min-w-0">
+                <h2 class="font-semibold truncate" id="pipeline-editor-title">Step Parameters</h2>
+                <p class="text-xs text-base-content/50 truncate" id="pipeline-editor-subtitle">Select a draft step</p>
+            </div>
+        </div>
+        <div class="card-body p-4 pipeline-editor-body" id="pipeline-editor-body">
+            <div class="empty-panel">No step selected</div>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm pipeline-yaml-panel">
+        <div class="panel-header">
+            <h2 class="font-semibold">YAML Preview</h2>
+        </div>
+        <pre class="pipeline-yaml-preview" id="pipeline-yaml-preview">Loading...</pre>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm pipeline-validation-panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="font-semibold">Validation</h2>
+                <p class="text-xs text-base-content/50" id="pipeline-validation-summary">Not validated</p>
+            </div>
+            <button class="btn btn-outline btn-sm" id="pipeline-diff-button" type="button">Diff</button>
+        </div>
+        <div class="pipeline-validation-results" id="pipeline-validation-results">
+            <div class="empty-panel">No validation run</div>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm pipeline-diff-panel">
+        <div class="panel-header">
+            <h2 class="font-semibold">Diff</h2>
+        </div>
+        <pre class="pipeline-diff-preview" id="pipeline-diff-preview">No diff loaded</pre>
+    </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/pipeline_config.js?v=task21" defer></script>
 {% endblock %}

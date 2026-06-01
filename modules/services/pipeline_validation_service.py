@@ -60,6 +60,7 @@ class PipelineValidationService:
         )
         findings.extend(self._validate_review_gate(config_data))
         findings.extend(self._validate_split(config_data))
+        findings.extend(self._validate_pipeline_task_cardinality(config_data))
         findings.extend(self._validate_schema_references(config_data))
 
         return {
@@ -127,6 +128,109 @@ class PipelineValidationService:
                             code="review-gate-invalid-split-confidence-levels",
                         )
                     )
+        return findings
+
+    def _validate_pipeline_task_cardinality(self, config_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Validate required singleton task types and dependency ordering."""
+        pipeline = config_data.get("pipeline") if isinstance(config_data.get("pipeline"), list) else []
+        tasks = config_data.get("tasks") if isinstance(config_data.get("tasks"), dict) else {}
+        occurrences: dict[str, list[dict[str, Any]]] = {
+            "extract": [],
+            "split": [],
+            "review": [],
+        }
+        duplicate_type_occurrences: dict[str, list[dict[str, Any]]] = {}
+
+        for index, task_key in enumerate(pipeline):
+            if not isinstance(task_key, str):
+                continue
+            task_cfg = tasks.get(task_key)
+            if not isinstance(task_cfg, dict):
+                continue
+            task_type = _pipeline_task_type(task_cfg)
+            occurrence = {"task_key": task_key, "index": index, "path": f"pipeline[{index}]"}
+            if task_type in occurrences:
+                occurrences[task_type].append(occurrence)
+            else:
+                duplicate_type = _duplicate_warning_type(task_cfg)
+                duplicate_type_occurrences.setdefault(duplicate_type, []).append(occurrence)
+
+        findings: list[dict[str, Any]] = []
+        labels = {
+            "extract": "extract",
+            "split": "split",
+            "review": "review gate",
+        }
+        codes = {
+            "extract": "pipeline-multiple-extract-tasks",
+            "split": "pipeline-multiple-split-tasks",
+            "review": "pipeline-multiple-review-gate-tasks",
+        }
+        for task_type, matches in occurrences.items():
+            if len(matches) <= 1:
+                continue
+            findings.append(
+                _finding(
+                    severity="error",
+                    path=matches[1]["path"],
+                    message=(
+                        f"Workflow pipeline can include only one {labels[task_type]} task; "
+                        f"found {len(matches)}."
+                    ),
+                    code=codes[task_type],
+                    details={"task_type": task_type, "task_keys": [match["task_key"] for match in matches]},
+                )
+            )
+
+        extract_matches = occurrences["extract"]
+        split_matches = occurrences["split"]
+        review_matches = occurrences["review"]
+        if split_matches and extract_matches and split_matches[0]["index"] > extract_matches[0]["index"]:
+            findings.append(
+                _finding(
+                    severity="error",
+                    path=split_matches[0]["path"],
+                    message="Split task must be configured before the extract task.",
+                    code="pipeline-split-after-extract",
+                    details={
+                        "split_task": split_matches[0]["task_key"],
+                        "extract_task": extract_matches[0]["task_key"],
+                    },
+                )
+            )
+        if review_matches and extract_matches and review_matches[0]["index"] < extract_matches[0]["index"]:
+            findings.append(
+                _finding(
+                    severity="error",
+                    path=review_matches[0]["path"],
+                    message="Review gate task must be configured after the extract task.",
+                    code="pipeline-review-before-extract",
+                    details={
+                        "review_task": review_matches[0]["task_key"],
+                        "extract_task": extract_matches[0]["task_key"],
+                    },
+                )
+            )
+
+        for duplicate_type, matches in duplicate_type_occurrences.items():
+            if len(matches) <= 1:
+                continue
+            findings.append(
+                _finding(
+                    severity="warning",
+                    path=matches[1]["path"],
+                    message=(
+                        f"Task type '{duplicate_type}' appears multiple times in the pipeline. "
+                        "This is allowed, but verify the duplicate is intentional."
+                    ),
+                    code="pipeline-duplicate-task-type",
+                    details={
+                        "task_type": duplicate_type,
+                        "task_keys": [match["task_key"] for match in matches],
+                    },
+                )
+            )
+
         return findings
 
     def _validate_split(self, config_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -287,3 +391,23 @@ def _iter_tasks(config_data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]
         for task_key, task_cfg in tasks.items()
         if isinstance(task_cfg, dict)
     ]
+
+
+def _pipeline_task_type(task_cfg: dict[str, Any]) -> str:
+    """Classify singleton pipeline task types used by workflow validation."""
+    module_name = str(task_cfg.get("module") or "")
+    class_name = str(task_cfg.get("class") or "")
+    if ".extraction." in module_name or class_name in {"ExtractPdfTask", "ExtractPdfV2Task"}:
+        return "extract"
+    if ".split." in module_name or class_name == "LlamaCloudSplitTask":
+        return "split"
+    if module_name == "standard_step.review.review_gate" or class_name == "ReviewGateTask":
+        return "review"
+    return "other"
+
+
+def _duplicate_warning_type(task_cfg: dict[str, Any]) -> str:
+    """Return the task type label used for non-blocking duplicate warnings."""
+    module_name = str(task_cfg.get("module") or "")
+    class_name = str(task_cfg.get("class") or "")
+    return f"{module_name}.{class_name}" if module_name or class_name else "unknown"

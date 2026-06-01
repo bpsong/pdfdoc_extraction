@@ -107,7 +107,7 @@ def test_post_pipeline_validate_reports_split_findings(tmp_path: Path, monkeypat
         "params": {"enabled": True, "categories": [{"name": "invoice"}]},
         "on_error": "stop",
     }
-    values["pipeline"] = ["extract", "split"]
+    values["pipeline"] = ["split", "extract"]
     config = TempConfig(tmp_path / "app.sqlite3", values)
     client = _client(monkeypatch, config)
 
@@ -117,7 +117,6 @@ def test_post_pipeline_validate_reports_split_findings(tmp_path: Path, monkeypat
     payload = response.json()
     assert payload["valid"] is True
     assert "split-missing-runtime-api-key" in _codes(payload)
-    assert "split-final-pipeline-step" in _codes(payload)
 
 
 def test_validation_endpoints_reject_invalid_payload_shape(tmp_path: Path, monkeypatch) -> None:

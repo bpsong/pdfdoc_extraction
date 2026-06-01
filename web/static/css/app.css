@@ -361,6 +361,143 @@
     line-height: 1.45;
 }
 
+.pipeline-config-workspace {
+    display: grid;
+    grid-template-columns: minmax(16rem, 0.7fr) minmax(26rem, 1fr) minmax(22rem, 0.9fr);
+    grid-template-areas:
+        "active draft editor"
+        "yaml yaml validation"
+        "yaml yaml diff";
+    gap: 1rem;
+    align-items: start;
+}
+
+.pipeline-active-panel {
+    grid-area: active;
+}
+
+.pipeline-draft-panel {
+    grid-area: draft;
+}
+
+.pipeline-editor-panel {
+    grid-area: editor;
+}
+
+.pipeline-yaml-panel {
+    grid-area: yaml;
+}
+
+.pipeline-validation-panel {
+    grid-area: validation;
+}
+
+.pipeline-diff-panel {
+    grid-area: diff;
+}
+
+.pipeline-active-list,
+.pipeline-step-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+}
+
+.pipeline-add-row {
+    display: flex;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.pipeline-static-step,
+.pipeline-draft-step {
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    background: oklch(var(--b1));
+}
+
+.pipeline-static-step {
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) max-content;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem;
+}
+
+.pipeline-draft-step.active {
+    border-color: oklch(var(--p));
+    background: oklch(var(--p) / 0.06);
+}
+
+.pipeline-static-step.disabled,
+.pipeline-draft-step.disabled {
+    opacity: 0.58;
+}
+
+.pipeline-step-main {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 2rem minmax(0, 1fr) max-content;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.pipeline-step-index {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: oklch(var(--b2));
+    color: oklch(var(--bc) / 0.68);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.pipeline-step-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0 0.75rem 0.75rem 3.5rem;
+}
+
+.pipeline-editor-body {
+    gap: 1rem;
+}
+
+.pipeline-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.pipeline-params-editor {
+    min-height: 15rem;
+    resize: vertical;
+}
+
+.pipeline-yaml-preview,
+.pipeline-diff-preview {
+    min-height: 18rem;
+    max-height: 34rem;
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    background: oklch(var(--b2));
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.pipeline-validation-results {
+    padding: 1rem;
+}
+
 .status-dot {
     width: 0.5rem;
     height: 0.5rem;
@@ -606,6 +743,21 @@
     .task-catalog-table table {
         min-width: 52rem;
         table-layout: auto;
+    }
+
+    .pipeline-config-workspace {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "active"
+            "draft"
+            "editor"
+            "validation"
+            "diff"
+            "yaml";
+    }
+
+    .pipeline-form-grid {
+        grid-template-columns: 1fr;
     }
 
     .schema-editor-workspace {

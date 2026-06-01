@@ -324,18 +324,18 @@ C:\Python313\python.exe -m pytest -v
   - [x] 20.3 Build `task_catalog.html` and `task_catalog.js`.
   - [x] 20.4 Add `test/services/test_task_catalog_service.py`.
 
-- [ ] 21.0 Build Admin Pipeline Configuration UI
+- [x] 21.0 Build Admin Pipeline Configuration UI
   - Acceptance: Admin can create a pipeline draft, reorder/enable/disable tasks, insert `ReviewGateTask`, validate, view diff, and publish with audit history.
-  - [ ] 21.1 Create `modules/services/pipeline_config_service.py`.
-  - [ ] 21.2 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
-  - [ ] 21.3 Build `pipeline_config.html`.
-  - [ ] 21.4 Build `pipeline_config.js`.
-  - [ ] 21.5 Implement ordered step rendering and reordering.
-  - [ ] 21.6 Implement task parameter forms and YAML preview.
-  - [ ] 21.7 Disable publish when blocking validation findings exist.
-  - [ ] 21.8 Record config version and admin audit event on publish.
-  - [ ] 21.9 Add `test/services/test_pipeline_config_service.py`.
-  - [ ] 21.10 Add `test/integration/test_admin_pipeline_config_api.py`.
+  - [x] 21.1 Create `modules/services/pipeline_config_service.py`.
+  - [x] 21.2 Add pipeline endpoints `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/diff`, `POST /api/admin/pipeline/validate`, and `POST /api/admin/pipeline/publish`.
+  - [x] 21.3 Build `pipeline_config.html`.
+  - [x] 21.4 Build `pipeline_config.js`.
+  - [x] 21.5 Implement ordered step rendering and reordering.
+  - [x] 21.6 Implement task parameter forms and YAML preview.
+  - [x] 21.7 Disable publish when blocking validation findings exist.
+  - [x] 21.8 Record config version and admin audit event on publish.
+  - [x] 21.9 Add `test/services/test_pipeline_config_service.py`.
+  - [x] 21.10 Add `test/integration/test_admin_pipeline_config_api.py`.
 
 - [ ] 22.0 Build Review Gate Rules and Split Settings
   - Acceptance: Admin can configure review gate rules and manage non-secret Split settings using the split/review backend already implemented.
