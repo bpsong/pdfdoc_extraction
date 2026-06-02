@@ -345,15 +345,15 @@ C:\Python313\python.exe -m pytest -v
   - [x] 22.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
   - [x] 22.5 Add review gate rule and split settings tests.
 
-- [ ] 23.0 Build Admin Validation Center UI
+- [x] 23.0 Build Admin Validation Center UI
   - Acceptance: Admin can validate active config, draft YAML, all schemas, and draft pipelines, then see actionable findings.
-  - [ ] 23.1 Build `config_validation.html`.
-  - [ ] 23.2 Build `config_validation.js`.
-  - [ ] 23.3 Render summary cards and findings table.
-  - [ ] 23.4 Redact secrets in any displayed YAML or JSON.
-  - [ ] 23.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
-  - [ ] 23.6 Link validation page from settings and the admin navigation group.
-  - [ ] 23.7 Add UI/API validation smoke tests.
+  - [x] 23.1 Build `config_validation.html`.
+  - [x] 23.2 Build `config_validation.js`.
+  - [x] 23.3 Render summary cards and findings table.
+  - [x] 23.4 Redact secrets in any displayed YAML or JSON.
+  - [x] 23.5 Add `GET /api/admin/schemas/validation` and `POST /api/admin/schemas/validate-all`.
+  - [x] 23.6 Link validation page from settings and the admin navigation group.
+  - [x] 23.7 Add UI/API validation smoke tests.
 
 - [ ] 24.0 Build Admin Dashboard, Audit, Settings, and Dry Run
   - Acceptance: Admin has a configuration-health home page, auditable configuration changes, editable non-secret settings, and a sample-pipeline dry run.

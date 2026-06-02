@@ -172,6 +172,18 @@ def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
     assert "/static/js/schema_editor.js" in response.text
 
 
+def test_config_validation_page_includes_task_23_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/settings/validation")
+
+    assert response.status_code == 200
+    assert 'id="config-validation-workspace"' in response.text
+    assert "/static/js/config_validation.js" in response.text
+    assert "Validate Active" in response.text
+
+
 def test_task_catalog_page_includes_task_20_assets(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)

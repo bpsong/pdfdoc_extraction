@@ -49,7 +49,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def _client(monkeypatch, config: TempConfig) -> TestClient:
+def _client(monkeypatch, config: TempConfig, *, username: str = "operator") -> TestClient:
     app = FastAPI()
     app.include_router(api_router.build_router())
 
@@ -57,7 +57,7 @@ def _client(monkeypatch, config: TempConfig) -> TestClient:
         return config, None, None, None, None
 
     monkeypatch.setattr(api_router, "get_dependencies", fake_get_dependencies)
-    app.dependency_overrides[api_router.get_current_user] = lambda: "operator"
+    app.dependency_overrides[api_router.get_current_user] = lambda: username
     return TestClient(app)
 
 
@@ -127,3 +127,50 @@ def test_validation_endpoints_reject_invalid_payload_shape(tmp_path: Path, monke
 
     assert response.status_code == 400
     assert response.json()["detail"] == "payload.config must be an object"
+
+
+def test_post_config_validation_accepts_yaml_text_alias(tmp_path: Path, monkeypatch) -> None:
+    values = _base_config(tmp_path)
+    config = TempConfig(tmp_path / "app.sqlite3", values)
+    client = _client(monkeypatch, config)
+
+    response = client.post("/api/config/validation", json={"yaml_text": yaml.safe_dump(values)})
+
+    assert response.status_code == 200
+    assert response.json()["valid"] is True
+
+
+def test_admin_schema_validation_requires_admin(tmp_path: Path, monkeypatch) -> None:
+    config = TempConfig(tmp_path / "app.sqlite3", _base_config(tmp_path))
+    client = _client(monkeypatch, config, username="operator")
+
+    response = client.get("/api/admin/schemas/validation")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin role required"
+
+
+def test_admin_schema_validation_endpoints_return_summary(tmp_path: Path, monkeypatch) -> None:
+    values = _base_config(tmp_path)
+    schema_dir = Path(values["schema"]["directories"][0])
+    (schema_dir / "invoice.yaml").write_text(
+        yaml.safe_dump({"fields": {"invoice_number": {"type": "string"}}}),
+        encoding="utf-8",
+    )
+    (schema_dir / "bad.yaml").write_text(
+        yaml.safe_dump({"fields": {"amount": {"type": "money"}}}),
+        encoding="utf-8",
+    )
+    config = TempConfig(tmp_path / "app.sqlite3", values)
+    client = _client(monkeypatch, config, username="admin")
+
+    get_response = client.get("/api/admin/schemas/validation")
+    post_response = client.post("/api/admin/schemas/validate-all", json={})
+
+    assert get_response.status_code == 200
+    assert post_response.status_code == 200
+    payload = post_response.json()
+    assert payload["valid"] is False
+    assert payload["summary"] == {"errors": 1, "warnings": 0, "info": 0}
+    assert {schema["name"] for schema in payload["schemas"]} == {"bad.yaml", "invoice.yaml"}
+    assert payload["findings"][0]["code"] == "schema-invalid"

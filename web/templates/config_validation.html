@@ -1,37 +1,100 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="validation-active-button" type="button">Validate Active</button>
+<button class="btn btn-primary btn-sm" id="validation-draft-button" type="button">Validate Draft</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <div class="page-grid grid-cols-1 md:grid-cols-3">
+<div class="validation-workspace" id="config-validation-workspace">
+    <section class="card bg-base-100 shadow-sm validation-controls-panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="font-semibold">Validation Controls</h2>
+                <p class="text-xs text-base-content/50" id="validation-source-label">Active configuration</p>
+            </div>
+            <button class="btn btn-outline btn-sm" id="validation-schemas-button" type="button">Validate Schemas</button>
+        </div>
+        <div class="card-body gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label class="label cursor-pointer justify-start gap-3">
+                    <input class="toggle toggle-sm" id="validation-strict-toggle" type="checkbox">
+                    <span class="label-text">Strict mode</span>
+                </label>
+                <label class="label cursor-pointer justify-start gap-3">
+                    <input class="toggle toggle-sm" id="validation-import-toggle" type="checkbox" checked>
+                    <span class="label-text">Import checks</span>
+                </label>
+            </div>
+            <label class="form-control">
+                <span class="label-text">Draft config YAML</span>
+                <textarea class="textarea textarea-bordered font-mono text-xs validation-draft-yaml"
+                    id="validation-draft-yaml"
+                    placeholder="Paste config YAML to validate without saving"></textarea>
+            </label>
+            <div class="alert alert-info text-sm">
+                Validation runs do not save or auto-fix YAML. Secret-like keys are redacted in displayed details.
+            </div>
+        </div>
+    </section>
+
+    <section class="validation-summary-panel">
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Blocking</div>
-            <div class="stat-value text-2xl text-error">0</div>
+            <div class="stat-title">Errors</div>
+            <div class="stat-value text-2xl text-error" id="validation-errors-count">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Warnings</div>
-            <div class="stat-value text-2xl text-warning">0</div>
+            <div class="stat-value text-2xl text-warning" id="validation-warnings-count">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Validated</div>
-            <div class="stat-value text-2xl">0</div>
+            <div class="stat-title">Info</div>
+            <div class="stat-value text-2xl" id="validation-info-count">0</div>
         </div>
-    </div>
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Severity</th>
-                    <th>Code</th>
-                    <th>Path</th>
-                    <th>Message</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No validation findings</td>
-                </tr>
-            </tbody>
-        </table>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Readiness</div>
+            <div class="stat-value text-2xl" id="validation-readiness">Not run</div>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm validation-findings-panel">
+        <div class="panel-header">
+            <div>
+                <h2 class="font-semibold">Findings</h2>
+                <p class="text-xs text-base-content/50" id="validation-findings-summary">No validation run</p>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table table-sm validation-findings-table">
+                <thead>
+                    <tr>
+                        <th>Level</th>
+                        <th>Code</th>
+                        <th>Path</th>
+                        <th>Message</th>
+                        <th>Suggestion</th>
+                        <th>Location</th>
+                    </tr>
+                </thead>
+                <tbody id="validation-findings-body">
+                    <tr>
+                        <td colspan="6" class="text-center text-base-content/50 py-10">No validation findings</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm validation-raw-panel">
+        <div class="panel-header">
+            <h2 class="font-semibold">Raw Details</h2>
+            <button class="btn btn-outline btn-sm" id="validation-raw-toggle" type="button">Hide</button>
+        </div>
+        <pre class="validation-raw-json" id="validation-raw-json">{}</pre>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/config_validation.js?v=task23" defer></script>
 {% endblock %}

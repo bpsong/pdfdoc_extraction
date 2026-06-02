@@ -490,6 +490,14 @@ def build_router() -> APIRouter:
         schema.setdefault("fields", {})
         return schema
 
+    def _validation_summary(findings: list[dict[str, Any]]) -> dict[str, int]:
+        """Return error/warning/info counts for normalized findings."""
+        return {
+            "errors": sum(1 for finding in findings if finding.get("severity", finding.get("level")) == "error"),
+            "warnings": sum(1 for finding in findings if finding.get("severity", finding.get("level")) == "warning"),
+            "info": sum(1 for finding in findings if finding.get("severity", finding.get("level")) == "info"),
+        }
+
     @router.post("/api/login", response_model=TokenResponse)
     async def login(request: Request):
         """Authenticate a user and return an access token.
@@ -936,6 +944,37 @@ def build_router() -> APIRouter:
         await _json_body(request)
         with connect(config) as conn:
             return AdminSettingsService(config, conn).test_split_connection(user=user)
+
+    @router.get("/api/admin/schemas/validation")
+    def get_admin_schema_validation(user: str = Depends(get_current_user)):
+        """Validate all configured review schemas for the admin validation center."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        result = ConfigValidationService(config).validate_all_schemas()
+        findings = cast(list[dict[str, Any]], result.get("findings", []))
+        return {
+            "source": "schemas",
+            "valid": bool(result.get("valid", False)),
+            "summary": _validation_summary(findings),
+            "findings": findings,
+            "schemas": SchemaService(config).list_schemas(),
+        }
+
+    @router.post("/api/admin/schemas/validate-all")
+    async def validate_all_admin_schemas(request: Request, user: str = Depends(get_current_user)):
+        """Run all-schema validation from the admin validation center."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        await _json_body(request)
+        result = ConfigValidationService(config).validate_all_schemas()
+        findings = cast(list[dict[str, Any]], result.get("findings", []))
+        return {
+            "source": "schemas",
+            "valid": bool(result.get("valid", False)),
+            "summary": _validation_summary(findings),
+            "findings": findings,
+            "schemas": SchemaService(config).list_schemas(),
+        }
 
     @router.get("/api/schemas")
     def list_schemas(user: str = Depends(get_current_user)):

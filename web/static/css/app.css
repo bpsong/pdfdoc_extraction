@@ -498,6 +498,64 @@
     padding: 1rem;
 }
 
+.validation-workspace {
+    display: grid;
+    grid-template-columns: minmax(20rem, 0.42fr) minmax(0, 1fr);
+    grid-template-areas:
+        "controls summary"
+        "findings findings"
+        "raw raw";
+    gap: 1rem;
+    align-items: start;
+}
+
+.validation-controls-panel {
+    grid-area: controls;
+}
+
+.validation-summary-panel {
+    grid-area: summary;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.validation-findings-panel {
+    grid-area: findings;
+    min-width: 0;
+}
+
+.validation-raw-panel {
+    grid-area: raw;
+    min-width: 0;
+}
+
+.validation-draft-yaml {
+    min-height: 14rem;
+    resize: vertical;
+}
+
+.validation-findings-table {
+    min-width: 62rem;
+}
+
+.validation-findings-table th,
+.validation-findings-table td {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+
+.validation-raw-json {
+    min-height: 12rem;
+    max-height: 28rem;
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    background: oklch(var(--b2));
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
 .status-dot {
     width: 0.5rem;
     height: 0.5rem;
@@ -758,6 +816,19 @@
 
     .pipeline-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .validation-workspace {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "controls"
+            "summary"
+            "findings"
+            "raw";
+    }
+
+    .validation-summary-panel {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .schema-editor-workspace {

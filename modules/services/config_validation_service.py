@@ -79,8 +79,8 @@ class ConfigValidationService:
                 raise ValueError("payload.config must be an object")
             return config
 
-        if "yaml" in payload:
-            yaml_text = payload["yaml"]
+        if "yaml" in payload or "yaml_text" in payload:
+            yaml_text = payload.get("yaml", payload.get("yaml_text"))
             if not isinstance(yaml_text, str):
                 raise ValueError("payload.yaml must be a string")
             data, error = YAMLParser().loads(yaml_text, source="payload.yaml")
