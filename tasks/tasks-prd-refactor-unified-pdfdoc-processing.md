@@ -337,13 +337,13 @@ C:\Python313\python.exe -m pytest -v
   - [x] 21.9 Add `test/services/test_pipeline_config_service.py`.
   - [x] 21.10 Add `test/integration/test_admin_pipeline_config_api.py`.
 
-- [ ] 22.0 Build Review Gate Rules and Split Settings
+- [x] 22.0 Build Review Gate Rules and Split Settings
   - Acceptance: Admin can configure review gate rules and manage non-secret Split settings using the split/review backend already implemented.
-  - [ ] 22.1 Build `review_gate_rules.html` and `review_gate_rules.js`.
-  - [ ] 22.2 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
-  - [ ] 22.3 Build `split_settings.html` and `split_settings.js`.
-  - [ ] 22.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
-  - [ ] 22.5 Add review gate rule and split settings tests.
+  - [x] 22.1 Build `review_gate_rules.html` and `review_gate_rules.js`.
+  - [x] 22.2 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
+  - [x] 22.3 Build `split_settings.html` and `split_settings.js`.
+  - [x] 22.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
+  - [x] 22.5 Add review gate rule and split settings tests.
 
 - [ ] 23.0 Build Admin Validation Center UI
   - Acceptance: Admin can validate active config, draft YAML, all schemas, and draft pipelines, then see actionable findings.

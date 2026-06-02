@@ -19,6 +19,8 @@ class ReviewGateTask(BaseTask):
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
         super().__init__(config_manager=config_manager, **params)
         self.confidence_threshold = float(params.get("confidence_threshold", 0.8))
+        self.per_document_type_thresholds = self._threshold_map(params.get("per_document_type_thresholds"))
+        self.field_threshold_overrides = self._threshold_map(params.get("field_threshold_overrides"))
         self.split_confidence_levels = set(params.get("split_confidence_levels_requiring_review") or [])
         self.require_missing_confidence = bool(params.get("require_review_when_missing_confidence", True))
         self.require_missing_required = bool(params.get("require_review_for_missing_required_fields", True))
@@ -57,7 +59,7 @@ class ReviewGateTask(BaseTask):
                 context["review_gate_status"] = "passed"
                 return context
 
-            metadata = self._review_metadata(context, fields, reasons, highlight_fields)
+            metadata = self._review_metadata(context, fields, reasons, highlight_fields, document)
             review_item = review_service.create_review_item(
                 batch_id=str(batch_id),
                 document_id=str(document_id),
@@ -80,6 +82,12 @@ class ReviewGateTask(BaseTask):
         """Validate task preconditions."""
         if self.confidence_threshold < 0 or self.confidence_threshold > 1:
             raise TaskError("confidence_threshold must be between 0 and 1")
+        for label, threshold in {
+            **self.per_document_type_thresholds,
+            **self.field_threshold_overrides,
+        }.items():
+            if threshold < 0 or threshold > 1:
+                raise TaskError(f"Confidence threshold for {label} must be between 0 and 1")
 
     def _review_reasons(
         self,
@@ -100,13 +108,21 @@ class ReviewGateTask(BaseTask):
         for field in fields:
             field_key = str(field["field_key"])
             confidence = field.get("confidence")
+            threshold = self._threshold_for_field(field_key, context, document)
             if confidence is None:
                 if self.require_missing_confidence:
                     reasons.append({"reason": "missing_confidence", "field_key": field_key})
                     highlight_fields.append(field_key)
                 continue
-            if float(confidence) < self.confidence_threshold:
-                reasons.append({"reason": "low_confidence", "field_key": field_key, "confidence": confidence})
+            if float(confidence) < threshold:
+                reasons.append(
+                    {
+                        "reason": "low_confidence",
+                        "field_key": field_key,
+                        "confidence": confidence,
+                        "threshold": threshold,
+                    }
+                )
                 highlight_fields.append(field_key)
 
         business_flags = context.get("review_flags") or context.get("business_rule_flags") or []
@@ -136,21 +152,28 @@ class ReviewGateTask(BaseTask):
         fields: list[dict[str, Any]],
         reasons: list[dict[str, Any]],
         highlight_fields: list[str],
+        document: dict[str, Any],
     ) -> dict[str, Any]:
         editable_fields = [str(field["field_key"]) for field in fields]
         if self.review_scope == "low_confidence_fields" and not self.allow_edit_high_confidence:
             editable_fields = highlight_fields
-        high_confidence_fields = [
-            str(field["field_key"])
-            for field in fields
-            if field.get("confidence") is not None and float(field["confidence"]) >= self.confidence_threshold
-        ]
+        high_confidence_fields = []
+        for field in fields:
+            field_key = str(field["field_key"])
+            if field.get("confidence") is not None and float(field["confidence"]) >= self._threshold_for_field(
+                field_key,
+                context,
+                document,
+            ):
+                high_confidence_fields.append(field_key)
         schema_hash = SchemaService(self.config_manager).schema_hash(str(self.schema_file)) if self.schema_file else None
         return {
             "schema_file": self.schema_file,
             "schema_version": schema_hash,
             "review_scope": self.review_scope,
             "confidence_threshold": self.confidence_threshold,
+            "per_document_type_thresholds": self.per_document_type_thresholds,
+            "field_threshold_overrides": self.field_threshold_overrides,
             "editable_fields": editable_fields,
             "highlight_fields": highlight_fields,
             "low_confidence_fields": highlight_fields,
@@ -167,3 +190,29 @@ class ReviewGateTask(BaseTask):
             str(field["field_key"]): json_loads(field.get("final_value_json"), json_loads(field.get("extracted_value_json")))
             for field in fields
         }
+
+    @staticmethod
+    def _threshold_map(value: Any) -> dict[str, float]:
+        """Normalize a threshold override mapping."""
+        if not isinstance(value, dict):
+            return {}
+        return {str(key): float(item) for key, item in value.items() if str(key)}
+
+    def _threshold_for_field(
+        self,
+        field_key: str,
+        context: dict[str, Any],
+        document: dict[str, Any],
+    ) -> float:
+        """Return the configured threshold for a field and document type."""
+        if field_key in self.field_threshold_overrides:
+            return self.field_threshold_overrides[field_key]
+        document_type = (
+            context.get("document_type")
+            or document.get("document_type")
+            or context.get("split_category")
+            or document.get("split_category")
+        )
+        if document_type and str(document_type) in self.per_document_type_thresholds:
+            return self.per_document_type_thresholds[str(document_type)]
+        return self.confidence_threshold

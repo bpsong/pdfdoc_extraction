@@ -1,12 +1,132 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="split-settings-refresh-button" type="button">Refresh</button>
+<button class="btn btn-outline btn-sm" id="split-settings-test-button" type="button">Test</button>
+<button class="btn btn-primary btn-sm" id="split-settings-save-button" type="button">Save</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
+<div class="app-workspace" id="split-settings-workspace">
+    <section class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Task</p>
+                <h2 class="text-lg font-semibold" id="split-settings-task-key">-</h2>
+                <p class="text-sm text-base-content/60" id="split-settings-source">-</p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Split</p>
+                <h2 class="text-lg font-semibold" id="split-settings-enabled-summary">-</h2>
+                <p class="text-sm text-base-content/60" id="split-settings-category-summary">-</p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Adapter</p>
+                <h2 class="text-lg font-semibold" id="split-settings-adapter-summary">-</h2>
+                <p class="text-sm text-base-content/60" id="split-settings-secret-summary">-</p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Connection</p>
+                <h2 class="text-lg font-semibold" id="split-settings-connection-summary">-</h2>
+                <p class="text-sm text-base-content/60" id="split-settings-connection-message">-</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="card bg-base-100 shadow-sm xl:col-span-2">
+            <div class="panel-header">
+                <h2 class="font-semibold">Split Settings</h2>
+            </div>
+            <div class="card-body grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <label class="label cursor-pointer justify-start gap-3 pt-7">
+                    <input class="toggle toggle-sm" id="split-settings-enabled" type="checkbox">
+                    <span class="label-text">Enabled</span>
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Uncategorized pages</span>
+                    <select class="select select-bordered select-sm" id="split-settings-allow-uncategorized">
+                        <option value="include">Include</option>
+                        <option value="omit">Omit</option>
+                        <option value="forbid">Forbid</option>
+                    </select>
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Split directory</span>
+                    <input class="input input-bordered input-sm" id="split-settings-split-dir" type="text">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Configuration ID</span>
+                    <input class="input input-bordered input-sm" id="split-settings-configuration-id" type="text">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Project ID</span>
+                    <input class="input input-bordered input-sm" id="split-settings-project-id" type="text">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Organization ID</span>
+                    <input class="input input-bordered input-sm" id="split-settings-organization-id" type="text">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Poll interval seconds</span>
+                    <input class="input input-bordered input-sm" id="split-settings-poll-interval" min="0.1" step="0.1"
+                        type="number">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Timeout seconds</span>
+                    <input class="input input-bordered input-sm" id="split-settings-timeout" min="1" step="1"
+                        type="number">
+                </label>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="panel-header">
+                <h2 class="font-semibold">Adapter Status</h2>
+            </div>
+            <div class="card-body gap-3">
+                <div class="alert text-sm" id="split-settings-status-alert">Loading</div>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <span class="text-base-content/50">API key</span>
+                    <span class="font-medium" id="split-settings-api-key-state">-</span>
+                    <span class="text-base-content/50">Network check</span>
+                    <span class="font-medium" id="split-settings-network-state">-</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
     <section class="card bg-base-100 shadow-sm">
-        <div class="card-body">
+        <div class="panel-header">
             <h2 class="font-semibold">Split Categories</h2>
-            <div class="empty-panel">No split settings loaded</div>
+            <button class="btn btn-outline btn-sm" id="split-settings-add-category" type="button">Add</button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="split-settings-category-body">
+                    <tr>
+                        <td colspan="3" class="text-center text-base-content/50 py-8">No categories</td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/split_settings.js?v=task22" defer></script>
 {% endblock %}

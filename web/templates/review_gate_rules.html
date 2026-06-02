@@ -1,12 +1,188 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="review-gate-refresh-button" type="button">Refresh</button>
+<button class="btn btn-primary btn-sm" id="review-gate-save-button" type="button">Save</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <section class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            <h2 class="font-semibold">Rules</h2>
-            <div class="empty-panel">No review gate rules loaded</div>
+<div class="app-workspace" id="review-gate-rules-workspace">
+    <section class="grid grid-cols-1 xl:grid-cols-4 gap-4">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Task</p>
+                <h2 class="text-lg font-semibold" id="review-gate-task-key">-</h2>
+                <p class="text-sm text-base-content/60" id="review-gate-source">-</p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Threshold</p>
+                <h2 class="text-lg font-semibold" id="review-gate-threshold-summary">-</h2>
+                <p class="text-sm text-base-content/60" id="review-gate-scope-summary">-</p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Queue</p>
+                <h2 class="text-lg font-semibold" id="review-gate-queue-summary">-</h2>
+                <p class="text-sm text-base-content/60" id="review-gate-lock-summary">-</p>
+            </div>
+        </div>
+        <div class="card bg-base-100 shadow-sm">
+            <div class="card-body">
+                <p class="text-xs uppercase tracking-wide text-base-content/50">Pass-through</p>
+                <h2 class="text-lg font-semibold" id="review-gate-pass-summary">-</h2>
+                <p class="text-sm text-base-content/60" id="review-gate-pass-status">-</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        <div class="card bg-base-100 shadow-sm xl:col-span-2">
+            <div class="panel-header">
+                <h2 class="font-semibold">Confidence Rules</h2>
+            </div>
+            <div class="card-body grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <label class="form-control">
+                    <span class="label-text">Global threshold</span>
+                    <input class="range range-primary" id="review-gate-confidence-range" min="0" max="1" step="0.01"
+                        type="range">
+                    <input class="input input-bordered input-sm mt-2" id="review-gate-confidence-input" min="0" max="1"
+                        step="0.01" type="number">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Review scope</span>
+                    <select class="select select-bordered select-sm" id="review-gate-review-scope">
+                        <option value="low_confidence_fields">Low confidence fields</option>
+                        <option value="document">Document</option>
+                        <option value="schema_errors">Schema errors</option>
+                        <option value="split_result">Split result</option>
+                    </select>
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Queue name</span>
+                    <input class="input input-bordered input-sm" id="review-gate-queue-name" type="text">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Review lock timeout</span>
+                    <input class="input input-bordered input-sm" id="review-gate-lock-timeout" min="1" step="1"
+                        type="number">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Schema file</span>
+                    <input class="input input-bordered input-sm" id="review-gate-schema-file" type="text">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Resume policy</span>
+                    <select class="select select-bordered select-sm" id="review-gate-resume-policy">
+                        <option value="next_task">Next task</option>
+                    </select>
+                </label>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="panel-header">
+                <h2 class="font-semibold">Triggers</h2>
+            </div>
+            <div class="card-body gap-3">
+                <label class="label cursor-pointer justify-between gap-3">
+                    <span class="label-text">Missing confidence</span>
+                    <input class="toggle toggle-sm" id="review-gate-missing-confidence" type="checkbox">
+                </label>
+                <label class="label cursor-pointer justify-between gap-3">
+                    <span class="label-text">Missing required fields</span>
+                    <input class="toggle toggle-sm" id="review-gate-missing-required" type="checkbox">
+                </label>
+                <label class="label cursor-pointer justify-between gap-3">
+                    <span class="label-text">Always review</span>
+                    <input class="toggle toggle-sm" id="review-gate-always-review" type="checkbox">
+                </label>
+                <label class="label cursor-pointer justify-between gap-3">
+                    <span class="label-text">Edit high-confidence fields</span>
+                    <input class="toggle toggle-sm" id="review-gate-edit-high-confidence" type="checkbox">
+                </label>
+                <div class="divider my-1"></div>
+                <div>
+                    <p class="label-text mb-2">Split confidence</p>
+                    <div class="grid grid-cols-2 gap-2" id="review-gate-split-confidence-options">
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input class="checkbox checkbox-sm" data-split-confidence="low" type="checkbox">
+                            <span class="label-text">Low</span>
+                        </label>
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input class="checkbox checkbox-sm" data-split-confidence="medium" type="checkbox">
+                            <span class="label-text">Medium</span>
+                        </label>
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input class="checkbox checkbox-sm" data-split-confidence="unknown" type="checkbox">
+                            <span class="label-text">Unknown</span>
+                        </label>
+                        <label class="label cursor-pointer justify-start gap-2 py-1">
+                            <input class="checkbox checkbox-sm" data-split-confidence="high" type="checkbox">
+                            <span class="label-text">High</span>
+                        </label>
+                    </div>
+                </div>
+                <label class="form-control">
+                    <span class="label-text">Business rule flags</span>
+                    <textarea class="textarea textarea-bordered text-sm" id="review-gate-business-flags"></textarea>
+                </label>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="card bg-base-100 shadow-sm">
+            <div class="panel-header">
+                <h2 class="font-semibold">Document Type Thresholds</h2>
+                <button class="btn btn-outline btn-sm" id="review-gate-add-document-threshold" type="button">Add</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Document type</th>
+                            <th>Threshold</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="review-gate-document-threshold-body">
+                        <tr>
+                            <td colspan="3" class="text-center text-base-content/50 py-8">No overrides</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-sm">
+            <div class="panel-header">
+                <h2 class="font-semibold">Field Threshold Overrides</h2>
+                <button class="btn btn-outline btn-sm" id="review-gate-add-field-threshold" type="button">Add</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Field key</th>
+                            <th>Threshold</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="review-gate-field-threshold-body">
+                        <tr>
+                            <td colspan="3" class="text-center text-base-content/50 py-8">No overrides</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/review_gate_rules.js?v=task22" defer></script>
 {% endblock %}

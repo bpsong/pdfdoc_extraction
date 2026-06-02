@@ -61,8 +61,36 @@ def test_review_gate_passes_when_all_rules_are_satisfied(tmp_path):
     assert result["review_gate_status"] == "passed"
     with connect(config) as conn:
         fields = ExtractionRepository(conn).get_fields(created["document"]["id"])
+        reviews = ReviewRepository(conn).list_queue()
     assert fields[0]["requires_review"] == 0
     assert fields[0]["review_status"] == "not_required"
+    assert reviews == []
+
+
+def test_review_gate_uses_field_threshold_override(tmp_path):
+    config, created, task_run = _create_document_with_field(tmp_path, 0.91)
+    task = ReviewGateTask(
+        config,
+        confidence_threshold=0.8,
+        field_threshold_overrides={"supplier": 0.95},
+        schema_file="invoice.yaml",
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "data": {"supplier": "Acme"},
+    }
+
+    result = task.run(context)
+
+    assert result["pipeline_state"] == "paused"
+    with connect(config) as conn:
+        reviews = ReviewRepository(conn).list_queue()
+        metadata = json_loads(reviews[0]["metadata_json"])
+    assert metadata["field_threshold_overrides"] == {"supplier": 0.95}
+    assert metadata["highlight_fields"] == ["supplier"]
 
 
 def test_review_gate_pauses_for_low_confidence_and_does_not_duplicate_open_item(tmp_path):

@@ -193,3 +193,18 @@ def test_pipeline_config_page_includes_task_21_assets(monkeypatch) -> None:
     assert 'id="pipeline-config-workspace"' in response.text
     assert 'id="pipeline-publish-button"' in response.text
     assert "/static/js/pipeline_config.js" in response.text
+
+
+def test_review_gate_and_split_pages_include_task_22_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    review_gate = client.get("/app/admin/review-gate")
+    split_settings = client.get("/app/admin/split")
+
+    assert review_gate.status_code == 200
+    assert 'id="review-gate-rules-workspace"' in review_gate.text
+    assert "/static/js/review_gate_rules.js" in review_gate.text
+    assert split_settings.status_code == 200
+    assert 'id="split-settings-workspace"' in split_settings.text
+    assert "/static/js/split_settings.js" in split_settings.text

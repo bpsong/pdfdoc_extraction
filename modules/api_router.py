@@ -51,6 +51,7 @@ from .db.connection import connect
 from .db.connection import json_loads
 from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
 from .db.migrations import initialize_database
+from .services.admin_settings_service import AdminSettingsError, AdminSettingsService
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
@@ -886,6 +887,55 @@ def build_router() -> APIRouter:
                 status_code=status.HTTP_409_CONFLICT,
                 detail={"message": str(exc), "findings": exc.findings},
             )
+
+    @router.get("/api/admin/review-gate-rules")
+    def get_admin_review_gate_rules(user: str = Depends(get_current_user)):
+        """Return admin-editable review gate rules."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return AdminSettingsService(config, conn).get_review_gate_rules()
+
+    @router.put("/api/admin/review-gate-rules")
+    async def update_admin_review_gate_rules(request: Request, user: str = Depends(get_current_user)):
+        """Update admin-editable review gate rules."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return AdminSettingsService(config, conn).update_review_gate_rules(payload, user=user)
+        except AdminSettingsError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/api/admin/split-settings")
+    def get_admin_split_settings(user: str = Depends(get_current_user)):
+        """Return admin-editable non-secret LlamaCloud Split settings."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return AdminSettingsService(config, conn).get_split_settings()
+
+    @router.put("/api/admin/split-settings")
+    async def update_admin_split_settings(request: Request, user: str = Depends(get_current_user)):
+        """Update admin-editable non-secret LlamaCloud Split settings."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return AdminSettingsService(config, conn).update_split_settings(payload, user=user)
+        except AdminSettingsError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.post("/api/admin/split-settings/test-connection")
+    async def test_admin_split_connection(request: Request, user: str = Depends(get_current_user)):
+        """Run a non-invasive Split adapter readiness check."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        await _json_body(request)
+        with connect(config) as conn:
+            return AdminSettingsService(config, conn).test_split_connection(user=user)
 
     @router.get("/api/schemas")
     def list_schemas(user: str = Depends(get_current_user)):
