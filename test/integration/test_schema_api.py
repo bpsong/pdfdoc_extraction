@@ -7,9 +7,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
-from modules.db.connection import connect
+from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
-from modules.db.repositories import ReviewRepository, TaskRunRepository
+from modules.db.repositories import AuditRepository, ReviewRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
 from test.helpers_sqlite import TempConfig
 
@@ -84,6 +84,19 @@ def test_schema_api_create_get_validate_update_and_duplicate(tmp_path, monkeypat
     assert duplicate_response.json()["schema"]["name"] == "invoice_copy.yaml"
 
     assert (Path(config.get("schema.directories")[0]) / "invoice_copy.yaml").exists()
+    with connect(config) as conn:
+        events = AuditRepository(conn).list_admin_events()
+    event_types = {event["event_type"] for event in events}
+    assert {
+        "admin_schema_created",
+        "admin_schema_validated",
+        "admin_schema_updated",
+        "admin_schema_duplicated",
+    }.issubset(event_types)
+    update_event = next(event for event in events if event["event_type"] == "admin_schema_updated")
+    update_payload = json_loads(update_event["event_json"])
+    assert update_payload["before"]["schema_name"] == "invoice.yaml"
+    assert update_payload["after"]["field_count"] == 3
 
 
 def test_schema_api_requires_admin_user(tmp_path, monkeypatch) -> None:

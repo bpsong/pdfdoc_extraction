@@ -1,36 +1,106 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="admin-refresh-button" type="button">Refresh</button>
+<button class="btn btn-primary btn-sm" id="admin-save-settings-button" type="button">Save Settings</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <div class="page-grid grid-cols-1 md:grid-cols-3">
+<div class="app-workspace" id="admin-dashboard-workspace">
+    <div class="page-grid admin-summary-grid">
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Config Health</div>
-            <div class="stat-value text-2xl">Ready</div>
+            <div class="stat-value text-2xl" id="admin-config-health">Loading</div>
+            <div class="stat-desc" id="admin-config-summary">Active configuration</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Drafts</div>
-            <div class="stat-value text-2xl">0</div>
+            <div class="stat-title">Schema Validation</div>
+            <div class="stat-value text-2xl" id="admin-schema-health">Loading</div>
+            <div class="stat-desc" id="admin-schema-summary">Schemas</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Audit Events</div>
-            <div class="stat-value text-2xl">0</div>
+            <div class="stat-title">Pipeline</div>
+            <div class="stat-value text-2xl" id="admin-pipeline-health">0</div>
+            <div class="stat-desc" id="admin-pipeline-summary">Enabled steps</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Admin Events</div>
+            <div class="stat-value text-2xl" id="admin-audit-count">0</div>
+            <div class="stat-desc">Immutable audit events</div>
         </div>
     </div>
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Area</th>
-                    <th>Status</th>
-                    <th>Updated</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="3" class="text-center text-base-content/50 py-10">No admin activity</td>
-                </tr>
-            </tbody>
-        </table>
-    </section>
+
+    <div class="admin-dashboard-grid">
+        <section class="card bg-base-100 shadow-sm admin-health-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Configuration Health</h2>
+                    <p class="text-xs text-base-content/50" id="admin-config-source">Active config</p>
+                </div>
+                <span class="badge badge-ghost" id="admin-draft-status">No draft</span>
+            </div>
+            <div class="card-body p-4 admin-health-list">
+                <div class="admin-health-row">
+                    <span>Published versions</span>
+                    <strong id="admin-published-count">0</strong>
+                </div>
+                <div class="admin-health-row">
+                    <span>Draft versions</span>
+                    <strong id="admin-draft-count">0</strong>
+                </div>
+                <div class="admin-health-row">
+                    <span>Review threshold</span>
+                    <strong id="admin-review-threshold">-</strong>
+                </div>
+                <div class="admin-health-row">
+                    <span>Split adapter</span>
+                    <strong id="admin-split-status">-</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm admin-audit-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Recent Admin Activity</h2>
+                    <p class="text-xs text-base-content/50">Latest governance events</p>
+                </div>
+                <a class="btn btn-outline btn-sm" href="/app/admin/audit">Audit</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User</th>
+                            <th>Event</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-recent-audit-body">
+                        <tr>
+                            <td colspan="3" class="text-center text-base-content/50 py-10">Loading activity</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm admin-settings-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Non-secret Settings</h2>
+                    <p class="text-xs text-base-content/50">Allow-listed runtime settings</p>
+                </div>
+                <span class="badge badge-outline" id="admin-settings-count">0 keys</span>
+            </div>
+            <div class="card-body p-4 admin-settings-groups" id="admin-settings-groups">
+                <div class="empty-panel">Loading settings</div>
+            </div>
+        </section>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin.js?v=task24" defer></script>
 {% endblock %}

@@ -36,7 +36,7 @@ from email.parser import BytesParser
 from email.policy import default
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks, Query
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -51,7 +51,14 @@ from .db.connection import connect
 from .db.connection import json_loads
 from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
 from .db.migrations import initialize_database
-from .services.admin_settings_service import AdminSettingsError, AdminSettingsService
+from .services.admin_settings_service import (
+    AdminAuditService,
+    AdminSettingsError,
+    AdminSettingsService,
+    AdminSummaryService,
+    PipelineDryRunService,
+)
+from .services.audit_service import AuditService
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
@@ -481,6 +488,35 @@ def build_router() -> APIRouter:
             "review_item_ids": open_items,
         }
 
+    def _schema_audit_payload(schema_name: str, service: SchemaService) -> dict[str, Any]:
+        """Return compact schema metadata for admin audit events."""
+        normalized = service.normalize_schema(schema_name)
+        return {
+            "schema_name": schema_name,
+            "title": normalized.get("title") if normalized else None,
+            "hash": service.schema_hash(schema_name),
+            "field_count": len(normalized.get("fields", [])) if normalized else 0,
+        }
+
+    def _append_admin_audit(
+        config: ConfigManager,
+        *,
+        event_type: str,
+        user: str | None,
+        before: Any = None,
+        after: Any = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Append an admin audit event without changing endpoint response shape."""
+        with connect(config) as conn:
+            AuditService(conn).append_event(
+                event_type=event_type,
+                user=user,
+                before=before,
+                after=after,
+                metadata=metadata,
+            )
+
     def _schema_payload(payload: dict[str, Any]) -> dict[str, Any]:
         schema = payload.get("schema")
         if schema is None:
@@ -819,6 +855,72 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         return TaskCatalogService(config).catalog()
 
+    @router.get("/api/admin/summary")
+    def get_admin_summary(user: str = Depends(get_current_user)):
+        """Return admin dashboard summary data."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return AdminSummaryService(config, conn).summary()
+
+    @router.get("/api/admin/settings")
+    def get_admin_settings(user: str = Depends(get_current_user)):
+        """Return editable non-secret admin settings."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return AdminSettingsService(config, conn).get_admin_settings()
+
+    @router.put("/api/admin/settings")
+    async def update_admin_settings(request: Request, user: str = Depends(get_current_user)):
+        """Update editable non-secret admin settings."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return AdminSettingsService(config, conn).update_admin_settings(payload, user=user)
+        except AdminSettingsError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/api/admin/audit")
+    def get_admin_audit(
+        event_type: str | None = None,
+        audit_user: str | None = Query(default=None, alias="user"),
+        created_from: str | None = None,
+        created_to: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        user: str = Depends(get_current_user),
+    ):
+        """Return filtered admin audit events."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return AdminAuditService(conn).list_events(
+                event_type=event_type,
+                user=audit_user,
+                created_from=created_from,
+                created_to=created_to,
+                limit=limit,
+                offset=offset,
+            )
+
+    @router.post("/api/admin/dry-run")
+    async def run_admin_pipeline_dry_run(request: Request, user: str = Depends(get_current_user)):
+        """Run a non-mutating draft pipeline dry run."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return PipelineDryRunService(config, conn).run(payload, user=user)
+        except PipelineConfigError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"message": str(exc), "findings": exc.findings},
+            )
+
     def _pipeline_model_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
         """Return an optional pipeline model from API payload shapes."""
         if not payload:
@@ -968,13 +1070,21 @@ def build_router() -> APIRouter:
         await _json_body(request)
         result = ConfigValidationService(config).validate_all_schemas()
         findings = cast(list[dict[str, Any]], result.get("findings", []))
-        return {
+        response = {
             "source": "schemas",
             "valid": bool(result.get("valid", False)),
             "summary": _validation_summary(findings),
             "findings": findings,
             "schemas": SchemaService(config).list_schemas(),
         }
+        _append_admin_audit(
+            config,
+            event_type="admin_schemas_validated",
+            user=user,
+            after={"valid": response["valid"], "summary": response["summary"]},
+            metadata={"schema_count": len(response["schemas"])},
+        )
+        return response
 
     @router.get("/api/schemas")
     def list_schemas(user: str = Depends(get_current_user)):
@@ -999,6 +1109,12 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        _append_admin_audit(
+            config,
+            event_type="admin_schema_created",
+            user=user,
+            after=_schema_audit_payload(schema_name, service),
+        )
         return {"schema": schema, "content": service.schema_content(schema_name)}
 
     @router.post("/api/schemas/{schema_name}/validate")
@@ -1010,11 +1126,19 @@ def build_router() -> APIRouter:
         schema = _schema_payload(payload)
         service = SchemaService(config)
         findings = service.validate_schema(schema)
-        return {
+        response = {
             "valid": not findings,
             "findings": findings,
             "active_review_warning": _schema_active_review_warning(schema_name, config),
         }
+        _append_admin_audit(
+            config,
+            event_type="admin_schema_validated",
+            user=user,
+            after={"schema_name": schema_name, "valid": response["valid"], "summary": _validation_summary(findings)},
+            metadata={"finding_paths": [finding.get("path") for finding in findings]},
+        )
+        return response
 
     @router.post("/api/schemas/{schema_name}/duplicate")
     async def duplicate_schema(schema_name: str, request: Request, user: str = Depends(get_current_user)):
@@ -1026,6 +1150,7 @@ def build_router() -> APIRouter:
         if not new_name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New schema name is required")
         service = SchemaService(config)
+        before = _schema_audit_payload(schema_name, service)
         try:
             schema = service.duplicate_schema(schema_name, new_name)
         except FileExistsError as exc:
@@ -1034,6 +1159,14 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        _append_admin_audit(
+            config,
+            event_type="admin_schema_duplicated",
+            user=user,
+            before=before,
+            after=_schema_audit_payload(new_name, service),
+            metadata={"source_schema_name": schema_name},
+        )
         return {"schema": schema, "content": service.schema_content(new_name)}
 
     @router.get("/api/schemas/{schema_name}")
@@ -1060,11 +1193,21 @@ def build_router() -> APIRouter:
         service = SchemaService(config)
         if service.load_schema(schema_name) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schema not found")
+        before = _schema_audit_payload(schema_name, service)
         payload = await _json_body(request)
         try:
             schema = service.save_schema(schema_name, _schema_payload(payload), overwrite=True)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        after = _schema_audit_payload(schema_name, service)
+        _append_admin_audit(
+            config,
+            event_type="admin_schema_updated",
+            user=user,
+            before=before,
+            after=after,
+            metadata={"active_review_warning": _schema_active_review_warning(schema_name, config)},
+        )
         return {
             "schema": schema,
             "content": service.schema_content(schema_name),

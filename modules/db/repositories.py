@@ -673,11 +673,71 @@ class AuditRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def list_admin_events(self) -> list[dict[str, Any]]:
-        rows = self.conn.execute(
-            "SELECT * FROM audit_events WHERE event_type LIKE 'admin_%' ORDER BY created_at DESC"
-        ).fetchall()
+    def list_admin_events(
+        self,
+        *,
+        event_type: str | None = None,
+        user: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        sql, params = self._admin_event_query(
+            event_type=event_type,
+            user=user,
+            created_from=created_from,
+            created_to=created_to,
+        )
+        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        rows = self.conn.execute(sql, params).fetchall()
         return [dict(row) for row in rows]
+
+    def count_admin_events(
+        self,
+        *,
+        event_type: str | None = None,
+        user: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+    ) -> int:
+        """Return the number of admin-scoped audit events matching filters."""
+        sql, params = self._admin_event_query(
+            event_type=event_type,
+            user=user,
+            created_from=created_from,
+            created_to=created_to,
+            select_clause="SELECT COUNT(*) AS count",
+        )
+        row = self.conn.execute(sql, params).fetchone()
+        return int(row["count"] if row else 0)
+
+    @staticmethod
+    def _admin_event_query(
+        *,
+        event_type: str | None = None,
+        user: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+        select_clause: str = "SELECT *",
+    ) -> tuple[str, list[Any]]:
+        """Build an admin-audit query over immutable audit events."""
+        sql = f"{select_clause} FROM audit_events WHERE event_type LIKE 'admin_%'"
+        params: list[Any] = []
+        if event_type:
+            sql += " AND event_type = ?"
+            params.append(event_type)
+        if user:
+            sql += " AND user = ?"
+            params.append(user)
+        if created_from:
+            sql += " AND created_at >= ?"
+            params.append(created_from)
+        if created_to:
+            sql += " AND created_at <= ?"
+            params.append(created_to)
+        return sql, params
 
 
 class AppSettingsRepository:

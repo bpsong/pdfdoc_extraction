@@ -220,3 +220,22 @@ def test_review_gate_and_split_pages_include_task_22_assets(monkeypatch) -> None
     assert split_settings.status_code == 200
     assert 'id="split-settings-workspace"' in split_settings.text
     assert "/static/js/split_settings.js" in split_settings.text
+
+
+def test_admin_dashboard_audit_and_dry_run_pages_include_task_24_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    dashboard = client.get("/app/admin")
+    audit = client.get("/app/admin/audit")
+    dry_run = client.get("/app/admin/dry-run")
+
+    assert dashboard.status_code == 200
+    assert 'id="admin-dashboard-workspace"' in dashboard.text
+    assert "/static/js/admin.js" in dashboard.text
+    assert audit.status_code == 200
+    assert 'id="admin-audit-workspace"' in audit.text
+    assert "/static/js/admin_audit.js" in audit.text
+    assert dry_run.status_code == 200
+    assert 'id="pipeline-dry-run-workspace"' in dry_run.text
+    assert "/static/js/pipeline_dry_run.js" in dry_run.text

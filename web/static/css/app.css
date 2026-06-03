@@ -556,6 +556,143 @@
     line-height: 1.45;
 }
 
+.admin-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(20rem, 0.7fr) minmax(0, 1fr);
+    grid-template-areas:
+        "health audit"
+        "settings settings";
+    gap: 1rem;
+    align-items: start;
+}
+
+.admin-health-panel {
+    grid-area: health;
+}
+
+.admin-audit-panel {
+    grid-area: audit;
+}
+
+.admin-settings-panel {
+    grid-area: settings;
+}
+
+.admin-health-list,
+.admin-settings-groups {
+    gap: 1rem;
+}
+
+.admin-health-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.admin-health-row:last-child {
+    border-bottom: 0;
+}
+
+.admin-settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.admin-settings-group:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.admin-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+.admin-setting-control {
+    min-width: 0;
+}
+
+.admin-audit-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(10rem, 1fr)) max-content;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.admin-audit-filter-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    padding-bottom: 0.25rem;
+}
+
+.admin-audit-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.5fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+.admin-audit-table {
+    min-width: 48rem;
+}
+
+.admin-audit-json,
+.dry-run-json {
+    min-height: 24rem;
+    max-height: 34rem;
+    margin: 0;
+    padding: 1rem;
+    overflow: auto;
+    background: oklch(var(--b2));
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.pipeline-dry-run-layout {
+    display: grid;
+    grid-template-columns: minmax(18rem, 0.5fr) minmax(0, 1fr);
+    grid-template-areas:
+        "controls results"
+        "json json";
+    gap: 1rem;
+    align-items: start;
+}
+
+.dry-run-controls-panel {
+    grid-area: controls;
+}
+
+.dry-run-results-panel {
+    grid-area: results;
+}
+
+.dry-run-json-panel {
+    grid-area: json;
+}
+
+.dry-run-mock-json {
+    min-height: 14rem;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.75rem;
+}
+
+.dry-run-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .status-dot {
     width: 0.5rem;
     height: 0.5rem;
@@ -829,6 +966,32 @@
 
     .validation-summary-panel {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-summary-grid,
+    .admin-settings-grid,
+    .dry-run-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .admin-dashboard-grid,
+    .admin-audit-layout,
+    .pipeline-dry-run-layout {
+        grid-template-columns: 1fr;
+        grid-template-areas: none;
+    }
+
+    .admin-health-panel,
+    .admin-audit-panel,
+    .admin-settings-panel,
+    .dry-run-controls-panel,
+    .dry-run-results-panel,
+    .dry-run-json-panel {
+        grid-area: auto;
+    }
+
+    .admin-audit-filters {
+        grid-template-columns: 1fr;
     }
 
     .schema-editor-workspace {

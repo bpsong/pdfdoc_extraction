@@ -1,0 +1,244 @@
+- generic [ref=e2]:
+  - banner [ref=e3]:
+    - heading "Dashboard" [level=1] [ref=e4]
+    - navigation [ref=e5]:
+      - link "Upload" [ref=e6] [cursor=pointer]:
+        - /url: /upload
+      - button "Logout" [ref=e8] [cursor=pointer]
+  - generic [ref=e9]:
+    - heading "Processed Files" [level=2] [ref=e10]
+    - table [ref=e11]:
+      - rowgroup [ref=e12]:
+        - row "File ID Original Name Status Created Updated Error" [ref=e13]:
+          - columnheader "File ID" [ref=e14]
+          - columnheader "Original Name" [ref=e15]
+          - columnheader "Status" [ref=e16]
+          - columnheader "Created" [ref=e17]
+          - columnheader "Updated" [ref=e18]
+          - columnheader "Error" [ref=e19]
+      - rowgroup [ref=e20]:
+        - 'row "web-123 uploaded.pdf Pipeline Completed with Errors 30-05-2026 16:15:30 GMT+8 30-05-2026 16:15:30 GMT+8 TaskError: Extraction failed after 3 attempts: Job ext-4ez10td677xrq2lwtgk38iebxikp failed with status: FAILED | Error: This document appears to be broken or corrupted. Please try repairing or re-saving the file, then upload it again." [ref=e21]':
+          - cell "web-123" [ref=e22]:
+            - button "web-123" [ref=e23] [cursor=pointer]
+          - cell "uploaded.pdf" [ref=e24]
+          - cell "Pipeline Completed with Errors" [ref=e25]:
+            - generic [ref=e26]: Pipeline Completed with Errors
+          - cell "30-05-2026 16:15:30 GMT+8" [ref=e27]
+          - cell "30-05-2026 16:15:30 GMT+8" [ref=e28]
+          - 'cell "TaskError: Extraction failed after 3 attempts: Job ext-4ez10td677xrq2lwtgk38iebxikp failed with status: FAILED | Error: This document appears to be broken or corrupted. Please try repairing or re-saving the file, then upload it again." [ref=e29]'
+        - row "f822b27d-6fda-4674-a1cf-21d960c0493e S268588 1781044.pdf Pipeline Completed Successfully 06-02-2026 14:39:32 GMT+8 06-02-2026 14:39:32 GMT+8" [ref=e30]:
+          - cell "f822b27d-6fda-4674-a1cf-21d960c0493e" [ref=e31]:
+            - button "f822b27d-6fda-4674-a1cf-21d960c0493e" [ref=e32] [cursor=pointer]
+          - cell "S268588 1781044.pdf" [ref=e33]
+          - cell "Pipeline Completed Successfully" [ref=e34]:
+            - generic [ref=e35]: Pipeline Completed Successfully
+          - cell "06-02-2026 14:39:32 GMT+8" [ref=e36]
+          - cell "06-02-2026 14:39:32 GMT+8" [ref=e37]
+          - cell [ref=e38]
+        - row "8a6f4c84-d426-4046-adb9-891a0e06224b S268588 1781037.pdf Pipeline Completed Successfully 03-02-2026 21:14:54 GMT+8 03-02-2026 21:14:54 GMT+8" [ref=e39]:
+          - cell "8a6f4c84-d426-4046-adb9-891a0e06224b" [ref=e40]:
+            - button "8a6f4c84-d426-4046-adb9-891a0e06224b" [ref=e41] [cursor=pointer]
+          - cell "S268588 1781037.pdf" [ref=e42]
+          - cell "Pipeline Completed Successfully" [ref=e43]:
+            - generic [ref=e44]: Pipeline Completed Successfully
+          - cell "03-02-2026 21:14:54 GMT+8" [ref=e45]
+          - cell "03-02-2026 21:14:54 GMT+8" [ref=e46]
+          - cell [ref=e47]
+        - row "0d4184de-f65b-443f-ab09-09a2a5afe844 S268588 1781042.pdf Pipeline Completed Successfully 21-11-2025 10:22:49 GMT+8 21-11-2025 10:22:49 GMT+8" [ref=e48]:
+          - cell "0d4184de-f65b-443f-ab09-09a2a5afe844" [ref=e49]:
+            - button "0d4184de-f65b-443f-ab09-09a2a5afe844" [ref=e50] [cursor=pointer]
+          - cell "S268588 1781042.pdf" [ref=e51]
+          - cell "Pipeline Completed Successfully" [ref=e52]:
+            - generic [ref=e53]: Pipeline Completed Successfully
+          - cell "21-11-2025 10:22:49 GMT+8" [ref=e54]
+          - cell "21-11-2025 10:22:49 GMT+8" [ref=e55]
+          - cell [ref=e56]
+        - row "294ded7b-248e-4d27-b6d5-5a050ed45c0d S268588 1781045.pdf Pipeline Completed Successfully 12-10-2025 09:47:52 GMT+8 12-10-2025 09:47:52 GMT+8" [ref=e57]:
+          - cell "294ded7b-248e-4d27-b6d5-5a050ed45c0d" [ref=e58]:
+            - button "294ded7b-248e-4d27-b6d5-5a050ed45c0d" [ref=e59] [cursor=pointer]
+          - cell "S268588 1781045.pdf" [ref=e60]
+          - cell "Pipeline Completed Successfully" [ref=e61]:
+            - generic [ref=e62]: Pipeline Completed Successfully
+          - cell "12-10-2025 09:47:52 GMT+8" [ref=e63]
+          - cell "12-10-2025 09:47:52 GMT+8" [ref=e64]
+          - cell [ref=e65]
+        - row "8e0b3989-1d4d-4fdc-aa5e-621ec7a338bb sample_invoice.pdf Pipeline Completed Successfully 11-10-2025 15:33:30 GMT+8 11-10-2025 15:33:30 GMT+8" [ref=e66]:
+          - cell "8e0b3989-1d4d-4fdc-aa5e-621ec7a338bb" [ref=e67]:
+            - button "8e0b3989-1d4d-4fdc-aa5e-621ec7a338bb" [ref=e68] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e69]
+          - cell "Pipeline Completed Successfully" [ref=e70]:
+            - generic [ref=e71]: Pipeline Completed Successfully
+          - cell "11-10-2025 15:33:30 GMT+8" [ref=e72]
+          - cell "11-10-2025 15:33:30 GMT+8" [ref=e73]
+          - cell [ref=e74]
+        - row "0f578594-085a-4b79-a7aa-b0bb9bdae82b sample_invoice.pdf Pipeline Completed Successfully 11-10-2025 15:29:58 GMT+8 11-10-2025 15:29:58 GMT+8" [ref=e75]:
+          - cell "0f578594-085a-4b79-a7aa-b0bb9bdae82b" [ref=e76]:
+            - button "0f578594-085a-4b79-a7aa-b0bb9bdae82b" [ref=e77] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e78]
+          - cell "Pipeline Completed Successfully" [ref=e79]:
+            - generic [ref=e80]: Pipeline Completed Successfully
+          - cell "11-10-2025 15:29:58 GMT+8" [ref=e81]
+          - cell "11-10-2025 15:29:58 GMT+8" [ref=e82]
+          - cell [ref=e83]
+        - row "89314554-3f3e-4e70-accb-20f86eaed711 sample_invoice.pdf Pipeline Completed Successfully 11-10-2025 15:25:17 GMT+8 11-10-2025 15:25:17 GMT+8" [ref=e84]:
+          - cell "89314554-3f3e-4e70-accb-20f86eaed711" [ref=e85]:
+            - button "89314554-3f3e-4e70-accb-20f86eaed711" [ref=e86] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e87]
+          - cell "Pipeline Completed Successfully" [ref=e88]:
+            - generic [ref=e89]: Pipeline Completed Successfully
+          - cell "11-10-2025 15:25:17 GMT+8" [ref=e90]
+          - cell "11-10-2025 15:25:17 GMT+8" [ref=e91]
+          - cell [ref=e92]
+        - row "849086e6-ff0a-4d85-a2b2-2a371265f9d2 sample_invoice.pdf Pipeline Completed Successfully 11-10-2025 15:22:05 GMT+8 11-10-2025 15:22:05 GMT+8" [ref=e93]:
+          - cell "849086e6-ff0a-4d85-a2b2-2a371265f9d2" [ref=e94]:
+            - button "849086e6-ff0a-4d85-a2b2-2a371265f9d2" [ref=e95] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e96]
+          - cell "Pipeline Completed Successfully" [ref=e97]:
+            - generic [ref=e98]: Pipeline Completed Successfully
+          - cell "11-10-2025 15:22:05 GMT+8" [ref=e99]
+          - cell "11-10-2025 15:22:05 GMT+8" [ref=e100]
+          - cell [ref=e101]
+        - row "378817d6-2a48-471a-984d-e6b598426e01 sample_invoice.pdf Pipeline Completed Successfully 11-10-2025 15:19:45 GMT+8 11-10-2025 15:19:45 GMT+8" [ref=e102]:
+          - cell "378817d6-2a48-471a-984d-e6b598426e01" [ref=e103]:
+            - button "378817d6-2a48-471a-984d-e6b598426e01" [ref=e104] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e105]
+          - cell "Pipeline Completed Successfully" [ref=e106]:
+            - generic [ref=e107]: Pipeline Completed Successfully
+          - cell "11-10-2025 15:19:45 GMT+8" [ref=e108]
+          - cell "11-10-2025 15:19:45 GMT+8" [ref=e109]
+          - cell [ref=e110]
+        - row "696473d3-db70-4e0d-aa0c-ba8b10faeada sample_invoice3.pdf Pipeline Completed Successfully 11-10-2025 10:21:44 GMT+8 11-10-2025 10:21:44 GMT+8" [ref=e111]:
+          - cell "696473d3-db70-4e0d-aa0c-ba8b10faeada" [ref=e112]:
+            - button "696473d3-db70-4e0d-aa0c-ba8b10faeada" [ref=e113] [cursor=pointer]
+          - cell "sample_invoice3.pdf" [ref=e114]
+          - cell "Pipeline Completed Successfully" [ref=e115]:
+            - generic [ref=e116]: Pipeline Completed Successfully
+          - cell "11-10-2025 10:21:44 GMT+8" [ref=e117]
+          - cell "11-10-2025 10:21:44 GMT+8" [ref=e118]
+          - cell [ref=e119]
+        - row "ab935500-3e03-49bd-aae8-b7a0a7296883 sample_invoice.pdf Pipeline Completed Successfully 11-10-2025 10:21:14 GMT+8 11-10-2025 10:21:14 GMT+8" [ref=e120]:
+          - cell "ab935500-3e03-49bd-aae8-b7a0a7296883" [ref=e121]:
+            - button "ab935500-3e03-49bd-aae8-b7a0a7296883" [ref=e122] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e123]
+          - cell "Pipeline Completed Successfully" [ref=e124]:
+            - generic [ref=e125]: Pipeline Completed Successfully
+          - cell "11-10-2025 10:21:14 GMT+8" [ref=e126]
+          - cell "11-10-2025 10:21:14 GMT+8" [ref=e127]
+          - cell [ref=e128]
+        - row "8089bd2d-211e-4b63-aac4-e1d92eb0e258 sample_invoce2.pdf Pipeline Completed Successfully 11-10-2025 10:20:19 GMT+8 11-10-2025 10:20:19 GMT+8" [ref=e129]:
+          - cell "8089bd2d-211e-4b63-aac4-e1d92eb0e258" [ref=e130]:
+            - button "8089bd2d-211e-4b63-aac4-e1d92eb0e258" [ref=e131] [cursor=pointer]
+          - cell "sample_invoce2.pdf" [ref=e132]
+          - cell "Pipeline Completed Successfully" [ref=e133]:
+            - generic [ref=e134]: Pipeline Completed Successfully
+          - cell "11-10-2025 10:20:19 GMT+8" [ref=e135]
+          - cell "11-10-2025 10:20:19 GMT+8" [ref=e136]
+          - cell [ref=e137]
+        - row "80627bf1-03c1-408d-ad69-6f2af6b7bdda sample_invoice.pdf Pipeline Completed Successfully 06-10-2025 14:21:50 GMT+8 06-10-2025 14:21:50 GMT+8" [ref=e138]:
+          - cell "80627bf1-03c1-408d-ad69-6f2af6b7bdda" [ref=e139]:
+            - button "80627bf1-03c1-408d-ad69-6f2af6b7bdda" [ref=e140] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e141]
+          - cell "Pipeline Completed Successfully" [ref=e142]:
+            - generic [ref=e143]: Pipeline Completed Successfully
+          - cell "06-10-2025 14:21:50 GMT+8" [ref=e144]
+          - cell "06-10-2025 14:21:50 GMT+8" [ref=e145]
+          - cell [ref=e146]
+        - row "723d67de-2210-454f-a7f7-3b7a9622520d sample_invoice.pdf Pipeline Completed Successfully 06-10-2025 14:01:43 GMT+8 06-10-2025 14:01:43 GMT+8" [ref=e147]:
+          - cell "723d67de-2210-454f-a7f7-3b7a9622520d" [ref=e148]:
+            - button "723d67de-2210-454f-a7f7-3b7a9622520d" [ref=e149] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e150]
+          - cell "Pipeline Completed Successfully" [ref=e151]:
+            - generic [ref=e152]: Pipeline Completed Successfully
+          - cell "06-10-2025 14:01:43 GMT+8" [ref=e153]
+          - cell "06-10-2025 14:01:43 GMT+8" [ref=e154]
+          - cell [ref=e155]
+        - row "9c1fc2f7-f7a0-4208-97ca-cc29afed72a1 sample_invoice.pdf Pipeline Completed Successfully 06-10-2025 13:43:19 GMT+8 06-10-2025 13:43:19 GMT+8" [ref=e156]:
+          - cell "9c1fc2f7-f7a0-4208-97ca-cc29afed72a1" [ref=e157]:
+            - button "9c1fc2f7-f7a0-4208-97ca-cc29afed72a1" [ref=e158] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e159]
+          - cell "Pipeline Completed Successfully" [ref=e160]:
+            - generic [ref=e161]: Pipeline Completed Successfully
+          - cell "06-10-2025 13:43:19 GMT+8" [ref=e162]
+          - cell "06-10-2025 13:43:19 GMT+8" [ref=e163]
+          - cell [ref=e164]
+        - row "0419bfb6-8829-4805-8e93-f2f57fd9d4a9 sample_invoice.pdf Pipeline Completed Successfully 06-10-2025 13:27:55 GMT+8 06-10-2025 13:27:55 GMT+8" [ref=e165]:
+          - cell "0419bfb6-8829-4805-8e93-f2f57fd9d4a9" [ref=e166]:
+            - button "0419bfb6-8829-4805-8e93-f2f57fd9d4a9" [ref=e167] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e168]
+          - cell "Pipeline Completed Successfully" [ref=e169]:
+            - generic [ref=e170]: Pipeline Completed Successfully
+          - cell "06-10-2025 13:27:55 GMT+8" [ref=e171]
+          - cell "06-10-2025 13:27:55 GMT+8" [ref=e172]
+          - cell [ref=e173]
+        - row "bd00a1e9-d9e4-4321-862d-542dd0d47a75 sample_invoice.pdf Pipeline Completed Successfully 06-10-2025 13:19:52 GMT+8 06-10-2025 13:19:52 GMT+8" [ref=e174]:
+          - cell "bd00a1e9-d9e4-4321-862d-542dd0d47a75" [ref=e175]:
+            - button "bd00a1e9-d9e4-4321-862d-542dd0d47a75" [ref=e176] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e177]
+          - cell "Pipeline Completed Successfully" [ref=e178]:
+            - generic [ref=e179]: Pipeline Completed Successfully
+          - cell "06-10-2025 13:19:52 GMT+8" [ref=e180]
+          - cell "06-10-2025 13:19:52 GMT+8" [ref=e181]
+          - cell [ref=e182]
+        - row "a90f4ec3-b9a2-41ab-86de-35dd680fa195 sample_invoice.pdf Pipeline Completed Successfully 06-10-2025 13:07:02 GMT+8 06-10-2025 13:07:02 GMT+8" [ref=e183]:
+          - cell "a90f4ec3-b9a2-41ab-86de-35dd680fa195" [ref=e184]:
+            - button "a90f4ec3-b9a2-41ab-86de-35dd680fa195" [ref=e185] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e186]
+          - cell "Pipeline Completed Successfully" [ref=e187]:
+            - generic [ref=e188]: Pipeline Completed Successfully
+          - cell "06-10-2025 13:07:02 GMT+8" [ref=e189]
+          - cell "06-10-2025 13:07:02 GMT+8" [ref=e190]
+          - cell [ref=e191]
+        - row "e5b4a448-2b47-4df5-a1d9-c2d2bfb5a980 sample_invoice.pdf Pipeline Completed Successfully 02-10-2025 21:04:02 GMT+8 02-10-2025 21:04:02 GMT+8" [ref=e192]:
+          - cell "e5b4a448-2b47-4df5-a1d9-c2d2bfb5a980" [ref=e193]:
+            - button "e5b4a448-2b47-4df5-a1d9-c2d2bfb5a980" [ref=e194] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e195]
+          - cell "Pipeline Completed Successfully" [ref=e196]:
+            - generic [ref=e197]: Pipeline Completed Successfully
+          - cell "02-10-2025 21:04:02 GMT+8" [ref=e198]
+          - cell "02-10-2025 21:04:02 GMT+8" [ref=e199]
+          - cell [ref=e200]
+        - row "a7990beb-a27c-4c86-91fa-67472f4b9315 sample_invoice.pdf Pipeline Completed Successfully 02-10-2025 21:02:34 GMT+8 02-10-2025 21:02:34 GMT+8" [ref=e201]:
+          - cell "a7990beb-a27c-4c86-91fa-67472f4b9315" [ref=e202]:
+            - button "a7990beb-a27c-4c86-91fa-67472f4b9315" [ref=e203] [cursor=pointer]
+          - cell "sample_invoice.pdf" [ref=e204]
+          - cell "Pipeline Completed Successfully" [ref=e205]:
+            - generic [ref=e206]: Pipeline Completed Successfully
+          - cell "02-10-2025 21:02:34 GMT+8" [ref=e207]
+          - cell "02-10-2025 21:02:34 GMT+8" [ref=e208]
+          - cell [ref=e209]
+        - row "bdbb3621-c4e3-4f82-8677-86bf3f75d99f S268588 1781083.pdf Pipeline Completed Successfully 01-10-2025 22:03:36 GMT+8 01-10-2025 22:03:36 GMT+8" [ref=e210]:
+          - cell "bdbb3621-c4e3-4f82-8677-86bf3f75d99f" [ref=e211]:
+            - button "bdbb3621-c4e3-4f82-8677-86bf3f75d99f" [ref=e212] [cursor=pointer]
+          - cell "S268588 1781083.pdf" [ref=e213]
+          - cell "Pipeline Completed Successfully" [ref=e214]:
+            - generic [ref=e215]: Pipeline Completed Successfully
+          - cell "01-10-2025 22:03:36 GMT+8" [ref=e216]
+          - cell "01-10-2025 22:03:36 GMT+8" [ref=e217]
+          - cell [ref=e218]
+        - row "1d02ccca-3cd6-49d7-bc10-c22bbecdeef0 S268588 1781081.pdf Pipeline Completed Successfully 01-10-2025 22:02:06 GMT+8 01-10-2025 22:02:06 GMT+8" [ref=e219]:
+          - cell "1d02ccca-3cd6-49d7-bc10-c22bbecdeef0" [ref=e220]:
+            - button "1d02ccca-3cd6-49d7-bc10-c22bbecdeef0" [ref=e221] [cursor=pointer]
+          - cell "S268588 1781081.pdf" [ref=e222]
+          - cell "Pipeline Completed Successfully" [ref=e223]:
+            - generic [ref=e224]: Pipeline Completed Successfully
+          - cell "01-10-2025 22:02:06 GMT+8" [ref=e225]
+          - cell "01-10-2025 22:02:06 GMT+8" [ref=e226]
+          - cell [ref=e227]
+        - row "b3c58bf9-5153-4ca9-856b-cdf1049ef7d1 S268588 1781053.pdf Pipeline Completed Successfully 30-09-2025 21:45:21 GMT+8 30-09-2025 21:45:21 GMT+8" [ref=e228]:
+          - cell "b3c58bf9-5153-4ca9-856b-cdf1049ef7d1" [ref=e229]:
+            - button "b3c58bf9-5153-4ca9-856b-cdf1049ef7d1" [ref=e230] [cursor=pointer]
+          - cell "S268588 1781053.pdf" [ref=e231]
+          - cell "Pipeline Completed Successfully" [ref=e232]:
+            - generic [ref=e233]: Pipeline Completed Successfully
+          - cell "30-09-2025 21:45:21 GMT+8" [ref=e234]
+          - cell "30-09-2025 21:45:21 GMT+8" [ref=e235]
+          - cell [ref=e236]
+        - row "4efa104c-074a-443f-8330-e47d0dced195 S268588 1781048.pdf Pipeline Completed Successfully 30-09-2025 21:40:51 GMT+8 30-09-2025 21:40:51 GMT+8" [ref=e237]:
+          - cell "4efa104c-074a-443f-8330-e47d0dced195" [ref=e238]:
+            - button "4efa104c-074a-443f-8330-e47d0dced195" [ref=e239] [cursor=pointer]
+          - cell "S268588 1781048.pdf" [ref=e240]
+          - cell "Pipeline Completed Successfully" [ref=e241]:
+            - generic [ref=e242]: Pipeline Completed Successfully
+          - cell "30-09-2025 21:40:51 GMT+8" [ref=e243]
+          - cell "30-09-2025 21:40:51 GMT+8" [ref=e244]
+          - cell [ref=e245]

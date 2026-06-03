@@ -1,23 +1,73 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="admin-audit-refresh-button" type="button">Refresh</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <section class="app-table-region">
-        <table class="table table-sm">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>User</th>
-                    <th>Event</th>
-                    <th>Target</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="4" class="text-center text-base-content/50 py-10">No audit events</td>
-                </tr>
-            </tbody>
-        </table>
+<div class="app-workspace" id="admin-audit-workspace">
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body p-4">
+            <div class="admin-audit-filters">
+                <label class="form-control">
+                    <span class="label-text">Event Type</span>
+                    <input class="input input-bordered input-sm" id="admin-audit-event-type" placeholder="admin_pipeline_published">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">User</span>
+                    <input class="input input-bordered input-sm" id="admin-audit-user" placeholder="admin">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">From</span>
+                    <input class="input input-bordered input-sm" id="admin-audit-created-from" type="datetime-local">
+                </label>
+                <label class="form-control">
+                    <span class="label-text">To</span>
+                    <input class="input input-bordered input-sm" id="admin-audit-created-to" type="datetime-local">
+                </label>
+                <div class="admin-audit-filter-actions">
+                    <button class="btn btn-primary btn-sm" id="admin-audit-apply-button" type="button">Apply</button>
+                    <button class="btn btn-ghost btn-sm" id="admin-audit-clear-button" type="button">Clear</button>
+                </div>
+            </div>
+        </div>
     </section>
+
+    <div class="admin-audit-layout">
+        <section class="app-table-region">
+            <table class="table table-sm admin-audit-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>User</th>
+                        <th>Event</th>
+                        <th>Target</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="admin-audit-body">
+                    <tr>
+                        <td colspan="5" class="text-center text-base-content/50 py-10">Loading audit events</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm admin-audit-detail-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold" id="admin-audit-detail-title">Event Details</h2>
+                    <p class="text-xs text-base-content/50" id="admin-audit-detail-subtitle">Select an event</p>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <pre class="admin-audit-json" id="admin-audit-detail-json">{}</pre>
+            </div>
+        </section>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin_audit.js?v=task24" defer></script>
 {% endblock %}

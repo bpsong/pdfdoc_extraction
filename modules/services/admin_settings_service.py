@@ -1,4 +1,4 @@
-"""Admin-editable review gate and split settings service."""
+"""Admin-facing settings, summary, audit, and dry-run services."""
 
 from __future__ import annotations
 
@@ -10,12 +10,22 @@ from typing import Any
 import yaml
 
 from modules.config_manager import ConfigManager
-from modules.db.repositories import AppSettingsRepository, ConfigVersionRepository
+from modules.db.connection import json_loads
+from modules.db.repositories import (
+    AppSettingsRepository,
+    AuditRepository,
+    ConfigVersionRepository,
+    DocumentRepository,
+)
+from modules.services.config_validation_service import ConfigValidationService
 from modules.services.audit_service import AuditService
+from modules.services.pipeline_config_service import PipelineConfigError, PipelineConfigService
 
 
+ADMIN_SETTINGS_KEY = "admin.non_secret_settings"
 REVIEW_GATE_SETTINGS_KEY = "admin.review_gate_rules"
 SPLIT_SETTINGS_KEY = "admin.split_settings"
+ADMIN_SETTINGS_CONFIG_TYPE = "admin_settings"
 REVIEW_GATE_CONFIG_TYPE = "review_gate_rules"
 SPLIT_SETTINGS_CONFIG_TYPE = "split_settings"
 CONFIG_NAME = "default"
@@ -23,6 +33,78 @@ CONFIG_NAME = "default"
 REVIEW_SCOPES = {"document", "low_confidence_fields", "schema_errors", "split_result"}
 RESUME_POLICIES = {"next_task"}
 UNCATEGORIZED_POLICIES = {"include", "forbid", "omit"}
+SECRET_KEYS = {
+    "api_key",
+    "apikey",
+    "password",
+    "password_hash",
+    "secret",
+    "secret_key",
+    "token",
+    "access_token",
+    "refresh_token",
+    "authorization",
+}
+EDITABLE_SETTINGS: dict[str, dict[str, Any]] = {
+    "ui.app_name": {"group": "ui", "label": "Application Name", "type": "string", "default": "DocFlow AI"},
+    "ui.page_size": {"group": "ui", "label": "Default Page Size", "type": "positive_int", "default": 25},
+    "validation.config_validation_enabled": {
+        "group": "validation",
+        "label": "Configuration Validation",
+        "type": "bool",
+        "default": True,
+    },
+    "validation.strict_mode_default": {
+        "group": "validation",
+        "label": "Strict Mode Default",
+        "type": "bool",
+        "default": False,
+    },
+    "validation.allow_ui_config_save": {
+        "group": "validation",
+        "label": "Allow UI Config Save",
+        "type": "bool",
+        "default": False,
+    },
+    "review.default_queue_name": {
+        "group": "review",
+        "label": "Default Review Queue",
+        "type": "string",
+        "default": "default_review",
+    },
+    "review.lock_timeout_minutes": {
+        "group": "review",
+        "label": "Review Lock Timeout",
+        "type": "positive_int",
+        "default": 60,
+    },
+    "app_storage.root_dir": {"group": "storage", "label": "Storage Root", "type": "path", "default": "data/app"},
+    "app_storage.originals_dir": {
+        "group": "storage",
+        "label": "Originals Directory",
+        "type": "path",
+        "default": "data/app/originals",
+    },
+    "app_storage.working_dir": {
+        "group": "storage",
+        "label": "Working Directory",
+        "type": "path",
+        "default": "data/app/working",
+    },
+    "app_storage.split_dir": {"group": "storage", "label": "Split Directory", "type": "path", "default": "data/app/split"},
+    "app_storage.exports_dir": {
+        "group": "storage",
+        "label": "Exports Directory",
+        "type": "path",
+        "default": "data/app/exports",
+    },
+    "app_storage.archive_dir": {
+        "group": "storage",
+        "label": "Archive Directory",
+        "type": "path",
+        "default": "data/app/archive",
+    },
+}
 
 
 class AdminSettingsError(ValueError):
@@ -155,6 +237,69 @@ class AdminSettingsService:
         )
         return status
 
+    def get_admin_settings(self) -> dict[str, Any]:
+        """Return editable non-secret runtime settings."""
+        config = self._active_config()
+        stored = self.settings.get(ADMIN_SETTINGS_KEY, {})
+        values = {
+            key: _get_nested(config, key, _default_for_setting(schema))
+            for key, schema in EDITABLE_SETTINGS.items()
+        }
+        if isinstance(stored, dict):
+            values.update(
+                {
+                    key: stored[key]
+                    for key in EDITABLE_SETTINGS
+                    if key in stored
+                }
+            )
+        normalized = {
+            key: self._normalize_admin_setting(key, value)
+            for key, value in values.items()
+        }
+        return {
+            "settings": normalized,
+            "groups": _settings_groups(normalized),
+            "editable_keys": [
+                {"key": key, **schema}
+                for key, schema in EDITABLE_SETTINGS.items()
+            ],
+        }
+
+    def update_admin_settings(self, payload: dict[str, Any], *, user: str | None = None) -> dict[str, Any]:
+        """Persist allow-listed non-secret runtime settings and audit the change."""
+        incoming = self._payload_settings(payload)
+        if self._contains_secret_key(incoming):
+            raise AdminSettingsError("Secret settings cannot be saved through this endpoint.")
+        unknown = sorted(set(incoming) - set(EDITABLE_SETTINGS))
+        if unknown:
+            raise AdminSettingsError(f"Unsupported admin setting key: {unknown[0]}.")
+
+        before = self.get_admin_settings()["settings"]
+        after = deepcopy(before)
+        for key, value in incoming.items():
+            after[key] = self._normalize_admin_setting(key, value)
+
+        config = self._active_config()
+        for key, value in after.items():
+            _set_nested(config, key, value)
+        self.settings.set(ADMIN_SETTINGS_KEY, after)
+        published = self._record_config_version(
+            config_type=ADMIN_SETTINGS_CONFIG_TYPE,
+            settings=after,
+            user=user,
+        )
+        self._write_active_config(config)
+        self._replace_in_memory_config(config)
+        self.audit.append_event(
+            event_type="admin_settings_updated",
+            user=user,
+            before=before,
+            after=after,
+            metadata={"config_version_id": published.get("id") if published else None},
+        )
+        return self.get_admin_settings()
+
     def _active_config(self) -> dict[str, Any]:
         """Return a deep copy of the active config mapping."""
         config = self.config_manager.get_all() if hasattr(self.config_manager, "get_all") else {}
@@ -167,6 +312,20 @@ class AdminSettingsService:
         if not isinstance(settings, dict):
             raise AdminSettingsError("Settings payload must be an object.")
         return settings
+
+    @staticmethod
+    def _normalize_admin_setting(key: str, value: Any) -> Any:
+        """Normalize one allow-listed admin setting."""
+        schema = EDITABLE_SETTINGS[key]
+        setting_type = schema["type"]
+        if setting_type == "bool":
+            return bool(value)
+        if setting_type == "positive_int":
+            return _positive_int(value, key)
+        text = str(value or "").strip()
+        if setting_type in {"string", "path"} and not text:
+            raise AdminSettingsError(f"{key} cannot be empty.")
+        return text
 
     @staticmethod
     def _task_params(config: dict[str, Any], class_name: str) -> tuple[str | None, dict[str, Any], list[str]]:
@@ -424,13 +583,319 @@ class AdminSettingsService:
         if isinstance(value, dict):
             for key, item in value.items():
                 lowered = str(key).lower()
-                if lowered in {"api_key", "password", "secret", "secret_key", "token"}:
+                if lowered in SECRET_KEYS:
                     return True
                 if AdminSettingsService._contains_secret_key(item):
                     return True
         if isinstance(value, list):
             return any(AdminSettingsService._contains_secret_key(item) for item in value)
         return False
+
+
+class AdminAuditService:
+    """Read admin-scoped audit events from the immutable audit stream."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.audit = AuditRepository(conn)
+
+    def list_events(
+        self,
+        *,
+        event_type: str | None = None,
+        user: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Return filtered admin audit events with parsed JSON payloads."""
+        safe_limit = min(max(int(limit), 1), 500)
+        safe_offset = max(int(offset), 0)
+        events = self.audit.list_admin_events(
+            event_type=event_type or None,
+            user=user or None,
+            created_from=created_from or None,
+            created_to=created_to or None,
+            limit=safe_limit,
+            offset=safe_offset,
+        )
+        total = self.audit.count_admin_events(
+            event_type=event_type or None,
+            user=user or None,
+            created_from=created_from or None,
+            created_to=created_to or None,
+        )
+        return {
+            "events": [_audit_event_payload(event) for event in events],
+            "total": total,
+            "limit": safe_limit,
+            "offset": safe_offset,
+            "filters": {
+                "event_type": event_type,
+                "user": user,
+                "created_from": created_from,
+                "created_to": created_to,
+            },
+        }
+
+
+class AdminSummaryService:
+    """Build the admin dashboard summary from existing admin services."""
+
+    def __init__(self, config_manager: ConfigManager, conn: sqlite3.Connection) -> None:
+        self.config_manager = config_manager
+        self.conn = conn
+        self.settings = AdminSettingsService(config_manager, conn)
+        self.audit = AdminAuditService(conn)
+
+    def summary(self) -> dict[str, Any]:
+        """Return configuration, pipeline, settings, split, and audit health."""
+        config_health = self._safe_active_config_validation()
+        schema_validation = self._safe_schema_validation()
+        pipeline = PipelineConfigService(self.config_manager, self.conn).get_pipeline()
+        review_gate = self.settings.get_review_gate_rules()
+        split = self.settings.get_split_settings()
+        recent_audit = self.audit.list_events(limit=5)
+        versions = ConfigVersionRepository(self.conn).list_versions()
+
+        return {
+            "config_health": {
+                "valid": bool(config_health.get("valid", False)),
+                "summary": config_health.get("summary", {}),
+                "source": config_health.get("source"),
+            },
+            "schema_validation": {
+                "valid": bool(schema_validation.get("valid", False)),
+                "summary": _summary_for_findings(schema_validation.get("findings", [])),
+            },
+            "pipeline": {
+                "active": pipeline["active"]["summary"],
+                "draft": pipeline["draft"]["summary"] if pipeline.get("draft") else None,
+                "has_draft": bool(pipeline.get("has_draft")),
+            },
+            "review_gate": {
+                "task_key": review_gate.get("task_key"),
+                "confidence_threshold": review_gate["settings"]["confidence_threshold"],
+                "review_scope": review_gate["settings"]["review_scope"],
+                "always_review": review_gate["settings"]["always_review"],
+            },
+            "split": {
+                "enabled": bool(split["settings"].get("enabled")),
+                "categories": len(split["settings"].get("categories") or []),
+                "adapter_status": split.get("adapter_status", {}),
+            },
+            "audit": {
+                "total_admin_events": recent_audit["total"],
+                "recent_events": recent_audit["events"],
+            },
+            "config_versions": {
+                "total": len(versions),
+                "drafts": sum(1 for version in versions if version.get("status") == "draft"),
+                "published": sum(1 for version in versions if version.get("status") == "published"),
+            },
+        }
+
+    def _safe_active_config_validation(self) -> dict[str, Any]:
+        try:
+            return ConfigValidationService(self.config_manager).validate_active_config()
+        except (OSError, ValueError, TypeError) as exc:
+            return {
+                "valid": False,
+                "source": "active config",
+                "summary": {"errors": 1, "warnings": 0},
+                "findings": [
+                    {
+                        "severity": "error",
+                        "path": "config",
+                        "message": str(exc),
+                        "code": "admin-summary-config-validation-failed",
+                    }
+                ],
+            }
+
+    def _safe_schema_validation(self) -> dict[str, Any]:
+        try:
+            return ConfigValidationService(self.config_manager).validate_all_schemas()
+        except (OSError, ValueError, TypeError) as exc:
+            return {
+                "valid": False,
+                "findings": [
+                    {
+                        "severity": "error",
+                        "path": "schemas",
+                        "message": str(exc),
+                        "code": "admin-summary-schema-validation-failed",
+                    }
+                ],
+            }
+
+
+class PipelineDryRunService:
+    """Preview draft pipeline decisions without writing final exports."""
+
+    def __init__(self, config_manager: ConfigManager, conn: sqlite3.Connection) -> None:
+        self.config_manager = config_manager
+        self.conn = conn
+        self.audit = AuditService(conn)
+
+    def run(self, payload: dict[str, Any], *, user: str | None = None) -> dict[str, Any]:
+        """Run a non-mutating pipeline decision preview and audit the result."""
+        model = payload.get("model")
+        if model is not None and not isinstance(model, dict):
+            raise PipelineConfigError("Dry-run model must be an object.")
+
+        pipeline_service = PipelineConfigService(self.config_manager, self.conn)
+        overview = pipeline_service.get_pipeline()
+        selected_model = model or (
+            overview["draft"]["model"] if overview.get("draft") else overview["active"]["model"]
+        )
+        validation = pipeline_service.validate_draft(selected_model)
+        mock_results = payload.get("mock_results") if isinstance(payload.get("mock_results"), dict) else {}
+        sample = self._sample_payload(payload)
+        steps = selected_model.get("steps") if isinstance(selected_model.get("steps"), list) else []
+        result = {
+            "dry_run_id": f"dry-run-{len(steps)}-{len(mock_results)}",
+            "mode": "draft" if overview.get("draft") and model is None else "submitted",
+            "sample": sample,
+            "pipeline": {
+                "summary": PipelineConfigService._summary(selected_model),
+                "steps": [
+                    {
+                        "key": step.get("key"),
+                        "label": step.get("label"),
+                        "class": step.get("class"),
+                        "enabled": bool(step.get("enabled", True)),
+                    }
+                    for step in steps
+                    if isinstance(step, dict)
+                ],
+            },
+            "split": self._split_summary(steps, mock_results),
+            "extraction": self._extraction_summary(steps, mock_results),
+            "review_gate": self._review_gate_summary(steps, mock_results),
+            "exports": self._export_summary(steps),
+            "validation": validation,
+            "writes": {
+                "final_exports_written": False,
+                "workflow_state_written": False,
+                "audit_event_written": True,
+            },
+        }
+        event = self.audit.append_event(
+            event_type="admin_pipeline_dry_run",
+            user=user,
+            after=result,
+            metadata={
+                "request": _redact_secrets(payload),
+                "validation_summary": validation.get("summary", {}),
+                "sample": sample,
+            },
+        )
+        result["audit_event_id"] = event["id"]
+        return result
+
+    def _sample_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        document_id = str(payload.get("document_id") or "").strip()
+        if document_id:
+            document = DocumentRepository(self.conn).get(document_id)
+            if document:
+                return {
+                    "source": "document",
+                    "document_id": document["id"],
+                    "filename": document.get("original_filename"),
+                    "status": document.get("status"),
+                }
+        sample = payload.get("sample") if isinstance(payload.get("sample"), dict) else {}
+        filename = str(payload.get("sample_filename") or sample.get("filename") or "").strip()
+        return {
+            "source": "uploaded_sample" if filename else "none",
+            "filename": filename or None,
+            "size_bytes": sample.get("size_bytes"),
+        }
+
+    @staticmethod
+    def _split_summary(steps: list[Any], mock_results: dict[str, Any]) -> dict[str, Any]:
+        step = _first_step(steps, "LlamaCloudSplitTask")
+        decisions = mock_results.get("split_decisions")
+        if not isinstance(decisions, list):
+            decisions = []
+        if not step:
+            return {"status": "not_configured", "decisions": []}
+        params = step.get("params") if isinstance(step.get("params"), dict) else {}
+        enabled = bool(step.get("enabled", True)) and bool(params.get("enabled", False))
+        return {
+            "status": "would_run" if enabled else "disabled",
+            "task_key": step.get("key"),
+            "categories": params.get("categories") if isinstance(params.get("categories"), list) else [],
+            "decisions": decisions,
+        }
+
+    @staticmethod
+    def _extraction_summary(steps: list[Any], mock_results: dict[str, Any]) -> dict[str, Any]:
+        step = _first_matching_step(steps, lambda item: _is_extraction_step(item))
+        fields = mock_results.get("extraction_fields")
+        if not isinstance(fields, list):
+            fields = []
+        if not step:
+            return {"status": "not_configured", "configured_fields": [], "mock_fields": fields}
+        params = step.get("params") if isinstance(step.get("params"), dict) else {}
+        configured_fields = params.get("fields") if isinstance(params.get("fields"), dict) else {}
+        return {
+            "status": "would_extract" if step.get("enabled", True) else "disabled",
+            "task_key": step.get("key"),
+            "provider": step.get("class"),
+            "configured_fields": sorted(configured_fields),
+            "mock_fields": fields,
+            "mock_field_count": len(fields),
+        }
+
+    @staticmethod
+    def _review_gate_summary(steps: list[Any], mock_results: dict[str, Any]) -> dict[str, Any]:
+        step = _first_step(steps, "ReviewGateTask")
+        if not step:
+            return {"status": "not_configured", "review_required": False, "reasons": []}
+        params = step.get("params") if isinstance(step.get("params"), dict) else {}
+        threshold = float(params.get("confidence_threshold", 0.8))
+        fields = mock_results.get("extraction_fields")
+        fields = fields if isinstance(fields, list) else []
+        reasons: list[str] = []
+        for field in fields:
+            if not isinstance(field, dict):
+                continue
+            confidence = field.get("confidence")
+            field_key = str(field.get("field_key") or field.get("key") or "field")
+            if confidence is None and params.get("require_review_when_missing_confidence", True):
+                reasons.append(f"{field_key}: missing confidence")
+                continue
+            try:
+                if confidence is not None and float(confidence) < threshold:
+                    reasons.append(f"{field_key}: below threshold")
+            except (TypeError, ValueError):
+                reasons.append(f"{field_key}: invalid confidence")
+        explicit_required = mock_results.get("review_required")
+        review_required = bool(params.get("always_review")) or bool(reasons)
+        if explicit_required is not None:
+            review_required = bool(explicit_required)
+        return {
+            "status": "would_evaluate" if step.get("enabled", True) else "disabled",
+            "task_key": step.get("key"),
+            "confidence_threshold": threshold,
+            "review_required": review_required,
+            "reasons": reasons,
+        }
+
+    @staticmethod
+    def _export_summary(steps: list[Any]) -> dict[str, Any]:
+        export_steps = [
+            {
+                "key": step.get("key"),
+                "class": step.get("class"),
+                "status": "skipped_in_dry_run",
+            }
+            for step in steps
+            if isinstance(step, dict) and _is_export_step(step)
+        ]
+        return {"final_exports_written": False, "steps": export_steps}
 
 
 def _float_between(value: Any, field_name: str) -> float:
@@ -508,3 +973,142 @@ def _normalize_categories(value: Any) -> list[dict[str, str]]:
             raise AdminSettingsError(f"categories[{index}].name is required.")
         categories.append({"name": name, "description": description})
     return categories
+
+
+def _default_for_setting(schema: dict[str, Any]) -> Any:
+    """Return a sensible default for an editable setting schema."""
+    if "default" in schema:
+        return schema["default"]
+    setting_type = schema["type"]
+    if setting_type == "bool":
+        return False
+    if setting_type == "positive_int":
+        return 1
+    return ""
+
+
+def _get_nested(config: dict[str, Any], key_path: str, default: Any = None) -> Any:
+    """Read a dotted key path from a nested mapping."""
+    value: Any = config
+    for part in key_path.split("."):
+        if not isinstance(value, dict):
+            return default
+        value = value.get(part, default)
+    return value
+
+
+def _set_nested(config: dict[str, Any], key_path: str, value: Any) -> None:
+    """Set a dotted key path on a nested mapping."""
+    target = config
+    parts = key_path.split(".")
+    for part in parts[:-1]:
+        next_value = target.setdefault(part, {})
+        if not isinstance(next_value, dict):
+            next_value = {}
+            target[part] = next_value
+        target = next_value
+    target[parts[-1]] = value
+
+
+def _settings_groups(settings: dict[str, Any]) -> list[dict[str, Any]]:
+    """Group editable settings for the admin settings API/UI."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for key, schema in EDITABLE_SETTINGS.items():
+        group = schema["group"]
+        groups.setdefault(group, []).append(
+            {
+                "key": key,
+                "label": schema["label"],
+                "type": schema["type"],
+                "value": settings.get(key),
+            }
+        )
+    return [
+        {
+            "name": group,
+            "settings": rows,
+        }
+        for group, rows in groups.items()
+    ]
+
+
+def _audit_event_payload(row: dict[str, Any]) -> dict[str, Any]:
+    """Parse one audit row for API consumers."""
+    event = json_loads(row.get("event_json"), {})
+    if not isinstance(event, dict):
+        event = {"value": event}
+    return {
+        "id": row.get("id"),
+        "batch_id": row.get("batch_id"),
+        "document_id": row.get("document_id"),
+        "review_item_id": row.get("review_item_id"),
+        "user": row.get("user"),
+        "event_type": row.get("event_type"),
+        "created_at": row.get("created_at"),
+        "event": event,
+        "before": event.get("before"),
+        "after": event.get("after"),
+        "metadata": event.get("metadata") if isinstance(event.get("metadata"), dict) else {},
+    }
+
+
+def _summary_for_findings(findings: Any) -> dict[str, int]:
+    """Build validation summary counts from finding payloads."""
+    if not isinstance(findings, list):
+        return {"errors": 0, "warnings": 0}
+    return {
+        "errors": sum(1 for finding in findings if isinstance(finding, dict) and finding.get("severity") == "error"),
+        "warnings": sum(
+            1 for finding in findings if isinstance(finding, dict) and finding.get("severity") == "warning"
+        ),
+    }
+
+
+def _first_step(steps: list[Any], class_name: str) -> dict[str, Any] | None:
+    """Return the first step matching a class name."""
+    return _first_matching_step(steps, lambda step: step.get("class") == class_name)
+
+
+def _first_matching_step(steps: list[Any], predicate: Any) -> dict[str, Any] | None:
+    """Return the first step matching a predicate."""
+    for step in steps:
+        if isinstance(step, dict) and predicate(step):
+            return step
+    return None
+
+
+def _is_extraction_step(step: dict[str, Any]) -> bool:
+    """Return whether a pipeline step represents extraction."""
+    module_name = str(step.get("module") or "")
+    class_name = str(step.get("class") or "")
+    return ".extraction." in module_name or class_name in {"ExtractPdfTask", "ExtractPdfV2Task"}
+
+
+def _is_export_step(step: dict[str, Any]) -> bool:
+    """Return whether a pipeline step writes final output artifacts."""
+    module_name = str(step.get("module") or "")
+    class_name = str(step.get("class") or "")
+    return (
+        ".storage." in module_name
+        or ".archiver." in module_name
+        or class_name.startswith("Store")
+        or class_name.startswith("Archive")
+    )
+
+
+def _secret_key(key: str) -> bool:
+    """Return whether a key name should be treated as secret."""
+    lowered = str(key or "").lower()
+    return lowered in SECRET_KEYS or any(lowered.endswith(f"_{secret}") for secret in SECRET_KEYS)
+
+
+def _redact_secrets(value: Any) -> Any:
+    """Return a copy with secret-looking keys redacted."""
+    if isinstance(value, dict):
+        return {
+            key: "[REDACTED]" if _secret_key(str(key)) else _redact_secrets(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_secrets(item) for item in value]
+    return value

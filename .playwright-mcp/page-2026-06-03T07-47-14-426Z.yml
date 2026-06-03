@@ -1,0 +1,114 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - link "DocFlow AI" [ref=e4] [cursor=pointer]:
+      - /url: /app/upload
+      - img [ref=e6]
+      - generic [ref=e8]: DocFlow AI
+    - navigation "Primary navigation" [ref=e9]:
+      - link "Upload & Process" [ref=e10] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=e11]
+        - generic [ref=e13]: Upload & Process
+      - link "Review Queue" [ref=e14] [cursor=pointer]:
+        - /url: /app/review
+        - img [ref=e15]
+        - generic [ref=e17]: Review Queue
+      - link "Reports" [ref=e18] [cursor=pointer]:
+        - /url: /app/reports
+        - img [ref=e19]
+        - generic [ref=e21]: Reports
+      - link "Settings" [ref=e22] [cursor=pointer]:
+        - /url: /app/settings
+        - img [ref=e23]
+        - generic [ref=e26]: Settings
+    - generic [ref=e27]: Admin
+    - navigation "Admin navigation" [ref=e28]:
+      - link "Admin Home" [ref=e29] [cursor=pointer]:
+        - /url: /app/admin
+        - img [ref=e30]
+        - generic [ref=e32]: Admin Home
+      - link "Schemas" [ref=e33] [cursor=pointer]:
+        - /url: /app/schemas
+        - img [ref=e34]
+        - generic [ref=e36]: Schemas
+      - link "Validation" [ref=e37] [cursor=pointer]:
+        - /url: /app/settings/validation
+        - img [ref=e38]
+        - generic [ref=e40]: Validation
+      - link "Pipeline" [ref=e41] [cursor=pointer]:
+        - /url: /app/admin/pipeline
+        - img [ref=e42]
+        - generic [ref=e44]: Pipeline
+      - link "Tasks" [ref=e45] [cursor=pointer]:
+        - /url: /app/admin/tasks
+        - img [ref=e46]
+        - generic [ref=e48]: Tasks
+      - link "Review Gate" [ref=e49] [cursor=pointer]:
+        - /url: /app/admin/review-gate
+        - img [ref=e50]
+        - generic [ref=e52]: Review Gate
+      - link "Split Settings" [ref=e53] [cursor=pointer]:
+        - /url: /app/admin/split
+        - img [ref=e54]
+        - generic [ref=e56]: Split Settings
+      - link "Audit" [ref=e57] [cursor=pointer]:
+        - /url: /app/admin/audit
+        - img [ref=e58]
+        - generic [ref=e60]: Audit
+      - link "Dry Run" [ref=e61] [cursor=pointer]:
+        - /url: /app/admin/dry-run
+        - img [ref=e62]
+        - generic [ref=e65]: Dry Run
+    - generic [ref=e66]: Signed in as admin
+  - main [ref=e67]:
+    - generic [ref=e68]:
+      - generic [ref=e69]:
+        - heading "Admin Audit" [level=1] [ref=e70]
+        - paragraph [ref=e71]: Inspect configuration and governance events.
+      - generic [ref=e72]:
+        - button "Refresh" [ref=e73] [cursor=pointer]
+        - button "Notifications" [ref=e74] [cursor=pointer]:
+          - img [ref=e75]
+        - button "admin" [ref=e78] [cursor=pointer]
+    - generic [ref=e80]:
+      - generic [ref=e83]:
+        - generic [ref=e84]:
+          - generic [ref=e85]: Event Type
+          - textbox "Event Type" [ref=e86]:
+            - /placeholder: admin_pipeline_published
+        - generic [ref=e87]:
+          - generic [ref=e88]: User
+          - textbox "User" [ref=e89]:
+            - /placeholder: admin
+        - generic [ref=e90]:
+          - generic [ref=e91]: From
+          - textbox "From" [ref=e92]
+        - generic [ref=e93]:
+          - generic [ref=e94]: To
+          - textbox "To" [ref=e95]
+        - generic [ref=e96]:
+          - button "Apply" [ref=e97] [cursor=pointer]
+          - button "Clear" [ref=e98] [cursor=pointer]
+      - generic [ref=e99]:
+        - table [ref=e101]:
+          - rowgroup [ref=e102]:
+            - row "Time User Event Target" [ref=e103]:
+              - columnheader "Time" [ref=e104]
+              - columnheader "User" [ref=e105]
+              - columnheader "Event" [ref=e106]
+              - columnheader "Target" [ref=e107]
+              - columnheader [ref=e108]
+          - rowgroup [ref=e109]:
+            - row "01 Jun 2026, 21:14 admin admin_pipeline_validated admin Details" [ref=e110]:
+              - cell "01 Jun 2026, 21:14" [ref=e111]
+              - cell "admin" [ref=e112]
+              - cell "admin_pipeline_validated" [ref=e113]:
+                - generic [ref=e114]: admin_pipeline_validated
+              - cell "admin" [ref=e115]
+              - cell "Details" [ref=e116]:
+                - button "Details" [ref=e117] [cursor=pointer]
+        - generic [ref=e118]:
+          - generic [ref=e120]:
+            - heading "admin_pipeline_validated" [level=2] [ref=e121]
+            - paragraph [ref=e122]: admin - 01 Jun 2026, 21:14
+          - generic [ref=e124]: "{ \"id\": \"64344327-eb4e-46c2-809b-76a1db683165\", \"batch_id\": null, \"document_id\": null, \"review_item_id\": null, \"user\": \"admin\", \"event_type\": \"admin_pipeline_validated\", \"created_at\": \"2026-06-01T13:14:17.310726+00:00\", \"event\": { \"after\": { \"summary\": { \"errors\": 0, \"warnings\": 0 }, \"valid\": true }, \"before\": null, \"metadata\": { \"finding_codes\": [] } }, \"before\": null, \"after\": { \"summary\": { \"errors\": 0, \"warnings\": 0 }, \"valid\": true }, \"metadata\": { \"finding_codes\": [] } }"

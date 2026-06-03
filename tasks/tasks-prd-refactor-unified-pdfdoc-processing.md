@@ -355,18 +355,18 @@ C:\Python313\python.exe -m pytest -v
   - [x] 23.6 Link validation page from settings and the admin navigation group.
   - [x] 23.7 Add UI/API validation smoke tests.
 
-- [ ] 24.0 Build Admin Dashboard, Audit, Settings, and Dry Run
+- [x] 24.0 Build Admin Dashboard, Audit, Settings, and Dry Run
   - Acceptance: Admin has a configuration-health home page, auditable configuration changes, editable non-secret settings, and a sample-pipeline dry run.
-  - [ ] 24.1 Build `admin_dashboard.html` and `admin.js`.
-  - [ ] 24.2 Add `GET /api/admin/summary`.
-  - [ ] 24.3 Create `modules/services/admin_settings_service.py`.
-  - [ ] 24.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
-  - [ ] 24.5 Build `admin_audit.html` and `admin_audit.js`.
-  - [ ] 24.6 Add `GET /api/admin/audit`.
-  - [ ] 24.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
-  - [ ] 24.8 Add `POST /api/admin/dry-run`.
-  - [ ] 24.9 Add `test/services/test_admin_settings_service.py`.
-  - [ ] 24.10 Add `test/integration/test_pipeline_dry_run.py`.
+  - [x] 24.1 Build `admin_dashboard.html` and `admin.js`.
+  - [x] 24.2 Add `GET /api/admin/summary`.
+  - [x] 24.3 Create `modules/services/admin_settings_service.py`.
+  - [x] 24.4 Add `GET /api/admin/settings` and `PUT /api/admin/settings`.
+  - [x] 24.5 Build `admin_audit.html` and `admin_audit.js`.
+  - [x] 24.6 Add `GET /api/admin/audit`.
+  - [x] 24.7 Build `pipeline_dry_run.html` and `pipeline_dry_run.js`.
+  - [x] 24.8 Add `POST /api/admin/dry-run`.
+  - [x] 24.9 Add `test/services/test_admin_settings_service.py`.
+  - [x] 24.10 Add `test/integration/test_pipeline_dry_run.py`.
 
 - [ ] 25.0 Build Reports and Operator Settings pages
   - Acceptance: Operator/admin can inspect basic reports and current non-secret runtime settings through the new UI.
