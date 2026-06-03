@@ -1,21 +1,148 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="reports-refresh-button" type="button">Refresh</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <div class="page-grid grid-cols-1 md:grid-cols-3">
+<div class="app-workspace" id="reports-workspace">
+    <div class="page-grid reports-summary-grid">
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Processed</div>
-            <div class="stat-value text-2xl">0</div>
+            <div class="stat-title">Batches</div>
+            <div class="stat-value text-2xl" id="reports-total-batches">0</div>
+            <div class="stat-desc">All ingestion sources</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Reviewed</div>
-            <div class="stat-value text-2xl">0</div>
+            <div class="stat-title">Documents</div>
+            <div class="stat-value text-2xl" id="reports-total-documents">0</div>
+            <div class="stat-desc">SQLite document records</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Completed</div>
+            <div class="stat-value text-2xl text-success" id="reports-completed-documents">0</div>
+            <div class="stat-desc">Completed documents</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Failed</div>
-            <div class="stat-value text-2xl text-error">0</div>
+            <div class="stat-value text-2xl text-error" id="reports-failed-documents">0</div>
+            <div class="stat-desc">Failed documents</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Reviewed</div>
+            <div class="stat-value text-2xl" id="reports-reviewed-documents">0</div>
+            <div class="stat-desc">Documents with completed review</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Avg Time</div>
+            <div class="stat-value text-2xl" id="reports-average-processing">n/a</div>
+            <div class="stat-desc">Task-run span</div>
         </div>
     </div>
-    <div class="empty-panel">No report data</div>
+
+    <div class="reports-layout">
+        <section class="card bg-base-100 shadow-sm reports-status-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Document Status</h2>
+                    <p class="text-xs text-base-content/50">Current persisted state</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th class="text-right">Documents</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-status-body">
+                        <tr>
+                            <td colspan="2" class="text-center text-base-content/50 py-10">Loading status data</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm reports-source-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Batch Sources</h2>
+                    <p class="text-xs text-base-content/50">Upload and watch-folder volume</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th class="text-right">Batches</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-source-body">
+                        <tr>
+                            <td colspan="2" class="text-center text-base-content/50 py-10">Loading source data</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm reports-review-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Review Queue</h2>
+                    <p class="text-xs text-base-content/50" id="reports-review-total">0 review items</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th class="text-right">Items</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-review-body">
+                        <tr>
+                            <td colspan="2" class="text-center text-base-content/50 py-10">Loading review data</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm reports-recent-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Recent Batches</h2>
+                    <p class="text-xs text-base-content/50">Latest persisted batch records</p>
+                </div>
+                <a class="btn btn-outline btn-sm" href="/app/processing">Processing</a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm reports-recent-table">
+                    <thead>
+                        <tr>
+                            <th>Created</th>
+                            <th>Source</th>
+                            <th>Batch</th>
+                            <th>Status</th>
+                            <th class="text-right">Progress</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-recent-body">
+                        <tr>
+                            <td colspan="5" class="text-center text-base-content/50 py-10">Loading recent batches</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/reports.js?v=task25" defer></script>
 {% endblock %}

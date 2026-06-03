@@ -693,6 +693,85 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.reports-summary-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.reports-layout {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-areas:
+        "status source review"
+        "recent recent recent";
+    gap: 1rem;
+    align-items: start;
+}
+
+.reports-status-panel {
+    grid-area: status;
+}
+
+.reports-source-panel {
+    grid-area: source;
+}
+
+.reports-review-panel {
+    grid-area: review;
+}
+
+.reports-recent-panel {
+    grid-area: recent;
+}
+
+.reports-recent-table {
+    min-width: 46rem;
+}
+
+.settings-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.settings-layout {
+    display: grid;
+    grid-template-columns: minmax(24rem, 0.75fr) minmax(24rem, 0.75fr);
+    grid-template-areas:
+        "paths review"
+        "pipeline pipeline"
+        "links links";
+    gap: 1rem;
+    align-items: start;
+}
+
+.settings-paths-panel {
+    grid-area: paths;
+}
+
+.settings-review-panel {
+    grid-area: review;
+}
+
+.settings-pipeline-panel {
+    grid-area: pipeline;
+}
+
+.settings-links-panel {
+    grid-area: links;
+}
+
+.settings-table {
+    min-width: 34rem;
+}
+
+.settings-pipeline-table {
+    min-width: 58rem;
+}
+
+.settings-link-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
 .status-dot {
     width: 0.5rem;
     height: 0.5rem;
@@ -970,13 +1049,17 @@
 
     .admin-summary-grid,
     .admin-settings-grid,
-    .dry-run-summary-grid {
+    .dry-run-summary-grid,
+    .reports-summary-grid,
+    .settings-summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .admin-dashboard-grid,
     .admin-audit-layout,
-    .pipeline-dry-run-layout {
+    .pipeline-dry-run-layout,
+    .reports-layout,
+    .settings-layout {
         grid-template-columns: 1fr;
         grid-template-areas: none;
     }
@@ -986,7 +1069,15 @@
     .admin-settings-panel,
     .dry-run-controls-panel,
     .dry-run-results-panel,
-    .dry-run-json-panel {
+    .dry-run-json-panel,
+    .reports-status-panel,
+    .reports-source-panel,
+    .reports-review-panel,
+    .reports-recent-panel,
+    .settings-paths-panel,
+    .settings-review-panel,
+    .settings-pipeline-panel,
+    .settings-links-panel {
         grid-area: auto;
     }
 

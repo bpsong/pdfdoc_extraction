@@ -62,7 +62,9 @@ from .services.audit_service import AuditService
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
+from .services.reports_service import ReportsService
 from .services.review_service import ReviewService, ReviewServiceError
+from .services.runtime_settings_service import RuntimeSettingsService
 from .services.schema_service import SchemaService
 from .services.task_catalog_service import TaskCatalogService
 from .resume_manager import ResumeManager
@@ -847,6 +849,19 @@ def build_router() -> APIRouter:
             return ConfigValidationService(config).validate_pipeline(payload)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    @router.get("/api/reports/summary")
+    def get_reports_summary(user: str = Depends(get_current_user)):
+        """Return SQLite-backed processing report summary metrics."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return ReportsService(conn).summary()
+
+    @router.get("/api/settings")
+    def get_runtime_settings(user: str = Depends(get_current_user)):
+        """Return read-only non-secret runtime settings."""
+        config, _, _, _, _ = get_dependencies()
+        return RuntimeSettingsService(config).settings()
 
     @router.get("/api/admin/task-catalog")
     def get_admin_task_catalog(user: str = Depends(get_current_user)):

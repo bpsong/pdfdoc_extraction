@@ -368,11 +368,11 @@ C:\Python313\python.exe -m pytest -v
   - [x] 24.9 Add `test/services/test_admin_settings_service.py`.
   - [x] 24.10 Add `test/integration/test_pipeline_dry_run.py`.
 
-- [ ] 25.0 Build Reports and Operator Settings pages
+- [x] 25.0 Build Reports and Operator Settings pages
   - Acceptance: Operator/admin can inspect basic reports and current non-secret runtime settings through the new UI.
-  - [ ] 25.1 Build `reports.html` and `GET /api/reports/summary`.
-  - [ ] 25.2 Build `settings.html` and `GET /api/settings`.
-  - [ ] 25.3 Add tests for non-secret settings output.
+  - [x] 25.1 Build `reports.html` and `GET /api/reports/summary`.
+  - [x] 25.2 Build `settings.html` and `GET /api/settings`.
+  - [x] 25.3 Add tests for non-secret settings output.
 
 - [ ] 26.0 Migration cleanup and documentation
   - Acceptance: New SQLite-backed UI/API is primary, all configured workflow-step state is read from and written to SQLite, intermediate text status files are not required to maintain workflow state, remaining file outputs are documented business artifacts only, and full suite passes.

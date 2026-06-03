@@ -1,32 +1,126 @@
 {% extends "app_base.html" %}
 
+{% block header_actions %}
+<button class="btn btn-outline btn-sm" id="settings-refresh-button" type="button">Refresh</button>
+{% endblock %}
+
 {% block content %}
-<div class="app-workspace">
-    <section class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            <h2 class="font-semibold">Runtime Settings</h2>
-            <div class="app-table-region">
-                <table class="table table-sm">
-                    <tbody>
+<div class="app-workspace" id="settings-workspace" data-is-admin="{{ 'true' if is_admin|default(false) else 'false' }}">
+    <div class="page-grid settings-summary-grid">
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Application</div>
+            <div class="stat-value text-2xl" id="settings-app-name">-</div>
+            <div class="stat-desc" id="settings-page-size">Page size</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Pipeline Steps</div>
+            <div class="stat-value text-2xl" id="settings-pipeline-count">0</div>
+            <div class="stat-desc">Configured execution order</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Review Lock</div>
+            <div class="stat-value text-2xl" id="settings-review-lock">-</div>
+            <div class="stat-desc" id="settings-review-queue">Default queue</div>
+        </div>
+        <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
+            <div class="stat-title">Split</div>
+            <div class="stat-value text-2xl" id="settings-split-state">Disabled</div>
+            <div class="stat-desc" id="settings-split-detail">No split task</div>
+        </div>
+    </div>
+
+    <div class="settings-layout">
+        <section class="card bg-base-100 shadow-sm settings-paths-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Runtime Paths</h2>
+                    <p class="text-xs text-base-content/50">Non-secret storage and processing locations</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm settings-table">
+                    <tbody id="settings-paths-body">
                         <tr>
-                            <th>Application</th>
-                            <td>{{ app_name|default('DocFlow AI') }}</td>
-                        </tr>
-                        <tr>
-                            <th>Role</th>
-                            <td>{{ user_role|default('operator') }}</td>
+                            <td colspan="2" class="text-center text-base-content/50 py-10">Loading paths</td>
                         </tr>
                     </tbody>
                 </table>
             </div>
-            {% if is_admin|default(false) %}
-            <div class="flex gap-2 flex-wrap">
+        </section>
+
+        <section class="card bg-base-100 shadow-sm settings-review-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Review Gate</h2>
+                    <p class="text-xs text-base-content/50">Thresholds and review behavior</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm settings-table">
+                    <tbody id="settings-review-body">
+                        <tr>
+                            <td colspan="2" class="text-center text-base-content/50 py-10">Loading review settings</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm settings-pipeline-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Pipeline</h2>
+                    <p class="text-xs text-base-content/50">Configured task order and redacted params</p>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm settings-pipeline-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Task</th>
+                            <th>Class</th>
+                            <th>Module</th>
+                            <th>On Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="settings-pipeline-body">
+                        <tr>
+                            <td colspan="5" class="text-center text-base-content/50 py-10">Loading pipeline</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card bg-base-100 shadow-sm settings-links-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Related Pages</h2>
+                    <p class="text-xs text-base-content/50">Configuration and operations shortcuts</p>
+                </div>
+            </div>
+            <div class="card-body p-4 settings-link-grid">
+                <a class="btn btn-outline btn-sm" href="/app/reports">Reports</a>
+                <a class="btn btn-outline btn-sm" href="/app/review">Review Queue</a>
+                <a class="btn btn-outline btn-sm" href="/app/upload">Upload</a>
+                {% if is_admin|default(false) %}
                 <a class="btn btn-outline btn-sm" href="/app/schemas">Schemas</a>
                 <a class="btn btn-outline btn-sm" href="/app/settings/validation">Validation</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin">Admin Home</a>
                 <a class="btn btn-outline btn-sm" href="/app/admin/pipeline">Pipeline</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/tasks">Tasks</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/review-gate">Review Gate</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/split">Split Settings</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/audit">Audit</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/dry-run">Dry Run</a>
+                {% endif %}
             </div>
-            {% endif %}
-        </div>
-    </section>
+        </section>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/settings.js?v=task25" defer></script>
 {% endblock %}

@@ -222,6 +222,28 @@ def test_review_gate_and_split_pages_include_task_22_assets(monkeypatch) -> None
     assert "/static/js/split_settings.js" in split_settings.text
 
 
+def test_reports_page_includes_task_25_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/reports")
+
+    assert response.status_code == 200
+    assert 'id="reports-workspace"' in response.text
+    assert "/static/js/reports.js" in response.text
+
+
+def test_settings_page_includes_task_25_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/settings")
+
+    assert response.status_code == 200
+    assert 'id="settings-workspace"' in response.text
+    assert "/static/js/settings.js" in response.text
+
+
 def test_admin_dashboard_audit_and_dry_run_pages_include_task_24_assets(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
