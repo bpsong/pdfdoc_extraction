@@ -34,7 +34,7 @@ Suggestion: Create the directory or update the path in config
 ```
 
 **Fixes**
-- Run `config-check validate --format json` to get precise line/column hints.
+- Run `config-check validate --config config.yaml --format json` to get precise line/column hints.
 - Verify indentation is two spaces and that all quoted strings are terminated.
 - For large files, validate subsets by commenting blocks with `#` until the offending section is isolated.
 
@@ -152,7 +152,7 @@ Suggestion: Create the directory or update the path in config
 - Confirm `tasks.<name>.module` points at `standard_step.housekeeping.cleanup_task` (or a compatible custom implementation).
 - The `processing_dir` parameter is optional but when provided must be:
   - A non-empty string value.
-  - A valid directory path where status files are written.
+  - A valid directory path where temporary processing files are cleaned up. Workflow state is stored in SQLite, not status files.
 - If not provided, the task defaults to using `'processing'` as the directory name.
 - Ensure the directory exists and the service account has read/write permissions.
 

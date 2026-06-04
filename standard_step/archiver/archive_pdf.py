@@ -8,7 +8,8 @@ workflow configuration.
 
 Notes:
     - Reads configuration via ConfigManager for the 'archive_dir' setting.
-    - Updates processing status via StatusManager on start/success/failure.
+    - Registers the archived copy as a ``source_archive`` document artifact
+      when SQLite document context is available.
     - Performs filesystem copy operations and may create a new unique filename.
     - No behavioral changes should be introduced by documentation updates.
 """
@@ -20,6 +21,7 @@ from pathlib import Path
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
+from modules.services.artifact_service import register_document_artifact
 from modules.utils import windows_long_path, sanitize_filename, generate_unique_filepath, retry_io
 
 
@@ -30,7 +32,7 @@ class ArchivePdfTask(BaseTask):
         - Validate that an archive directory is provided and exists.
         - Copy the original file to the archive directory using a sanitized,
           uniqueness-safe filename.
-        - Record start/success/failure states via StatusManager.
+        - Register the archived copy in SQLite when document context exists.
 
     Integration:
         This class is a standard step in the pipeline and uses BaseTask
@@ -42,8 +44,8 @@ class ArchivePdfTask(BaseTask):
             'archive_dir' for destination directory.
 
     Notes:
-        - Side effects include filesystem writes (copy) and status updates via
-          StatusManager.
+        - Side effects include filesystem writes (copy) and SQLite artifact
+          registration.
         - Errors are reported as TaskError and registered into the task context.
     """
 
@@ -99,24 +101,13 @@ class ArchivePdfTask(BaseTask):
     def on_start(self, context: dict):
         """Lifecycle hook invoked when the task starts.
 
-        This logs the start and updates StatusManager with a 'started' state.
+        This logs the start.
 
         Args:
             context (dict): The pipeline context dictionary.
 
-        Notes:
-            Attempts to update StatusManager but intentionally does not fail
-            the task if status updates cause exceptions.
         """
         self.logger.info(f"Starting ArchivePdfTask with archive_dir: {self.archive_dir}")
-        # Unified timestamp convention
-        try:
-            unique_id = str(context.get("id", "unknown"))
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(unique_id, "started", step="Task Started: archive_pdf")
-        except Exception:
-            # Avoid failing start on status write issues
-            pass
 
     @retry_io(max_attempts=3, delay=0.5)
     def _copy_file(self, src: str, dst: str):
@@ -137,8 +128,8 @@ class ArchivePdfTask(BaseTask):
 
         Expects 'file_path' and 'original_filename' in the context. The file is
         copied to the archive directory with a sanitized, unique filename.
-        StatusManager is updated on success/failure, and any error is recorded
-        into the context via BaseTask.register_error.
+        The archived file is registered in SQLite when document context exists,
+        and any error is recorded into the context via BaseTask.register_error.
 
         Args:
             context (dict): Pipeline context. Must contain:
@@ -154,7 +145,7 @@ class ArchivePdfTask(BaseTask):
             TaskError: If required context keys are missing or validation fails.
 
         Notes:
-            - Side effects: filesystem copy, status updates via StatusManager.
+            - Side effects: filesystem copy and SQLite artifact registration.
             - Paths are normalized to Windows long path format.
         """
         self.initialize_context(context)
@@ -188,30 +179,20 @@ class ArchivePdfTask(BaseTask):
             context.setdefault("data", {})
             context["data"]["archive_status"] = f"File archived successfully to {dst_path}"
             self.logger.info(f"File archived successfully to {dst_path}")
-            # Unified timestamp convention (success)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(context.get("id")), "success", step="Task Completed: archive_pdf")
-            except Exception:
-                pass
+            context["archive_path"] = dst_path
+            register_document_artifact(
+                self.config_manager,
+                context,
+                file_type="source_archive",
+                file_path=dst_path,
+                metadata={"task_slug": "archive_pdf", "original_filename": original_filename},
+            )
 
         except TaskError as e:
             self.logger.error(f"TaskError in ArchivePdfTask: {e}")
-            # Unified timestamp convention (failure)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(context.get("id")), "failed", step="Task Failed: archive_pdf", error=str(e))
-            except Exception:
-                pass
             self.register_error(context, e)
         except Exception as e:
             self.logger.error(f"Unexpected error in ArchivePdfTask: {e}", exc_info=True)
-            # Unified timestamp convention (failure)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(context.get("id")), "failed", step="Task Failed: archive_pdf", error=str(e))
-            except Exception:
-                pass
             self.register_error(context, TaskError(f"Unexpected error: {e}"))
 
         return context

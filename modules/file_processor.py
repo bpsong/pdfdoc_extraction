@@ -4,10 +4,10 @@ This module is responsible for:
   - Receiving and storing web uploads into a configured upload directory.
   - Optionally validating PDF headers using a minimal magic-bytes check.
   - Generating a UUID and renaming/moving files into the processing directory.
-  - Creating a UUID-based filename and creating initial status records via StatusManager.
+  - Creating a UUID-based filename and SQLite ingestion records when available.
   - Triggering downstream processing through WorkflowManager.
 
-It does not change files' content; it orchestrates placement, metadata/status creation,
+It does not change files' content; it orchestrates placement, metadata creation,
 and workflow initiation based on configuration.
 """
 
@@ -19,7 +19,6 @@ from pathlib import Path
 
 from modules.config_manager import ConfigManager
 from modules.workflow_manager import WorkflowManager
-from modules.status_manager import StatusManager
 from modules.utils import windows_long_path, is_pdf_header
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
@@ -44,7 +43,7 @@ class FileProcessor:
        1) Accept upload and write it into web.upload_dir.
        2) Optionally validate that the file is a PDF by checking the '%PDF-' header.
        3) Generate a UUID, rename the file to <uuid>.pdf, and move it to processing_dir.
-       4) Create an initial status entry for tracking.
+       4) Create initial SQLite batch/document records when available.
        5) Trigger the workflow via WorkflowManager.
 
     Performance Considerations:
@@ -64,7 +63,6 @@ class FileProcessor:
             workflow_manager (WorkflowManager): Manager used to trigger workflows.
 
         Notes:
-            - Initializes a StatusManager instance for status lifecycle handling.
             - Ensures the processing directory exists (creates it if missing).
             - Ensures the web upload directory exists when configured.
             - Emits informational logs when directories are created.
@@ -76,7 +74,6 @@ class FileProcessor:
         self.retry_operation_func = retry_operation_func
         self.workflow_manager = workflow_manager
         self.processing_folder_path = str(self.config_manager.get('watch_folder.processing_dir', 'processing_folder'))
-        self.status_manager = StatusManager(self.config_manager)  # Initialize StatusManager
         if not self.processing_folder_path:
             raise ValueError("Processing folder directory not specified in config.yaml or is empty.")
         
@@ -137,7 +134,7 @@ class FileProcessor:
           2) Optionally validate PDF header depending on configuration.
           3) Generate a UUID and rename to '<uuid>.pdf'.
           4) Move the file into the processing directory.
-          5) Create status and trigger the workflow via process_file.
+          5) Create SQLite state and trigger the workflow via process_file.
 
         Args:
             upload_file: A Starlette/FastAPI UploadFile instance or a file-like/bytes-like object.
@@ -244,7 +241,6 @@ class FileProcessor:
             bool: True if status creation and workflow trigger were initiated successfully.
 
         Notes:
-            - Creates an initial status entry via StatusManager.
             - Triggers the configured workflow via WorkflowManager.
             - Emits info/debug logs to trace processing.
         """
@@ -253,16 +249,6 @@ class FileProcessor:
         destination_path = filepath  # File is already renamed and placed correctly
 
         logger.info(f"Processing file {filepath} with UUID {unique_id}")
-
-        # Create initial status record
-        logger.debug(f"FileProcessor.process_file - unique_id: {unique_id}, filepath: {filepath}")
-        self.status_manager.create_status(
-            unique_id=unique_id,
-            original_filename=filename,
-            source=source,
-            file_path=destination_path
-        )
-        logger.info(f"Created pending status record for {filename} with ID {unique_id}")
 
         if create_sqlite_state and not (batch_id and document_id):
             batch_id, document_id = self._create_sqlite_ingestion_state(

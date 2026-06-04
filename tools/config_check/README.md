@@ -34,6 +34,17 @@ config-check schema --format json
 
 All commands are also available by invoking the module directly (`C:\Python313\python.exe -m tools.config_check ...`).
 
+## UI Validation
+
+The unified web app wraps the same validation logic for operator/admin views:
+
+- `/app/settings/validation` shows configuration, schema, and pipeline findings in the UI.
+- `GET /api/config/validation` returns validation status for the current runtime configuration.
+- `POST /api/config/validation` runs validation with request-provided options.
+- Admin pipeline and schema pages call validation APIs before publishing configuration changes.
+
+Use the CLI for pre-deployment checks and automation. Use the UI when an operator or administrator needs to inspect the active runtime configuration from the running application.
+
 ## Output Formats
 
 - **text** (default) - Human readable groups of errors, warnings, and info messages.
@@ -93,7 +104,7 @@ watch_folder:
 Use the `--import-checks` flag to verify that task modules and classes can be imported:
 
 ```powershell
-config-check validate --import-checks config.yaml
+config-check validate --config config.yaml --import-checks
 ```
 
 This validates:
@@ -105,13 +116,13 @@ This validates:
 
 ```powershell
 # Basic validation without import checks
-config-check validate config.yaml
+config-check validate --config config.yaml
 
 # Full validation including import verification
-config-check validate --import-checks config.yaml
+config-check validate --config config.yaml --import-checks
 
 # Import validation with JSON output for automation
-config-check validate --import-checks --format json config.yaml
+config-check validate --config config.yaml --import-checks --format json
 ```
 
 ### Import Error Types
@@ -131,10 +142,10 @@ Validates that reference CSV files can be opened and parsed:
 
 ```powershell
 # Basic validation (structural checks only)
-config-check validate config.yaml
+config-check validate --config config.yaml
 
 # Full validation including CSV file checks
-config-check validate --check-files config.yaml
+config-check validate --config config.yaml --check-files
 ```
 
 **Validation checks:**
@@ -326,7 +337,7 @@ Analyzes extraction tasks for performance impact based on field count and comple
 
 ```powershell
 # Enable performance analysis
-config-check validate --performance-analysis config.yaml
+config-check validate --config config.yaml --performance-analysis
 ```
 
 **Performance thresholds:**
@@ -356,16 +367,16 @@ Assesses overall pipeline performance characteristics:
 
 ```powershell
 # Basic validation without performance analysis
-config-check validate config.yaml
+config-check validate --config config.yaml
 
 # Performance analysis with text output
-config-check validate --performance-analysis config.yaml
+config-check validate --config config.yaml --performance-analysis
 
 # Performance analysis with JSON output for automation
-config-check validate --performance-analysis --format json config.yaml
+config-check validate --config config.yaml --performance-analysis --format json
 
 # Combined analysis with other validation modes
-config-check validate --performance-analysis --import-checks --check-files config.yaml
+config-check validate --config config.yaml --performance-analysis --import-checks --check-files
 ```
 
 ### Performance Issue Types
@@ -455,7 +466,7 @@ Identifies dangerous path patterns that could lead to path traversal attacks:
 
 ```powershell
 # Enable security analysis
-config-check validate --security-analysis config.yaml
+config-check validate --config config.yaml --security-analysis
 ```
 
 **Dangerous patterns detected:**
@@ -487,16 +498,16 @@ Validates directory configurations for security issues:
 
 ```powershell
 # Basic validation without security analysis
-config-check validate config.yaml
+config-check validate --config config.yaml
 
 # Security analysis with text output
-config-check validate --security-analysis config.yaml
+config-check validate --config config.yaml --security-analysis
 
 # Security analysis with JSON output for automation
-config-check validate --security-analysis --format json config.yaml
+config-check validate --config config.yaml --security-analysis --format json
 
 # Combined security and performance analysis
-config-check validate --security-analysis --performance-analysis config.yaml
+config-check validate --config config.yaml --security-analysis --performance-analysis
 ```
 
 ### Security Issue Types
@@ -606,7 +617,7 @@ Verifies that all referenced files exist and are accessible:
 
 ```powershell
 # Enable runtime file validation
-config-check validate --check-files config.yaml
+config-check validate --config config.yaml --check-files
 ```
 
 **Validation checks:**
@@ -633,13 +644,13 @@ config-check validate --check-files config.yaml
 
 ```powershell
 # Basic structural validation (fast)
-config-check validate config.yaml
+config-check validate --config config.yaml
 
 # Full validation including file system checks (slower)
-config-check validate --check-files config.yaml
+config-check validate --config config.yaml --check-files
 
 # Runtime validation with JSON output
-config-check validate --check-files --format json config.yaml
+config-check validate --config config.yaml --check-files --format json
 ```
 
 ### Runtime File Error Codes

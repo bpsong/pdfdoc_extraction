@@ -169,11 +169,11 @@ from_context: "supplier_name"
 ### Command Line Usage
 ```powershell
 # Get detailed error information
-config-check validate --format json config.yaml
+config-check validate --config config.yaml --format json
 
 # Filter by error severity
-config-check validate config.yaml | findstr "ERROR"
-config-check validate config.yaml | findstr "WARNING"
+config-check validate --config config.yaml | findstr "ERROR"
+config-check validate --config config.yaml | findstr "WARNING"
 ```
 
 ### JSON Output Format
@@ -199,7 +199,7 @@ Use error codes in CI/CD pipelines to handle different validation outcomes:
 
 ```powershell
 # PowerShell example
-$result = config-check validate --format json config.yaml
+$result = config-check validate --config config.yaml --format json
 $json = $result | ConvertFrom-Json
 
 foreach ($finding in $json.findings) {

@@ -1,5 +1,7 @@
 # Product Requirements Document: Redesigned PDF Document Processing System
 
+> Historical note: this PRD is superseded by `tasks/prd-refactor-unified-pdfdoc-processing.md` and `tasks/design-refactor-unified-pdfdoc-processing.md`. It describes the earlier dynamic pipeline/status-file redesign and is retained only for implementation history.
+
 ## 1. Overview
 
 This document outlines the product features for a redesigned PDF document processing system. The core idea is to move from a monolithic `ProcessingPipeline` to a **dynamic**, **YAML-driven** Prefect flow orchestrated by a comprehensive `main.py` application. This new architecture will allow for highly configurable and extensible workflows, supporting various input sources and output destinations.

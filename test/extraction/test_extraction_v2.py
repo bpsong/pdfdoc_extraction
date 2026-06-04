@@ -4,7 +4,6 @@ import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from modules.config_manager import ConfigManager
-from modules.status_manager import StatusManager
 from modules.exceptions import TaskError
 from standard_step.extraction.extract_pdf_v2 import ExtractPdfV2Task
 from typing import Dict, Any, List
@@ -12,24 +11,6 @@ from typing import Dict, Any, List
 # Test configuration
 TEST_DIR = Path(__file__).parent
 SAMPLE_PDF_SOURCE = TEST_DIR / "test_extraction.py"  # Use existing test file as mock PDF
-
-# Mock StatusManager for testing
-class MockStatusManager:
-    _instance = None
-    status_updates = []
-
-    def __new__(cls, config_manager=None):
-        if cls._instance is None:
-            cls._instance = super(MockStatusManager, cls).__new__(cls)
-            cls._instance._init(config_manager)
-        return cls._instance
-
-    def _init(self, config_manager):
-        self.config_manager = config_manager
-
-    def update_status(self, unique_id, status, step=None, error=None, details=None):
-        MockStatusManager.status_updates.append((unique_id, status, step, error, details))
-
 
 class TestExtractPdfV2Task:
     """Comprehensive test suite for ExtractPdfV2Task."""
@@ -80,13 +61,6 @@ class TestExtractPdfV2Task:
 
         self.config_manager = MagicMock()
         self.config_manager.get.side_effect = mock_get
-
-        # Patch StatusManager
-        monkeypatch.setattr("modules.status_manager.StatusManager", MockStatusManager)
-        monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.StatusManager", MockStatusManager)
-
-        # Clear status updates
-        MockStatusManager.status_updates = []
 
         yield
 
@@ -156,11 +130,6 @@ class TestExtractPdfV2Task:
         assert "metadata" in result_context
         assert result_context["metadata"]["extraction_configuration_id"] == "test_configuration_id"
         assert result_context["metadata"]["extraction_metadata"] == sample_response.extraction_metadata
-
-        # Test status updates
-        status_updates = MockStatusManager.status_updates
-        assert any("Task Started: extract_document_data" in update[1] for update in status_updates)
-        assert any("Task Completed: extract_document_data" in update[1] for update in status_updates)
 
         # Test no error in context
         assert result_context.get("error") is None
@@ -277,11 +246,8 @@ class TestExtractPdfV2Task:
         # Verify the error message
         assert "File path not provided" in str(exc_info.value)
 
-        # Test status update with error
-        status_updates = MockStatusManager.status_updates
-        error_updates = [update for update in status_updates if update[3]]  # Updates with error
-        assert len(error_updates) > 0
-        assert "Task Failed: extract_document_data" in error_updates[-1][1]
+        assert context["error"] == "TaskError: File path not provided in context"
+        assert context["error_step"] == "ExtractPdfV2Task"
 
     def test_api_failure(self, monkeypatch):
         """Test error handling when LlamaCloud API fails."""
@@ -302,11 +268,7 @@ class TestExtractPdfV2Task:
         assert "error" in context
         assert "API connection failed" in str(context["error"])
 
-        # Test status error update
-        status_updates = MockStatusManager.status_updates
-        error_updates = [update for update in status_updates if update[3]]
-        assert len(error_updates) > 0
-        assert "Task Failed: extract_document_data" in error_updates[-1][1]
+        assert context["error_step"] == "ExtractPdfV2Task"
 
     def test_type_conversion(self, monkeypatch):
         """Test type conversion for different field types."""

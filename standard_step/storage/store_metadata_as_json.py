@@ -7,7 +7,8 @@ template and uniqueness is ensured before writing.
 
 Notes:
     - Reads 'data_dir' and 'filename' from task params (required).
-    - Uses StatusManager for standardized start/success/failure updates.
+    - Registers the generated JSON as an ``export_json`` document artifact when
+      SQLite document context is available.
     - Performs filesystem writes and guarantees a unique output path.
 """
 
@@ -19,6 +20,7 @@ from modules.utils import sanitize_filename, generate_unique_filepath, preproces
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
+from modules.services.artifact_service import register_document_artifact
 import logging
 from modules.utils import windows_long_path
 
@@ -32,15 +34,15 @@ class StoreMetadataAsJson(BaseTask):
         - Generate a unique filename from a template and write JSON output.
 
     Integration:
-        Uses BaseTask params for configuration and StatusManager for progress
-        reporting. Expects extracted data in context['data'].
+        Uses BaseTask params for configuration. Expects extracted data in
+        context['data'].
 
     Args:
         config_manager (ConfigManager): Project configuration manager.
         **params: Must include 'data_dir' (str) and 'filename' (str).
 
     Notes:
-        - Side effects: Filesystem write and status updates.
+        - Side effects: Filesystem write and SQLite artifact registration.
         - Errors are reported as TaskError and logged.
     """
 
@@ -88,21 +90,12 @@ class StoreMetadataAsJson(BaseTask):
     def on_start(self, context: Dict[str, Any]) -> None:
         """Lifecycle hook executed when the task starts.
 
-        Initializes context and marks the task as started in StatusManager.
+        Initializes context.
 
         Args:
             context (Dict[str, Any]): The pipeline context.
         """
-        # Initialize context keys
         self.initialize_context(context)
-        # Unified timestamp convention
-        try:
-            unique_id = str(context.get("id", "unknown"))
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(unique_id, "Task Started: store_metadata_json", step="Task Started: store_metadata_json")
-        except Exception:
-            # Avoid failing start on status write issues
-            pass
 
     def validate_required_fields(self, context: Dict[str, Any]):
         """Validate required parameters.
@@ -137,7 +130,7 @@ class StoreMetadataAsJson(BaseTask):
             TaskError: If extracted data is missing/unsupported or writing fails.
 
         Notes:
-            - Side effects: Filesystem write and status updates via StatusManager.
+            - Side effects: Filesystem write and SQLite artifact registration.
         """
         extracted_data = context.get("data")  # Use "data" as per PRD
         unique_id = context.get("id")
@@ -153,13 +146,6 @@ class StoreMetadataAsJson(BaseTask):
             raise TaskError("Filename template is not set after validation.")
         if self.data_dir is None:
             raise TaskError("Data directory is not set after validation.")
-
-        # Update status: preparing to write JSON
-        try:
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(str(unique_id), "Preparing to write JSON", step="Preparing to write JSON")
-        except Exception:
-            pass
 
         # Generate filename from template and extracted data
         try:
@@ -182,13 +168,6 @@ class StoreMetadataAsJson(BaseTask):
         # Generate unique filepath
         output_path = generate_unique_filepath(self.data_dir, os.path.splitext(base_filename)[0], ".json")
 
-        # Update status: writing JSON file
-        try:
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(str(unique_id), "Writing JSON file", step="Writing JSON file")
-        except Exception:
-            pass
-
         try:
             # Transform keys to aliases
             processed_json_data = {}
@@ -206,19 +185,15 @@ class StoreMetadataAsJson(BaseTask):
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(processed_json_data, f, indent=4)
             self.logger.info(f"Metadata for {unique_id} stored as JSON at {output_path}")
-            # Unified timestamp convention (success)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(unique_id), "Task Completed: store_metadata_json", step="Task Completed: store_metadata_json")
-            except Exception:
-                pass
+            context["output_path"] = str(output_path)
+            register_document_artifact(
+                self.config_manager,
+                context,
+                file_type="export_json",
+                file_path=output_path,
+                metadata={"task_slug": "store_metadata_json"},
+            )
         except Exception as e:
-            # Unified timestamp convention (failure)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(unique_id), "Task Failed: store_metadata_json", step="Task Failed: store_metadata_json", error=str(e))
-            except Exception:
-                pass
             raise TaskError(f"Failed to store metadata as JSON for {unique_id}: {e}")
 
         return context

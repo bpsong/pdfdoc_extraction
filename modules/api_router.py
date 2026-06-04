@@ -5,18 +5,18 @@ It exposes the following endpoints:
 
 - POST /login: Obtain an OAuth2 bearer token using username and password.
 - POST /upload: Upload a PDF for processing; redirects to the dashboard page.
-- GET /api/files: List files currently tracked in the processing directory with statuses.
-- GET /api/status/{file_id}: Retrieve the processing status of a specific file.
+- GET /api/files: Legacy compatibility list backed by SQLite documents.
+- GET /api/status/{file_id}: Legacy compatibility status backed by SQLite documents.
 
 Dependencies:
 - ConfigManager: Loads and provides access to application configuration (e.g., folders, auth settings).
 - AuthUtils: Handles authentication (login, token generation/validation).
-- StatusManager: Accesses and aggregates file processing status metadata.
+- StatusManager: Legacy compatibility dependency retained for older callers.
 - WorkflowManager: Coordinates processing workflows used by file operations.
 - FileProcessor: Handles web upload processing and integration with workflows.
 - utils.retry_with_cleanup (optional): Retry wrapper used by FileProcessor if available.
 
-All functions are documented using Google-style docstrings. No behavior is changed.
+All functions are documented using Google-style docstrings.
 
 Architecture Reference:
     For detailed system architecture, API design patterns, and endpoint integration
@@ -261,6 +261,26 @@ def require_admin_user(user: str, config: Any) -> None:
     """Raise a 403 when the current user lacks admin access."""
     if not is_admin_user(user, config):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+
+
+def _file_status_from_document(document: dict[str, Any], *, details: dict[str, Any] | None = None) -> FileStatus:
+    """Convert a SQLite document row into the legacy FileStatus response shape."""
+    timestamps = {
+        "created": document.get("created_at"),
+        "updated": document.get("updated_at"),
+        "created_sg": convert_to_singapore_time(document.get("created_at")),
+        "updated_sg": convert_to_singapore_time(document.get("updated_at")),
+    }
+    return FileStatus(
+        file_id=str(document["id"]),
+        original_name=document.get("original_filename") or Path(str(document.get("file_path") or "")).name,
+        status=str(document.get("status") or "unknown"),
+        created_at=convert_to_singapore_time(document.get("created_at")),
+        updated_at=convert_to_singapore_time(document.get("updated_at")),
+        error=details.get("error") if details else None,
+        timestamps=timestamps,
+        details=details,
+    )
 
 
 def _confidence_band(confidence: Any) -> str:
@@ -510,6 +530,7 @@ def build_router() -> APIRouter:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Append an admin audit event without changing endpoint response shape."""
+        initialize_database(config)
         with connect(config) as conn:
             AuditService(conn).append_event(
                 event_type=event_type,
@@ -741,88 +762,19 @@ def build_router() -> APIRouter:
 
     @router.get("/api/files", response_model=List[FileStatus])
     def list_files(user: str = Depends(get_current_user)):
-        """List current files and their statuses from the processing directory.
+        """List current documents through the legacy file-status shape.
 
         Args:
             user: The authenticated user identifier, injected via dependency.
 
         Returns:
-            List[FileStatus]: Collection of file status entries parsed from status files,
-                              sorted by updated time (descending).
-
-        Raises:
-            HTTPException: 500 if the processing directory is misconfigured or inaccessible.
-
-        HTTP Error Codes:
-            - 200: Successful response with list of file statuses
-            - 401: Authentication required or failed
-            - 500: Processing directory misconfigured or inaccessible
+            List[FileStatus]: Collection of SQLite-backed document status
+            entries sorted by update time descending.
         """
-        
         config, _, _, _, _ = get_dependencies()
-        processing_dir = config.get("watch_folder.processing_dir")
-        if not processing_dir or not os.path.isdir(processing_dir):
-            raise HTTPException(status_code=500, detail="Processing directory misconfigured")
-        result: List[dict] = []
-        # Enumerate *.txt status files
-        for entry in os.listdir(processing_dir):
-            if not entry.endswith(".txt"):
-                continue
-            file_id = entry[:-4]
-            status_path = os.path.join(processing_dir, entry)
-            try:
-                with open(status_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                
-                # Get original timestamps for sorting
-                created_at_utc = (data.get("timestamps") or {}).get("created")
-                updated_at_utc = (data.get("timestamps") or {}).get("pending")
-                
-                # Convert timestamps to Singapore time for display
-                created_at_sg = convert_to_singapore_time(created_at_utc)
-                updated_at_sg = convert_to_singapore_time(updated_at_utc)
-                
-                result.append({
-                    "file_id": str(data.get("id") or file_id),
-                    "original_name": data.get("original_filename"),
-                    "status": data.get("status") or "Unknown",
-                    "created_at": created_at_sg,
-                    "updated_at": updated_at_sg,
-                    "error": data.get("error"),
-                    "created_at_utc": created_at_utc,  # Keep UTC for sorting
-                    "updated_at_utc": updated_at_utc   # Keep UTC for sorting
-                })
-            except Exception:
-                # Best-effort; skip corrupted files
-                continue
-        
-        # Sort by updated_at_utc in descending order (latest first)
-        # For files without updated_at_utc, use created_at_utc as fallback
-        def get_sort_key(file_dict):
-            # Use updated_at_utc if available, otherwise created_at_utc
-            timestamp = file_dict.get("updated_at_utc") or file_dict.get("created_at_utc") or ""
-            # Parse the timestamp for proper sorting
-            if timestamp:
-                try:
-                    if timestamp.endswith('Z'):
-                        return datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                    else:
-                        return datetime.fromisoformat(timestamp)
-                except Exception:
-                    pass
-            # Return epoch time for unparseable timestamps
-            return datetime.min.replace(tzinfo=timezone.utc)
-        
-        result.sort(key=get_sort_key, reverse=True)
-        
-        # Convert back to FileStatus objects without the UTC fields
-        file_status_result: List[FileStatus] = []
-        for item in result:
-            item.pop("created_at_utc", None)
-            item.pop("updated_at_utc", None)
-            file_status_result.append(FileStatus(**item))
-        
-        return file_status_result
+        with connect(config) as conn:
+            documents = DocumentRepository(conn).list_all(limit=500)
+        return [_file_status_from_document(document) for document in documents]
 
     @router.get("/api/config/validation")
     def validate_active_config(user: str = Depends(get_current_user)):
@@ -1231,68 +1183,39 @@ def build_router() -> APIRouter:
 
     @router.get("/api/status/{file_id}")
     def get_status(file_id: str, user: str = Depends(get_current_user)):
-        """Get the full processing status for a specific file including timestamps and details.
-
-        Enhanced for modal dialog implementation: Returns complete status data instead of
-        limited FileStatus model to provide rich information for the modal interface.
-        Includes full timestamps, details object, and processing history for comprehensive
-        status display in the UI.
+        """Get SQLite-backed document status through the legacy status shape.
 
         Args:
             file_id: The identifier of the file to query.
             user: The authenticated user identifier, injected via dependency.
 
         Returns:
-            dict: The complete status information for the requested file including
-                  timestamps, details, and all processing information. Structure:
-                  {
-                      "id": str,
-                      "original_filename": str,
-                      "status": str,
-                      "timestamps": {"created": "...", "pending": "...", "created_sg": "..."},
-                      "details": {...},
-                      "error": str or null
-                  }
-
-        Raises:
-            None: Graceful fallback implemented instead of exceptions.
-
-        HTTP Error Codes:
-            - 200: Successful response with full file status
-            - 401: Authentication required or failed
-
-        Note:
-            - Returns placeholder status object if file exists but status not yet available
-            - Converts all timestamps to Singapore time (GMT+8) for display
-            - Thread-safe dictionary operations prevent iteration modification errors
+            FileStatus: Legacy-compatible response whose ``details`` field
+            includes document metadata, task runs, and registered artifacts.
         """
-        _, _, status_mgr, _, _ = get_dependencies()
-        r = status_mgr.get_status(file_id)
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            documents = DocumentRepository(conn)
+            task_runs = TaskRunRepository(conn)
+            document = documents.get(file_id)
+            if document is None:
+                document = documents.get(str(file_id))
+            if document is None:
+                raise HTTPException(status_code=404, detail="File not found")
+            runs = task_runs.list_by_document(str(document["id"]))
+            files = [_parsed_file_payload(file_record) for file_record in documents.list_files(str(document["id"]))]
 
-        if not r:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        # Create a shallow copy to avoid mutating StatusManager state
-        record = dict(r)
-
-        # Extract and normalize timestamps with Singapore time conversion
-        timestamps = dict(record.get("timestamps") or {})
-        sg_timestamps: Dict[str, str] = {}
-        for key, ts in timestamps.items():
-            sg_timestamps[f"{key}_sg"] = convert_to_singapore_time(ts)
-        if sg_timestamps:
-            timestamps.update(sg_timestamps)  # Safe to update local copy
-
-        return FileStatus(
-            file_id=str(record.get("id") or file_id),
-            original_name=record.get("original_filename"),
-            status=record.get("status") or "Unknown",
-            created_at=convert_to_singapore_time(timestamps.get("created")),
-            updated_at=convert_to_singapore_time(timestamps.get("pending")),
-            error=record.get("error"),
-            timestamps=timestamps or None,
-            details=record.get("details"),
-        )
+        failed_runs = [run for run in runs if run.get("status") == "failed"]
+        latest_error = failed_runs[-1].get("error") if failed_runs else None
+        details = {
+            "legacy_endpoint": True,
+            "state_source": "sqlite",
+            "document": document,
+            "task_runs": runs,
+            "files": files,
+            "error": latest_error,
+        }
+        return _file_status_from_document(document, details=details)
 
     @router.get("/api/batches")
     def list_batches(user: str = Depends(get_current_user)):

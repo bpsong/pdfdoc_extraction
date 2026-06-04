@@ -10,7 +10,8 @@ Notes:
     - Reads 'files_dir' and 'filename' from task params (required).
     - May reference extraction field definitions from the global config to
       inform filename formatting, but this is optional.
-    - Uses StatusManager to emit started/success/failed events.
+    - Registers the copied PDF as an ``export_pdf`` document artifact when
+      SQLite document context is available.
     - Performs filesystem copy operations only; no modification of the source.
 """
 
@@ -21,6 +22,7 @@ from modules.utils import sanitize_filename, generate_unique_filepath, preproces
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
+from modules.services.artifact_service import register_document_artifact
 from datetime import datetime
 import shutil
 import logging
@@ -97,21 +99,12 @@ class StoreFileToLocaldrive(BaseTask):
     def on_start(self, context: Dict[str, Any]) -> None:
         """Lifecycle hook executed when the task starts.
 
-        Initializes context and marks the task as started in StatusManager.
+        Initializes context.
 
         Args:
             context (Dict[str, Any]): The pipeline context.
         """
-        # Initialize context keys
         self.initialize_context(context)
-        # Unified timestamp convention
-        try:
-            unique_id = str(context.get("id", "unknown"))
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(unique_id, "Task Started: store_file_to_localdrive", step="Task Started: store_file_to_localdrive")
-        except Exception:
-            # Avoid failing start on status write issues
-            pass
 
     def validate_required_fields(self, context: Dict[str, Any]):
         """Validate required parameters.
@@ -149,7 +142,7 @@ class StoreFileToLocaldrive(BaseTask):
                 or the copy operation fails.
 
         Notes:
-            - Side effects: Filesystem copy and status updates via StatusManager.
+            - Side effects: Filesystem copy and SQLite artifact registration.
 
         Performance Considerations:
             - This method performs synchronous file I/O operations, which may block for large files (>10MB).
@@ -195,30 +188,19 @@ class StoreFileToLocaldrive(BaseTask):
         # Generate unique filepath
         output_path = generate_unique_filepath(self.files_dir, os.path.splitext(base_filename)[0], ".pdf")
 
-        # Update status: preparing to copy file
-        try:
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(str(unique_id), "Preparing to copy file", step="Preparing to copy file")
-        except Exception:
-            pass
-
         try:
             # Copy the file to the new location
             shutil.copy(file_path, output_path)
             self.logger.info(f"File {original_filename} ({unique_id}) stored at {output_path}")
-            # Unified timestamp convention (success)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(unique_id), "Task Completed: store_file_to_localdrive", step="Task Completed: store_file_to_localdrive")
-            except Exception:
-                pass
+            context["output_path"] = str(output_path)
+            register_document_artifact(
+                self.config_manager,
+                context,
+                file_type="export_pdf",
+                file_path=output_path,
+                metadata={"task_slug": "store_file_to_localdrive", "original_filename": original_filename},
+            )
         except Exception as e:
-            # Unified timestamp convention (failure)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(unique_id), "Task Failed: store_file_to_localdrive", step="Task Failed: store_file_to_localdrive", error=str(e))
-            except Exception:
-                pass
             raise TaskError(f"Failed to store file {original_filename} ({unique_id}): {e}")
 
         return context

@@ -57,16 +57,16 @@ You can test these examples with the config-check tool:
 
 ```powershell
 # Test valid configurations
-config-check validate examples/complete_config.yaml
-config-check validate examples/minimal_config.yaml
+config-check validate --config examples/complete_config.yaml
+config-check validate --config examples/minimal_config.yaml
 
 # Test invalid configurations (should show errors)
-config-check validate examples/invalid_configs/invalid_web_host.yaml
-config-check validate examples/invalid_configs/invalid_web_port.yaml
-config-check validate examples/invalid_configs/invalid_watch_folder_fields.yaml
+config-check validate --config examples/invalid_configs/invalid_web_host.yaml
+config-check validate --config examples/invalid_configs/invalid_web_port.yaml
+config-check validate --config examples/invalid_configs/invalid_watch_folder_fields.yaml
 
 # Test import validation (requires --import-checks flag)
-config-check validate --import-checks examples/invalid_configs/invalid_import_errors.yaml
+config-check validate --config examples/invalid_configs/invalid_import_errors.yaml --import-checks
 ```
 
 ## Rules Task Validation Examples
@@ -91,13 +91,13 @@ CSV files for testing rules task validation:
 
 ```powershell
 # Test rules task validation with sample files
-config-check validate examples/rules_task_examples.yaml
+config-check validate --config examples/rules_task_examples.yaml
 
 # Test with runtime file validation
-config-check validate --check-files examples/rules_task_examples.yaml
+config-check validate --config examples/rules_task_examples.yaml --check-files
 
 # Test specific validation scenarios
-config-check validate --format json examples/rules_task_examples.yaml
+config-check validate --config examples/rules_task_examples.yaml --format json
 ```
 
 For detailed troubleshooting of rules task validation issues, see the main troubleshooting guide at [`docs/config_check_troubleshooting.md`](../../../docs/config_check_troubleshooting.md).

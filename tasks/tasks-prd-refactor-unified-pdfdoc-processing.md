@@ -2,7 +2,22 @@
 
 - `tasks/prd-refactor-unified-pdfdoc-processing.md` - Requirements source for the unified refactor.
 - `tasks/design-refactor-unified-pdfdoc-processing.md` - Implementation design source for this task list.
+- `tasks/markdown-documentation-audit.md` - Markdown documentation age, update, merge, archive, and removal audit for task 26 cleanup.
 - `tasks/standard-step-sqlite-state-audit.md` - New audit and migration checklist for standard workflow task file/state behavior.
+- `README.md` - Public project entry point to update with current SQLite-backed UI/API usage.
+- `docs/user_guide.md` - User/admin guide to update for operator/admin workflows, review, split, reports, settings, and validation.
+- `docs/design_architecture.md` - Architecture document to update for SQLite state, review, audit, admin config, fan-out/fan-in, and status-file retirement.
+- `docs/config_check_troubleshooting.md` - Config-check troubleshooting reference to reconcile with current validation behavior.
+- `docs/llamacloud_extract_v2_migration.md` - LlamaCloud Extract v2 migration plan to merge into maintained docs or archive/remove.
+- `tools/config_check/README.md` - Config-check command reference to verify and cross-link.
+- `tools/config_check/examples/README.md` - Config-check examples reference to verify, update, or merge.
+- `tools/config_check/examples/ERROR_CODES.md` - Config-check error-code reference to verify, update, or merge.
+- `tasks/standard_task_creation_guidelines.md` - Standard task authoring guide to update from `StatusManager` file events to SQLite task-run/audit/artifact conventions.
+- `tasks/future_todos.md` - Mostly completed backlog to merge into active backlog or archive/remove.
+- `tasks/prd-design-pdf-processing.md` - Superseded redesign PRD to archive/remove after maintained docs are current.
+- `tasks/tasks-prd-redesigned-pdf-processing.md` - Superseded redesign task list to archive/remove after maintained docs are current.
+- `tasks/prd-config-checker.md` - Completed config-check PRD to archive or mark historical.
+- `tasks/tasks-prd-config-checker.md` - Completed config-check task list to archive or mark historical.
 - `config.yaml` - Runtime configuration to extend with database, app storage, review, validation, and UI settings.
 - `requirements.txt` - Dependency list to update if new runtime packages are needed.
 - `main.py` - Application startup path where database initialization will be wired.
@@ -113,6 +128,7 @@
 - Use existing CLI validation code where possible. The UI validator must call shared validation logic, not shell out to the CLI.
 - Keep the operator sidebar close to the prototype. Show admin-only pages through an admin role and a compact admin navigation group.
 - Enforce admin authorization server-side for schema editing, validation center, pipeline configuration, task catalog, review-gate rules, split settings, admin audit, and dry-run routes.
+- Treat `tasks/markdown-documentation-audit.md` as the documentation cleanup source for task 26. Public/runtime docs must not present status text files, `/api/files`, or `/api/status/{file_id}` as the primary workflow-state path after migration cleanup.
 - Use the Windows Python command for tests:
 
 ```powershell
@@ -374,18 +390,23 @@ C:\Python313\python.exe -m pytest -v
   - [x] 25.2 Build `settings.html` and `GET /api/settings`.
   - [x] 25.3 Add tests for non-secret settings output.
 
-- [ ] 26.0 Migration cleanup and documentation
-  - Acceptance: New SQLite-backed UI/API is primary, all configured workflow-step state is read from and written to SQLite, intermediate text status files are not required to maintain workflow state, remaining file outputs are documented business artifacts only, and full suite passes.
-  - [ ] 26.1 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
-  - [ ] 26.2 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
-  - [ ] 26.3 Ensure storage/archive/export steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, using explicit roles for source originals, split working PDFs, source archives, and final exports instead of relying on status text details.
-  - [ ] 26.4 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
-  - [ ] 26.5 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, `update_reference`, storage, archiver, and housekeeping steps without intermediate status text files.
-  - [ ] 26.6 Document any remaining filesystem writes as durable business artifacts, source input files, split working files, archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
-  - [ ] 26.7 Deprecate or remove status-file reads from new UI paths.
-  - [ ] 26.8 Update README with new run and UI paths.
-  - [ ] 26.9 Update architecture docs with SQLite, review flow, admin configuration flow, fan-in/fan-out flow, and SQLite-only workflow state.
-  - [ ] 26.10 Document migration from `qa_extracted_data`.
-  - [ ] 26.11 Document CLI and UI validation usage.
-  - [ ] 26.12 Document operator/admin UI roles.
-  - [ ] 26.13 Run full pytest suite.
+- [x] 26.0 Migration cleanup and documentation
+  - Acceptance: New SQLite-backed UI/API is primary, all configured workflow-step state is read from and written to SQLite, intermediate text status files are not required to maintain workflow state, remaining file outputs are documented business artifacts only, Markdown documentation has been updated/merged/archived per `tasks/markdown-documentation-audit.md`, stale primary-state references have been checked, and full suite passes.
+  - [x] 26.1 Replace `StatusManager` text-file writes in `WorkflowManager`, `WorkflowLoader`, `FileProcessor`, and all `standard_step/*` tasks with SQLite-backed services or task-run events while preserving task context compatibility.
+  - [x] 26.2 Replace `/api/files`, `/api/status/{file_id}`, and any new UI status reads with SQLite batch/document/task-run queries.
+  - [x] 26.3 Ensure storage/archive/export steps register generated files in SQLite `document_files`, extraction/export metadata, or audit records as appropriate, using explicit roles for source originals, split working PDFs, source archives, and final exports instead of relying on status text details.
+  - [x] 26.4 Ensure watch-folder and upload workflows can run successfully when text status-file creation is disabled.
+  - [x] 26.5 Add `test/integration/test_sqlite_only_workflow_state.py` covering at least extraction, review gate, `update_reference`, storage, archiver, and housekeeping steps without intermediate status text files.
+  - [x] 26.6 Deprecate or remove status-file reads from new UI paths and leave any legacy compatibility endpoints explicitly marked as legacy.
+  - [x] 26.7 Document any remaining filesystem writes as durable business artifacts, source input files, split working files, archive files, reference/config files, or exports; no remaining text file may be required for workflow state.
+  - [x] 26.8 Update `README.md` with current run steps, database initialization, `/app/*` UI paths, current API overview, and SQLite-backed state.
+  - [x] 26.9 Update `docs/user_guide.md` with operator/admin roles, upload/watch ingestion, processing overview, split results, extraction results, review, reports, settings, validation, and admin configuration workflows.
+  - [x] 26.10 Update `docs/design_architecture.md` with SQLite repositories/services, review flow, audit/config-version flow, admin configuration flow, fan-out/fan-in flow, artifact registration, and SQLite-only workflow state.
+  - [x] 26.11 Update `tasks/standard_task_creation_guidelines.md` so new tasks use SQLite task-run events, audit events where appropriate, and explicit artifact registration instead of direct status text-file writes.
+  - [x] 26.12 Update `tasks/standard-step-sqlite-state-audit.md` with final post-cleanup state/artifact boundaries and any implementation deviations.
+  - [x] 26.13 Merge stable `docs/llamacloud_extract_v2_migration.md` content into maintained docs, then archive/remove the standalone migration plan if it is no longer needed.
+  - [x] 26.14 Document migration from `qa_extracted_data`, including schema editor/review UI behavior that replaced Streamlit flows.
+  - [x] 26.15 Document CLI and UI validation usage, and reconcile `tools/config_check/README.md`, `docs/config_check_troubleshooting.md`, `tools/config_check/examples/README.md`, and `tools/config_check/examples/ERROR_CODES.md`.
+  - [x] 26.16 Archive/remove or mark historical superseded planning docs and completed backlog docs identified in `tasks/markdown-documentation-audit.md`.
+  - [x] 26.17 Run Markdown stale-reference checks for old primary-state paths (`StatusManager`, `/api/files`, `/api/status`, `dashboard.html`, `status.js`, status files, Streamlit) and fix maintained docs so remaining hits are only legacy/historical/deprecation references.
+  - [x] 26.18 Run full pytest suite.

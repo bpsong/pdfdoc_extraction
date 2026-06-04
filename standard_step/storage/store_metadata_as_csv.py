@@ -8,7 +8,8 @@ formatted from a template and made unique if needed.
 
 Notes:
     - Reads 'data_dir' and 'filename' from task params (required).
-    - Uses StatusManager for standardized start/success/failure updates.
+    - Registers the generated CSV as an ``export_csv`` document artifact when
+      SQLite document context is available.
     - Performs filesystem writes and guarantees a unique output path.
 """
 
@@ -20,6 +21,7 @@ from modules.utils import sanitize_filename, generate_unique_filepath, preproces
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
+from modules.services.artifact_service import register_document_artifact
 import logging
 from modules.utils import windows_long_path
 
@@ -34,15 +36,15 @@ class StoreMetadataAsCsv(BaseTask):
         - Generate a unique filename from a template and write the CSV.
 
     Integration:
-        Uses BaseTask params for configuration and StatusManager for progress
-        reporting. Expects extracted data in context['data'].
+        Uses BaseTask params for configuration. Expects extracted data in
+        context['data'].
 
     Args:
         config_manager (ConfigManager): Project configuration manager.
         **params: Must include 'data_dir' (str) and 'filename' (str).
 
     Notes:
-        - Side effects: Filesystem write and status updates.
+        - Side effects: Filesystem write and SQLite artifact registration.
         - Errors are reported as TaskError and logged.
 
     Performance Considerations:
@@ -94,21 +96,12 @@ class StoreMetadataAsCsv(BaseTask):
     def on_start(self, context: Dict[str, Any]) -> None:
         """Lifecycle hook executed when the task starts.
 
-        Initializes context and marks the task as started in StatusManager.
+        Initializes context.
 
         Args:
             context (Dict[str, Any]): The pipeline context.
         """
-        # Initialize context keys
         self.initialize_context(context)
-        # Unified timestamp convention
-        try:
-            unique_id = str(context.get("id", "unknown"))
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(unique_id, "Task Started: store_metadata_csv", step="Task Started: store_metadata_csv")
-        except Exception:
-            # Avoid failing start on status write issues
-            pass
 
     def validate_required_fields(self, context: Dict[str, Any]):
         """Validate required parameters.
@@ -143,7 +136,7 @@ class StoreMetadataAsCsv(BaseTask):
             TaskError: If extracted data is missing/unsupported or writing fails.
 
         Notes:
-            - Side effects: Filesystem write and status updates via StatusManager.
+            - Side effects: Filesystem write and SQLite artifact registration.
 
         Performance Considerations:
             - This method performs synchronous CSV file I/O, which may block for large datasets (>1000 records).
@@ -213,13 +206,6 @@ class StoreMetadataAsCsv(BaseTask):
                     processed_item[alias] = value
             processed_data.append(processed_item)
 
-        # Update status: preparing to write CSV
-        try:
-            from modules.status_manager import StatusManager
-            StatusManager(self.config_manager).update_status(str(unique_id), "Preparing to write CSV", step="Preparing to write CSV")
-        except Exception:
-            pass
-
         # Generate filename from template and extracted data
         try:
             # Format the filename using data_for_filename_formatting. Ensure all values are strings for formatting.
@@ -245,27 +231,17 @@ class StoreMetadataAsCsv(BaseTask):
             with open(output_path, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-                # Update status: writing rows
-                try:
-                    from modules.status_manager import StatusManager
-                    StatusManager(self.config_manager).update_status(str(unique_id), "Writing CSV rows", step="Writing CSV rows")
-                except Exception:
-                    pass
                 writer.writerows(processed_data)
             self.logger.info(f"Metadata for {unique_id} stored as CSV at {output_path}")
-            # Unified timestamp convention (success)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(unique_id), "Task Completed: store_metadata_csv", step="Task Completed: store_metadata_csv")
-            except Exception:
-                pass
+            context["output_path"] = str(output_path)
+            register_document_artifact(
+                self.config_manager,
+                context,
+                file_type="export_csv",
+                file_path=output_path,
+                metadata={"task_slug": "store_metadata_csv", "rows": len(processed_data)},
+            )
         except Exception as e:
-            # Unified timestamp convention (failure)
-            try:
-                from modules.status_manager import StatusManager
-                StatusManager(self.config_manager).update_status(str(unique_id), "Task Failed: store_metadata_csv", step="Task Failed: store_metadata_csv", error=str(e))
-            except Exception:
-                pass
             raise TaskError(f"Failed to store metadata as CSV for {unique_id}: {e}")
 
         return context

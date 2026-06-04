@@ -99,9 +99,6 @@ def test_file_processor_initialization_and_process_file(mock_config_manager, moc
     retry_func = lambda f, *args, **kwargs: f(*args, **kwargs)  # simple retry function that calls directly
     fp = FileProcessor(mock_config_manager, retry_func, mock_workflow_manager)
 
-    # Patch StatusManager singleton to ensure it uses the injected ConfigManager
-    sm = StatusManager(mock_config_manager)
-
     # Prepare test file path and unique_id
     test_file_path = os.path.join(fp.processing_folder_path, "testfile_uuid.pdf")
     unique_id = "test-uuid-1234"
@@ -111,12 +108,19 @@ def test_file_processor_initialization_and_process_file(mock_config_manager, moc
         f.write("Test content")
 
     # Call process_file and verify it returns True
-    result = fp.process_file(test_file_path, unique_id, source="watch_folder", original_filename="testfile_uuid.pdf")
+    result = fp.process_file(
+        test_file_path,
+        unique_id,
+        source="watch_folder",
+        original_filename="testfile_uuid.pdf",
+        create_sqlite_state=False,
+    )
     assert result is True
 
-    # Verify that status file was created by StatusManager
+    # Configured workflow state is SQLite/task-run backed; process_file no longer
+    # creates a text status file.
     status_file_path = os.path.join(fp.processing_folder_path, f"{unique_id}.txt")
-    assert os.path.exists(status_file_path)
+    assert not os.path.exists(status_file_path)
 
     # Verify workflow_manager.trigger_workflow_for_file was called with expected args
     mock_workflow_manager.trigger_workflow_for_file.assert_called_once()

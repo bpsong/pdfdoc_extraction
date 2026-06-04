@@ -15,27 +15,10 @@ TEST_DIR = Path(__file__).parent
 CONFIG_PATH = Path("test/data/extraction_config.yaml")
 SAMPLE_PDF_SOURCE = Path("test/data/sample_invoice.pdf")
 
-# Define MockStatusManager outside the test class to avoid scope issues
-class MockStatusManager:
-    _instance = None
-    status_updates = []
-
-    def __new__(cls, config_manager=None):
-        if cls._instance is None:
-            cls._instance = super(MockStatusManager, cls).__new__(cls)
-            cls._instance._init(config_manager)
-        return cls._instance
-
-    def _init(self, config_manager):
-        self.config_manager = config_manager
-
-    def update_status(self, unique_id, status, step=None, error=None, details=None):
-        MockStatusManager.status_updates.append((unique_id, status, step, error))
-
 class TestExtractPdfTask:
 
     @pytest.fixture(autouse=True)
-    def setup_and_teardown(self, monkeypatch):
+    def setup_and_teardown(self):
         ConfigManager._instance = None
         self.config_manager = MagicMock()
         self.config_manager.get_all.return_value = {
@@ -50,19 +33,10 @@ class TestExtractPdfTask:
                 }
             }
         }
+        yield
 
-        monkeypatch.setattr("modules.status_manager.StatusManager", MockStatusManager)
-        monkeypatch.setattr("standard_step.extraction.extract_pdf.StatusManager", MockStatusManager)
-        
-        MockStatusManager.status_updates = []
-
-        yield MockStatusManager
-
-    def test_status_manager_updates(self, monkeypatch, setup_and_teardown):
+    def test_extract_pdf_updates_context(self, monkeypatch):
         context = {"id": "test_id_status", "file_path": str(SAMPLE_PDF_SOURCE)}
-        
-        MockStatusManager = setup_and_teardown
-        MockStatusManager.status_updates = []
 
         sample_response = MagicMock()
         sample_response.data = {
@@ -85,15 +59,11 @@ class TestExtractPdfTask:
         )
         
         task.on_start(context)
-        task.run(context)
+        result = task.run(context)
 
-        # The implementation emits several intermediate status updates.
-        # Assert the first and last updates match the expected start and completion events.
-        expected_start = ("test_id_status", "Task Started: extract_document_data", "Task Started: extract_document_data", None)
-        expected_end = ("test_id_status", "Task Completed: extract_document_data", "Task Completed: extract_document_data", None)
-
-        assert MockStatusManager.status_updates[0] == expected_start
-        assert MockStatusManager.status_updates[-1] == expected_end
+        assert result["data"]["field1"] == "value1"
+        assert result["data"]["serial_numbers"] == ["123", "456"]
+        assert result["metadata"]["extraction_status"] == "success"
 
     def test_extract_pdf(self, monkeypatch, setup_and_teardown):
         sample_response = MagicMock()
@@ -173,10 +143,6 @@ class TestExtractPdfTask:
         assert result_context["metadata"]["extraction_configuration_id"] is None
         assert result_context["metadata"]["extraction_status"] == "success"
 
-        # Align assertions with current implementation where status string equals descriptive step
-        assert MockStatusManager.status_updates[-1][1] == "Task Completed: extract_document_data"
-        assert MockStatusManager.status_updates[-1][2] == "Task Completed: extract_document_data"
-
 
 def test_extract_pdf_persists_confidence_for_review_gate(tmp_path, monkeypatch):
     pdf_path = tmp_path / "invoice.pdf"
@@ -223,8 +189,6 @@ def test_extract_pdf_persists_confidence_for_review_gate(tmp_path, monkeypatch):
 
     runner = MagicMock(return_value=Result())
     monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", runner)
-    monkeypatch.setattr("standard_step.extraction.extract_pdf.StatusManager", MockStatusManager)
-    MockStatusManager.status_updates = []
 
     task = ExtractPdfTask(config_manager=config, **params)
     context = {

@@ -1,15 +1,15 @@
-<!--
+﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 2.4
-Release Date: 2025-08-20
+Version: 2.5
+Release Date: 2026-06-03
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 2.4  
-Release Date: 2025-08-20  
+Version: 2.5
+Release Date: 2026-06-03
 Author: [Your Organization/Name]
 
 ---
@@ -23,6 +23,7 @@ Author: [Your Organization/Name]
 - [3. End User Guide](#3-end-user-guide)
   - [3.1. Using the Watch Folder](#31-using-the-watch-folder)
   - [3.2. Using the Web Interface](#32-using-the-web-interface)
+  - [3.3. Operator Workflows in the Unified App](#33-operator-workflows-in-the-unified-app)
 - [4. Administrator Guide](#4-administrator-guide)
   - [4.1. Starting and Stopping Services](#41-starting-and-stopping-services)
   - [4.2. Required Folders and Permissions](#42-required-folders-and-permissions)
@@ -31,22 +32,23 @@ Author: [Your Organization/Name]
     - [4.3.2. Global Sections](#432-global-sections)
     - [4.3.3. Workflows and Matching](#433-workflows-and-matching)
   - [4.4. Managing Web Interface Passwords](#44-managing-web-interface-passwords)
-  - [4.5. Log Files and Troubleshooting](#45-log-files-and-troubleshooting)
-  - [4.6. Graceful Shutdown and Error Recovery](#46-graceful-shutdown-and-error-recovery)
-  - [4.7. Task System: Standard Steps and Parameters](#47-task-system-standard-steps-and-parameters)
-       - [4.7.1. extraction](#471-extraction)
-       - [4.7.2. storage.store_metadata_as_csv](#472-storagestore_metadata_as_csv)
-       - [4.7.3. storage.store_metadata_as_json](#473-storagestore_metadata_as_json)
-       - [4.7.4. storage.store_file_to_localdrive](#474-storagestore_file_to_localdrive)
-       - [4.7.5. archiver.post_process](#475-archiverpost_process)
-       - [4.7.6. rules.update_reference](#476-rulesupdate_reference)
-       - [4.7.7. Assign Nanoid (standard_step/context)](#477-assign-nanoid-standard_stepcontext)
-       - [4.7.8. housekeeping.cleanup](#478-housekeepingcleanup)
-       - [4.7.9. Validation and Failure Behavior](#479-validation-and-failure-behavior)
-     - [4.10. LlamaCloud Extract v2 Array-of-Objects Support](#410-llamacloud-extract-v2-array-of-objects-support)
-  - [4.8. Example Workflows](#48-example-workflows)
-  - [4.9. Housekeeping and the Processing Folder](#49-housekeeping-and-the-processing-folder)
-  - [4.11. Config Check Validation Tool](#411-config-check-validation-tool)
+  - [4.5. Database, State, and Artifact Storage](#45-database-state-and-artifact-storage)
+  - [4.6. Log Files and Troubleshooting](#46-log-files-and-troubleshooting)
+  - [4.7. Graceful Shutdown and Error Recovery](#47-graceful-shutdown-and-error-recovery)
+  - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
+       - [4.8.1. extraction](#481-extraction)
+       - [4.8.2. storage.store_metadata_as_csv](#482-storagestore_metadata_as_csv)
+       - [4.8.3. storage.store_metadata_as_json](#483-storagestore_metadata_as_json)
+       - [4.8.4. storage.store_file_to_localdrive](#484-storagestore_file_to_localdrive)
+       - [4.8.5. archiver.archive_pdf](#485-archiverarchive_pdf)
+       - [4.8.6. rules.update_reference](#486-rulesupdate_reference)
+       - [4.8.7. Assign Nanoid (standard_step/context)](#487-assign-nanoid-standard_stepcontext)
+       - [4.8.8. housekeeping.cleanup](#488-housekeepingcleanup)
+       - [4.8.9. Validation and Failure Behavior](#489-validation-and-failure-behavior)
+  - [4.9. LlamaCloud Extract v2 Array-of-Objects Support](#49-llamacloud-extract-v2-array-of-objects-support)
+  - [4.10. Example Workflows](#410-example-workflows)
+  - [4.11. Housekeeping and the Processing Folder](#411-housekeeping-and-the-processing-folder)
+  - [4.12. Config Check Validation Tool](#412-config-check-validation-tool)
 - [5. Frequently Asked Questions (FAQ)](#5-frequently-asked-questions-faq)
 - [6. Appendix](#6-appendix)
   - [Glossary](#glossary)
@@ -65,6 +67,7 @@ Author: [Your Organization/Name]
 | 2.2     | 2025-08-01 | [Your Organization] | Added YAML configuration examples to all 4.7.x subsections for clarity      |
 | 2.3     | 2025-08-11 | [Your Organization] | Implemented and documented web interface for PDF upload and status monitoring|
 | 2.4     | 2025-08-20 | [Your Organization] | Added config-check administrator overview and cross-references to validation docs |
+| 2.5     | 2026-06-03 | [Your Organization] | Updated for unified `/app/*` operator/admin UI, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
 
 ---
 
@@ -88,10 +91,13 @@ This quick start guide helps you get the system running with minimal steps. It i
 
     The system will monitor the watch folder and process new files automatically.
 
-4.  **Check Output**  
+4.  **Check Processing State**
+    Use `/app/processing` or the batch page shown after upload to track the document. Workflow state is stored in SQLite, not intermediate text status files.
+
+5.  **Check Output**
     Processed PDFs will appear in the `files/` folder (renamed if configured). Extracted data will be saved in the `data/` folder as CSV or JSON files.
 
-5.  **Stop the System**  
+6.  **Stop the System**
     Press `Ctrl+C` in the `Command Prompt` to stop the system safely.
 
 ---
@@ -107,6 +113,8 @@ Key features:
   *(Standard steps are predefined operations that the system performs on each file.)*  
 - Centralized configuration and logging  
 - Watch-folder based ingestion and web interface for PDF upload
+- SQLite-backed workflow state for batches, documents, task runs, extraction results, review items, artifacts, settings, and audit history
+- Operator and administrator UI pages under `/app/*`
 - Consistent alias-based output for CSV/JSON  
   *(Alias means a friendly name used for data fields in outputs, such as column headers.)*
 
@@ -121,9 +129,10 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
 - **Watch Folder Monitor:** Detects new PDFs in the configured `watch_folder.dir` (the folder the system watches for new files). This directory must pre-exist; it is not auto-created.
 - **Workflow Manager and Loader:** Loads `config.yaml` and runs the single configured pipeline order for every file.  
 - **Standard Steps:** Executes ordered tasks for each file (extraction, rules, storage, archiver, housekeeping).  
+- **SQLite State Services:** Record ingestion batches, documents, task runs, extracted fields, review queues, artifacts, settings, and audit events.
 - **Storage:** Writes extracted data to CSV/JSON and moves PDFs to their final destination.  
 - **Logging:** Centralized application log with rotation.  
-- **Web Interface:** Web upload and status monitoring are available; see section 3.2 for user instructions.  
+- **Web Interface:** Operator and admin pages are available under `/app/*`; see section 3.2 and 3.3 for user instructions.
 
 ### Data Flow Diagram
 
@@ -140,16 +149,20 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
       Steps -->|Store| Storage[File & Data Storage]
       Storage -->|Organized Files| Output[files/ and data/]
       Steps -->|Post-process| Archiver[Archive/Delete Input]
+      Steps -->|State Events| SQLite[SQLite State Database]
+      SQLite -->|Batches, Documents, Reviews| AppUI[Unified /app UI]
 ```
 
 ### What happens to your document?
 
 1. Submission: You place a PDF in the watch folder.  
 2. Detection: The system sees the new file and chooses a workflow via match rules.  
-3. Extraction: Information is extracted through LlamaCloud Extract v2.  
-4. Rules: Optional business logic runs (e.g., update reference files).  
-5. Storage: The PDF and extracted metadata are written to `files/` (PDF) and `data/` (CSV/JSON).
-6. Post-process: The original input is archived or deleted per configuration.  
+3. State record: The system creates SQLite batch/document records and a task-run record for each configured step.
+4. Extraction: Information is extracted through LlamaCloud Extract v2 and field values/confidence are persisted.
+5. Review gate: Optional rules decide whether the document needs human review.
+6. Rules: Optional business logic runs (e.g., update reference files).
+7. Storage: The PDF and extracted metadata are written to `files/` (PDF) and `data/` (CSV/JSON), and durable artifacts are registered in SQLite.
+8. Post-process: The original input is archived or deleted per configuration.
 
 ---
 
@@ -190,22 +203,22 @@ The web interface provides a user-friendly way to upload PDF documents and monit
 **Accessing the Web Interface:**
 
 1.  Open your web browser.
-2.  Navigate to the system's web address (e.g., `http://localhost:8000/login`). Ask your administrator for the exact URL.
+2.  Navigate to the system's web address (e.g., `http://localhost:8000/app/upload`). Ask your administrator for the exact URL.
 3.  Log in using your provided username and password.
 
 **Uploading PDF Files:**
 
-1.  After logging in, navigate to the "Upload" page (typically accessible via `/upload` or a link on the dashboard).
+1.  After logging in, navigate to the "Upload" page (typically accessible via `/app/upload` or a link on the app sidebar).
 2.  Click the "Choose File" or "Browse" button to select the PDF document(s) from your local machine.
 3.  Click the "Upload" button to submit the file(s).
-4.  The system will immediately redirect you to the dashboard, where you can monitor the status of your uploaded file.
+4.  The system will redirect you to the batch processing page, where you can monitor the status of your uploaded file or batch.
 
 **Monitoring File Status:**
 
-1.  On the dashboard page, you will see a list of recently processed and currently processing files.
-2.  Each entry displays the `File ID`, `Original Name`, `Status` (e.g., Pending, Processing, Completed, Failed), `Created At`, and `Updated At`.
-3.  The `Status` column provides real-time updates on the processing progress.
-4.  If a file fails, an `Error` message will be displayed to assist with troubleshooting.
+1.  On `/app/processing` or `/app/batches/{batch_id}`, you will see recent batches and documents.
+2.  Each entry displays the document, original name, status, created/updated timestamps, and task progress.
+3.  The processing view reads SQLite batch/document/task-run state.
+4.  If a file fails, an error message will be displayed to assist with troubleshooting.
 
 **What happens after upload:**
 
@@ -214,7 +227,67 @@ The web interface provides a user-friendly way to upload PDF documents and monit
 -   The file is then moved to the `watch_folder.processing_dir` for workflow execution.
 -   Data extraction and subsequent tasks are performed in the background.
 -   Outputs are saved into `data/` (CSV/JSON) and `files/` (renamed PDF via the `store_file_to_localdrive` task).
--   The dashboard provides real-time status updates.
+-   `/app/processing` and the batch detail page provide real-time status updates from SQLite state.
+
+### 3.3. Operator Workflows in the Unified App
+
+The primary operator experience is under `/app/*`.
+
+| Page | Purpose |
+|------|---------|
+| `/app/upload` | Upload one or more PDFs as a batch. |
+| `/app/processing` | View current and recent batches/documents. |
+| `/app/batches/{batch_id}` | Track one batch through splitting, extraction, review, and completion. |
+| `/app/batches/{batch_id}/split-results` | Inspect split source files and generated child documents. |
+| `/app/documents/{document_id}/extraction` | Review extracted fields, confidence, metadata, and source PDF access. |
+| `/app/review` | Work the review queue for documents requiring human intervention. |
+| `/app/review/{review_item_id}` | Claim, inspect, edit, diff, and complete a review item. |
+| `/app/reports` | View processing and review activity summaries. |
+| `/app/settings` | View non-secret runtime settings and configured paths. |
+| `/app/settings/validation` | View configuration, schema, and pipeline validation findings. |
+| `/app/schemas` | Admin-only schema list and creation workflow. |
+| `/app/schemas/{schema_name}` | Admin-only schema editor for extraction/review schemas. |
+
+#### Human Review
+
+Documents enter review when configured review-gate rules require it, such as low confidence, missing required fields, or an always-review policy. Operators should:
+
+1. Open `/app/review`.
+2. Filter or search for pending review items.
+3. Claim an item.
+4. Review the source PDF and extracted fields.
+5. Save draft values if more work is needed.
+6. Complete review when corrected values are ready.
+
+Completed review values are persisted in SQLite with the extracted fields. The document can then be resumed through downstream workflow steps.
+
+#### Schema-Based Review Migration
+
+The unified app replaces the previous separate `qa_extracted_data` Streamlit review workflow. Operators and administrators no longer need to run a separate Streamlit application.
+
+Migrated capabilities:
+
+- schema-driven review forms are served from `/app/schemas` and `/app/schemas/{schema_name}`;
+- review items are queued in SQLite and worked through `/app/review`;
+- field corrections, drafts, diffs, and final values are stored with the document extraction state;
+- schema validation is exposed through `/app/settings/validation` and admin schema validation APIs;
+- audit/config-version flows record administrator changes where applicable.
+
+Administrators should use the unified schema editor to maintain review schemas. Operators should use the review queue rather than editing schema files directly.
+
+#### Split Results
+
+When split processing is enabled, a batch may create child documents from one source PDF. Use `/app/batches/{batch_id}/split-results` to see:
+
+- source document status
+- child document IDs
+- split category and confidence
+- page ranges
+- links to extraction results for child documents
+
+#### Legacy Dashboard
+
+Legacy `/dashboard`, `/api/files`, and `/api/status/{file_id}` routes may still exist for compatibility. New operational workflows should use `/app/*` pages. The legacy status APIs are backed by SQLite compatibility responses and should not be treated as the primary state model.
 
 ---
 
@@ -312,6 +385,22 @@ watch_folder:
 web:
   upload_dir: "web_upload"            # Directory for future web uploads (must pre-exist; validated at startup)
 
+database:
+  path: "data/app_state.sqlite3"       # SQLite workflow-state database
+  run_migrations_on_startup: true      # Run migrations when the app starts
+
+app_storage:
+  originals_dir: "data/app/originals"  # Source originals registered to documents
+  working_dir: "data/app/working"      # Working copies used during processing
+  split_dir: "data/app/split"          # Split child PDFs and related working files
+  exports_dir: "data/app/exports"      # Export destinations for app-managed outputs
+  archive_dir: "data/app/archive"      # Source archive destination
+
+review:
+  enabled: true
+  default_queue_name: "default_review"
+  lock_timeout_minutes: 60
+
 # Outputs are defined per task in `tasks`:
 # - Processed PDFs destination: tasks.store_file_to_localdrive.params.files_dir (auto-created)
 # - Metadata destinations: tasks.store_metadata_{csv,json}.params.data_dir (auto-created)
@@ -322,6 +411,9 @@ web:
 - **logging:** Controls logging behavior.
 - **watch_folder:** Defines ingestion and processing folder behavior.
 - **web:** Defines web upload directory and web server settings (host, port, secret key).
+- **database:** Defines the SQLite workflow-state path and migration behavior.
+- **app_storage:** Defines app-managed artifact directories for originals, working files, splits, exports, and archives.
+- **review:** Defines review queue behavior, queue name, and review lock duration.
 
 #### 4.3.3. Workflows and Matching
 
@@ -477,7 +569,62 @@ Updated Security Notes (summary from existing section):
 - Do not commit password hashes or secret-bearing config files to version control.
 - Rotate passwords and audit access regularly.
 
-### 4.5. Log Files and Troubleshooting
+### 4.5. Database, State, and Artifact Storage
+
+The unified application uses SQLite as the primary source of workflow state.
+
+#### 4.5.1. Database Initialization
+
+The database location is configured by `database.path`, with a default of `data/app_state.sqlite3`. When `database.run_migrations_on_startup` is true, migrations run during startup for the web server and workflow ingestion paths.
+
+Administrators should back up the SQLite database together with durable business artifacts. The database contains operational state and review decisions; exported CSV/JSON/PDF files remain filesystem artifacts.
+
+#### 4.5.2. What SQLite Stores
+
+SQLite stores:
+
+- ingestion batches and source documents
+- split child documents and page/category metadata
+- task runs, status, error details, and task output summaries
+- extraction results, extracted fields, confidence, review state, and corrected values
+- review queue items, claims, drafts, diffs, and completions
+- document artifact records in `document_files`
+- non-secret runtime settings, admin configuration versions, and audit events
+
+Text status files are not required for configured workflow state.
+
+#### 4.5.3. Filesystem Artifact Boundaries
+
+The filesystem still stores durable business files and operational inputs:
+
+| Artifact type | Examples | State source |
+|---------------|----------|--------------|
+| Source input files | watch-folder PDFs, upload staging PDFs | Registered as original/source files where SQLite context exists |
+| Working files | processing-folder PDFs, split working PDFs | Temporary or registered by split/source role |
+| Archive files | archived source PDFs | Registered as `source_archive` |
+| Final exports | JSON, CSV, renamed PDFs | Registered as `export_json`, `export_csv`, `export_pdf` |
+| Reference/config files | reference CSVs, YAML config, schema files | Managed by configuration and admin settings flows |
+
+No remaining text file should be required to reconstruct workflow state. If a legacy endpoint returns status, it should be treated as a SQLite compatibility response.
+
+#### 4.5.4. Operator and Admin State Views
+
+- Operators use `/app/processing`, `/app/batches/{batch_id}`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
+- Administrators use `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`.
+- Legacy `/dashboard`, `/api/files`, and `/api/status/{file_id}` are compatibility paths only.
+
+#### 4.5.5. Backup and Recovery
+
+For a complete operational backup, include:
+
+- the SQLite database file configured at `database.path`
+- configured `app_storage` directories
+- legacy output folders such as `files/`, `data/`, and `archive_folder/` if still used by configured tasks
+- reference CSVs and schema/config files
+
+If the database is restored without the files, the UI may show registered artifacts whose paths no longer exist. If files are restored without the database, the system may still have exports on disk, but batch/task/review history will be incomplete.
+
+### 4.6. Log Files and Troubleshooting
 
 - The main log file is `app.log` in the project root.
 - To see more detailed logs, set `logging.log_level` to `DEBUG` in `config.yaml`.
@@ -494,8 +641,8 @@ Updated Security Notes (summary from existing section):
   - The system processes files sequentially, so large files will block other files until complete.
 - During runtime troubleshooting:
   - Failed tasks log detailed errors to `app.log` with timestamps and context information.
-  - Files with processing errors may remain in the `processing/` directory with error status.
-  - Check the web interface dashboard for real-time status updates on file processing.
+  - Files with processing errors may remain in the `processing/` directory; inspect `/app/processing`, document task runs, and `app.log`.
+  - Check the unified web app for real-time status updates on file processing.
   - Use `Ctrl+C` for graceful shutdown to allow current tasks to complete before stopping.
 - Common runtime issues and solutions:
   - **High memory usage**: Large PDF files (>50MB) can consume significant RAM during processing.
@@ -508,7 +655,7 @@ Updated Security Notes (summary from existing section):
   - "WARNING" messages indicate non-fatal issues that may affect performance.
   - Use the web interface to monitor processing status in real-time.
 
-### 4.6. Graceful Shutdown and Error Recovery
+### 4.7. Graceful Shutdown and Error Recovery
 
 - To stop the system, press `Ctrl+C` in the terminal where `main.py` is running.
 - The system will finish processing any files currently in progress before shutting down.
@@ -537,11 +684,11 @@ Updated Security Notes (summary from existing section):
   - Files in `processing/` directory may need manual cleanup if marked as failed.
   - The system will automatically resume monitoring the watch folder after restart.
 
-### 4.7. Task System: Standard Steps and Parameters
+### 4.8. Task System: Standard Steps and Parameters
 
 Standard steps are predefined operations configured in workflows. Below are the main task types and their parameters.
 
-#### 4.7.1. extraction
+#### 4.8.1. extraction
 
 - **type:** `"extraction"`
 - **Purpose:** Extracts structured data from PDF documents using external extraction services.
@@ -598,7 +745,7 @@ pipeline:
   - extract_document_data
 ```
 
-#### 4.7.2. storage.store_metadata_as_csv
+#### 4.8.2. storage.store_metadata_as_csv
 
 - **type:** `"storage.store_metadata_as_csv"`
 - **Purpose:** Stores extracted metadata as CSV files with consistent column headers.
@@ -627,7 +774,7 @@ pipeline:
   - store_metadata_csv
 ```
 
-#### 4.7.3. storage.store_metadata_as_json
+#### 4.8.3. storage.store_metadata_as_json
 
 - **type:** `"storage.store_metadata_as_json"`
 - **Purpose:** Stores extracted metadata as JSON files with consistent key naming.
@@ -655,7 +802,7 @@ pipeline:
   - store_metadata_json
 ```
 
-#### 4.7.4. storage.store_file_to_localdrive
+#### 4.8.4. storage.store_file_to_localdrive
 
 - **type:** `"storage.store_file_to_localdrive"`
 - **Purpose:** Stores processed PDF files with descriptive filenames based on extracted data.
@@ -683,7 +830,7 @@ pipeline:
   - store_file_to_localdrive
 ```
 
-#### 4.7.5. archiver.archive_pdf
+#### 4.8.5. archiver.archive_pdf
 
 - **type:** `"archiver.archive_pdf"`
 - **Purpose:** Archives the original input PDF to a designated archive directory with a sanitized, unique filename.
@@ -709,7 +856,7 @@ pipeline:
   - archive_pdf
 ```
 
-#### 4.7.6. rules.update_reference
+#### 4.8.6. rules.update_reference
 
 - **type:** `"rules.update_reference"`
 - **Purpose:** Update a reference CSV file using extracted data.
@@ -761,7 +908,7 @@ pipeline:
 
 > **Migration Note:** Update Reference Configuration Update: Bare field names (e.g., 'purchase_order_number') are now preferred over dotted paths (e.g., 'data.purchase_order_number'). The dotted format is still supported for backward compatibility but will be deprecated in future releases. Deprecation warnings are logged when the old format is used.
 
-### 4.7.7. Assign Nanoid (standard_step/context)
+#### 4.8.7. Assign Nanoid (standard_step/context)
 
 - **type:** `"context.assign_nanoid"`
 - **Purpose:** Assigns a short, URL-safe unique identifier to the shared task context for downstream use in filename construction (e.g., `{nanoid}_{purchase_order_number}_{supplier_name}`).
@@ -795,7 +942,7 @@ pipeline:
 - Update existing filename templates to include `{nanoid}` where a short unique prefix is desired; for example:
   - `{nanoid}_{purchase_order_number}_{supplier_name}`
 - This change ensures filenames are unique and traceable while remaining short.
-#### 4.7.8. housekeeping.cleanup
+#### 4.8.8. housekeeping.cleanup
 
 - **type:** `"housekeeping.cleanup"`
 - **Purpose:** Performs final cleanup after workflow execution by deleting the processed PDF from the processing directory so the folder does not accumulate UUID-named files.
@@ -803,14 +950,14 @@ pipeline:
   - `processing_dir`: string (optional). Directory containing processed files. Defaults to "processing".
 - **Behavior:**
   - Deletes the processed file referenced in the context if it exists in `processing_dir`.
-  - Logs successes and warnings for missing files but does not touch status files or archives.
+  - Logs successes and warnings for missing files and preserves registered business artifacts.
   - Raises exceptions on critical delete failures.
   - Executes unconditionally as the final step, even if previous tasks failed, to keep the processing directory tidy.
 - **Notes:**
   - This task is automatically invoked by the WorkflowLoader as a mandatory final step in every Prefect flow.
   - It does not require definition in the `tasks` section or inclusion in the `pipeline` list of `config.yaml`.
   - Ensures the processing directory remains clean by removing only the processed PDF.
-#### 4.7.9. Validation and Failure Behavior
+#### 4.8.9. Validation and Failure Behavior
 
 - Config validation happens at startup via the `ConfigManager`:
   - Validates that `web.upload_dir` exists and is a directory.
@@ -820,18 +967,18 @@ pipeline:
 - At runtime, tasks validate their own required parameters.
 - On validation failure or error:
   - The system logs the error.
-  - Status is updated via `StatusManager`; pipeline flow may continue or stop per each task’s `on_error`.
+  - Task-run and document state are updated in SQLite when document context exists; pipeline flow may continue or stop per each task’s `on_error`.
 - **Tip:** Set `logging.log_level = DEBUG` in `config.yaml` for detailed diagnostics.
 
-### 4.10. LlamaCloud Extract v2 Array-of-Objects Support
+### 4.9. LlamaCloud Extract v2 Array-of-Objects Support
 
 The v2 extraction and storage system handles LlamaCloud Extract v2 responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
 
-#### 4.10.1. Overview
+#### 4.9.1. Overview
 
 The v2 system allows extraction of structured data where certain fields return lists of sub-objects. For example, an invoice might have an "Items" field containing multiple line items with descriptions, quantities, and prices.
 
-#### 4.10.2. Configuration
+#### 4.9.2. Configuration
 
 To use v2 features, update your `config.yaml` to:
 
@@ -844,7 +991,14 @@ To use v2 features, update your `config.yaml` to:
        api_key: "llx-REDACTED"
        configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
        tier: "agentic"
+       parse_tier: "agentic"          # optional
+       extraction_target: "per_doc"   # optional
+       cite_sources: true             # optional
+       poll_interval_seconds: 2       # optional
+       timeout_seconds: 1800          # optional
    ```
+
+   The current runtime uses the `llama-cloud` SDK and `LlamaCloud` client. New configurations should use `configuration_id` or inline `fields`; `agent_id` is legacy.
 
 2. Mark array fields with `is_table: true`:
    ```yaml
@@ -861,7 +1015,7 @@ To use v2 features, update your `config.yaml` to:
          type: "str"
    ```
 
-#### 4.10.3. Storage Behavior
+#### 4.9.3. Storage Behavior
 
 ##### JSON Storage (v2)
 - Preserves the list-of-objects structure for table fields.
@@ -879,7 +1033,7 @@ To use v2 features, update your `config.yaml` to:
   ALLIGATOR SINGAPORE PTE LTD,44.62,QUICK COUPLER SOCKET,2.0 PCS
   ```
 
-#### 4.10.4. Migration Guide
+#### 4.9.4. Migration Guide
 
 To migrate from v1 to v2:
 
@@ -904,7 +1058,15 @@ To migrate from v1 to v2:
 
 4. After the LlamaCloud UI configuration is ready, test with a small set of documents before full deployment.
 
-#### 4.10.5. Current Limitations
+5. Validate a saved LlamaCloud configuration with the smoke checker:
+
+   ```powershell
+   C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+   ```
+
+   If `configuration_id` is already set in the selected config file, omit the override flag. The smoke checker writes `raw_extract_result.json`, `workflow_normalized_data.json`, and `workflow_fit_report.json`.
+
+#### 4.9.5. Current Limitations
 
 - Only one `is_table: true` field is supported per extraction.
 - Items must be simple dictionaries (no nested arrays or objects).
@@ -912,7 +1074,7 @@ To migrate from v1 to v2:
 
 ---
 
-### 4.8. Example Workflows
+### 4.10. Example Workflows
 
 **Production-style pipeline example (matches current code and `config.yaml`):**
 
@@ -1027,7 +1189,7 @@ Housekeeping runs automatically as the final step after the pipeline completes t
 
 Notes:
 - The pipeline is an ordered list of task names defined under `tasks:`.
-- Housekeeping runs automatically as the final step of the workflow, invoked directly by the WorkflowLoader. It deletes the processed PDF but does not archive files or modify status records.
+- Housekeeping runs automatically as the final step of the workflow, invoked directly by the WorkflowLoader. It deletes temporary processing-folder PDFs while preserving registered business artifacts.
 - Each task references a Python module and class from the `standard_step` package and receives `params`.
 - The three storage-related tasks are separate:
   - `store_metadata_csv` writes CSV to `data_dir` using `filename` template.
@@ -1035,16 +1197,16 @@ Notes:
   - `store_file_to_localdrive` moves the original PDF to `files_dir` using `filename`.
 - Field placeholders in `filename` come from extracted data keys (e.g., `{supplier_name}`, `{invoice_amount}`, `{policy_number}`).
 - Use `on_error: stop|continue` per task to control failure behavior.
-### 4.9. Housekeeping and the Processing Folder
+### 4.11. Housekeeping and the Processing Folder
 
-- The `processing_dir` contains temporary files and status metadata during processing.
-- The housekeeping cleanup task automatically executes as the final step in every workflow, deleting the processed PDF from `processing_dir` so the folder stays small. It does not archive files or remove status text files.
+- The `processing_dir` contains temporary working files during processing. Workflow state is stored in SQLite.
+- The housekeeping cleanup task automatically executes as the final step in every workflow, deleting the processed PDF from `processing_dir` so the folder stays small. It does not remove durable registered artifacts.
 - It always runs, regardless of pipeline success or failure, to guarantee the processing directory is cleared of that PDF.
-- Deleting old status files is safe; they are used for history and diagnostics.
+- Any old text status files are legacy diagnostics only and are not required for current workflow state.
 
 ---
 
-### 4.11. Config Check Validation Tool
+### 4.12. Config Check Validation Tool
 
 **Audience:** Administrators (end users should contact an administrator if configuration changes are required).
 
@@ -1110,7 +1272,7 @@ A: For many files, ensure adequate system resources and monitor for rate limitin
 A: For basic operation: 4GB RAM, 2GB free disk space, stable internet connection. For processing many large files (>50MB): 8GB+ RAM, SSD storage, high-speed internet. The system is designed to run on modest hardware but performance scales with available resources.
 
 **Q: How can I monitor system performance during operation?**
-A: Use Windows Task Manager to monitor CPU, memory, and disk usage. Watch the `app.log` file for performance warnings. Use the web interface dashboard to monitor processing queue length and file status. Check system resources before processing large batches of files.
+A: Use Windows Task Manager to monitor CPU, memory, and disk usage. Watch the `app.log` file for performance warnings. Use `/app/processing`, `/app/batches/{batch_id}`, and `/app/reports` to monitor processing queue length, file status, and review activity. Check system resources before processing large batches of files.
 
 **Q: What should I do if the system becomes unresponsive during large file processing?**
 A: Large files (>100MB) can cause temporary unresponsiveness. Wait for current processing to complete (check `app.log` for progress). If the system remains unresponsive for more than 30 minutes, restart it using `Ctrl+C` followed by the startup command. Consider processing very large files individually during off-peak hours.

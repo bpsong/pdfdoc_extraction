@@ -67,30 +67,6 @@ class DummyWorkflowManager:
         return None
 
 
-class DummyStatusManager:
-    def __init__(self):
-        self.created = []
-
-    def create_status(self, *, unique_id, original_filename, source, file_path):
-        self.created.append({
-            "unique_id": unique_id,
-            "original_filename": original_filename,
-            "source": source,
-            "file_path": file_path,
-        })
-
-
-def monkeypatch_status_manager(monkeypatch, dummy_status_manager):
-    """
-    Patch StatusManager used inside FileProcessor to our dummy.
-    """
-    import modules.file_processor as fp_mod
-    class _Factory:
-        def __call__(self, *args, **kwargs):
-            return dummy_status_manager
-    monkeypatch.setattr(fp_mod, "StatusManager", _Factory())
-
-
 class FakeUploadFile:
     """
     Minimal FastAPI-like UploadFile double: exposes .filename and .file with read().
@@ -132,8 +108,6 @@ def test_process_web_upload_success_pdf_header_valid(monkeypatch, tmp_dirs, conf
 
     # Prepare FileProcessor with a no-op retry function and dummy workflow
     wf = DummyWorkflowManager()
-    dummy_status = DummyStatusManager()
-    monkeypatch_status_manager(monkeypatch, dummy_status)
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
 
@@ -148,14 +122,6 @@ def test_process_web_upload_success_pdf_header_valid(monkeypatch, tmp_dirs, conf
     assert len(files) == 1
     assert files[0].endswith(".pdf")
     moved_path = os.path.join(processing_dir, files[0])
-
-    # Check status created
-    assert len(dummy_status.created) == 1
-    created = dummy_status.created[0]
-    assert created["unique_id"] == unique_id
-    assert created["original_filename"] == "source.pdf"
-    assert created["source"] == "web"
-    assert created["file_path"] == moved_path
 
     # Check workflow triggered with source=web
     assert len(wf.calls) == 1
@@ -175,8 +141,6 @@ def test_process_web_upload_invalid_header_removes_temp_and_raises(monkeypatch, 
     cfg = config(upload_dir, processing_dir, validate_header=True)
 
     wf = DummyWorkflowManager()
-    dummy_status = DummyStatusManager()
-    monkeypatch_status_manager(monkeypatch, dummy_status)
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
 
@@ -191,8 +155,7 @@ def test_process_web_upload_invalid_header_removes_temp_and_raises(monkeypatch, 
     # Ensure no file lingered in processing
     assert os.listdir(processing_dir) == []
 
-    # Ensure no status or workflow call
-    assert dummy_status.created == []
+    # Ensure no workflow call
     assert wf.calls == []
 
     # Ensure temp file in upload_dir removed
@@ -204,8 +167,6 @@ def test_process_web_upload_header_validation_disabled(monkeypatch, tmp_dirs, co
     cfg = config(upload_dir, processing_dir, validate_header=False)
 
     wf = DummyWorkflowManager()
-    dummy_status = DummyStatusManager()
-    monkeypatch_status_manager(monkeypatch, dummy_status)
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
 
@@ -221,14 +182,7 @@ def test_process_web_upload_header_validation_disabled(monkeypatch, tmp_dirs, co
     assert files[0].endswith(".pdf")
     moved_path = os.path.join(processing_dir, files[0])
 
-    # Status and workflow still created
-    assert len(dummy_status.created) == 1
-    created = dummy_status.created[0]
-    assert created["unique_id"] == unique_id
-    assert created["original_filename"] == "any.pdf"
-    assert created["source"] == "web"
-    assert created["file_path"] == moved_path
-
+    # Workflow still triggered.
     assert len(wf.calls) == 1
     call = wf.calls[0]
     assert call["unique_id"] == unique_id
@@ -242,8 +196,6 @@ def test_process_web_upload_supports_bytes_like_input(monkeypatch, tmp_dirs, con
     cfg = config(upload_dir, processing_dir, validate_header=True)
 
     wf = DummyWorkflowManager()
-    dummy_status = DummyStatusManager()
-    monkeypatch_status_manager(monkeypatch, dummy_status)
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
 
@@ -255,7 +207,6 @@ def test_process_web_upload_supports_bytes_like_input(monkeypatch, tmp_dirs, con
     assert len(files) == 1
     moved_path = os.path.join(processing_dir, files[0])
 
-    assert len(dummy_status.created) == 1
     assert len(wf.calls) == 1
     with open(moved_path, "rb") as f:
         assert f.read(5) == b"%PDF-"

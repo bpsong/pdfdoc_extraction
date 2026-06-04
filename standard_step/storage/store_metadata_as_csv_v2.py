@@ -11,7 +11,8 @@ It supports:
 
 Behavior:
 - Reads configuration (data_dir, filename template) from ConfigManager.
-- Uses StatusManager to report start/completion/failure using task_slug.
+- Registers the generated CSV as an ``export_csv`` document artifact when
+  SQLite document context is available.
 - Cleans strings for CSV (newlines -> spaces).
 - Ensures unique filenames by appending _1, _2, ... if necessary.
 """
@@ -27,7 +28,7 @@ from typing import Any, Dict, List, Optional
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
-from modules.status_manager import StatusManager
+from modules.services.artifact_service import register_document_artifact
 from modules.utils import windows_long_path, sanitize_filename, preprocess_filename_value
 
 TASK_SLUG = "store_metadata_csv_v2"
@@ -93,13 +94,9 @@ class StoreMetadataAsCsvV2(BaseTask):
         self.logger = logging.getLogger(__name__)
 
     def on_start(self, context: Dict[str, Any]) -> None:
-        """Log and update status that the task has started."""
+        """Log that the task has started."""
         unique_id = str(context.get("id", "unknown"))
         self.logger.info("Starting StoreMetadataAsCsvV2 for id=%s", unique_id)
-        try:
-            StatusManager(self.config_manager).update_status(unique_id, f"Task Started: {self.task_slug}", step=f"Task Started: {self.task_slug}")
-        except Exception:
-            self.logger.debug("Status update (started) failed", exc_info=True)
 
     def validate_required_fields(self, context: Dict[str, Any]) -> None:
         """
@@ -418,33 +415,27 @@ class StoreMetadataAsCsvV2(BaseTask):
                 with open(output_path, "w", newline="", encoding="utf-8") as fh:
                     writer = csv.DictWriter(fh, fieldnames=headers)
                     writer.writeheader()
-                    # status update while writing rows (best-effort)
-                    try:
-                        StatusManager(self.config_manager).update_status(unique_id, "Writing CSV rows", step="Writing CSV rows")
-                    except Exception:
-                        self.logger.debug("Status update (writing rows) failed", exc_info=True)
                     writer.writerows(rows)
             except Exception as e:
-                # capture error and update status manager, but follow Railway pattern: return context with error info
+                # capture error, but follow Railway pattern: return context with error info
                 context["error"] = str(e)
                 context["error_step"] = "StoreMetadataAsCsvV2"
-                try:
-                    StatusManager(self.config_manager).update_status(unique_id, f"Task Failed: {self.task_slug}", step=f"Task Failed: {self.task_slug}", error=str(e))
-                except Exception:
-                    self.logger.debug("Status update (failed) failed", exc_info=True)
                 self.logger.exception("Failed writing CSV for %s", unique_id)
                 return context
 
             # Success updates
             self.logger.info("Metadata for %s stored as CSV at %s", unique_id, output_path)
-            try:
-                StatusManager(self.config_manager).update_status(unique_id, f"Task Completed: {self.task_slug}", step=f"Task Completed: {self.task_slug}", details={"output_path": str(output_path), "rows": len(rows)})
-            except Exception:
-                self.logger.debug("Status update (completed) failed", exc_info=True)
 
             # Attach output path to context
             context["output_path"] = str(output_path)
             context["rows_written"] = len(rows)
+            register_document_artifact(
+                self.config_manager,
+                context,
+                file_type="export_csv",
+                file_path=output_path,
+                metadata={"task_slug": self.task_slug, "rows": len(rows)},
+            )
             return context
 
         except TaskError as e:
@@ -452,18 +443,10 @@ class StoreMetadataAsCsvV2(BaseTask):
             context["error"] = str(e)
             if "error_step" not in context:
                 context["error_step"] = "StoreMetadataAsCsvV2"
-            try:
-                StatusManager(self.config_manager).update_status(str(context.get("id", "unknown")), f"Task Failed: {self.task_slug}", step=f"Task Failed: {self.task_slug}", error=str(e))
-            except Exception:
-                self.logger.debug("Status update (failed outer) failed", exc_info=True)
             return context
         except Exception as e:
             # Unexpected exceptions: capture and return context
             context["error"] = str(e)
             context["error_step"] = "StoreMetadataAsCsvV2"
-            try:
-                StatusManager(self.config_manager).update_status(str(context.get("id", "unknown")), f"Task Failed: {self.task_slug}", step=f"Task Failed: {self.task_slug}", error=str(e))
-            except Exception:
-                self.logger.debug("Status update (failed unexpected) failed", exc_info=True)
             self.logger.exception("Unhandled exception in StoreMetadataAsCsvV2")
             return context

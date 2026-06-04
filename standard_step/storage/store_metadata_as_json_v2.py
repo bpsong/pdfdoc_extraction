@@ -15,8 +15,8 @@ Behavior:
 - Generates a safe, unique filename (appending _1, _2, ...) to avoid
   overwrites.
 - Uses windows_long_path for all filesystem paths.
-- Updates StatusManager with start/completed/failed messages using
-  task_slug = "store_metadata_json_v2".
+- Registers the generated JSON as an ``export_json`` document artifact when
+  SQLite document context is available.
 
 This file follows the conventions used in the existing
 standard_step/storage/store_metadata_as_json.py module but adapts the
@@ -34,13 +34,13 @@ from typing import Any, Dict, Optional
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
+from modules.services.artifact_service import register_document_artifact
 from modules.utils import (
     sanitize_filename,
     generate_unique_filepath,
     preprocess_filename_value,
     windows_long_path,
 )
-from modules.status_manager import StatusManager
 
 # Task slug used for status updates
 TASK_SLUG = "store_metadata_json_v2"
@@ -98,17 +98,8 @@ class StoreMetadataAsJsonV2(BaseTask):
             self.logger.debug("No extraction.fields config found; aliasing/is_table info unavailable.")
 
     def on_start(self, context: Dict[str, Any]) -> None:
-        """Lifecycle hook executed when the task starts.
-
-        Updates StatusManager that the task has started.
-        """
+        """Lifecycle hook executed when the task starts."""
         self.initialize_context(context)
-        unique_id = str(context.get("id", "unknown"))
-        try:
-            StatusManager(self.config_manager).update_status(unique_id, f"Task Started: {TASK_SLUG}", step=f"Task Started: {TASK_SLUG}")
-        except Exception:
-            # Do not fail on status update errors
-            self.logger.debug("Failed to write start status", exc_info=True)
 
     def validate_required_fields(self, context: Dict[str, Any]) -> None:
         """Validate that required internal configuration is present.
@@ -193,7 +184,8 @@ class StoreMetadataAsJsonV2(BaseTask):
             - Map top-level scalar fields to aliases (if configured).
             - Preserve list-of-objects fields (is_table: true) under alias.
             - Ensure output filename uniqueness.
-            - Update StatusManager at key points.
+            - Register the generated JSON as a SQLite document artifact when
+              document context exists.
         """
         unique_id = str(context.get("id", "unknown"))
         try:
@@ -224,12 +216,6 @@ class StoreMetadataAsJsonV2(BaseTask):
                 output_path = windows_long_path(str(output_path))
             except Exception as e:
                 raise TaskError(f"Failed to create unique filepath in '{self.data_dir}': {e}")
-
-            # Status: preparing to write
-            try:
-                StatusManager(self.config_manager).update_status(unique_id, "Preparing to write JSON", step=f"Preparing to write JSON - {TASK_SLUG}")
-            except Exception:
-                self.logger.debug("Status update (preparing) failed", exc_info=True)
 
             # Transform data according to extraction.fields config
             processed: Dict[str, Any] = {}
@@ -269,12 +255,6 @@ class StoreMetadataAsJsonV2(BaseTask):
                     # For scalar fields, keep the value as-is.
                     processed[alias] = value
 
-            # Status: writing
-            try:
-                StatusManager(self.config_manager).update_status(unique_id, "Writing JSON file", step=f"Writing JSON file - {TASK_SLUG}")
-            except Exception:
-                self.logger.debug("Status update (writing) failed", exc_info=True)
-
             # Ensure data_dir exists
             try:
                 Path(self.data_dir).mkdir(parents=True, exist_ok=True)
@@ -286,18 +266,17 @@ class StoreMetadataAsJsonV2(BaseTask):
                 with open(output_path, "w", encoding="utf-8") as fh:
                     json.dump(processed, fh, indent=4, ensure_ascii=False)
                 self.logger.info(f"Metadata for {unique_id} stored as JSON at {output_path}")
-                try:
-                    StatusManager(self.config_manager).update_status(unique_id, f"Task Completed: {TASK_SLUG}", step=f"Task Completed: {TASK_SLUG}", details={"output_path": output_path})
-                except Exception:
-                    self.logger.debug("Status update (completed) failed", exc_info=True)
                 # Put output path into context for downstream steps
                 context["output_path"] = output_path
+                register_document_artifact(
+                    self.config_manager,
+                    context,
+                    file_type="export_json",
+                    file_path=output_path,
+                    metadata={"task_slug": TASK_SLUG},
+                )
             except Exception as e:
                 # On write failure, record and re-raise as TaskError
-                try:
-                    StatusManager(self.config_manager).update_status(unique_id, f"Task Failed: {TASK_SLUG}", step=f"Task Failed: {TASK_SLUG}", error=str(e))
-                except Exception:
-                    self.logger.debug("Status update (failed) failed", exc_info=True)
                 # Update context with error for Railway pattern
                 context["error"] = str(e)
                 context["error_step"] = "StoreMetadataAsJsonV2"
@@ -307,19 +286,11 @@ class StoreMetadataAsJsonV2(BaseTask):
             # TaskError already meaningful; ensure context contains failure info and return
             if "error_step" not in context:
                 context["error_step"] = "StoreMetadataAsJsonV2"
-            try:
-                StatusManager(self.config_manager).update_status(unique_id, f"Task Failed: {TASK_SLUG}", step=f"Task Failed: {TASK_SLUG}", error=context.get("error", "TaskError"))
-            except Exception:
-                self.logger.debug("Status update (failed outer) failed", exc_info=True)
             return context
         except Exception as e:
             # Unexpected exceptions: capture in context and update status manager
             context["error"] = str(e)
             context["error_step"] = "StoreMetadataAsJsonV2"
-            try:
-                StatusManager(self.config_manager).update_status(unique_id, f"Task Failed: {TASK_SLUG}", step=f"Task Failed: {TASK_SLUG}", error=str(e))
-            except Exception:
-                self.logger.debug("Status update (failed unexpected) failed", exc_info=True)
             self.logger.exception("Unhandled exception in StoreMetadataAsJsonV2")
             return context
 

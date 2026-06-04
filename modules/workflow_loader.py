@@ -3,7 +3,7 @@
 This module is responsible for:
 - Dynamically loading task classes defined in configuration.
 - Constructing a Prefect flow that orchestrates execution of configured steps.
-- Managing execution lifecycle with robust error handling and status updates.
+- Managing execution lifecycle with robust error handling and SQLite task runs.
 - Ensuring a mandatory housekeeping step executes at the end of the pipeline.
 """
 
@@ -19,7 +19,6 @@ from prefect.cache_policies import NO_CACHE
 
 from modules.config_manager import ConfigManager
 from modules.shutdown_manager import ShutdownManager
-from modules.status_manager import StatusManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect
 from modules.exceptions import TaskError
@@ -30,16 +29,16 @@ from standard_step.housekeeping.cleanup_task import CleanupTask
 class WorkflowLoader:
     """Dynamically builds and runs a Prefect-based workflow from configuration.
 
-    This loader depends on external managers for configuration, shutdown, and status:
+    This loader depends on external managers for configuration, shutdown, and state:
     - ConfigManager: provides access to the pipeline and task definitions.
     - ShutdownManager: performs a graceful shutdown when unrecoverable errors occur.
-    - StatusManager: records status updates for pipeline start, per-step completion/failure,
-      and final pipeline outcome.
+    - WorkflowStateService: records SQLite task-run start, completion, pause,
+      failure, and current document pointer state.
 
     The loader imports task classes at runtime based on config (module + class),
     instantiates them, wraps their run methods as Prefect tasks, and wires them
-    into a Prefect flow function. It updates statuses after each step and handles
-    on-error behavior, then appends and executes a housekeeping step with status updates.
+    into a Prefect flow function. It updates SQLite task runs after each step and handles
+    on-error behavior, then appends and executes a housekeeping step.
     """
 
     _instance = None
@@ -61,7 +60,6 @@ class WorkflowLoader:
         self.task_defs = self.cfg.get("tasks", {})
         self.logger = logging.getLogger(__name__)
         self.shutdown_manager = ShutdownManager()
-        self.status_manager = StatusManager(self.config_manager)
 
     def _import_task_class(self, module_name: str, class_name: str) -> Type[BaseTask]:
         """Import and validate a task class specified by module and class name.
@@ -123,8 +121,8 @@ class WorkflowLoader:
         Purpose:
             Validate pipeline configuration, iterate over configured steps, wrap
             each task's run() as a Prefect @task (with NO_CACHE), execute steps
-            sequentially while updating statuses, and finally run a housekeeping
-            task with appropriate status updates.
+            sequentially while updating SQLite task runs, and finally run a
+            housekeeping task before fan-in finalization.
 
         Returns:
             A Prefect flow function named "Dynamic PDF Processing Flow" that accepts
@@ -135,14 +133,9 @@ class WorkflowLoader:
             - Iteration: for each step, imports and instantiates the configured task
               class, calls on_start(context), executes run(context) via a wrapped
               Prefect task, and propagates the resulting context.
-            - Status updates: sets "Pipeline Started" at the beginning; per-step
-              updates include "Task Completed: {task_name}" on success or
-              "Task Failed: {task_name}" on errors, with error details recorded.
             - Error behavior: if step config specifies on_error == "stop", the
               pipeline stops after logging and status update; otherwise it continues.
-            - Housekeeping: executes a mandatory "housekeeping_task" if present in
-              'tasks' with its own status updates, setting final pipeline status to
-              either "Pipeline Completed Successfully" or "Pipeline Completed with Errors".
+            - Housekeeping: executes a mandatory cleanup task before leaf fan-in.
         """
         pipeline_config = self.cfg.get("pipeline", [])
         if not isinstance(pipeline_config, list):
@@ -154,7 +147,6 @@ class WorkflowLoader:
         def dynamic_flow(initial_context: Dict[str, Any]):
             current_context = initial_context
             effective_start_index = int(current_context.pop("start_task_index", start_task_index) or 0)
-            self.status_manager.update_status(current_context.get("id", "unknown"), "Pipeline Started")
 
             for task_index, task_key in enumerate(pipeline_config):
                 if task_index < effective_start_index:
@@ -230,10 +222,6 @@ class WorkflowLoader:
                         current_context.setdefault("fan_out_start_task_index", task_index + 1)
                         if state_service is not None and task_run_id:
                             state_service.complete_task(task_run_id, output_summary)
-                        self.status_manager.update_status(
-                            current_context.get("id", "unknown"),
-                            f"Task Completed with Fan-Out: {task_name}",
-                        )
                         self.logger.info("Pipeline fan-out after task '%s'.", task_name)
                         return current_context
 
@@ -242,19 +230,12 @@ class WorkflowLoader:
                             state_service.pause_task(task_run_id, output_summary)
                             state_service.pause_document(str(current_context["document_id"]))
                             FanInService(state_service.conn).finalize_leaf(current_context)
-                        self.status_manager.update_status(
-                            current_context.get("id", "unknown"),
-                            f"Task Paused: {task_name}",
-                        )
                         self.logger.info("Pipeline paused after task '%s'.", task_name)
                         return current_context
 
                     if current_context.get("error"):
                         if state_service is not None and task_run_id:
                             state_service.fail_task(task_run_id, str(current_context["error"]), output_summary)
-                        self.status_manager.update_status(current_context.get("id", "unknown"),
-                                                          f"Task Failed: {task_name}",
-                                                          error=current_context["error"])
                         if on_error == "stop":
                             self.logger.critical(f"Stopping pipeline due to error in task '{task_name}'.")
                             break
@@ -263,8 +244,6 @@ class WorkflowLoader:
                     else:
                         if state_service is not None and task_run_id:
                             state_service.complete_task(task_run_id, output_summary)
-                        self.status_manager.update_status(current_context.get("id", "unknown"),
-                                                          f"Task Completed: {task_name}")
 
                 except TaskError as e:
                     self.logger.error(f"Task '{task_name}' failed with TaskError: {e}")
@@ -272,9 +251,6 @@ class WorkflowLoader:
                     current_context["error_step"] = task_name
                     if state_service is not None and task_run_id:
                         state_service.fail_task(task_run_id, str(e), self._context_summary(current_context))
-                    self.status_manager.update_status(current_context.get("id", "unknown"),
-                                                      f"Task Failed: {task_name}",
-                                                      error=str(e))
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to TaskError in task '{task_name}'.")
                         break
@@ -284,9 +260,6 @@ class WorkflowLoader:
                     current_context["error_step"] = task_name
                     if state_service is not None and task_run_id:
                         state_service.fail_task(task_run_id, str(e), self._context_summary(current_context))
-                    self.status_manager.update_status(current_context.get("id", "unknown"),
-                                                      f"Task Failed: {task_name}",
-                                                      error=f"Unexpected error: {e}")
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to unexpected error in task '{task_name}'.")
                         break
@@ -316,21 +289,11 @@ class WorkflowLoader:
                 else:
                     final_context = current_context
 
-                if final_context.get("error"):
-                    self.status_manager.update_status(final_context.get("id", "unknown"),
-                                                      "Pipeline Completed with Errors",
-                                                      error=final_context["error"])
-                else:
-                    self.status_manager.update_status(final_context.get("id", "unknown"),
-                                                      "Pipeline Completed Successfully")
                 self._finalize_leaf(final_context)
                 return final_context
             except Exception as e:
                 self.logger.critical(f"Housekeeping task failed: {e}")
                 current_context["error"] = str(e)
-                self.status_manager.update_status(current_context.get("id", "unknown"),
-                                                  "Pipeline Completed with Critical Housekeeping Error",
-                                                  error=str(e))
                 self._finalize_leaf(current_context)
                 return final_context
         return dynamic_flow

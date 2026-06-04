@@ -1,4 +1,4 @@
-# Design Architecture for PDF Processing System
+﻿# Design Architecture for PDF Processing System
 
 ## Purpose
 
@@ -19,13 +19,12 @@ This document presents the architecture and design rationale for the PDF Process
 - [`standard_step/extraction/extract_pdf.py`](standard_step/extraction/extract_pdf.py:1)
 - [`standard_step/context/assign_nanoid.py`](standard_step/context/assign_nanoid.py:1)
 - [`standard_step/housekeeping/cleanup_task.py`](standard_step/housekeeping/cleanup_task.py:1)
-- Core modules: [`modules/base_task.py`](modules/base_task.py:1), [`modules/config_manager.py`](modules/config_manager.py:1), [`modules/status_manager.py`](modules/status_manager.py:1), [`modules/workflow_loader.py`](modules/workflow_loader.py:1), [`modules/workflow_manager.py`](modules/workflow_manager.py:1)
+- Core modules: [`modules/base_task.py`](modules/base_task.py:1), [`modules/config_manager.py`](modules/config_manager.py:1), [`modules/workflow_loader.py`](modules/workflow_loader.py:1), [`modules/workflow_manager.py`](modules/workflow_manager.py:1), [`modules/file_processor.py`](modules/file_processor.py:1)
 - [`modules/watch_folder_monitor.py`](modules/watch_folder_monitor.py:1), [`modules/auth_utils.py`](modules/auth_utils.py:1), [`modules/api_router.py`](modules/api_router.py:1)
-- [`modules/workflow_loader.py`](modules/workflow_loader.py:1)
-- [`modules/config_manager.py`](modules/config_manager.py:1)
-- [`modules/status_manager.py`](modules/status_manager.py:1)
+- SQLite data layer: [`modules/db/`](modules/db/:1)
+- Application services: [`modules/services/`](modules/services/:1)
 - [`standard_step/archiver/archive_pdf.py`](standard_step/archiver/archive_pdf.py:1)
-- Web interface: [`web/server.py`](web/server.py:1), [`web/templates/dashboard.html`](web/templates/dashboard.html:1), [`web/static/js/status.js`](web/static/js/status.js:1)
+- Web interface: [`web/server.py`](web/server.py:1), [`web/templates/`](web/templates/:1), [`web/static/js/`](web/static/js/:1)
 These files are the primary implementations referenced by this architecture document.
 
 ## High-level goals
@@ -39,7 +38,11 @@ These files are the primary implementations referenced by this architecture docu
 
 The system is organized around pipelines defined in configuration (YAML). For each input PDF the system:
 - ingests the file via watch folder or web upload
+- creates SQLite batch/document state
 - runs extraction to produce a structured data payload
+- stores extraction result and field-level confidence/review state
+- optionally fans out source PDFs into split child documents
+- optionally gates documents into human review
 - runs rule processors to perform domain logic (for example update reference CSVs)
 - persists metadata and files using storage steps
 - optionally archives or cleans up inputs
@@ -50,7 +53,10 @@ The system is organized around pipelines defined in configuration (YAML). For ea
 - Workflow Loader: builds the Prefect flow from the single configured `pipeline` list and supplies tasks. This component is responsible for dynamic task instantiation and managing the sequence of operations defined in configuration.
 - Standard Steps: pluggable tasks under `standard_step` (extraction, rules, storage, archiver, housekeeping). These are designed as independent, reusable units of work.
 - Config Manager: validates configuration at startup and enforces folder/file existence. It centralizes system configuration and ensures operational readiness.
-- Status Manager: records task lifecycle events for operational visibility. This provides a standardized mechanism for reporting progress and errors across the pipeline.
+- SQLite Repository Layer: owns persistence for batches, documents, task runs, extraction results, review items, document files, settings, and audit history.
+- Service Layer: coordinates use cases such as batch upload, review, reports, runtime settings, admin settings, audit events, and artifact registration.
+- Unified Web App: `/app/*` pages provide operator and administrator workflows over SQLite-backed APIs.
+- Legacy Compatibility: `StatusManager`, `/dashboard`, `/api/files`, and `/api/status/{file_id}` remain compatibility surfaces. They are not the primary state path for configured workflows.
 
 ## Data flow
 
@@ -64,12 +70,17 @@ graph TD
     WFProc -->|Extracted Data| Rules[RulesEngine]
     WFProc -->|Processed Data| Storage[Storage]
     WFProc -->|Original PDF Path| Archiver[Archiver]
+    WFProc -->|Task Run Events| DB[(SQLite)]
     Extract -->|Structured Data| Rules
+    Extract -->|Results and Fields| DB
+    WFProc -->|Review Required| Review[Review Queue]
+    Review -->|Corrected Values| DB
     Rules -->|Updated Data| Storage
     Storage -->|CSV/JSON & Renamed PDF| Output[FilesData]
+    Storage -->|Artifact Records| DB
     Archiver -->|Archived/Deleted PDF| ArchiveStore[ArchiveFolder]
-    WFProc -->|Status Updates| Status[StatusManager]
-    Status -->|Enhanced Status| WebUI[WebInterface]
+    Archiver -->|Artifact Records| DB
+    DB -->|Batches, Documents, Tasks, Reviews| WebUI[Unified /app WebInterface]
     WebUI -->|Modal Dialog| Users[Users]
 ```
 
@@ -80,39 +91,122 @@ graph TD
   - Configuration: `watch_folder.dir`, `watch_folder.processing_dir` (see [`docs/user_guide.md`](docs/user_guide.md:1))
 
 - WorkflowLoader
-  - Responsibilities: load `config.yaml`, match workflows to file metadata, instantiate tasks from `tasks` registry. It dynamically creates task instances based on configuration, allowing for flexible pipeline definitions without code changes. It also directly instantiates and appends the `CleanupTask` from `standard_step/housekeeping/cleanup_task` as a mandatory final step in every Prefect flow, ensuring it runs last regardless of pipeline configuration or previous errors.
-  - Important contract: tasks are referenced by `module` and `class` and receive `params`. The loader ensures that task dependencies (e.g., data from previous steps) are passed through the `context` dictionary.
+  - Responsibilities: load `config.yaml`, instantiate tasks from the configured `pipeline`, and append the housekeeping cleanup step as a final step. It dynamically creates task instances based on configuration, allowing flexible pipeline definitions without code changes.
+  - Important contract: tasks are referenced by `module` and `class` and receive `params`. The loader passes a mutable context dictionary through each task. When SQLite context exists, the loader records task-run lifecycle state and output summaries in SQLite.
 
 - Standard Steps
   - Each standard step implements a task class; tasks extend `modules/base_task.BaseTask`. This base class defines the common interface for all tasks, including methods like `on_start`, `run`, `validate_required_fields`, and `register_error`.
-  - Side effects: file I/O, network calls, status updates must be explicit and contained within the task's `run` method, promoting modularity and testability.
-  - Example: [`standard_step/rules/update_reference.py`](standard_step/rules/update_reference.py:1) updates CSVs atomically and emits status events via `modules/status_manager.py` (`modules/status_manager.py:1`).
+  - Side effects: file I/O, network calls, context mutations, SQLite persistence, and artifact registration must be explicit and contained within the task's `run` method, promoting modularity and testability.
+  - Example: [`standard_step/rules/update_reference.py`](standard_step/rules/update_reference.py:1) updates CSVs atomically and records an operation summary in `context["data"]["update_reference"]`.
 
-  - Housekeeping Task (`CleanupTask`): Responsibilities include moving processed files from the processing directory to an archive directory while preserving original filenames, cleaning up associated status files, logging all operations and errors, raising exceptions on critical failures (e.g., file move errors), and ensuring execution as the final step regardless of previous task outcomes.
+  - Housekeeping Task (`CleanupTask`): Responsibilities include cleaning up temporary processing-folder files while preserving registered business artifacts, logging all operations and errors, raising exceptions on critical failures, and ensuring execution as the final step regardless of previous task outcomes.
 
-- Enhanced Web Interface and Modal Dialog System
+- SQLite Repositories and Services
+  - `modules/db/connection.py` resolves the SQLite path, enables row access, and enforces foreign keys.
+  - `modules/db/migrations.py` creates and evolves the application tables.
+  - `modules/db/repositories.py` implements persistence boundaries for documents, task runs, extraction results, review items, files, settings, and audit entities.
+  - Services under `modules/services/` compose repositories into application use cases. Examples include batch upload, review queue operations, reports summaries, runtime settings, admin settings/versioning, audit event recording, and artifact registration.
+
+- Unified Web Interface
   - **Authentication**: JWT-based single-user authentication with session management via [`modules/auth_utils.py`](modules/auth_utils.py:1)
-  - **File Upload**: Web-based PDF upload with progress tracking and header validation
-  - **Status Dashboard**: Real-time processing status display with enhanced modal dialog system
-  - **Modal Dialog Features**:
-    - Complete status data including timestamps, details, and processing history
-    - Singapore timezone conversion (GMT+8) for all timestamp displays
-    - Timeline visualization with chronological processing steps and color-coded status indicators
-    - Reference document match detection and special note section
-    - Collapsible raw JSON debug view for technical troubleshooting
-    - Responsive CSS grid layout with auto-fit columns
-    - Accessibility features including focus management and keyboard navigation
-    - Graceful fallback handling with inline styling system
-  - **API Endpoints**: RESTful API with enhanced status responses via [`modules/api_router.py`](modules/api_router.py:1)
-    - `POST /upload`: PDF file upload with validation and progress tracking
-    - `GET /api/files`: Retrieve list of processed files with status information
-    - `GET /api/status/{file_id}`: Detailed status with complete processing history, timeline, and debug information
-    - Graceful fallback handling for missing status files with appropriate error responses
+  - **Operator UI**: `/app/upload`, `/app/processing`, `/app/batches/{batch_id}`, `/app/batches/{batch_id}/split-results`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
+  - **Admin UI**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`.
+  - **Primary APIs**: batch, document, extraction, review, reports, settings, admin settings, pipeline, review-gate, split, schema, and audit endpoints in [`modules/api_router.py`](modules/api_router.py:1).
+  - **Legacy APIs**: `/api/files` and `/api/status/{file_id}` return SQLite-backed compatibility responses. New UI code should use the primary SQLite APIs.
 
 - Context Management Tasks
   - **Nanoid Generation**: [`standard_step/context/assign_nanoid.py`](standard_step/context/assign_nanoid.py:1) generates secure, unique nanoid strings (5-21 characters)
   - **Configuration validation**: Validates length parameters and ensures proper configuration
   - **Context integration**: Adds generated nanoid to processing context under "nanoid" key for use by subsequent tasks
+
+## SQLite State Model
+
+SQLite is the authoritative workflow-state store. The design separates operational state from durable business artifacts:
+
+- `batches`: ingestion groups created by batch upload or watch-folder ingestion.
+- `documents`: source documents, split child documents, document type/category, and aggregate processing status.
+- `task_runs`: task lifecycle records keyed by document and task.
+- `extraction_results` and extracted field tables: normalized extraction payloads, provider metadata, confidence, review state, and final values.
+- `review_items`: queue, claim, draft, diff, and completion state for human review.
+- `document_files`: artifact registry for source originals, split working files, archives, PDF exports, CSV exports, and JSON exports.
+- admin/settings/audit tables: versioned settings changes, audit events, and admin workflow history.
+
+The repository layer owns table-specific queries. The service layer owns use-case orchestration and cross-table invariants. Standard steps should not create ad hoc status text files to communicate state.
+
+## Ingestion and Workflow Execution
+
+### Watch Folder Ingestion
+
+The watch folder monitor detects candidate PDFs, validates the `%PDF-` header, and moves the file into the configured processing directory. `FileProcessor` creates SQLite ingestion state when possible, then triggers `WorkflowManager` with `batch_id` and `document_id`.
+
+### Web and Batch Upload
+
+The unified upload page posts to `POST /api/batches/upload`. The API creates one batch with one document per uploaded PDF, persists original source artifacts, and returns a batch route for monitoring.
+
+### Task Execution
+
+`WorkflowManager` and `WorkflowLoader` execute the configured pipeline and create/update SQLite task runs. Each task receives a context dictionary that includes identifiers such as:
+
+- `id`
+- `batch_id`
+- `document_id`
+- `task_run_id`
+- `file_path`
+- `data`
+- `metadata`
+
+Task output summaries are stored for operational visibility. Document status is updated from task-run state and review/split outcomes.
+
+## Review Flow
+
+The review gate evaluates extracted fields and configured review policies. Documents can be marked `review_required`, and review items are inserted into the queue. Operators use `/app/review` to claim work, inspect the source PDF and extracted fields, save drafts, compute diffs, and complete review.
+
+Completed review persists corrected field values and review metadata in SQLite. After review, the document can resume downstream workflow steps through `POST /api/documents/{document_id}/resume`.
+
+## Migration from `qa_extracted_data`
+
+The unified application absorbs the useful behavior from the previous `qa_extracted_data` Streamlit application without keeping Streamlit as a runtime dependency.
+
+Replacement mapping:
+
+| Previous capability | Unified implementation |
+| --- | --- |
+| Streamlit review queue | `/app/review` and `/api/review/items` |
+| Streamlit review workspace | `/app/review/{review_item_id}` with SQLite review items and extracted fields |
+| Schema loading/editing utilities | `/app/schemas`, `/app/schemas/{schema_name}`, and schema APIs |
+| Diff generation | Review diff API and review workspace JavaScript |
+| File-locking concepts | Review claim/release semantics with lock timeout |
+| Audit logging | Admin/review audit services and SQLite audit tables |
+| Separate review data store | SQLite extraction/review tables in the main application |
+
+The architecture keeps schema-driven forms and corrected final values, but the source of truth is now the main app database and app-managed schema/config flows.
+
+## Split Fan-out and Fan-in
+
+Split processing classifies or separates source PDFs into child documents. The parent/source document records split status and child relationships. Child documents run extraction/review/storage workflows independently. Fan-in aggregates child document state so the source batch can display completion, partial completion, failure, or review-required state.
+
+Split artifacts are stored as working files or child source artifacts and are associated with their documents in `document_files`.
+
+## Admin Configuration, Audit, and Versioning
+
+Admin UI routes manage runtime settings, pipeline drafts, task catalog views, review-gate rules, split settings, schema validation, and dry runs. Admin changes are versioned where appropriate and recorded through audit services. Audit events should describe:
+
+- who initiated the change
+- what setting or configuration was changed
+- old/new values or safe summaries
+- validation or dry-run results
+- timestamps and request context where available
+
+Secrets must not be exposed through runtime settings responses or audit payloads.
+
+## Artifact Registration
+
+Durable files are represented by explicit artifact roles. Current roles include source originals, split working files, source archives, PDF exports, CSV exports, and JSON exports. Storage and archive tasks register generated files with `document_files` when `document_id` is available.
+
+This preserves the boundary between workflow state and business files:
+
+- SQLite answers "what happened, where is it in the workflow, what was reviewed, and what artifacts exist?"
+- The filesystem stores large binary/text artifacts such as PDFs, CSVs, JSON exports, reference CSVs, and config/schema files.
 
 ## Notes on UpdateReferenceTask
 
@@ -131,13 +225,17 @@ graph TD
 
 - ConfigManager validates `_dir` existence and `_file` presence at startup
 - `config.yaml` contains `tasks` registry; each task entry must include `module`, `class`, and `params`
+- `database.path` controls SQLite state storage; migrations run on startup when configured
+- `app_storage` controls app-managed artifact directories
+- `review` controls review queue defaults and lock behavior
+- Admin configuration flows validate pipeline, review-gate, split, and schema settings before publishing changes
 - Validation guidance:
   - Keep watch folder path stable and ensure permissions are set
   - Avoid using relative paths that may vary between environments
 
 ## Concurrency and process model
 
-The current implementation runs single-process and executes workflows sequentially per file. This behavior is primarily driven by the main application loop in [`main.py`](main.py:205), which orchestrates file processing via [`modules/file_processor.py`](modules/file_processor.py:1), [`modules/workflow_manager.py`](modules/workflow_manager.py:1), and [`modules/watch_folder_monitor.py`](modules/watch_folder_monitor.py:1). The housekeeping task, invoked unconditionally by the WorkflowLoader, ensures final cleanup and status updates even if prior tasks fail, aligning with the error handling strategy.
+The current implementation runs single-process and executes workflows sequentially per file. This behavior is primarily driven by the main application loop in [`main.py`](main.py:205), which orchestrates file processing via [`modules/file_processor.py`](modules/file_processor.py:1), [`modules/workflow_manager.py`](modules/workflow_manager.py:1), and [`modules/watch_folder_monitor.py`](modules/watch_folder_monitor.py:1). The housekeeping task, invoked unconditionally by the WorkflowLoader, ensures final cleanup and task-run state updates even if prior tasks fail, aligning with the error handling strategy.
 
 Where to change: To introduce concurrency or worker pools, the starting points for modification would be [`main.py`](main.py:205), [`modules/file_processor.py`](modules/file_processor.py:1), [`modules/workflow_manager.py`](modules/workflow_manager.py:1), and [`modules/watch_folder_monitor.py`](modules/watch_folder_monitor.py:1). Consider integrating queue options like Redis or Celery to manage task distribution.
 
@@ -156,7 +254,7 @@ if some_precondition_is_missing:
     raise TaskError("Missing required parameter")
 ```
 
-Tasks should also update the `StatusManager` on failure to provide operational visibility (see failure handling in [`standard_step/rules/update_reference.py`](standard_step/rules/update_reference.py:409)).
+Task-run failures are persisted by the workflow loader/manager when document context is available. Tasks should register context errors with `BaseTask.register_error`; durable task outputs should be returned through context and, when they produce files, registered through the artifact service.
 
 - `on_error` per task controls pipeline continuation (`stop` or `continue`), allowing granular control over error handling behavior.
 - Recommendations:
@@ -262,6 +360,10 @@ items:  # Workflow field key, used in context["data"]
 - v2 modules are created as parallel implementations (e.g., `extract_pdf_v2.py`, `store_metadata_as_json_v2.py`).
 - Configuration-driven: Enable v2 by updating module paths in `config.yaml` and adding `is_table: true` to relevant fields.
 - Backward compatibility: v1 tasks remain available and functional for existing configurations.
+- SDK contract: runtime extraction uses `llama-cloud>=2.1` and `from llama_cloud import LlamaCloud`; new code should not import `llama_cloud_services.LlamaExtract`.
+- Saved cloud configurations use `configuration_id`. If `configuration_id` is absent, extraction builds an inline Extract v2 configuration from workflow `fields`.
+- Saved LlamaCloud configurations may return workflow field keys or aliases. Extraction normalizes both forms to workflow field keys before downstream tasks run.
+- Smoke validation is available through `tools/llamacloud_extract_smoke.py`, which produces raw extraction output, workflow-normalized output, and a workflow-fit report.
 
 ## Authentication and session management
 
@@ -285,7 +387,7 @@ items:  # Workflow field key, used in context["data"]
 ## Testing strategy
 
 - Unit tests:
-  - Core components: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
+  - Core components: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), and legacy status compatibility coverage in [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
   - Standard steps: [`test/standard_step/rules/test_rules.py`](test/standard_step/rules/test_rules.py:1), [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1), [`test/standard_step/test_standard_steps.py`](test/standard_step/test_standard_steps.py:1)
   - Workflow components: [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1), [`test/workflow/test_workflow_manager.py`](test/workflow/test_workflow_manager.py:1)
   - Extraction logic: [`test/extraction/test_extraction.py`](test/extraction/test_extraction.py:1), [`test/extraction/test_extraction_v2.py`](test/extraction/test_extraction_v2.py:1)
@@ -296,6 +398,7 @@ items:  # Workflow field key, used in context["data"]
 - Integration tests:
   - API endpoint testing: [`test/integration/test_api_endpoints.py`](test/integration/test_api_endpoints.py:1)
   - Input processing workflows: [`test/integration/test_input_processing.py`](test/integration/test_input_processing.py:1)
+  - SQLite-only workflow state and artifact registration: [`test/integration/test_sqlite_only_workflow_state.py`](test/integration/test_sqlite_only_workflow_state.py:1)
 - Test utilities:
   - Password hash generation: [`tools/generate_password_hash.py`](tools/generate_password_hash.py:1)
   - Mocking and test data management utilities
@@ -322,9 +425,12 @@ items:  # Workflow field key, used in context["data"]
 ## Operational runbook (summary)
 
 - Startup validation errors: check missing folders or files reported by ConfigManager
-- If files stuck in processing_dir: inspect status `.txt` files and application logs
+- If files are stuck in `processing_dir`: inspect `/app/processing`, document task runs, SQLite document status, and application logs
+- If review is blocking completion: inspect `/app/review` and the document extraction page
+- If split batches look incomplete: inspect `/app/batches/{batch_id}/split-results` and child document statuses
 - Recovery steps:
   - Re-run failed pipeline for a file by moving input back to watch folder or invoking a CLI helper
+  - Resume reviewed documents from `POST /api/documents/{document_id}/resume`
 
 ## Appendix
 
@@ -332,7 +438,7 @@ items:  # Workflow field key, used in context["data"]
   - User guide: [`docs/user_guide.md`](docs/user_guide.md:1)
   - Reference task: [`standard_step/rules/update_reference.py`](standard_step/rules/update_reference.py:1)
   - Tests:
-    - Core tests: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
+    - Core tests: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), and legacy status compatibility tests in [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
     - Workflow tests: [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1), [`test/workflow/test_workflow_manager.py`](test/workflow/test_workflow_manager.py:1)
     - Integration tests: [`test/integration/test_api_endpoints.py`](test/integration/test_api_endpoints.py:1), [`test/integration/test_input_processing.py`](test/integration/test_input_processing.py:1)
     - Standard step tests: [`test/standard_step/rules/test_rules.py`](test/standard_step/rules/test_rules.py:1), [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1), [`test/standard_step/test_standard_steps.py`](test/standard_step/test_standard_steps.py:1)

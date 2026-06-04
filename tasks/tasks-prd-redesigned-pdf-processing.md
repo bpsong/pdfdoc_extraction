@@ -1,3 +1,5 @@
+> Historical note: this task list is superseded by `tasks/tasks-prd-refactor-unified-pdfdoc-processing.md`. It is retained only for implementation history of the earlier redesigned PDF processing work.
+
 ## Relevant Files
 
 - [`config.yaml`](config.yaml:1) - Main application configuration, defining pipeline structure and global settings.

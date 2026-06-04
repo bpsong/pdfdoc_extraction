@@ -166,7 +166,8 @@ def test_end_to_end_workflow_execution(test_environment):
     # Ensure processing_dir exists prior to status writes
     processing_dir.mkdir(parents=True, exist_ok=True)
 
-    # Invoke workflow directly and block by polling StatusManager (no WatchFolderMonitor thread)
+    # Invoke workflow directly. Workflow completion is synchronous; persistent
+    # workflow state is SQLite-backed when a document context is supplied.
     original_filename = sample_pdf.name
     unique_id = Path(original_filename).stem
     source = "watch_folder"
@@ -199,28 +200,14 @@ def test_end_to_end_workflow_execution(test_environment):
 
     dummy_result = _DummyExtractionResult(extracted_payload)
 
-    final_status = None
     with patch('standard_step.extraction.extract_pdf.run_extract_v2_job', return_value=dummy_result):
-        workflow_manager.trigger_workflow_for_file(str(sample_pdf), unique_id, original_filename, source)
+        workflow_result = workflow_manager.trigger_workflow_for_file(str(sample_pdf), unique_id, original_filename, source)
 
-        # Poll for completion (up to 120s)
-        for i in range(1200):
-            status = status_manager.get_status(unique_id)
-            logging.debug(f"[sync] Completion check {i+1}: {status}")
-            if status and status.get('status') not in ('Pending', 'Workflow Triggered', 'Pipeline Started'):
-                final_status = status
-                break
-            time.sleep(0.1)
+    assert workflow_result is True
 
-    assert final_status is not None, "Workflow did not complete within timeout"
-
-    # Validate status content
+    # Legacy text status files are no longer the workflow-state source.
     status_file_path = processing_dir / f"{unique_id}.txt"
-    assert status_file_path.exists(), "Status file not created"
-    with open(status_file_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-        assert original_filename in content
-        assert 'watch_folder' in content
+    assert not status_file_path.exists(), "Status text files should not be created by unified workflow processing"
 
     # Discover produced artifacts
     produced_json_files = sorted(data_dir.glob('*.json'))
@@ -343,9 +330,9 @@ def test_end_to_end_workflow_execution(test_environment):
             return re.sub(r'\s+', ' ', s).strip()
         assert _normalize_spaces(json_policy.replace('/', ' ')) == _normalize_spaces(policy_number)
 
-    # Source should be watch_folder
+    # Source is carried in workflow context, not mirrored to legacy text status files.
     status_after = status_manager.get_status(unique_id)
-    assert status_after and status_after.get("source") == "watch_folder", "Source should be 'watch_folder'"
+    assert status_after is None
     logging.info("End-to-end workflow execution test (synchronous) completed successfully")
 
 
@@ -392,14 +379,26 @@ def test_workflow_manager_propagates_source_web(monkeypatch, tmp_path):
     original_filename = "uploaded.pdf"
     source = "web"
 
-    # Trigger workflow
-    workflow_manager.trigger_workflow_for_file(str(file_path), unique_id, original_filename, source)
+    captured_context = {}
 
-    # Immediately check status record to assert source propagation
+    def fake_flow(context):
+        captured_context.update(context)
+        return context
+
+    monkeypatch.setattr(workflow_manager.workflow_loader, "load_workflow", lambda: fake_flow)
+
+    # Trigger workflow and inspect the initial context passed to the loaded flow.
+    workflow_result = workflow_manager.trigger_workflow_for_file(str(file_path), unique_id, original_filename, source)
+
+    assert workflow_result is True
+    assert captured_context["id"] == unique_id
+    assert captured_context["file_path"] == str(file_path)
+    assert captured_context["source"] == "web"
+    assert captured_context["original_filename"] == original_filename
+
+    # No legacy text status record should be created for source propagation.
     status = status_manager.get_status(unique_id)
-    assert status is not None, "Status should be created after triggering workflow"
-    assert status.get("source") == "web", "Source should be 'web' for web-triggered workflows"
-    assert status.get("original_filename") == original_filename
+    assert status is None
 
     # Clean up created directories/files for isolation
     try:

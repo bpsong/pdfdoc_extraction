@@ -172,51 +172,42 @@ def test_error_handling_missing_columns():
 
 
 @patch("pandas.read_csv")
-def test_status_manager_integration(mock_read_csv):
+def test_run_records_update_reference_summary(mock_read_csv):
     # Provide minimal valid DF so run() reaches success path
     mock_read_csv.return_value = pd.DataFrame({
         "policy_number": ["POL123"],
         "status": ["old_status"]
     })
     task = make_task()
-    mock_status_manager = MagicMock()
-    # Replace the instance's status_manager directly
-    task.status_manager = mock_status_manager
 
     context = {"id": "uid123", "data": {"policy_number": "POL123"}}
     # Patch validate_required_fields to pass and avoid file writes
     with patch.object(task, "validate_required_fields", return_value=None):
         with patch.object(task, "_atomic_write_df", return_value=None):
-            _ = task.run(context)
+            result = task.run(context)
 
-    # Check status_manager.update_status called for started and success
-    assert mock_status_manager.update_status.call_count >= 2
-    calls = [call.kwargs.get("status") for call in mock_status_manager.update_status.call_args_list]
-    assert "Task Started: update_csv_reference" in calls
-    assert "Task Completed: update_csv_reference" in calls
+    assert result["data"]["update_reference"] == {
+        "updated_rows": 1,
+        "selected_rows": 1,
+        "update_field": "status",
+        "update_value": "MATCHED",
+    }
 
 
 @patch("pandas.read_csv")
-def test_status_manager_failure(mock_read_csv):
+def test_run_registers_validation_failure_in_context(mock_read_csv):
     mock_read_csv.return_value = pd.DataFrame({
         "policy_number": ["POL123"],
         "status": ["old_status"]
     })
     task = make_task()
-    mock_status_manager = MagicMock()
-    # Replace the instance's status_manager directly
-    task.status_manager = mock_status_manager
 
     # Force validate_required_fields to raise TaskError
     with patch.object(task, "validate_required_fields", side_effect=TaskError("fail")):
         context = {"id": "uid123"}
-        _ = task.run(context)
+        result = task.run(context)
 
-    # Check status_manager.update_status called for started and failed
-    assert mock_status_manager.update_status.call_count >= 2
-    calls = [call.kwargs.get("status") for call in mock_status_manager.update_status.call_args_list]
-    assert "Task Started: update_csv_reference" in calls
-    assert "Task Failed: update_csv_reference" in calls
+    assert result["error"] == "TaskError: fail"
 
 
 # Additional tests for full coverage

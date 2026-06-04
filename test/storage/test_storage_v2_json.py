@@ -24,15 +24,6 @@ class DummyConfigManager:
         return self._tasks_conf
 
 
-class DummyStatus:
-    def __init__(self):
-        self.calls = []
-
-    def update_status(self, unique_id: str, message: str, **kwargs):
-        # record calls for assertions
-        self.calls.append({"id": unique_id, "message": message, "kwargs": kwargs})
-
-
 @pytest.fixture
 def temp_dir():
     with tempfile.TemporaryDirectory() as d:
@@ -65,16 +56,9 @@ def config_manager(basic_fields_config):
 
 
 @pytest.fixture(autouse=True)
-def patch_status_manager(monkeypatch):
-    """Replace StatusManager to avoid touching real external systems."""
-    dummy = DummyStatus()
-
-    def fake_status_manager(cm):
-        return dummy
-
-    # Monkeypatch the StatusManager class in the module under test
-    monkeypatch.setattr("standard_step.storage.store_metadata_as_json_v2.StatusManager", lambda cm: dummy)
-    return dummy
+def patch_status_manager():
+    """Compatibility fixture retained for tests that still request it."""
+    return None
 
 
 def read_json_file(path: Path) -> Dict[str, Any]:

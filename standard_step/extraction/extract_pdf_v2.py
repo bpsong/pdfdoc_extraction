@@ -10,7 +10,6 @@ Key Features:
     - Handles table fields as arrays of objects with subfield mapping
     - Preserves extraction metadata including field citations and usage stats
     - Supports dynamic field configuration via ConfigManager
-    - Updates StatusManager with granular status information
     - Maintains the existing scalar extraction context structure
 
 Notes:
@@ -37,7 +36,6 @@ from modules.config_manager import ConfigManager
 from modules.db.connection import connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
-from modules.status_manager import StatusManager
 from standard_step.extraction.llama_cloud_v2 import (
     extract_confidence_label,
     extract_field_source,
@@ -54,11 +52,10 @@ class ExtractPdfV2Task(BaseTask):
     include both scalar fields and structured table data.
 
     The task follows the standard task creation guidelines with proper
-    initialization, error handling, status management, and logging.
+    initialization, error handling, and logging.
 
     Attributes:
         config_manager (ConfigManager): Central configuration manager instance.
-        status_manager (StatusManager): Status tracking manager instance.
         api_key (str): LlamaCloud API key for authentication.
         configuration_id (Optional[str]): Saved LlamaCloud Extract v2 configuration identifier.
         fields (Dict[str, Any]): Field configuration including scalar and table fields.
@@ -110,7 +107,6 @@ class ExtractPdfV2Task(BaseTask):
         self.params = params
         self.task_slug = "extract_document_data"
         self.logger = get_logger(__name__)
-        self.status_manager = StatusManager(self.config_manager)
         self.api_key: Optional[str] = None
         self.configuration_id: Optional[str] = None
         self.tier: str = "agentic"
@@ -130,8 +126,7 @@ class ExtractPdfV2Task(BaseTask):
         """Perform task initialization and early validation.
 
         Sets up the task context, loads configuration from the correct path,
-        validates required configuration parameters, and updates the status
-        manager with initialization information.
+        and validates required configuration parameters.
 
         Args:
             context: The pipeline context dictionary.
@@ -140,10 +135,9 @@ class ExtractPdfV2Task(BaseTask):
             TaskError: If required configuration parameters are missing.
 
         Side Effects:
-            - Initializes context with standard keys
-            - Updates StatusManager with task started status
-            - Loads and validates api_key and fields from config
-            - Finds and stores table field configuration
+            - Initializes context with standard keys.
+            - Loads and validates api_key and fields from config.
+            - Finds and stores table field configuration.
         """
         try:
             # Call parent on_start to initialize context
@@ -180,14 +174,6 @@ class ExtractPdfV2Task(BaseTask):
             fields = params.get('fields', {})
             self.fields = fields if isinstance(fields, dict) else {}
 
-            # Update status with correct format
-            unique_id = str(context.get('id', 'unknown'))
-            self.status_manager.update_status(
-                unique_id,
-                f"Task Started: {self.task_slug}",
-                step=f"Task Started: {self.task_slug}"
-            )
-
             self.logger.info(f"Loaded {len(self.fields)} fields from configuration")
 
             # Find table field configuration (marked with is_table: true)
@@ -214,17 +200,6 @@ class ExtractPdfV2Task(BaseTask):
         except Exception as e:
             error_msg = f"Failed to initialize ExtractPdfV2Task: {str(e)}"
             self.logger.error(error_msg)
-            unique_id = str(context.get('id', 'unknown'))
-            try:
-                self.status_manager.update_status(
-                    unique_id,
-                    f"Task Failed: {self.task_slug}",
-                    step=f"Task Failed: {self.task_slug}",
-                    error=error_msg
-                )
-            except Exception:
-                # Don't mask the original error with status update failures
-                pass
             raise TaskError(error_msg)
 
     def _require_api_key(self) -> str:
@@ -300,7 +275,7 @@ class ExtractPdfV2Task(BaseTask):
 
         Args:
             context: Pipeline context containing:
-                - id: Unique identifier for status tracking
+                - id: Unique identifier.
                 - file_path: Path to PDF file for extraction
 
         Returns:
@@ -312,21 +287,10 @@ class ExtractPdfV2Task(BaseTask):
             TaskError: If file path is missing, extraction fails, or
                       validation errors occur.
         """
-        unique_id = str(context.get("id", "unknown"))
         file_path = context.get("file_path")
 
         # Wrap entire logic in try-except for proper error handling
         try:
-            # Update status - task started (if not already done in on_start)
-            try:
-                self.status_manager.update_status(
-                    unique_id,
-                    f"Task Started: {self.task_slug}",
-                    step=f"Task Started: {self.task_slug}"
-                )
-            except Exception as e:
-                self.logger.warning(f"Failed to update start status: {e}")
-
             # Validate required fields
             self.validate_required_fields(context)
 
@@ -343,7 +307,7 @@ class ExtractPdfV2Task(BaseTask):
             # Retry logic for API calls
             extracted_result = self._extract_with_retry(normalized_file_path)
 
-            self.logger.info(f"Raw extracted data for {unique_id}: {extracted_result}")
+            self.logger.info("Raw extracted data for %s: %s", context.get("id", "unknown"), extracted_result)
 
             # Extract data from response
             data = getattr(extracted_result, 'data', {}) or {}
@@ -379,43 +343,12 @@ class ExtractPdfV2Task(BaseTask):
                 provider_job_id=getattr(extracted_result, "job_id", None),
             )
 
-            # Update success status with details
-            table_items_count = 0
-            if table_field_key and table_field_key in context["data"]:
-                table_data = context["data"][table_field_key]
-                if isinstance(table_data, list):
-                    table_items_count = len(table_data)
-
-            try:
-                self.status_manager.update_status(
-                    unique_id,
-                    f"Task Completed: {self.task_slug}",
-                    step=f"Task Completed: {self.task_slug}",
-                    details={
-                        "extracted_fields": len(self.fields),
-                        "table_items": table_items_count
-                    }
-                )
-            except Exception as e:
-                self.logger.warning(f"Failed to update completion status: {e}")
-
-            self.logger.info(f"V2 extraction successful for {unique_id}")
+            self.logger.info("V2 extraction successful for %s", context.get("id", "unknown"))
             return context
 
         except TaskError as e:
             # Handle TaskError specifically
             self.register_error(context, e)
-            try:
-                self.status_manager.update_status(
-                    unique_id,
-                    f"Task Failed: {self.task_slug}",
-                    step=f"Task Failed: {self.task_slug}",
-                    error=str(e),
-                    details={"task": self.__class__.__name__}
-                )
-            except Exception:
-                # Don't mask the original error
-                pass
             raise
         except Exception as e:
             # Handle unexpected exceptions
@@ -423,17 +356,6 @@ class ExtractPdfV2Task(BaseTask):
             self.logger.error(error_msg)
             task_error = TaskError(error_msg)
             self.register_error(context, task_error)
-            try:
-                self.status_manager.update_status(
-                    unique_id,
-                    f"Task Failed: {self.task_slug}",
-                    step=f"Task Failed: {self.task_slug}",
-                    error=str(e),
-                    details={"task": self.__class__.__name__}
-                )
-            except Exception:
-                # Don't mask the original error
-                pass
             raise task_error
 
     def _persist_extraction_result(

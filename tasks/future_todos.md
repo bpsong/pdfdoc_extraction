@@ -1,5 +1,7 @@
 # Future To-Do Items
 
+> Historical note: this backlog is retained for context. Most listed items were completed by the config-check and unified PDF processing refactors. Current active work should be tracked in `tasks/tasks-prd-refactor-unified-pdfdoc-processing.md` or a new active task list rather than added here.
+
 - [x] Implement schema validation for config.yaml to ensure configuration integrity and early error detection.
 - [x] Refactor ConfigManager's internal path validation logic (_validate_static_paths, _precreate_required_directories, _validate_dynamic_paths) to support the new 'tasks' and 'pipeline' schema, and update test/test_config_manager/config.yaml and its corresponding tests accordingly.
 

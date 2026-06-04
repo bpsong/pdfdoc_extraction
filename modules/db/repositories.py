@@ -217,10 +217,31 @@ class DocumentRepository:
             )
         return dict(self.conn.execute("SELECT * FROM document_files WHERE id = ?", (file_id,)).fetchone())
 
+    def find_file(self, *, document_id: str, file_type: str, file_path: str) -> dict[str, Any] | None:
+        """Return an existing document file by document, role, and path."""
+        return _row_to_dict(
+            self.conn.execute(
+                """
+                SELECT * FROM document_files
+                WHERE document_id = ? AND file_type = ? AND file_path = ?
+                LIMIT 1
+                """,
+                (document_id, file_type, file_path),
+            ).fetchone()
+        )
+
     def list_files(self, document_id: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             "SELECT * FROM document_files WHERE document_id = ? ORDER BY created_at",
             (document_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_all(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        """Return all documents for legacy list/status compatibility views."""
+        rows = self.conn.execute(
+            "SELECT * FROM documents ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
         ).fetchall()
         return [dict(row) for row in rows]
 

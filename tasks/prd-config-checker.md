@@ -1,5 +1,7 @@
 # Product Requirements Document: Config.yaml Validator CLI
 
+> Historical note: this PRD is completed. Current config-check usage is documented in `tools/config_check/README.md`, troubleshooting in `docs/config_check_troubleshooting.md`, and active migration cleanup in `tasks/tasks-prd-refactor-unified-pdfdoc-processing.md`.
+
 1. Introduction/Overview
 
 This PRD defines a command-line tool ("config-check") for administrators that validates the application's YAML configuration file before runtime. The tool checks schema correctness, parameter validity, path existence, task definitions, and pipeline sequencing dependencies. It reports clear errors with actionable suggestions to help users fix issues in the config quickly and safely. This tool complements, but does not run, the main application described in [tasks/prd-design-pdf-processing.md](tasks/prd-design-pdf-processing.md).

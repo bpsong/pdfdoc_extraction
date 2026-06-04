@@ -1,3 +1,5 @@
+> Historical note: this task list is completed. Current config-check usage is documented in `tools/config_check/README.md`, examples in `tools/config_check/examples/`, and troubleshooting in `docs/config_check_troubleshooting.md`.
+
 ## Relevant Files
 
 - `tools/config_check/__main__.py` - Main entry point and CLI argument parsing

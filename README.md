@@ -1,4 +1,4 @@
-# PDF Document Processing System
+﻿# PDF Document Processing System
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115.12-green.svg)](https://fastapi.tiangolo.com/)
@@ -18,23 +18,27 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - **Watch Folder Monitoring**: Automated processing of dropped PDF files
 - **Web Upload Interface**: User-friendly web portal for manual uploads
 - **Real-time Processing**: Live status updates and progress tracking
+- **Batch Uploads**: `/app/upload` supports multi-file upload and creates batch/document records for tracking
 
 ### Configurable Pipeline Architecture
 - **Modular Design**: Pluggable processing steps (extraction, storage, archiving, rules)
 - **Prefect Workflow Orchestration**: Reliable task execution and error handling
 - **Dynamic Configuration**: YAML-based pipeline definition
 - **Extensible Framework**: Easy to add new processing steps
+- **SQLite-backed Workflow State**: Batches, documents, task runs, extracted fields, review items, artifacts, settings, and audit history are persisted in SQLite
 
 ### Flexible Data Storage
 - **CSV Export**: Structured data in spreadsheet format
 - **JSON Export**: Hierarchical data preservation
 - **v2 Enhanced Storage**: Row-per-item expansion for tabular data
 - **Local File Management**: Organized storage with metadata tracking
+- **Artifact Registry**: Source originals, split working files, archives, PDFs, CSVs, and JSON exports are registered as durable document files
 
 ### Modern Web Interface
 - **FastAPI Backend**: High-performance REST API
-- **Interactive Dashboard**: Real-time processing status
-- **Enhanced Modal Dialogs**: Detailed progress visualization with timeline
+- **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/reports`, and `/app/settings`
+- **Admin App**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`
+- **Review Workflows**: Human review queues for low-confidence or policy-triggered extracted fields
 - **Responsive Design**: Mobile-friendly interface
 
 ## Table of Contents
@@ -72,12 +76,14 @@ A sophisticated PDF document processing system that leverages AI-powered extract
    Open `config.yaml` in the project root and set your host, credentials, and task parameters.
 
 4. **Run the application**
-   ```bash
+   ```powershell
    C:\Python313\python.exe main.py
    ```
 
+   Database migrations run automatically on startup when `database.run_migrations_on_startup` is enabled.
+
 5. **Access the web interface**
-   Open your browser and navigate to `http://localhost:8000`
+   Open your browser and navigate to `http://localhost:8000/app/upload`
 
 ## Installation
 
@@ -110,6 +116,22 @@ web:
   port: 8000
   secret_key: "your_secret_key"
   upload_dir: "web_upload"
+
+database:
+  path: "data/app_state.sqlite3"
+  run_migrations_on_startup: true
+
+app_storage:
+  originals_dir: "data/app/originals"
+  working_dir: "data/app/working"
+  split_dir: "data/app/split"
+  exports_dir: "data/app/exports"
+  archive_dir: "data/app/archive"
+
+review:
+  enabled: true
+  default_queue_name: "default_review"
+  lock_timeout_minutes: 60
 
 watch_folder:
   dir: "watch_folder"
@@ -151,8 +173,7 @@ pipeline:
   - extract_document_data
 ```
 
-For the phased SDK migration details, see
-[LlamaCloud Extract v2 Migration Plan](docs/llamacloud_extract_v2_migration.md).
+The current runtime uses the `llama-cloud` SDK and `LlamaCloud` client. New code should not use the legacy `llama-cloud-services` / `LlamaExtract` agent flow. `agent_id` is legacy; use `configuration_id` for saved Extract v2 configurations or omit it to build an inline schema from `fields`.
 
 ### Manual LlamaCloud Smoke Check
 
@@ -185,14 +206,29 @@ C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.ya
 - `CONFIG_PATH`: Custom path to configuration file
 - `USE_RELOAD`: Enable auto-reload for development (`true`/`false`)
 
+### Runtime State
+
+SQLite is the primary workflow-state store. The application records:
+
+- ingestion batches and documents
+- task-run lifecycle and errors
+- extraction results and field-level confidence/review state
+- review queue items and decisions
+- registered document artifacts
+- admin settings versions and audit events
+
+Text status files are not required for configured workflow state. `/api/files` and `/api/status/{file_id}` remain as legacy compatibility APIs, but they read from SQLite.
+
 ## Usage
 
 ### Web Interface
 
-1. **Login**: Access the dashboard at `http://localhost:8000`
-2. **Upload PDFs**: Use the upload form to submit documents
-3. **Monitor Progress**: View real-time processing status
-4. **Download Results**: Access processed data in CSV/JSON format
+1. **Login**: Access the app at `http://localhost:8000/app/upload`
+2. **Upload PDFs**: Use `/app/upload` to submit one or more PDFs as a batch
+3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track splitting, extraction, review, and completion state
+4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
+5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
+6. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, review-gate, split, audit, dry-run, and schema workflows
 
 ### Watch Folder
 
@@ -221,13 +257,30 @@ C:\Python313\python.exe main.py --no-web
 
 ### File Operations
 - `POST /upload`: Upload PDF for processing
-- `GET /api/files`: List processed files
-- `GET /api/status/{file_id}`: Detailed processing status
+- `POST /api/batches/upload`: Upload a batch of PDFs and create SQLite batch/document records
+- `GET /api/batches`: List ingestion batches
+- `GET /api/batches/{batch_id}`: Get batch details
+- `GET /api/batches/{batch_id}/documents`: List batch documents
+- `GET /api/batches/{batch_id}/split-results`: Show split source/child document relationships
+- `GET /api/documents/{document_id}/task-runs`: List task runs for a document
+- `GET /api/documents/{document_id}/extraction`: Read extraction result and normalized fields
+- `GET /api/documents/{document_id}/fields`: Read extracted/reviewed fields
+- `GET /api/documents/{document_id}/file/pdf`: Stream the source PDF or registered PDF artifact
+- `POST /api/documents/{document_id}/resume`: Resume a document after review
+- `GET /api/files`: Legacy compatibility list backed by SQLite documents
+- `GET /api/status/{file_id}`: Legacy compatibility detail backed by SQLite documents, task runs, and artifacts
 
-### Status Monitoring
-- Real-time status updates via WebSocket
-- Comprehensive error reporting
-- Processing timeline visualization
+### Review, Reports, and Admin
+- `GET /api/review/items`: List review queue items
+- `POST /api/review/items/{review_item_id}/claim`: Claim a review item
+- `POST /api/review/items/{review_item_id}/complete`: Complete review and persist corrected values
+- `GET /api/reports/summary`: Processing and review activity summary
+- `GET /api/settings`: Non-secret runtime settings for operators
+- `GET /api/admin/settings`, `PUT /api/admin/settings`: Admin configuration state
+- `GET /api/admin/audit`: Admin audit events
+- `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/publish`: Pipeline editing flow
+- `GET /api/admin/review-gate-rules`, `PUT /api/admin/review-gate-rules`: Review gate configuration
+- `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`: Split settings configuration
 
 ## 📁 Project Structure
 
@@ -240,7 +293,9 @@ pdfdoc_extraction/
 │   ├── api_router.py           # API endpoint management
 │   ├── config_manager.py       # Configuration management
 │   ├── file_processor.py       # File processing logic
-│   ├── status_manager.py       # Status tracking
+│   ├── db/                     # SQLite connection, migrations, repositories
+│   ├── services/               # Batch, review, reports, audit, settings, artifact services
+│   ├── status_manager.py       # Legacy text-status compatibility support
 │   ├── watch_folder_monitor.py # File system monitoring
 │   └── workflow_manager.py     # Workflow orchestration
 ├── 📁 standard_step/           # Processing pipeline steps
@@ -318,9 +373,13 @@ C:\Python313\python.exe -m pytest -v test/core/test_config_manager.py
 C:\Python313\python.exe -m pytest -v --cov=modules
 ```
 
-Current full-suite verification for the LlamaCloud Extract v2 migration:
-`393 passed, 3 skipped, 4 warnings`. The skipped tests are POSIX-style
-permission checks that are intentionally skipped on Windows.
+Current focused validation for the SQLite-only workflow-state cleanup:
+
+```powershell
+C:\Python313\python.exe -m pytest -v test\integration\test_sqlite_only_workflow_state.py test\integration\test_batch_upload_api.py test\integration\test_reports_api.py test\integration\test_settings_api.py
+```
+
+The broader full-suite run remains part of the migration cleanup checklist.
 
 The end-to-end workflow fixture config also passes config-check:
 

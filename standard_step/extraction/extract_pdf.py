@@ -8,10 +8,9 @@ pipeline context.
 
 Notes:
     - Reads runtime parameters (api_key, configuration_id, fields) from BaseTask.params.
-    - Updates processing status via StatusManager on start/success/failure.
     - Interacts with the filesystem indirectly via the external service using
       the provided file path.
-    - Errors are surfaced as TaskError after being logged and status-updated.
+    - Errors are surfaced as TaskError after being logged.
 """
 import logging
 from typing import Any, Dict, Optional
@@ -22,7 +21,6 @@ from modules.config_manager import ConfigManager
 from modules.db.connection import connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
-from modules.status_manager import StatusManager
 from modules.utils import windows_long_path
 from standard_step.extraction.llama_cloud_v2 import (
     extract_confidence_label,
@@ -40,18 +38,18 @@ class ExtractPdfTask(BaseTask):
         - Run a LlamaCloud Extract v2 job against the file path.
         - Filter/normalize extracted lists to remove None values when needed.
         - Validate fields using a dynamically created Pydantic model.
-        - Merge validated data into context['data'] and update metadata/status.
+        - Merge validated data into context['data'] and update metadata.
 
     Integration:
-        Uses BaseTask for context initialization and error conventions and
-        StatusManager for consistent progress reporting.
+        Uses BaseTask for context initialization and error conventions.
 
     Args:
         config_manager (ConfigManager): Project configuration manager.
         **params: Expected keys include 'api_key', optional 'configuration_id', and 'fields'.
 
     Notes:
-        - Side effects include remote API calls and status updates.
+        - Side effects include remote API calls and SQLite extraction
+          persistence when document context exists.
         - Raises TaskError for validation or extraction errors.
 
     Performance Considerations:
@@ -71,7 +69,6 @@ class ExtractPdfTask(BaseTask):
         """
         super().__init__(config_manager=config_manager, **params)
         self.logger = logging.getLogger(__name__)
-        self.status_manager = StatusManager(self.config_manager)
         
         api_key = self.params.get("api_key")
         self.api_key: Optional[str] = api_key if isinstance(api_key, str) else None
@@ -103,8 +100,7 @@ class ExtractPdfTask(BaseTask):
     def on_start(self, context: dict):
         """Lifecycle hook executed when the task starts.
 
-        Initializes context and marks the task as started in StatusManager.
-        Also performs parameter presence checks and fails early if missing.
+        Initializes context and performs parameter presence checks.
 
         Args:
             context (dict): The pipeline context dict. Must contain 'id'.
@@ -112,19 +108,12 @@ class ExtractPdfTask(BaseTask):
         Raises:
             TaskError: If api_key or fields are missing.
 
-        Notes:
-            - Uses StatusManager to record both start and early failure states.
         """
-        # Initialize context keys
         self.initialize_context(context)
-        # Unified timestamp convention
-        self.status_manager.update_status(str(context.get('id', 'unknown')), "Task Started: extract_document_data", step="Task Started: extract_document_data")
 
         if not self.api_key:
-            self.status_manager.update_status(str(context.get('id', 'unknown')), "Task Failed: extract_document_data", step="ExtractPdfTask", error="API key not found in configuration for ExtractPdfTask.")
             raise TaskError("API key not found in configuration for ExtractPdfTask.")
         if not self.fields:
-            self.status_manager.update_status(str(context.get('id', 'unknown')), "Task Failed: extract_document_data", step="ExtractPdfTask", error="Fields not found in configuration for ExtractPdfTask.")
             raise TaskError("Fields not found in configuration for ExtractPdfTask.")
 
     def run(self, context: dict) -> dict:
@@ -139,7 +128,7 @@ class ExtractPdfTask(BaseTask):
 
         Args:
             context (dict): Pipeline context. Requires:
-                - id (str): Unique identifier for status updates.
+                - id (str): Unique identifier.
                 - file_path (str): Source PDF file to extract from.
 
         Returns:
@@ -152,7 +141,7 @@ class ExtractPdfTask(BaseTask):
                 external service reports an error.
 
         Notes:
-            - Side effects: Status updates via StatusManager, remote API call.
+            - Side effects: remote API call and optional SQLite persistence.
 
         Performance Considerations:
             - This method makes synchronous remote API calls that may be subject to rate limiting by the external service.
@@ -162,13 +151,11 @@ class ExtractPdfTask(BaseTask):
         unique_id = str(context.get("id"))
 
         if not file_path:
-            self.status_manager.update_status(unique_id, "Task Failed: extract_document_data", step="ExtractPdfTask", error="File path not provided in context.")
             raise TaskError("File path not provided in context.")
 
         if not self.fields:
             error_msg = "Fields configuration is missing or empty."
             self.logger.error(error_msg)
-            self.status_manager.update_status(unique_id, "Task Failed: extract_document_data", step="ExtractPdfTask", error=error_msg)
             raise TaskError(error_msg)
 
         normalized_file_path = windows_long_path(file_path)
@@ -194,9 +181,6 @@ class ExtractPdfTask(BaseTask):
                 logger=self.logger,
             )
 
-            # Update status: extraction completed
-            self.status_manager.update_status(unique_id, "Extraction completed", step="Extraction completed")
-
             self.logger.info(f"Raw extracted data for {unique_id}: {extracted_result}")
 
             # Extract data dictionary from result
@@ -215,9 +199,6 @@ class ExtractPdfTask(BaseTask):
                         filtered_list = [item for item in original_list if item is not None]
                         processed_data[source_key] = filtered_list
 
-            # Update status: preprocessing done
-            self.status_manager.update_status(unique_id, "Preprocessing done", step="Preprocessing done")
-
             # Dynamically create a Pydantic model for validation. populate_by_name
             # lets the workflow accept either aliases or workflow field keys.
             model_fields = {}
@@ -231,9 +212,6 @@ class ExtractPdfTask(BaseTask):
 
             # Validate extracted data
             validated_data = DynamicModel(**processed_data).model_dump()
-
-            # Update status: validation done
-            self.status_manager.update_status(unique_id, "Validation done", step="Validation done")
 
             # Merge extracted data into existing context['data'] dictionary
             if "data" not in context or not isinstance(context["data"], dict):
@@ -255,22 +233,16 @@ class ExtractPdfTask(BaseTask):
                 provider_job_id=getattr(extracted_result, "job_id", None),
             )
 
-            # Unified timestamp convention
-            self.status_manager.update_status(unique_id, "Task Completed: extract_document_data", step="Task Completed: extract_document_data")
             self.logger.info(f"Extraction successful for {unique_id}")
 
         except ValidationError as ve:
             error_msg = f"Validation error during extraction: {ve}"
             self.logger.error(error_msg)
-            # Unified timestamp convention
-            self.status_manager.update_status(unique_id, "Task Failed: extract_document_data", step="Task Failed: extract_document_data", error=error_msg)
             raise TaskError(error_msg)
 
         except Exception as e:
             error_msg = f"Extraction failed: {e}"
             self.logger.error(error_msg)
-            # Unified timestamp convention
-            self.status_manager.update_status(unique_id, "Task Failed: extract_document_data", step="Task Failed: extract_document_data", error=error_msg)
             raise TaskError(error_msg)
 
         return context

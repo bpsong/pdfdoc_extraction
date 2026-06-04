@@ -1,5 +1,10 @@
 # LlamaCloud Extract v2 Migration Plan
 
+> Historical note: this migration plan is retained for implementation history.
+> Stable runtime guidance has been merged into `README.md`, `docs/user_guide.md`,
+> and `docs/design_architecture.md`. Prefer those maintained documents for
+> current setup and operations.
+
 This project has migrated from the legacy `llama-cloud-services` package and
 agent-based Extract flow to the current `llama-cloud` Python SDK and Extract v2
 job flow.

@@ -188,9 +188,8 @@ def test_logging_calls(mock_get_logger, config_manager_mock):
 
 
 # Assign Nanoid Tests
-@patch("standard_step.context.assign_nanoid.StatusManager")
 @patch("standard_step.context.assign_nanoid.generate")
-def test_valid_length_and_context_update(mock_generate, mock_status):
+def test_valid_length_and_context_update(mock_generate):
     mock_generate.return_value = "X" * 10
     config = make_config_manager({"assign_nanoid.length": 10})
     task = AssignNanoidTask(config)
@@ -227,11 +226,8 @@ def test_invalid_length_values():
 
 
 @patch("standard_step.context.assign_nanoid.generate")
-@patch("standard_step.context.assign_nanoid.StatusManager")
-def test_run_handles_exception_and_updates_status(mock_status_manager_cls, mock_generate):
+def test_run_handles_exception_and_registers_context_error(mock_generate):
     mock_generate.side_effect = Exception("Generation failed")
-    mock_status_manager = MagicMock()
-    mock_status_manager_cls.return_value = mock_status_manager
 
     config = make_config_manager({"assign_nanoid.length": 10})
     task = AssignNanoidTask(config)
@@ -240,7 +236,5 @@ def test_run_handles_exception_and_updates_status(mock_status_manager_cls, mock_
     with pytest.raises(TaskError):
         task.run(context)
 
-    mock_status_manager.update_status.assert_any_call(
-        str(context.get("id", "unknown")), "failed",
-        step=f"Task Failed: {task.TASK_SLUG}", error="Generation failed"
-    )
+    assert context["error"] == "Generation failed"
+    assert context["error_step"] == task.TASK_SLUG

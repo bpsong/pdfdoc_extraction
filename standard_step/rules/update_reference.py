@@ -9,7 +9,6 @@ value. The update is written atomically with an optional backup.
 Notes:
     - Reads parameters via injected BaseTask params:
       reference_file, update_field, write_value, backup, task_slug, csv_match.
-    - Uses StatusManager for standardized start/success/failure updates.
     - Reads/writes a CSV file on disk; atomic replace with optional .backup.
     - Follows Railway pattern: errors registered in context and surfaced as TaskError.
 """
@@ -25,7 +24,6 @@ import pandas as pd
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
 from modules.exceptions import TaskError
-from modules.status_manager import StatusManager
 from modules.utils import normalize_field_path, resolve_field
 
 
@@ -119,11 +117,11 @@ class UpdateReferenceTask(BaseTask):
         - Validate required params and CSV structure.
         - Build a combined selection mask from up to five clauses.
         - Update a single column with a configured value for matched rows.
-        - Write results atomically and report status via StatusManager.
+        - Write results atomically and return a context summary.
 
     Integration:
-        Obtains params through WorkflowLoader/BaseTask. Emits standardized
-        status events. Returns updated context with operation summary.
+        Obtains params through WorkflowLoader/BaseTask. Returns updated context
+        with operation summary.
 
     Args:
         config_manager (ConfigManager): Project configuration manager.
@@ -132,11 +130,11 @@ class UpdateReferenceTask(BaseTask):
             - update_field (str): Column to write.
             - write_value (str): Value to write for matched rows.
             - backup (bool): Whether to write a .backup before replacement.
-            - task_slug (str): Slug used in status events.
+            - task_slug (str): Slug used in context summaries.
             - csv_match (dict): With 'type' and 'clauses' definitions.
 
     Notes:
-        - Side effects: File I/O, status updates.
+        - Side effects: File I/O.
         - Errors are reported as TaskError and registered in context.
     """
     
@@ -152,7 +150,6 @@ class UpdateReferenceTask(BaseTask):
         """
         super().__init__(config_manager, **params)
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.status_manager = StatusManager(config_manager)
     
         # Extract parameters (ConfigManager validation of *_file paths occurs at startup)
         self.reference_file: str = params.get("reference_file", "") or ""
@@ -193,25 +190,12 @@ class UpdateReferenceTask(BaseTask):
                 )
     
     def on_start(self, context: dict):
-        """Mark the task as started using StatusManager.
+        """Initialize task context.
 
         Args:
             context (dict): Pipeline context containing 'id'.
-
-        Notes:
-            Status update failures are ignored to avoid blocking progress.
         """
         self.initialize_context(context)
-        uid = str(context.get("id", "unknown"))
-        try:
-            self.status_manager.update_status(
-                unique_id=uid,
-                status=f"Task Started: {self.task_slug}",
-                step=f"Task Started: {self.task_slug}",
-                details={"task": self.__class__.__name__}
-            )
-        except Exception as e:
-            self.logger.debug(f"Failed to update status on start: {e}")
     
     def validate_required_fields(self, context: dict):
         """Validate presence and structure of CSV and parameters.
@@ -336,7 +320,7 @@ class UpdateReferenceTask(BaseTask):
         """Execute the CSV update and return an updated context summary.
 
         Validates inputs, loads the CSV, creates a selection mask from the
-        configured clauses, writes the update atomically, reports status, and
+        configured clauses, writes the update atomically, and
         records a brief summary into context['data']['update_reference'].
 
         Args:
@@ -347,10 +331,9 @@ class UpdateReferenceTask(BaseTask):
             dict: Updated context including an 'update_reference' summary.
 
         Notes:
-            - Side effects: CSV read/write, optional backup creation, status updates.
+            - Side effects: CSV read/write and optional backup creation.
         """
         self.on_start(context)
-        uid = str(context.get("id", "unknown"))
         try:
             self.validate_required_fields(context)
     
@@ -371,23 +354,6 @@ class UpdateReferenceTask(BaseTask):
     
             self._atomic_write_df(Path(self.reference_file), df)
     
-            # Standardized success per guidelines
-            try:
-                self.status_manager.update_status(
-                    unique_id=uid,
-                    status=f"Task Completed: {self.task_slug}",
-                    step=f"Task Completed: {self.task_slug}",
-                    details={
-                        "task": self.__class__.__name__,
-                        "updated_rows": updated_count,
-                        "selected_rows": selected_rows,
-                        "update_field": self.update_field,
-                        "update_value": update_value,
-                    }
-                )
-            except Exception as e:
-                self.logger.debug(f"Failed to update status on success: {e}")
-    
             context.setdefault("data", {})
             context["data"]["update_reference"] = {
                 "updated_rows": updated_count,
@@ -400,29 +366,8 @@ class UpdateReferenceTask(BaseTask):
         except TaskError as e:
             self.logger.error(f"TaskError: {e}")
             self.register_error(context, e)
-            # Standardized failure per guidelines
-            try:
-                self.status_manager.update_status(
-                    unique_id=uid,
-                    status=f"Task Failed: {self.task_slug}",
-                    step=f"Task Failed: {self.task_slug}",
-                    error=str(e),
-                    details={"task": self.__class__.__name__}
-                )
-            except Exception as e:
-                self.logger.debug(f"Failed to update status on failure: {e}")
             return context
         except Exception as e:
             self.logger.exception("Unexpected error in UpdateReferenceTask")
             self.register_error(context, TaskError(f"Unexpected error: {e}"))
-            try:
-                self.status_manager.update_status(
-                    unique_id=uid,
-                    status=f"Task Failed: {self.task_slug}",
-                    step=f"Task Failed: {self.task_slug}",
-                    error=str(e),
-                    details={"task": self.__class__.__name__}
-                )
-            except Exception as e:
-                self.logger.debug(f"Failed to update status on unexpected failure: {e}")
             return context

@@ -22,16 +22,6 @@ class DummyConfigManager:
         return self._config
 
 
-class DummyStatusManager:
-    """Minimal stand-in for StatusManager that records updates."""
-
-    def __init__(self, config_manager: Any):
-        self.updates = []
-
-    def update_status(self, uid: str, message: str, step: str = "", status: str = ""):
-        self.updates.append({"uid": uid, "message": message, "step": step, "status": status})
-
-
 @pytest.fixture
 def sample_extraction_config():
     # This mirrors the shape expected by the CSV v2 task: extraction fields with a table
@@ -57,15 +47,9 @@ def sample_extraction_config():
 
 
 @pytest.fixture(autouse=True)
-def patch_status_manager(monkeypatch):
-    """Patch StatusManager import inside the task to use DummyStatusManager."""
-    def _dummy_init(config_manager):
-        return DummyStatusManager(config_manager)
-
-    # monkeypatch the StatusManager class used in the task module namespace
-    import standard_step.storage.store_metadata_as_csv_v2 as task_module
-    monkeypatch.setattr(task_module, "StatusManager", lambda cfg: _dummy_init(cfg))
-    return _dummy_init
+def patch_status_manager():
+    """Compatibility fixture retained for tests that still request it."""
+    return None
 
 
 def read_csv_rows(path: str) -> List[Dict[str, Any]]:
@@ -228,9 +212,7 @@ def test_error_handling_updates_context_and_status_on_exception(tmp_path, sample
     assert "error_step" in result
     assert "disk error" in result["error"]
 
-    # The patched StatusManager collects updates; ensure a failure status was recorded
-    # The DummyStatusManager used in patch_status_manager fixture doesn't expose global instance,
-    # but the task will have invoked it without raising - ensure context indicates failure.
+    # Ensure context indicates failure without requiring any text status side effect.
     assert result.get("error_step") is not None
 
 
