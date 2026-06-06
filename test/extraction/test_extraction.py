@@ -6,6 +6,7 @@ from modules.config_manager import ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import ExtractionRepository, TaskRunRepository
+from modules.exceptions import TaskError
 from modules.services.batch_service import BatchService
 from standard_step.extraction.extract_pdf import ExtractPdfTask
 from test.helpers_sqlite import TempConfig
@@ -142,6 +143,46 @@ class TestExtractPdfTask:
         assert "metadata" in result_context
         assert result_context["metadata"]["extraction_configuration_id"] is None
         assert result_context["metadata"]["extraction_status"] == "success"
+
+    def test_extract_pdf_rejects_malicious_field_type_without_executing(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+        marker_path = tmp_path / "eval_executed.txt"
+        malicious_type = (
+            "__import__('pathlib').Path("
+            f"{str(marker_path)!r}"
+            ").write_text('owned') or str"
+        )
+        sample_response = MagicMock()
+        sample_response.data = {"field1": "value1"}
+        sample_response.extraction_metadata = {}
+        monkeypatch.setattr(
+            "standard_step.extraction.extract_pdf.run_extract_v2_job",
+            MagicMock(return_value=sample_response),
+        )
+
+        task = ExtractPdfTask(
+            config_manager=self.config_manager,
+            api_key="dummy_api_key",
+            fields={
+                "field1": {
+                    "type": malicious_type,
+                    "alias": "field1",
+                },
+            },
+        )
+        context = {
+            "id": "malicious_type_test",
+            "file_path": str(SAMPLE_PDF_SOURCE),
+        }
+
+        task.on_start(context)
+        with pytest.raises(TaskError, match="Unsupported field type"):
+            task.run(context)
+
+        assert not marker_path.exists()
 
 
 def test_extract_pdf_persists_confidence_for_review_gate(tmp_path, monkeypatch):

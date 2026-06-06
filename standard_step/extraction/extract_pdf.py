@@ -13,6 +13,7 @@ Notes:
     - Errors are surfaced as TaskError after being logged.
 """
 import logging
+from decimal import Decimal
 from typing import Any, Dict, Optional
 from pydantic import create_model
 from pydantic import BaseModel, ValidationError, Field, ConfigDict
@@ -28,6 +29,93 @@ from standard_step.extraction.llama_cloud_v2 import (
     extract_numeric_confidence,
     run_extract_v2_job,
 )
+
+
+_ALLOWED_FIELD_TYPES: Dict[str, Any] = {
+    "str": str,
+    "int": int,
+    "float": float,
+    "bool": bool,
+    "Decimal": Decimal,
+    "Any": Any,
+    "dict": dict,
+}
+
+
+def _parse_field_type(type_value: Any) -> Any:
+    """Parse an allowlisted extraction field type string.
+
+    Supports the same config-facing type syntax used by extraction validation:
+    base types, Optional[T], List[T], Dict[K, V], and nested combinations.
+
+    Args:
+        type_value: Configured field type value.
+
+    Returns:
+        A Python type annotation suitable for Pydantic model creation.
+
+    Raises:
+        ValueError: If the type value is malformed or unsupported.
+    """
+    if type_value is None:
+        return Any
+    if not isinstance(type_value, str):
+        raise ValueError(
+            f"Field type must be a string, got {type(type_value).__name__}."
+        )
+
+    clean_type = type_value.strip()
+    if not clean_type:
+        return Any
+    if clean_type in _ALLOWED_FIELD_TYPES:
+        return _ALLOWED_FIELD_TYPES[clean_type]
+
+    if clean_type.startswith("Optional[") and clean_type.endswith("]"):
+        inner_type = clean_type[len("Optional["):-1].strip()
+        if not inner_type:
+            raise ValueError(f"Malformed Optional field type: {type_value!r}")
+        return Optional[_parse_field_type(inner_type)]
+
+    if clean_type.startswith("List[") and clean_type.endswith("]"):
+        inner_type = clean_type[len("List["):-1].strip()
+        if not inner_type:
+            raise ValueError(f"Malformed List field type: {type_value!r}")
+        return list[_parse_field_type(inner_type)]
+
+    if clean_type.startswith("Dict[") and clean_type.endswith("]"):
+        type_args = clean_type[len("Dict["):-1]
+        parts = _split_top_level_type_args(type_args)
+        if len(parts) != 2:
+            raise ValueError(f"Malformed Dict field type: {type_value!r}")
+        key_type = _parse_field_type(parts[0])
+        value_type = _parse_field_type(parts[1])
+        return dict[key_type, value_type]
+
+    raise ValueError(f"Unsupported field type: {type_value!r}")
+
+
+def _split_top_level_type_args(type_args: str) -> list[str]:
+    """Split comma-separated type arguments without splitting nested brackets."""
+    parts: list[str] = []
+    start = 0
+    depth = 0
+
+    for index, char in enumerate(type_args):
+        if char == "[":
+            depth += 1
+        elif char == "]":
+            depth -= 1
+            if depth < 0:
+                return []
+        elif char == "," and depth == 0:
+            parts.append(type_args[start:index].strip())
+            start = index + 1
+
+    if depth != 0:
+        return []
+
+    parts.append(type_args[start:].strip())
+    return [part for part in parts if part]
 
 
 class ExtractPdfTask(BaseTask):
@@ -204,7 +292,7 @@ class ExtractPdfTask(BaseTask):
             model_fields = {}
             for field_name, field_config in self.fields.items():
                 field_type_str = field_config.get("type", "Any")
-                field_type = eval(field_type_str, {"List": list, "Optional": Optional, "str": str, "float": float, "int": int, "Any": Any})
+                field_type = _parse_field_type(field_type_str)
                 alias = field_config.get("alias", field_name)
                 model_fields[field_name] = (field_type, Field(alias=alias))
             model_config = ConfigDict(populate_by_name=True, extra="ignore")

@@ -37,14 +37,16 @@ Author: [Your Organization/Name]
   - [4.7. Graceful Shutdown and Error Recovery](#47-graceful-shutdown-and-error-recovery)
   - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
        - [4.8.1. extraction](#481-extraction)
-       - [4.8.2. storage.store_metadata_as_csv](#482-storagestore_metadata_as_csv)
-       - [4.8.3. storage.store_metadata_as_json](#483-storagestore_metadata_as_json)
-       - [4.8.4. storage.store_file_to_localdrive](#484-storagestore_file_to_localdrive)
-       - [4.8.5. archiver.archive_pdf](#485-archiverarchive_pdf)
-       - [4.8.6. rules.update_reference](#486-rulesupdate_reference)
-       - [4.8.7. Assign Nanoid (standard_step/context)](#487-assign-nanoid-standard_stepcontext)
-       - [4.8.8. housekeeping.cleanup](#488-housekeepingcleanup)
-       - [4.8.9. Validation and Failure Behavior](#489-validation-and-failure-behavior)
+       - [4.8.2. split.llamacloud_split](#482-splitllamacloud_split)
+       - [4.8.3. storage.store_metadata_as_csv](#483-storagestore_metadata_as_csv)
+       - [4.8.4. storage.store_metadata_as_json](#484-storagestore_metadata_as_json)
+       - [4.8.5. storage.store_file_to_localdrive](#485-storagestore_file_to_localdrive)
+       - [4.8.6. archiver.archive_pdf](#486-archiverarchive_pdf)
+       - [4.8.7. rules.update_reference](#487-rulesupdate_reference)
+       - [4.8.8. review.review_gate](#488-reviewreview_gate)
+       - [4.8.9. Assign Nanoid (standard_step/context)](#489-assign-nanoid-standard_stepcontext)
+       - [4.8.10. housekeeping.cleanup](#4810-housekeepingcleanup)
+       - [4.8.11. Validation and Failure Behavior](#4811-validation-and-failure-behavior)
   - [4.9. LlamaCloud Extract v2 Array-of-Objects Support](#49-llamacloud-extract-v2-array-of-objects-support)
   - [4.10. Example Workflows](#410-example-workflows)
   - [4.11. Housekeeping and the Processing Folder](#411-housekeeping-and-the-processing-folder)
@@ -109,7 +111,7 @@ The PDF Processing System automates extracting information from PDF documents. T
 Key features:  
 - Configurable workflows via YAML “workflows” and “tasks”  
   *(YAML is a human-readable configuration file format that uses indentation to organize settings.)*  
-- Extensible standard steps: extraction, rules, storage, archiving, housekeeping  
+- Extensible standard steps: split, extraction, review, rules, storage, archiving, housekeeping
   *(Standard steps are predefined operations that the system performs on each file.)*  
 - Centralized configuration and logging  
 - Watch-folder based ingestion and web interface for PDF upload
@@ -128,7 +130,7 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
 
 - **Watch Folder Monitor:** Detects new PDFs in the configured `watch_folder.dir` (the folder the system watches for new files). This directory must pre-exist; it is not auto-created.
 - **Workflow Manager and Loader:** Loads `config.yaml` and runs the single configured pipeline order for every file.  
-- **Standard Steps:** Executes ordered tasks for each file (extraction, rules, storage, archiver, housekeeping).  
+- **Standard Steps:** Executes ordered tasks for each file (split, extraction, review, rules, storage, archiver, housekeeping).
 - **SQLite State Services:** Record ingestion batches, documents, task runs, extracted fields, review queues, artifacts, settings, and audit events.
 - **Storage:** Writes extracted data to CSV/JSON and moves PDFs to their final destination.  
 - **Logging:** Centralized application log with rotation.  
@@ -144,12 +146,23 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
       WebUpload -->|Trigger| WorkflowLoader
       WorkflowLoader -->|Builds| Workflow[Workflow Manager]
       Workflow -->|Executes| Steps[Standard Steps Chain]
+      Steps -->|Optional Split| Split[Split Fan-out]
+      Split -->|Child PDFs| Children[Child Documents]
+      Children -->|Run Downstream Tasks| Steps
       Steps -->|Extract| Extractor[LlamaCloud Extract v2 API]
-      Steps -->|Apply Rules| Rules[Rules Engine (e.g., update_reference)]
-      Steps -->|Store| Storage[File & Data Storage]
+      Extractor -->|Fields & Confidence| ReviewGate[Review Gate]
+      ReviewGate -->|Needs Review| ReviewQueue[Human Review Queue]
+      ReviewQueue -->|Corrections Complete| Resume[Resume Downstream Workflow]
+      ReviewGate -->|Passes Review Rules| Rules[Rules Engine (e.g., update_reference)]
+      Resume --> Rules
+      Rules -->|Store| Storage[File & Data Storage]
       Storage -->|Organized Files| Output[files/ and data/]
+      Storage -->|Child Completion| FanIn[Fan-in Aggregate Status]
       Steps -->|Post-process| Archiver[Archive/Delete Input]
       Steps -->|State Events| SQLite[SQLite State Database]
+      Split -->|Parent/Child State| SQLite
+      ReviewQueue -->|Drafts, Diffs, Decisions| SQLite
+      FanIn -->|Batch/Parent Status| SQLite
       SQLite -->|Batches, Documents, Reviews| AppUI[Unified /app UI]
 ```
 
@@ -260,6 +273,16 @@ Documents enter review when configured review-gate rules require it, such as low
 6. Complete review when corrected values are ready.
 
 Completed review values are persisted in SQLite with the extracted fields. The document can then be resumed through downstream workflow steps.
+
+#### Review Gate Example
+
+If the review gate is configured with `confidence_threshold: 0.90`, any extracted field below 90% confidence can route the document to human review. For example:
+
+1. LlamaCloud extracts `invoice_amount` with confidence `0.86`.
+2. The review gate marks the document as `review_required` and creates a review item in the configured queue.
+3. An operator opens `/app/review`, claims the item, checks the source PDF, and corrects the field value if needed.
+4. The operator may save a draft while working or preview the diff before completion.
+5. When the operator completes review, corrected values are persisted in SQLite and the document resumes the downstream workflow steps.
 
 #### Schema-Based Review Migration
 
@@ -423,6 +446,8 @@ The current implementation runs the same pipeline for every file; dynamic workfl
 Example task categories include:
 
 - `extraction`: Extract data from PDFs.
+- `split.llamacloud_split`: Optionally split bundled PDFs into child documents before extraction.
+- `review.review_gate`: Pause documents for operator review based on confidence, schema, or policy rules.
 - `rules.update_reference`: Update reference CSV files.
 - `storage.store_metadata_as_csv` / `storage.store_metadata_as_json`: Persist metadata.
 - `storage.store_file_to_localdrive`: Persist the processed PDF.
@@ -474,28 +499,16 @@ Notes:
 
 Optional helper script:
 
-You can use the helper script `scripts/encrypt_password.py` to generate bcrypt hashes more easily.
-
-Example content for `scripts/encrypt_password.py`:
-
-```python
-import sys
-import bcrypt
-
-if len(sys.argv) != 2:
-    print("Usage: python encrypt_password.py <password>")
-    sys.exit(1)
-
-password = sys.argv[1].encode('utf-8')
-hashed = bcrypt.hashpw(password, bcrypt.gensalt())
-print(hashed.decode())
-```
+You can use the included helper script `tools/generate_password_hash.py` to generate bcrypt hashes.
 
 Usage:
 
 ```
-C:\Python313\python.exe scripts/encrypt_password.py your_new_password
+C:\Python313\python.exe tools\generate_password_hash.py
+C:\Python313\python.exe tools\generate_password_hash.py --password "new_password"
 ```
+
+The script prints a bcrypt hash suitable for `authentication.password_hash` in `config.yaml`.
 
 Security recommendations for storing password hashes
 
@@ -613,7 +626,22 @@ No remaining text file should be required to reconstruct workflow state. If a le
 - Administrators use `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`.
 - Legacy `/dashboard`, `/api/files`, and `/api/status/{file_id}` are compatibility paths only.
 
-#### 4.5.5. Backup and Recovery
+#### 4.5.5. Admin Workflow Details
+
+The `/app/admin/*` pages provide configuration and governance workflows for administrators:
+
+- `/app/admin`: configuration health, schema validation summary, pipeline summary, review-gate status, split status, and recent audit events.
+- `/app/admin/pipeline`: create or update a pipeline draft, review a diff against the active configuration, validate the draft, and publish it when validation has no blocking errors.
+- `/app/admin/tasks`: inspect available task classes and their configured module/class information.
+- `/app/admin/review-gate`: maintain review thresholds, field/document-type overrides, review scope, queue name, schema reference, and resume policy.
+- `/app/admin/split`: maintain non-secret split settings such as enablement, categories, uncategorized behavior, split directory, saved configuration ID, project/organization IDs, polling interval, and timeout.
+- `/app/admin/dry-run`: preview split, extraction, review-gate, and export decisions without writing final exports or workflow state.
+- `/app/admin/audit`: review administrative and governance events such as settings changes, pipeline publishing, split tests, and schema changes.
+- `/app/settings/validation`: review active configuration, schema, and pipeline validation findings.
+
+Admin access is role-aware. When roles are enabled, users listed in `auth.default_admin_users` or `ui.default_admin_users` can access admin pages. If no admin list is configured, the configured `authentication.username` is treated as the administrator. Secret values are not exposed through runtime settings, and split settings updates do not save secret keys such as `api_key`; configure those secrets through `config.yaml` or your deployment secret-management process.
+
+#### 4.5.6. Backup and Recovery
 
 For a complete operational backup, include:
 
@@ -745,7 +773,66 @@ pipeline:
   - extract_document_data
 ```
 
-#### 4.8.2. storage.store_metadata_as_csv
+#### 4.8.2. split.llamacloud_split
+
+- **type:** `"split.llamacloud_split"`
+- **Purpose:** Optionally splits a source PDF into child PDF documents before downstream extraction and storage tasks run.
+- **params:**
+  - `enabled`: boolean. If `false`, the task records a skipped split result and the source document continues as a normal document.
+  - `api_key`: string. Required at runtime when the real LlamaCloud split adapter is used.
+  - `configuration_id`: optional saved LlamaCloud split configuration ID.
+  - `categories`: optional list of category definitions. Required when `configuration_id` is not provided.
+  - `allow_uncategorized`: string, one of `"include"`, `"forbid"`, or `"omit"`. Default is `"include"`.
+  - `split_dir`: string. Destination for generated child PDFs. Defaults to `app_storage.split_dir`.
+  - `project_id` / `organization_id`: optional provider scoping values.
+  - `poll_interval_seconds`: optional polling interval. Default is `1.0`.
+  - `timeout_seconds`: optional timeout. Default is `7200.0`.
+- **Behavior:**
+  - Runs only for root/source documents; split child documents skip the split task.
+  - Creates one child document record and one split PDF for each provider segment.
+  - Records split category, confidence, page range, and source metadata in SQLite.
+  - Sets the parent/source document to `split_completed`, then child documents continue from the next pipeline task.
+  - Fan-in recomputes the parent and batch status after child documents complete, fail, or enter review.
+- **Ordering rules:**
+  - Configure split before extraction, so child PDFs are extracted independently.
+  - Configure the review gate after extraction, so it can evaluate extracted fields and confidence.
+
+**YAML configuration example:**
+
+```yaml
+tasks:
+  split_documents:
+    module: standard_step.split.llamacloud_split
+    class: LlamaCloudSplitTask
+    params:
+      enabled: true
+      api_key: "llx-REDACTED"
+      configuration_id: "YOUR-SPLIT-CONFIGURATION-ID"  # optional
+      categories:
+        - name: "invoice"
+          description: "Supplier invoice pages"
+        - name: "supporting_document"
+          description: "Delivery orders, receipts, or supporting pages"
+      allow_uncategorized: "include"
+      split_dir: "data/app/split"
+      poll_interval_seconds: 1.0
+      timeout_seconds: 7200
+    on_error: stop
+
+pipeline:
+  - split_documents
+  - extract_document_data
+  - store_metadata_json
+```
+
+Fan-in aggregate statuses shown in the app include:
+
+- `completed`: all leaf documents completed successfully.
+- `completed_with_errors`: one or more leaf documents failed after all leaves reached a terminal state.
+- `review_required`: one or more leaf documents require review or are in review.
+- `processing`: at least one leaf document is still running.
+
+#### 4.8.3. storage.store_metadata_as_csv
 
 - **type:** `"storage.store_metadata_as_csv"`
 - **Purpose:** Stores extracted metadata as CSV files with consistent column headers.
@@ -774,7 +861,7 @@ pipeline:
   - store_metadata_csv
 ```
 
-#### 4.8.3. storage.store_metadata_as_json
+#### 4.8.4. storage.store_metadata_as_json
 
 - **type:** `"storage.store_metadata_as_json"`
 - **Purpose:** Stores extracted metadata as JSON files with consistent key naming.
@@ -802,7 +889,7 @@ pipeline:
   - store_metadata_json
 ```
 
-#### 4.8.4. storage.store_file_to_localdrive
+#### 4.8.5. storage.store_file_to_localdrive
 
 - **type:** `"storage.store_file_to_localdrive"`
 - **Purpose:** Stores processed PDF files with descriptive filenames based on extracted data.
@@ -830,7 +917,7 @@ pipeline:
   - store_file_to_localdrive
 ```
 
-#### 4.8.5. archiver.archive_pdf
+#### 4.8.6. archiver.archive_pdf
 
 - **type:** `"archiver.archive_pdf"`
 - **Purpose:** Archives the original input PDF to a designated archive directory with a sanitized, unique filename.
@@ -856,7 +943,7 @@ pipeline:
   - archive_pdf
 ```
 
-#### 4.8.6. rules.update_reference
+#### 4.8.7. rules.update_reference
 
 - **type:** `"rules.update_reference"`
 - **Purpose:** Update a reference CSV file using extracted data.
@@ -872,8 +959,9 @@ pipeline:
       - `from_context`: string (required). A field path to resolve the comparison value from the pipeline context (e.g., `"invoice_number"`).
       - `number`: boolean (optional). If `true`, forces numeric comparison; if `false`, forces string comparison; if `null` or omitted, auto-detects based on context value.
 - **Behavior:**
-  - Loads or creates the CSV file.
-  - Updates matching rows or appends new rows.
+  - Loads the configured CSV file.
+  - Updates matching rows only; it does not append new rows.
+  - Creates the configured `update_field` column at runtime if it is missing from the loaded CSV.
   - Saves the CSV, creating a backup if enabled.
 - **Notes:**
   - Use workflow field keys in `from_context` (for example, `purchase_order_number`). Use CSV `column` names to match the external reference file headers.
@@ -908,7 +996,73 @@ pipeline:
 
 > **Migration Note:** Update Reference Configuration Update: Bare field names (e.g., 'purchase_order_number') are now preferred over dotted paths (e.g., 'data.purchase_order_number'). The dotted format is still supported for backward compatibility but will be deprecated in future releases. Deprecation warnings are logged when the old format is used.
 
-#### 4.8.7. Assign Nanoid (standard_step/context)
+#### 4.8.8. review.review_gate
+
+- **type:** `"review.review_gate"`
+- **Purpose:** Pauses a document for operator review when extracted fields or configured policies indicate human review is required.
+- **params:**
+  - `confidence_threshold`: float from `0.0` to `1.0`. Default is `0.8`; use `0.9` for a 90% review threshold.
+  - `per_document_type_thresholds`: optional map of document type or split category to threshold.
+  - `field_threshold_overrides`: optional map of field key to threshold.
+  - `split_confidence_levels_requiring_review`: optional list of split confidence labels such as `high`, `medium`, or `low` that should force review.
+  - `require_review_when_missing_confidence`: boolean. Default is `true`.
+  - `require_review_for_missing_required_fields`: boolean. Default is `true` when schema validation is used.
+  - `always_review`: boolean. If `true`, every document entering this task requires review.
+  - `schema_file`: optional schema name used to validate corrected/final field values.
+  - `queue_name`: review queue name. Defaults to `review.default_queue_name` or `default_review`.
+  - `review_scope`: review scope, commonly `"low_confidence_fields"`.
+  - `allow_operator_to_edit_high_confidence_fields`: boolean. Default is `true`.
+  - `resume_policy`: currently supports `"next_task"`.
+- **Behavior:**
+  - Evaluates persisted extracted fields, confidence values, missing-confidence conditions, schema errors, split confidence, and business rule flags.
+  - Marks fields requiring review and creates a review queue item in SQLite when review is required.
+  - Sets document state to `review_required` and pauses the workflow.
+  - Operators can claim the item, save draft corrections, preview diffs, and complete review from `/app/review/{review_item_id}`.
+  - Completed corrections are persisted in SQLite and the document resumes downstream workflow steps according to `resume_policy`.
+- **Locking:** Review claims use `review.lock_timeout_minutes`, defaulting to 60 minutes.
+
+**YAML configuration example:**
+
+```yaml
+tasks:
+  extract_document_data:
+    module: standard_step.extraction.extract_pdf_v2
+    class: ExtractPdfV2Task
+    params:
+      api_key: "llx-REDACTED"
+      fields:
+        supplier_name: { alias: "Supplier name", type: "str" }
+        invoice_amount: { alias: "Invoice Amount", type: "float" }
+    on_error: stop
+
+  review_gate:
+    module: standard_step.review.review_gate
+    class: ReviewGateTask
+    params:
+      confidence_threshold: 0.90
+      queue_name: "default_review"
+      review_scope: "low_confidence_fields"
+      require_review_when_missing_confidence: true
+      require_review_for_missing_required_fields: true
+      always_review: false
+      resume_policy: "next_task"
+    on_error: stop
+
+  store_metadata_json:
+    module: standard_step.storage.store_metadata_as_json_v2
+    class: StoreMetadataAsJsonV2
+    params:
+      data_dir: "data"
+      filename: "{supplier_name}_{invoice_amount}"
+    on_error: continue
+
+pipeline:
+  - extract_document_data
+  - review_gate
+  - store_metadata_json
+```
+
+#### 4.8.9. Assign Nanoid (standard_step/context)
 
 - **type:** `"context.assign_nanoid"`
 - **Purpose:** Assigns a short, URL-safe unique identifier to the shared task context for downstream use in filename construction (e.g., `{nanoid}_{purchase_order_number}_{supplier_name}`).
@@ -942,7 +1096,7 @@ pipeline:
 - Update existing filename templates to include `{nanoid}` where a short unique prefix is desired; for example:
   - `{nanoid}_{purchase_order_number}_{supplier_name}`
 - This change ensures filenames are unique and traceable while remaining short.
-#### 4.8.8. housekeeping.cleanup
+#### 4.8.10. housekeeping.cleanup
 
 - **type:** `"housekeeping.cleanup"`
 - **Purpose:** Performs final cleanup after workflow execution by deleting the processed PDF from the processing directory so the folder does not accumulate UUID-named files.
@@ -957,7 +1111,7 @@ pipeline:
   - This task is automatically invoked by the WorkflowLoader as a mandatory final step in every Prefect flow.
   - It does not require definition in the `tasks` section or inclusion in the `pipeline` list of `config.yaml`.
   - Ensures the processing directory remains clean by removing only the processed PDF.
-#### 4.8.9. Validation and Failure Behavior
+#### 4.8.11. Validation and Failure Behavior
 
 - Config validation happens at startup via the `ConfigManager`:
   - Validates that `web.upload_dir` exists and is a directory.
@@ -1235,6 +1389,8 @@ A: Processed PDF documents are saved by the "`store_file_to_localdrive`" task to
 - CSV files: `tasks.store_metadata_csv.params.data_dir`
 - JSON files: `tasks.store_metadata_json.params.data_dir`
 
+When SQLite document context exists, generated PDFs, CSV files, JSON files, archives, source originals, and split PDFs are also registered as document artifacts in SQLite. Split child PDFs are written to the configured split directory, typically `app_storage.split_dir`.
+
 **Q: What happens if the same filename already exists?**
 A: Storage tasks generate unique filenames automatically by appending a numeric suffix (`_1`, `_2`, …) to avoid overwriting, as implemented by the utility in [`modules.utils.generate_unique_filepath()`](modules/utils.py:95).
 
@@ -1251,22 +1407,26 @@ A: Right-click the folder, select Properties > Security tab, and ensure the syst
 A: Verify that the `authentication.username` and `authentication.password_hash` values in `config.yaml` match your intended login credentials. The username should be a plain text string, and the password_hash should be a valid bcrypt hash. If you've forgotten your password, regenerate the hash using the bcrypt command shown in section 4.4 and update the configuration.
 
 **Q: Why does my login session expire quickly or tokens become invalid?**
-A: Authentication tokens are valid for 30 minutes by default. If sessions are expiring too quickly, ensure your system's clock is accurate, as token expiration is time-sensitive. The token timeout is managed internally and cannot be configured externally.
+A: Authentication tokens are valid for 30 minutes by default. If sessions are expiring too quickly, ensure your system's clock is accurate, as token expiration is time-sensitive. Administrators can adjust the timeout with `web.token_exp_minutes` in `config.yaml`.
 
 **Q: How do I reset or change the web interface password?**
-A: Update the `authentication.password_hash` value in `config.yaml` with a new bcrypt hash. Generate the hash using the command shown in section 4.4: `C:\Python313\python.exe -c "import bcrypt; print(bcrypt.hashpw(b'your_new_password', bcrypt.gensalt()).decode())"`. Replace `your_new_password` with your desired password and update the configuration file.
+A: Update the `authentication.password_hash` value in `config.yaml` with a new bcrypt hash. Generate the hash using the helper shown in section 4.4:
+```
+C:\Python313\python.exe tools\generate_password_hash.py --password "new_password"
+```
+Replace `new_password` with your desired password and update the configuration file.
 
 **Q: How do I verify my authentication configuration is correct?**
 A: Ensure these values are properly set in `config.yaml`: `authentication.username` (plain text username), `authentication.password_hash` (bcrypt hash starting with $2b$), and `web.secret_key` (random string for token signing). Test the configuration by restarting the system and attempting to log in through the web interface.
 
 **Q: Why is processing slow for large PDF files?**
-A: Files over 10MB may cause noticeable delays due to synchronous file I/O operations. Files over 100MB may cause significant performance issues or memory problems. The system processes files sequentially, so large files will block other files until complete. Monitor the `app.log` file for performance warnings during large file processing.
+A: Files over 10MB may cause noticeable delays due to synchronous file I/O operations and external extraction processing. Files over 100MB may cause significant delays or memory pressure. The system processes workflow files sequentially, so one large file can delay later files. Monitor `/app/processing`, document task runs, and `app.log` during large file processing.
 
 **Q: What should I do if the system appears stuck processing a file?**
-A: Check the `app.log` file for error messages or performance warnings. Large files (>100MB) may take considerable time to process. If the system is unresponsive, check system resources (CPU, memory, disk space). The system will automatically log detailed progress and any timeouts or errors.
+A: Check `/app/processing` or `/app/batches/{batch_id}` first to see the document, task-run, split, extraction, and review state. Then check `app.log` for provider errors, timeouts, validation errors, or filesystem issues. Large files (>100MB) may take considerable time to process. If the app itself is unresponsive, check system resources such as CPU, memory, and disk space.
 
 **Q: How can I improve performance for many files or large files?**
-A: For many files, ensure adequate system resources and monitor for rate limiting (the system processes files at a controlled rate to prevent overload). For large files, consider processing them during off-peak hours or ensuring sufficient memory (at least 2GB RAM recommended for files >50MB). Check the troubleshooting section for performance considerations.
+A: For many files, ensure adequate CPU, memory, disk, and network capacity, and monitor provider quota or rate-limit messages. For very large files, process them during off-peak hours, keep enough free disk space for processing/split/export artifacts, and watch `/app/processing` plus `app.log` for slow task runs.
 
 **Q: What are the recommended system requirements for optimal performance?**
 A: For basic operation: 4GB RAM, 2GB free disk space, stable internet connection. For processing many large files (>50MB): 8GB+ RAM, SSD storage, high-speed internet. The system is designed to run on modest hardware but performance scales with available resources.
@@ -1275,19 +1435,31 @@ A: For basic operation: 4GB RAM, 2GB free disk space, stable internet connection
 A: Use Windows Task Manager to monitor CPU, memory, and disk usage. Watch the `app.log` file for performance warnings. Use `/app/processing`, `/app/batches/{batch_id}`, and `/app/reports` to monitor processing queue length, file status, and review activity. Check system resources before processing large batches of files.
 
 **Q: What should I do if the system becomes unresponsive during large file processing?**
-A: Large files (>100MB) can cause temporary unresponsiveness. Wait for current processing to complete (check `app.log` for progress). If the system remains unresponsive for more than 30 minutes, restart it using `Ctrl+C` followed by the startup command. Consider processing very large files individually during off-peak hours.
+A: Large files (>100MB) can cause temporary unresponsiveness. Wait for current processing to complete when `/app/processing` or `app.log` still shows progress. If the system remains unresponsive for more than 30 minutes and no progress is visible, stop it with `Ctrl+C`, restart with the normal startup command, and inspect the affected document state before reprocessing. Consider processing very large files individually during off-peak hours.
 
 **Q: How do I handle API rate limiting from extraction providers?**
-A: The system includes built-in retry logic for temporary API failures. If you encounter rate limiting, the system will automatically retry failed requests. Monitor `app.log` for rate limit messages and consider adding delays between file processing or upgrading your API plan with the provider.
+A: The v2 extraction task retries transient extraction failures, and workflow task wrappers also retry task execution. Persistent provider rate limits may still fail after retries. Monitor `app.log`, provider quota dashboards, and document task-run errors, then retry or reprocess after the provider limit clears. For recurring rate limits, reduce ingestion volume, process during off-peak hours, or upgrade the provider plan.
 
 **Q: What should I do if archiving fails due to directory permissions?**
-A: Ensure the `archive_dir` configured in your `tasks.archive_pdf.params.archive_dir` exists and has write permissions for the system user. The system validates that archive directories exist and are writable at startup. If archiving fails, check that the directory path is correct and the user account running the application has Modify permissions on the folder.
+A: Ensure the `archive_dir` configured in `tasks.archive_pdf.params.archive_dir` exists, is a directory, and grants write/Modify permission to the account running the application. Startup path validation checks configured `_dir` paths, but archive copy permission failures can still appear at runtime. If archiving fails, inspect `/app/processing`, the document task runs, and `app.log`. When document context exists, successful archive copies are registered as `source_archive` artifacts in SQLite.
 
 **Q: Why do large PDF files (>50MB) cause extended processing times?**
-A: Large files require more processing time due to increased I/O operations and memory usage during extraction. Files over 100MB may cause significant delays or performance issues. Monitor system resources during large file processing and consider processing very large files during off-peak hours. The system processes files sequentially, so large files will block other files until complete.
+A: Large files require more processing time due to increased I/O, PDF handling, split/extraction work, and provider processing time. This is the same underlying cause described in the large-file performance questions above. Monitor system resources, `/app/processing`, and `app.log`, and consider processing very large files individually.
 
 **Q: What happens when reference file matching fails in the update_reference task?**
-A: When field values required for matching are not found in the pipeline context, the task logs a warning and continues without matching any rows. The task will not throw an error but simply won't update the reference file. Check your extraction field configuration and ensure the required fields (like `purchase_order_number` or `invoice_amount`) are being extracted correctly.
+A: When field values required for matching are not found in the pipeline context, the task logs a warning and continues without matching any rows. The task will not append new rows. It updates matched rows only, creating the configured `update_field` column at runtime if needed. Check your extraction field configuration and ensure the required fields (like `purchase_order_number` or `invoice_amount`) are being extracted correctly.
+
+**Q: Why is my document waiting for review?**
+A: A configured review gate can pause a document when extracted field confidence is below threshold, confidence is missing, required/schema fields are missing or invalid, split confidence rules require review, business-rule flags request review, or `always_review` is enabled. Operators should open `/app/review`, claim the item, inspect the PDF and fields, then complete review when corrected values are ready.
+
+**Q: What happens after review is completed?**
+A: Corrected values are persisted in SQLite with the document extraction state. If the review gate uses `resume_policy: "next_task"`, the document resumes the downstream workflow steps after review completion.
+
+**Q: Why did one uploaded PDF become multiple documents?**
+A: If the split task is configured and enabled, the source PDF can be split into child documents based on provider segments, categories, confidence, and page ranges. Use `/app/batches/{batch_id}/split-results` to inspect source documents, child document IDs, categories, confidence, pages, and statuses.
+
+**Q: Can administrators change pipeline, review, or split settings in the UI?**
+A: Yes. Admin users can use `/app/admin/pipeline` for pipeline draft/diff/validate/publish workflows, `/app/admin/review-gate` for review rules, `/app/admin/split` for non-secret split settings, `/app/admin/dry-run` for previews, and `/app/settings/validation` for validation findings. Secret values such as `api_key` are not saved through split settings and should be managed through `config.yaml` or deployment secret management.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
 A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.
@@ -1300,7 +1472,7 @@ A: The system validates the required LlamaCloud `api_key` before processing. If 
 ### Glossary
 
 - **Workflow:** An ordered list of tasks configured in `config.yaml` applied to every processed file.  
-- **Task (Standard Step):** A single operation in the pipeline, e.g., `extraction`, `rules.update_reference`, `storage.store_metadata_as_csv`, `storage.store_metadata_as_json`, `archiver.post_process`, `housekeeping.cleanup`.  
+- **Task (Standard Step):** A single operation in the pipeline, e.g., `split.llamacloud_split`, `extraction`, `review.review_gate`, `rules.update_reference`, `storage.store_metadata_as_csv`, `storage.store_metadata_as_json`, `archiver.post_process`, `housekeeping.cleanup`.
 - **Alias:** Display/output field name used as CSV headers/JSON keys and in reference files for consistency.  
 - **Watch Folder:** The `watch_folder.dir` monitored for new PDFs.  
 - **YAML:** A human-readable configuration file format that uses indentation to organize settings.  
@@ -1321,4 +1493,4 @@ Please note that the code located in the `OLD_VERSION/llamaextract` directory is
 
 ---
 
-This guide documents the configurable, task-based workflow system, including the newly implemented web interface for PDF upload and status monitoring.
+This guide documents the configurable, task-based workflow system, including the unified `/app/*` interface for upload, processing, review, reporting, settings, and administration.
