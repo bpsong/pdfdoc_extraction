@@ -62,6 +62,7 @@ from .services.audit_service import AuditService
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
+from .services.processing_state_service import ProcessingStateService, build_pipeline_snapshot
 from .services.reports_service import ReportsService
 from .services.review_service import ReviewService, ReviewServiceError
 from .services.runtime_settings_service import RuntimeSettingsService
@@ -719,7 +720,11 @@ def build_router() -> APIRouter:
                 created = BatchService(conn).create_ingestion_batch_with_documents(
                     source="web",
                     files=file_descriptors,
-                    metadata={"uploaded_by": user, "file_count": len(file_descriptors)},
+                    metadata={
+                        "uploaded_by": user,
+                        "file_count": len(file_descriptors),
+                        "pipeline_snapshot": build_pipeline_snapshot(config),
+                    },
                     status="queued",
                 )
 
@@ -1243,6 +1248,26 @@ def build_router() -> APIRouter:
             if service.get_batch(batch_id) is None:
                 raise HTTPException(status_code=404, detail="Batch not found")
             return service.list_documents(batch_id)
+
+    @router.get("/api/processing-state")
+    def list_processing_state(
+        limit: int = Query(default=10, ge=1, le=50),
+        user: str = Depends(get_current_user),
+    ):
+        """Return recent batch processing state for the dynamic pipeline UI."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return ProcessingStateService(config, conn).list_active_state(limit=limit)
+
+    @router.get("/api/batches/{batch_id}/processing-state")
+    def get_batch_processing_state(batch_id: str, user: str = Depends(get_current_user)):
+        """Return dynamic pipeline processing state for one batch."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            payload = ProcessingStateService(config, conn).get_batch_state(batch_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        return payload
 
     @router.get("/api/batches/{batch_id}/split-results")
     def get_split_results(batch_id: str, user: str = Depends(get_current_user)):

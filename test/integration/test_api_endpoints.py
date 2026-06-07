@@ -111,7 +111,7 @@ def test_login_success_returns_redirect_and_cookie(client, mock_auth):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/dashboard"
+    assert resp.headers["location"] == "/app/upload"
     # Check cookie is set
     cookies = resp.cookies
     assert "access_token" in cookies

@@ -12,16 +12,8 @@
                 <span class="badge badge-ghost badge-sm">Active batches</span>
                 {% endif %}
             </div>
-            <div id="pipeline-step-list" class="pipeline-steps">
-                <div class="pipeline-step" data-step="uploaded"></div>
-                <div class="pipeline-connector"></div>
-                <div class="pipeline-step" data-step="splitting"></div>
-                <div class="pipeline-connector"></div>
-                <div class="pipeline-step" data-step="extracting"></div>
-                <div class="pipeline-connector"></div>
-                <div class="pipeline-step" data-step="review"></div>
-                <div class="pipeline-connector"></div>
-                <div class="pipeline-step" data-step="output"></div>
+            <div id="pipeline-step-list" class="pipeline-groups">
+                <div class="empty-panel">Loading pipeline</div>
             </div>
 
             <div class="mt-6">
@@ -47,17 +39,15 @@
                         <tr class="text-xs text-base-content/50">
                             <th>File Name</th>
                             <th>Status</th>
-                            <th>Splitting</th>
-                            <th>Extracting</th>
-                            <th>Review</th>
-                            <th>Output</th>
+                            <th>Current Step</th>
+                            <th>Last Completed</th>
                             <th>Progress</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="processing-table-body">
                         <tr>
-                            <td colspan="8" class="text-center text-base-content/50 py-10">No active documents</td>
+                            <td colspan="6" class="text-center text-base-content/50 py-10">No active documents</td>
                         </tr>
                     </tbody>
                 </table>

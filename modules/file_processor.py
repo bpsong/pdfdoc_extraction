@@ -23,6 +23,7 @@ from modules.utils import windows_long_path, is_pdf_header
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.services.batch_service import BatchService
+from modules.services.processing_state_service import build_pipeline_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,7 @@ class FileProcessor:
                     metadata={
                         "legacy_id": unique_id,
                         "ingestion_source": source,
+                        "pipeline_snapshot": build_pipeline_snapshot(self.config_manager),
                     },
                 )
                 return created["batch"]["id"], created["document"]["id"]

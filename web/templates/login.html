@@ -1,33 +1,76 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 
 <head>
     <meta charset="UTF-8" />
-    <title>Login - PDF Processor</title>
+    <title>Login - DocFlow AI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link href="/static/css/style.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="/static/css/app.css?v=task26-login" rel="stylesheet" />
 </head>
 
-<body>
-    <div class="container">
-        <h1>Login</h1>
-        {% if error %}
-        <div id="alert" class="alert" style="display:block;">{{ error }}</div>
-        {% else %}
-        <div id="alert" class="alert" style="display:none;"></div>
-        {% endif %}
-        <!-- Standard HTML form submit; server sets HttpOnly cookie and redirects -->
-        <form action="/auth/login" method="post">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input id="username" name="username" type="text" required autocomplete="username" />
+<body class="bg-base-200 min-h-screen">
+    <div class="login-shell">
+        <section class="login-brand-panel bg-base-100 border-r border-base-200">
+            <a href="/login" class="login-brand">
+                <div class="w-7 h-7 bg-primary rounded-md flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </div>
+                <span class="font-bold text-base truncate">DocFlow AI</span>
+            </a>
+        </section>
+
+        <main class="login-main">
+            <div class="login-header">
+                <div>
+                    <h1 class="text-lg font-bold">Sign In</h1>
+                    <p class="text-sm text-base-content/60">Access upload, review, reports, and admin workflows.</p>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input id="password" name="password" type="password" required autocomplete="current-password" />
-            </div>
-            <button type="submit" class="btn">Login</button>
-        </form>
+
+            <section class="card bg-base-100 shadow-sm login-card">
+                <div class="card-body">
+                    <div class="login-card-heading">
+                        <div class="login-icon">
+                            <svg class="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 class="font-semibold">Welcome Back</h2>
+                            <p class="text-sm text-base-content/60">Use your configured DocFlow account.</p>
+                        </div>
+                    </div>
+
+                    {% if error %}
+                    <div id="alert" class="alert alert-error">{{ error }}</div>
+                    {% else %}
+                    <div id="alert" class="alert alert-error hidden"></div>
+                    {% endif %}
+
+                    <form action="/auth/login" method="post" class="login-form">
+                        <label class="form-control">
+                            <span class="label-text">Username</span>
+                            <input id="username" name="username" class="input input-bordered w-full" type="text"
+                                required autocomplete="username" autofocus />
+                        </label>
+                        <label class="form-control">
+                            <span class="label-text">Password</span>
+                            <input id="password" name="password" class="input input-bordered w-full" type="password"
+                                required autocomplete="current-password" />
+                        </label>
+                        <button type="submit" class="btn btn-primary w-full">Login</button>
+                    </form>
+                </div>
+            </section>
+        </main>
     </div>
 </body>
 

@@ -198,10 +198,10 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def root(request: Request):
-        """Redirects to dashboard if logged in, otherwise to login page."""
+        """Redirect to the refactored app when logged in, otherwise to login."""
         username = await get_current_user(request)
         if username:
-            return RedirectResponse(url="/dashboard", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+            return RedirectResponse(url="/app/upload", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
         else:
             return RedirectResponse(url="/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
@@ -210,8 +210,8 @@ def create_app() -> FastAPI:
         """Serves the login page."""
         username = await get_current_user(request)
         if username:
-            logger.info(f"/login GET: user already authenticated -> {username}, redirecting to /dashboard")
-            return RedirectResponse(url="/dashboard", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+            logger.info(f"/login GET: user already authenticated -> {username}, redirecting to /app/upload")
+            return RedirectResponse(url="/app/upload", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
         
         logger.info("/login GET: unauthenticated, rendering login page")
         response = templates.TemplateResponse(
@@ -254,7 +254,7 @@ def create_app() -> FastAPI:
     async def login_post(request: Request):
         """Handles login form submission, verifies credentials, sets cookie, redirects.
         
-        On successful authentication: sets HttpOnly cookie and redirects to dashboard.
+        On successful authentication: sets HttpOnly cookie and redirects to the refactored app.
         On authentication failure: returns login page with error message and cache-control headers
         to prevent browser caching of error responses.
         """
@@ -280,7 +280,7 @@ def create_app() -> FastAPI:
             
             # Create response with redirect
             response = RedirectResponse(
-                url="/dashboard",
+                url="/app/upload",
                 status_code=status.HTTP_303_SEE_OTHER
             )
             

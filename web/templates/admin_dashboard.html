@@ -39,23 +39,27 @@
                 </div>
                 <span class="badge badge-ghost" id="admin-draft-status">No draft</span>
             </div>
-            <div class="card-body p-4 admin-health-list">
-                <div class="admin-health-row">
-                    <span>Published versions</span>
-                    <strong id="admin-published-count">0</strong>
-                </div>
-                <div class="admin-health-row">
-                    <span>Draft versions</span>
-                    <strong id="admin-draft-count">0</strong>
-                </div>
-                <div class="admin-health-row">
-                    <span>Review threshold</span>
-                    <strong id="admin-review-threshold">-</strong>
-                </div>
-                <div class="admin-health-row">
-                    <span>Split adapter</span>
-                    <strong id="admin-split-status">-</strong>
-                </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm admin-health-table">
+                    <tbody>
+                        <tr>
+                            <td>Published versions</td>
+                            <td class="text-right font-semibold" id="admin-published-count">0</td>
+                        </tr>
+                        <tr>
+                            <td>Draft versions</td>
+                            <td class="text-right font-semibold" id="admin-draft-count">0</td>
+                        </tr>
+                        <tr>
+                            <td>Review threshold</td>
+                            <td class="text-right font-semibold" id="admin-review-threshold">-</td>
+                        </tr>
+                        <tr>
+                            <td>Split adapter</td>
+                            <td class="text-right font-semibold" id="admin-split-status">-</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </section>
 
@@ -85,6 +89,24 @@
             </div>
         </section>
 
+        <section class="card bg-base-100 shadow-sm admin-shortcuts-panel">
+            <div class="panel-header">
+                <div>
+                    <h2 class="font-semibold">Admin Workspaces</h2>
+                    <p class="text-xs text-base-content/50">Configuration, validation, and governance tools</p>
+                </div>
+            </div>
+            <div class="card-body p-4 admin-shortcut-grid">
+                <a class="btn btn-outline btn-sm" href="/app/settings/validation">Validation</a>
+                <a class="btn btn-outline btn-sm" href="/app/schemas">Schemas</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/pipeline">Pipeline</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/tasks">Tasks</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/review-gate">Review Gate</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/split">Split Settings</a>
+                <a class="btn btn-outline btn-sm" href="/app/admin/dry-run">Dry Run</a>
+            </div>
+        </section>
+
         <section class="card bg-base-100 shadow-sm admin-settings-panel">
             <div class="panel-header">
                 <div>
@@ -102,5 +124,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/admin.js?v=task24" defer></script>
+<script src="/static/js/admin.js?v=task26-admin" defer></script>
 {% endblock %}

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
-from modules.db.connection import connect
+from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.file_processor import FileProcessor
 
@@ -22,6 +22,18 @@ class TempConfig:
             "watch_folder.dir": str(root / "watch"),
             "watch_folder.processing_dir": str(root / "processing"),
             "watch_folder.validate_pdf_header": True,
+            "tasks": {
+                "extract_invoice": {
+                    "module": "standard_step.extraction.extract_pdf_v2",
+                    "class": "ExtractPdfV2Task",
+                    "params": {"api_key": "secret"},
+                },
+                "store_json": {
+                    "module": "standard_step.storage.store_metadata_as_json",
+                    "class": "StoreMetadataAsJson",
+                },
+            },
+            "pipeline": ["extract_invoice", "store_json"],
         }
         for key in ("web.upload_dir", "watch_folder.dir", "watch_folder.processing_dir"):
             Path(self._values[key]).mkdir(parents=True, exist_ok=True)
@@ -89,6 +101,11 @@ def test_batch_upload_api_creates_one_batch_for_multiple_pdfs(tmp_path, monkeypa
     assert batches[0]["id"] == payload["batch_id"]
     assert batches[0]["source"] == "web"
     assert batches[0]["total_documents"] == 2
+    metadata = json_loads(batches[0]["metadata_json"])
+    snapshot = metadata["pipeline_snapshot"]
+    assert [step["key"] for step in snapshot["steps"]] == ["extract_invoice", "store_json"]
+    assert snapshot["steps"][0]["category"] == "extract"
+    assert "params" not in snapshot["steps"][0]
     assert [document["original_filename"] for document in documents] == ["invoice_a.pdf", "invoice_b.pdf"]
     assert {document["id"] for document in documents} == set(payload["document_ids"])
     assert len(source_files) == 2

@@ -88,7 +88,10 @@
         }
         container.innerHTML = groups.map((group) => `
             <section class="admin-settings-group">
-                <h3 class="font-semibold text-sm">${escapeHtml(titleCase(group.name))}</h3>
+                <div>
+                    <h3 class="font-semibold text-sm">${escapeHtml(titleCase(group.name))}</h3>
+                    <p class="text-xs text-base-content/50">Editable allow-listed values</p>
+                </div>
                 <div class="admin-settings-grid">
                     ${(group.settings || []).map((setting) => settingInput(setting)).join("")}
                 </div>
@@ -102,8 +105,8 @@
         const type = escapeHtml(setting.type);
         if (setting.type === "bool") {
             return `
-                <label class="form-control admin-setting-control">
-                    <span class="label-text">${label}</span>
+                <label class="form-control admin-setting-control bg-base-200/60 rounded-lg p-3">
+                    <span class="label-text mb-2">${label}</span>
                     <input class="toggle toggle-sm" data-admin-setting-key="${key}" data-admin-setting-type="${type}"
                         type="checkbox" ${setting.value ? "checked" : ""}>
                 </label>
@@ -111,9 +114,9 @@
         }
         const inputType = setting.type === "positive_int" ? "number" : "text";
         return `
-            <label class="form-control admin-setting-control">
-                <span class="label-text">${label}</span>
-                <input class="input input-bordered input-sm" data-admin-setting-key="${key}" data-admin-setting-type="${type}"
+            <label class="form-control admin-setting-control bg-base-200/60 rounded-lg p-3">
+                <span class="label-text mb-2">${label}</span>
+                <input class="input input-bordered input-sm w-full" data-admin-setting-key="${key}" data-admin-setting-type="${type}"
                     type="${inputType}" value="${escapeHtml(setting.value || "")}">
             </label>
         `;

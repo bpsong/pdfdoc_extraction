@@ -8,11 +8,12 @@
 
     const batchId = workspace.dataset.batchId || "";
     const tableBody = document.getElementById("processing-table-body");
+    const pipelineStepList = document.getElementById("pipeline-step-list");
     const progressBar = document.getElementById("overall-progress-bar");
     const progressLabel = document.getElementById("overall-progress-label");
     const refreshNote = document.getElementById("processing-refresh-note");
     const splitResultsLink = document.getElementById("split-results-link");
-    const terminalStatuses = new Set(["completed", "completed_with_errors", "failed", "cancelled"]);
+    const terminalStatuses = new Set(["completed", "completed_with_errors", "failed", "cancelled", "review_completed"]);
     let pollTimer = null;
 
     function escapeHtml(value) {
@@ -55,71 +56,174 @@
         return `<span class="badge ${classByStatus[normalized] || "badge-ghost"} badge-sm">${escapeHtml(titleCase(normalized))}</span>`;
     }
 
-    function stageIcon(state) {
-        if (state === "completed") {
-            return '<svg class="w-4 h-4 text-success" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
-        }
-        if (state === "running") {
-            return '<span class="loading loading-spinner loading-xs text-primary"></span>';
-        }
-        if (state === "warning") {
-            return '<span class="badge badge-warning badge-xs">Review</span>';
-        }
-        if (state === "failed") {
-            return '<span class="badge badge-error badge-xs">Failed</span>';
-        }
-        if (state === "skipped") {
-            return '<span class="text-base-content/30">Skipped</span>';
-        }
-        return '<span class="text-base-content/30">-</span>';
+    function categoryBadge(category) {
+        const normalized = String(category || "custom").toLowerCase();
+        const classByCategory = {
+            context: "badge-ghost",
+            split: "badge-info",
+            extract: "badge-primary",
+            review: "badge-warning",
+            storage: "badge-success",
+            rules: "badge-secondary",
+            archive: "badge-accent",
+            housekeeping: "badge-ghost",
+            ingestion: "badge-ghost",
+            custom: "badge-ghost",
+        };
+        return `<span class="badge ${classByCategory[normalized] || "badge-ghost"} badge-xs">${escapeHtml(titleCase(normalized))}</span>`;
     }
 
-    function documentStage(document, stage) {
-        const status = String(document.status || "").toLowerCase();
-        const taskKey = String(document.current_task_key || "").toLowerCase();
-        if (status === "failed" || status === "cancelled") {
+    function stateIcon(state) {
+        if (state === "running") {
+            return '<span class="loading loading-spinner loading-xs"></span>';
+        }
+        if (state === "completed") {
+            return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+        }
+        if (state === "failed") {
+            return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
+        }
+        if (state === "paused") {
+            return '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6" /></svg>';
+        }
+        if (state === "skipped") {
+            return '<span class="text-xs font-semibold">Skip</span>';
+        }
+        return '<span class="w-2 h-2 rounded-full bg-current"></span>';
+    }
+
+    function stateClass(state) {
+        if (state === "completed") {
+            return "completed";
+        }
+        if (state === "running") {
+            return "running";
+        }
+        if (state === "paused") {
+            return "warning";
+        }
+        if (state === "failed") {
             return "failed";
         }
-        if (stage === "splitting") {
-            if (document.parent_document_id || status === "split_completed") {
-                return "completed";
-            }
-            if (status === "split_pending" || taskKey.includes("split")) {
-                return "running";
-            }
+        if (state === "skipped") {
             return "skipped";
         }
-        if (stage === "extracting") {
-            if (["extraction_completed", "review_required", "in_review", "review_completed", "completed"].includes(status)) {
-                return "completed";
-            }
-            if (status === "extraction_pending" || taskKey.includes("extract")) {
-                return "running";
-            }
-            return "pending";
+        return "";
+    }
+
+    function stepDetail(step) {
+        const counts = step.counts || {};
+        const parts = [];
+        if (counts.completed) {
+            parts.push(`${counts.completed} done`);
         }
-        if (stage === "review") {
-            if (["review_required", "in_review"].includes(status)) {
-                return "warning";
-            }
-            if (["review_completed", "completed"].includes(status)) {
-                return "completed";
-            }
-            if (taskKey.includes("review")) {
-                return "running";
-            }
-            return "pending";
+        if (counts.running) {
+            parts.push(`${counts.running} running`);
         }
-        if (stage === "output") {
-            if (status === "completed") {
-                return "completed";
-            }
-            if (taskKey.includes("store") || taskKey.includes("output") || taskKey.includes("archive")) {
-                return "running";
-            }
-            return "pending";
+        if (counts.paused) {
+            parts.push(`${counts.paused} paused`);
         }
-        return "pending";
+        if (counts.failed) {
+            parts.push(`${counts.failed} failed`);
+        }
+        if (counts.pending && !parts.length) {
+            parts.push(`${counts.pending} pending`);
+        }
+        if (counts.skipped && !parts.length) {
+            parts.push(`${counts.skipped} skipped`);
+        }
+        return parts.join(", ") || titleCase(step.state || "pending");
+    }
+
+    function ingestionStep(state) {
+        const documentCount = (state.documents || []).length;
+        const failed = (state.documents || []).filter((document) => String(document.status || "").toLowerCase() === "failed").length;
+        const running = (state.documents || []).filter((document) => !isTerminal(document.status)).length;
+        return {
+            key: "ingestion",
+            label: "Uploaded",
+            category: "ingestion",
+            state: documentCount ? "completed" : "pending",
+            counts: {
+                completed: documentCount,
+                running,
+                failed,
+                paused: 0,
+                pending: documentCount ? 0 : 1,
+                skipped: 0,
+            },
+            detail: documentCount ? `${documentCount} files${failed ? `, ${failed} failed` : ""}` : "Pending",
+        };
+    }
+
+    function renderPipelineStep(step) {
+        const state = String(step.state || "pending");
+        const muted = state === "pending" || state === "skipped" ? "text-base-content/50" : "";
+        return `
+            <div class="pipeline-step" data-step="${escapeHtml(step.key)}">
+                <div class="pipeline-step-icon ${stateClass(state)}">${stateIcon(state)}</div>
+                <div class="pipeline-step-text">
+                    <div class="pipeline-step-label ${muted}">${escapeHtml(step.label || step.key)}</div>
+                    <div class="pipeline-step-key">${escapeHtml(step.key || "")}</div>
+                    <div class="pipeline-step-meta">
+                        ${categoryBadge(step.category)}
+                        <span>${escapeHtml(step.detail || stepDetail(step))}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderPipelineGroup(state, showTitle) {
+        const batch = state.batch || {};
+        const steps = [ingestionStep(state)].concat(state.aggregate_step_states || []);
+        const compactClass = steps.length > 8 ? " compact" : "";
+        const items = [];
+        steps.forEach((step, index) => {
+            if (index > 0) {
+                const previousState = String(steps[index - 1].state || "");
+                items.push(`<div class="pipeline-connector ${["completed", "running"].includes(previousState) ? "active" : ""}"></div>`);
+            }
+            items.push(renderPipelineStep(step));
+        });
+
+        return `
+            <div class="pipeline-group">
+                ${showTitle ? `
+                    <div class="pipeline-group-header">
+                        <span class="font-medium truncate">${escapeHtml(batch.original_filename || batch.id || "Batch")}</span>
+                        <span class="badge badge-outline badge-xs">${escapeHtml(batch.id || "")}</span>
+                    </div>
+                ` : ""}
+                <div class="pipeline-steps${compactClass}">
+                    ${items.join("")}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderPipeline(states) {
+        if (!states.length) {
+            pipelineStepList.innerHTML = '<div class="empty-panel">No active pipeline data</div>';
+            return;
+        }
+        pipelineStepList.innerHTML = states.map((state) => renderPipelineGroup(state, states.length > 1)).join("");
+    }
+
+    function stepName(step) {
+        if (!step) {
+            return '<span class="text-xs text-base-content/40">Pending</span>';
+        }
+        const state = String(step.state || "pending");
+        return `
+            <div class="min-w-36">
+                <div class="text-sm font-medium">${escapeHtml(step.label || step.key)}</div>
+                <div class="flex items-center gap-2 text-xs text-base-content/50">
+                    ${categoryBadge(step.category)}
+                    <span>${escapeHtml(titleCase(state))}</span>
+                </div>
+            </div>
+        `;
     }
 
     function rowAction(batch, document) {
@@ -130,30 +234,36 @@
         if (["extraction_completed", "review_completed", "completed"].includes(status)) {
             return `<a href="/app/documents/${encodeURIComponent(document.id)}/extraction" class="btn btn-ghost btn-xs">Extraction</a>`;
         }
-        if (batch && batch.id) {
+        if (batch && batch.id && hasSplitEvidence(document)) {
             return `<a href="/app/batches/${encodeURIComponent(batch.id)}/split-results" class="btn btn-ghost btn-xs">Split</a>`;
         }
         return '<span class="text-xs text-base-content/40">Pending</span>';
     }
 
-    function renderRows(batches) {
+    function hasSplitEvidence(document) {
+        return Boolean(
+            document.parent_document_id
+            || String(document.status || "").toLowerCase() === "split_completed"
+            || (document.task_states || []).some((step) => step.category === "split" && ["completed", "running"].includes(step.state))
+        );
+    }
+
+    function renderRows(states) {
         const rows = [];
-        batches.forEach((entry) => {
-            const batch = entry.batch;
-            entry.documents.forEach((document) => {
+        states.forEach((state) => {
+            const batch = state.batch || {};
+            (state.documents || []).forEach((document) => {
                 const filename = document.original_filename || document.file_path || document.id;
                 const progress = Number(document.progress_percent || 0);
                 rows.push(`
                     <tr>
                         <td>
                             <div class="text-sm font-medium truncate max-w-xs">${escapeHtml(filename)}</div>
-                            <div class="text-xs text-base-content/40">${escapeHtml(batch.id || "")}</div>
+                            <div class="text-xs text-base-content/40">${escapeHtml(batch.id || document.batch_id || "")}</div>
                         </td>
                         <td>${statusBadge(document.status)}</td>
-                        <td>${stageIcon(documentStage(document, "splitting"))}</td>
-                        <td>${stageIcon(documentStage(document, "extracting"))}</td>
-                        <td>${stageIcon(documentStage(document, "review"))}</td>
-                        <td>${stageIcon(documentStage(document, "output"))}</td>
+                        <td>${stepName(document.current_step)}</td>
+                        <td>${stepName(document.last_completed_step)}</td>
                         <td>
                             <div class="flex items-center gap-2 min-w-28">
                                 <progress class="progress progress-primary w-20" value="${progress}" max="100"></progress>
@@ -167,137 +277,62 @@
         });
 
         if (!rows.length) {
-            tableBody.innerHTML = '<tr><td colspan="8" class="text-center text-base-content/50 py-10">No active documents</td></tr>';
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-base-content/50 py-10">No active documents</td></tr>';
             return;
         }
         tableBody.innerHTML = rows.join("");
     }
 
-    function aggregateProgress(batches) {
+    function aggregateProgress(states) {
         let total = 0;
         let count = 0;
-        batches.forEach((entry) => {
-            if (entry.documents.length) {
-                entry.documents.forEach((document) => {
-                    total += Number(document.progress_percent || 0);
-                    count += 1;
-                });
-            } else if (entry.batch) {
-                total += Number(entry.batch.progress_percent || 0);
-                count += 1;
-            }
+        states.forEach((state) => {
+            total += Number(state.progress_percent || 0);
+            count += 1;
         });
         return count ? Math.round(total / count) : 0;
     }
 
-    function stepStateFromDocuments(documents, stage) {
-        if (!documents.length) {
-            return "pending";
-        }
-        const states = documents.map((document) => documentStage(document, stage));
-        if (states.includes("failed")) {
-            return "failed";
-        }
-        if (states.includes("warning")) {
-            return "warning";
-        }
-        if (states.includes("running")) {
-            return "running";
-        }
-        if (states.every((state) => state === "completed")) {
-            return "completed";
-        }
-        if (stage === "splitting" && states.every((state) => state === "skipped")) {
-            return "skipped";
-        }
-        return "pending";
-    }
-
-    function renderStep(element, label, state, detail) {
-        const iconClass = state === "completed" ? "completed" : state === "running" ? "running" : state === "warning" ? "warning" : state === "failed" ? "failed" : "";
-        const icon = state === "running"
-            ? '<span class="loading loading-spinner loading-xs"></span>'
-            : state === "completed"
-                ? '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>'
-                : state === "failed"
-                    ? '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>'
-                    : '<span class="w-2 h-2 rounded-full bg-current"></span>';
-        element.innerHTML = `
-            <div class="pipeline-step-icon ${iconClass}">${icon}</div>
-            <p class="mt-2 text-xs font-medium ${state === "pending" || state === "skipped" ? "text-base-content/50" : ""}">${escapeHtml(label)}</p>
-            <p class="text-xs text-base-content/50">${escapeHtml(detail)}</p>
-        `;
-    }
-
-    function renderPipeline(batches) {
-        const documents = batches.flatMap((entry) => entry.documents);
-        const uploadedState = documents.length ? "completed" : "pending";
-        const stepStates = [
-            ["uploaded", "Uploaded", uploadedState, documents.length ? `${documents.length} files` : "Pending"],
-            ["splitting", "Splitting", stepStateFromDocuments(documents, "splitting"), ""],
-            ["extracting", "Extracting", stepStateFromDocuments(documents, "extracting"), ""],
-            ["review", "Review", stepStateFromDocuments(documents, "review"), ""],
-            ["output", "Output", stepStateFromDocuments(documents, "output"), ""],
-        ];
-        stepStates.forEach(([key, label, state, detail]) => {
-            const element = document.querySelector(`[data-step="${key}"]`);
-            const displayDetail = detail || (state === "running" ? "In progress" : state === "completed" ? "Done" : state === "skipped" ? "Skipped" : state === "warning" ? "Needs review" : state === "failed" ? "Failed" : "Pending");
-            if (element) {
-                renderStep(element, label, state, displayDetail);
-            }
-        });
-        document.querySelectorAll(".pipeline-connector").forEach((connector, index) => {
-            const beforeState = stepStates[index][2];
-            connector.classList.toggle("active", ["completed", "running"].includes(beforeState));
-        });
-    }
-
-    function updateSplitLink(batches) {
-        const targetBatch = batchId ? batches[0]?.batch : batches.find((entry) => entry.documents.some((document) => document.parent_document_id || document.status === "split_completed"))?.batch;
-        if (targetBatch && targetBatch.id) {
-            splitResultsLink.href = `/app/batches/${encodeURIComponent(targetBatch.id)}/split-results`;
+    function updateSplitLink(states) {
+        const target = states.find((state) => (state.documents || []).some(hasSplitEvidence));
+        if (target && target.batch && target.batch.id) {
+            splitResultsLink.href = `/app/batches/${encodeURIComponent(target.batch.id)}/split-results`;
             splitResultsLink.classList.remove("hidden");
         } else {
             splitResultsLink.classList.add("hidden");
         }
     }
 
-    async function loadBatchEntry(id) {
-        const batch = await window.DocFlow.apiGet(`/api/batches/${encodeURIComponent(id)}`);
-        const documents = await window.DocFlow.apiGet(`/api/batches/${encodeURIComponent(id)}/documents`);
-        return { batch, documents };
-    }
-
-    async function loadVisibleBatches() {
+    async function loadVisibleStates() {
         if (batchId) {
-            return [await loadBatchEntry(batchId)];
+            return [await window.DocFlow.apiGet(`/api/batches/${encodeURIComponent(batchId)}/processing-state`)];
         }
-        const batches = await window.DocFlow.apiGet("/api/batches");
-        const visible = batches.slice(0, 10);
-        return Promise.all(visible.map((batch) => loadBatchEntry(batch.id)));
+        const payload = await window.DocFlow.apiGet("/api/processing-state");
+        return Array.isArray(payload.batches) ? payload.batches : [];
     }
 
-    function hasActiveWork(batches) {
-        return batches.some((entry) => {
-            if (!isTerminal(entry.batch.status)) {
+    function hasActiveWork(states) {
+        return states.some((state) => {
+            const batch = state.batch || {};
+            if (!isTerminal(batch.status)) {
                 return true;
             }
-            return entry.documents.some((document) => !isTerminal(document.status));
+            return (state.documents || []).some((document) => !isTerminal(document.status));
         });
     }
 
     async function refreshProcessing() {
         try {
-            const batches = await loadVisibleBatches();
-            renderPipeline(batches);
-            renderRows(batches);
-            updateSplitLink(batches);
-            const progress = aggregateProgress(batches);
+            const states = await loadVisibleStates();
+            renderPipeline(states);
+            renderRows(states);
+            updateSplitLink(states);
+            const progress = aggregateProgress(states);
             progressBar.value = progress;
             progressLabel.textContent = `${progress}%`;
-            refreshNote.textContent = batches.length ? `Last updated ${new Date().toLocaleTimeString()}` : "No batches found";
+            refreshNote.textContent = states.length ? `Last updated ${new Date().toLocaleTimeString()}` : "No batches found";
 
-            if (hasActiveWork(batches)) {
+            if (hasActiveWork(states)) {
                 if (!pollTimer) {
                     pollTimer = window.setInterval(refreshProcessing, 3000);
                 }
