@@ -95,7 +95,7 @@ class AuthUtils:
             raise AuthError("web.secret_key must be set in config")
             
         self.logger.info(f"Configured username: {self.username}")
-        self.logger.debug(f"Loaded password hash: {self.password_hash}")
+        self.logger.debug("Password hash configured")
         self.logger.debug(f"Using JWT algorithm: {self.algorithm}")
         self.logger.debug(f"Token expiration: {self.token_exp_minutes} minutes")
 
@@ -207,7 +207,7 @@ class AuthUtils:
             raise AuthError("Invalid credentials")
             
         # Verify password
-        self.logger.debug(f"Verifying password for user '{username}' against hash: {self.password_hash}")
+        self.logger.debug(f"Verifying password for user '{username}'")
         is_valid_password = self.verify_password(password, self.password_hash)
         
         if not is_valid_password:

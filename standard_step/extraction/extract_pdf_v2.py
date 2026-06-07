@@ -307,11 +307,16 @@ class ExtractPdfV2Task(BaseTask):
             # Retry logic for API calls
             extracted_result = self._extract_with_retry(normalized_file_path)
 
-            self.logger.info("Raw extracted data for %s: %s", context.get("id", "unknown"), extracted_result)
-
             # Extract data from response
             data = getattr(extracted_result, 'data', {}) or {}
             metadata = getattr(extracted_result, 'extraction_metadata', {}) or {}
+            field_count = len(data) if isinstance(data, dict) else 0
+            self.logger.info(
+                "Extraction job %s returned %s fields for %s",
+                getattr(extracted_result, "job_id", None),
+                field_count,
+                context.get("id", "unknown"),
+            )
 
             # Find table field configuration
             table_field_config = self._find_table_field_config()

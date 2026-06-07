@@ -269,10 +269,15 @@ class ExtractPdfTask(BaseTask):
                 logger=self.logger,
             )
 
-            self.logger.info(f"Raw extracted data for {unique_id}: {extracted_result}")
-
             # Extract data dictionary from result
             data = getattr(extracted_result, 'data', {}) or {}
+            field_count = len(data) if isinstance(data, dict) else 0
+            self.logger.info(
+                "Extraction job %s returned %s fields for %s",
+                getattr(extracted_result, "job_id", None),
+                field_count,
+                unique_id,
+            )
 
             # Preprocess data by alias or workflow field key. Saved LlamaCloud
             # configurations may return either form.

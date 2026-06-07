@@ -115,6 +115,22 @@ from modules.logging_config import setup_logging
 logger = logging.getLogger(__name__)
 
 
+def _should_use_reload(env: dict[str, str] | None = None) -> bool:
+    """Return whether Uvicorn reload should be enabled for the current environment."""
+    env_values = env if env is not None else _os.environ
+    reload_value = env_values.get("USE_RELOAD", "false").lower()
+    reload_requested = reload_value in ("1", "true", "yes", "on")
+    app_env = (
+        env_values.get("APP_ENV")
+        or env_values.get("ENV")
+        or env_values.get("ENVIRONMENT")
+        or ""
+    ).lower()
+    if app_env in {"prod", "production"}:
+        return False
+    return reload_requested
+
+
 def parse_args():
     """Parse command-line arguments.
 
@@ -159,8 +175,9 @@ def start_web_server(config: ConfigManager, logger: logging.Logger):
     """
     host = config.get("web.host") or "127.0.0.1"
     port = int(config.get("web.port") or 8000)
-    use_reload_env = _os.getenv("USE_RELOAD", "false").lower()
-    use_reload = use_reload_env in ("1", "true", "yes", "on")
+    use_reload = _should_use_reload()
+    if not use_reload and _os.getenv("USE_RELOAD", "false").lower() in ("1", "true", "yes", "on"):
+        logger.warning("Uvicorn reload requested but disabled in production environment")
 
     # Build command
     base_cmd = f'{shlex.quote(sys.executable)} -m uvicorn web.server:app --host {shlex.quote(str(host))} --port {shlex.quote(str(port))}'
