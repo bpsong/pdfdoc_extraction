@@ -167,6 +167,24 @@ class ConfigModel(BaseModel):
     authentication: AuthenticationConfig = Field(
         ..., description="Authentication settings for the web interface"
     )
+    database: Optional[Dict[str, Any]] = Field(
+        default=None, description="SQLite database configuration"
+    )
+    app_storage: Optional[Dict[str, Any]] = Field(
+        default=None, description="Application-managed artifact storage paths"
+    )
+    review: Optional[Dict[str, Any]] = Field(
+        default=None, description="Human review workflow settings"
+    )
+    validation: Optional[Dict[str, Any]] = Field(
+        default=None, description="Configuration validation behavior settings"
+    )
+    ui: Optional[Dict[str, Any]] = Field(
+        default=None, description="Operator and admin UI settings"
+    )
+    auth: Optional[Dict[str, Any]] = Field(
+        default=None, description="Role and authorization settings"
+    )
     secrets: Optional[Dict[str, Any]] = Field(
         default=None, description="Secret management configuration"
     )

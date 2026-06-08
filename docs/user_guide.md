@@ -742,6 +742,8 @@ Standard steps are predefined operations configured in workflows. Below are the 
   - Normalizes extracted output to workflow field keys in `context["data"]`. Saved LlamaCloud configurations may return either field keys or aliases; both are accepted.
   - Storage tasks can transform workflow field keys to configured aliases for CSV/JSON output.
 - **Notes:**
+  - Use `configuration_id` when you want LlamaCloud to use a saved Extract v2 configuration. Omit it when you want the application to build the extraction schema from the YAML `fields` block.
+  - Do not use `agent_id` for new configurations. It is a legacy Extract v1/LlamaExtract-era parameter and is not required by the current Extract v2 runtime.
   - Field names and types must match the provider's schema.
   - Internet access over HTTPS is required.
 
