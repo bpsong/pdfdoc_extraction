@@ -65,14 +65,6 @@ DEFAULT_CONFIG: dict = {
         "path": "data/app_state.sqlite3",
         "run_migrations_on_startup": True,
     },
-    "app_storage": {
-        "root_dir": "data/app",
-        "originals_dir": "data/app/originals",
-        "working_dir": "data/app/working",
-        "split_dir": "data/app/split",
-        "exports_dir": "data/app/exports",
-        "archive_dir": "data/app/archive",
-    },
     "review": {
         "lock_timeout_minutes": 60,
         "default_queue_name": "default_review",

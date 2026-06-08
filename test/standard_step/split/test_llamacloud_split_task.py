@@ -62,10 +62,7 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
     source = tmp_path / "bundle.pdf"
     split_dir = tmp_path / "split"
     _write_pdf(source, 4)
-    config = TempConfig(
-        tmp_path / "app.sqlite3",
-        {"app_storage": {"split_dir": str(split_dir)}},
-    )
+    config = TempConfig(tmp_path / "app.sqlite3")
     initialize_database(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
@@ -79,6 +76,7 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
         enabled=True,
         adapter=FakeSplitAdapter(),
         categories=[{"name": "invoice"}],
+        split_dir=str(split_dir),
     )
     context = {
         "id": created["document"]["id"],

@@ -23,6 +23,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                     "enabled": True,
                     "adapter": "mock",
                     "categories": [{"name": "invoice"}],
+                    "split_dir": str(tmp_path / "split"),
                 },
             },
             "extract": {

@@ -25,7 +25,7 @@ def _config(tmp_path: Path) -> TempConfig:
                 "split_pdf": {
                     "module": "standard_step.split.llamacloud_split",
                     "class": "LlamaCloudSplitTask",
-                    "params": {"api_key": "hidden"},
+                    "params": {"api_key": "hidden", "split_dir": str(tmp_path / "split")},
                 },
                 "extract_invoice": {
                     "module": "standard_step.extraction.extract_pdf_v2",

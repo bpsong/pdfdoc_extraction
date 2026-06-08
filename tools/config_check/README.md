@@ -689,6 +689,10 @@ Use them as templates for new environments or as fixtures when extending the val
   - Fix: Provide a valid directory path for `watch_folder.processing_dir`
   - Example: `processing_dir: "processing"`
 
+- **`param-split-missing-split-dir`**: LlamaCloud split task requires `params.split_dir`
+  - Fix: Add a non-empty `split_dir` under the configured `LlamaCloudSplitTask` params
+  - Example: `split_dir: "data/app/split"`
+
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path
   - Fix: Ensure the module is installed or the path is correct

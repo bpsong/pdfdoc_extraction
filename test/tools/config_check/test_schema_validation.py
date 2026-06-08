@@ -124,6 +124,17 @@ def test_unknown_keys_are_warnings_by_default():
     assert any(issue.path == "custom_section" for issue in result.warnings)
 
 
+def test_app_storage_is_unknown_warning_by_default():
+    config = _build_minimal_config()
+    config["app_storage"] = {"split_dir": "data/app/split"}
+
+    result = validate_config_against_schema(config)
+
+    assert result.model is not None
+    assert result.errors == []
+    assert any(issue.path == "app_storage" for issue in result.warnings)
+
+
 def test_strict_mode_treats_unknown_keys_as_errors():
     config = _build_minimal_config()
     config["extra_block"] = {}

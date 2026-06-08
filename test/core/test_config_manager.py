@@ -69,6 +69,7 @@ def test_initialization_and_loading_valid_config(temp_dir):
         assert manager.config[key] == value
     assert manager.config["database"]["path"] == "data/app_state.sqlite3"
     assert manager.config["review"]["default_queue_name"] == "default_review"
+    assert "app_storage" not in manager.config
     assert ConfigManager._instance is not None
 
 def test_singleton_behavior(temp_dir):

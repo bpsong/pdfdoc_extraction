@@ -61,7 +61,6 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
     config = TempConfig(
         tmp_path / "app.sqlite3",
         {
-            "app_storage": {"split_dir": str(tmp_path / "split")},
             "watch_folder": {"processing_dir": str(processing_dir)},
             "pipeline": ["split", "update_reference"],
             "tasks": {
@@ -72,6 +71,7 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
                         "enabled": True,
                         "adapter": FakeSplitAdapter(),
                         "categories": [{"name": "invoice"}],
+                        "split_dir": str(tmp_path / "split"),
                     },
                     "on_error": "stop",
                 },

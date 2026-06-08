@@ -79,6 +79,8 @@ MODULE_PREFIX_CLASSIFICATION = {
     "custom_step.housekeeping.": "housekeeping",
     "standard_step.rules.": "rules",
     "custom_step.rules.": "rules",
+    "standard_step.split.": "split",
+    "custom_step.split.": "split",
 }
 
 V2_STORAGE_SUFFIXES: Set[str] = {
@@ -320,7 +322,8 @@ def _build_task_metadata(tasks: Dict[str, Any]) -> Dict[str, Any]:
 
         params = task_config.get("params", {})
         module_name = task_config.get("module")
-        classification = _classify_task(module_name)
+        class_name = task_config.get("class")
+        classification = _classify_task(module_name, class_name)
 
         if (
             classification is None
@@ -391,7 +394,9 @@ def _build_task_metadata(tasks: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _classify_task(module_name: Optional[str]) -> Optional[str]:
+def _classify_task(module_name: Optional[str], class_name: Optional[str] = None) -> Optional[str]:
+    if class_name == "LlamaCloudSplitTask":
+        return "split"
     if not isinstance(module_name, str):
         return None
     for prefix, classification in MODULE_PREFIX_CLASSIFICATION.items():

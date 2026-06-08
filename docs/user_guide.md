@@ -412,13 +412,6 @@ database:
   path: "data/app_state.sqlite3"       # SQLite workflow-state database
   run_migrations_on_startup: true      # Run migrations when the app starts
 
-app_storage:
-  originals_dir: "data/app/originals"  # Source originals registered to documents
-  working_dir: "data/app/working"      # Working copies used during processing
-  split_dir: "data/app/split"          # Split child PDFs and related working files
-  exports_dir: "data/app/exports"      # Export destinations for app-managed outputs
-  archive_dir: "data/app/archive"      # Source archive destination
-
 review:
   enabled: true
   default_queue_name: "default_review"
@@ -427,6 +420,8 @@ review:
 # Outputs are defined per task in `tasks`:
 # - Processed PDFs destination: tasks.store_file_to_localdrive.params.files_dir (auto-created)
 # - Metadata destinations: tasks.store_metadata_{csv,json}.params.data_dir (auto-created)
+# - Split child PDFs destination: tasks.<split_task>.params.split_dir (required for split tasks, auto-created)
+# - Archive destination: tasks.archive_pdf.params.archive_dir (auto-created)
 ```
 
 #### 4.3.2. Global Sections
@@ -435,8 +430,8 @@ review:
 - **watch_folder:** Defines ingestion and processing folder behavior.
 - **web:** Defines web upload directory and web server settings (host, port, secret key).
 - **database:** Defines the SQLite workflow-state path and migration behavior.
-- **app_storage:** Defines app-managed artifact directories for originals, working files, splits, exports, and archives.
 - **review:** Defines review queue behavior, queue name, and review lock duration.
+- Task output directories are owned by task parameters such as `data_dir`, `files_dir`, `archive_dir`, `processing_dir`, and `split_dir`. Except for `watch_folder.dir`, directory paths whose keys end in `_dir` are auto-created by `ConfigManager`.
 
 #### 4.3.3. Workflows and Matching
 
@@ -646,8 +641,7 @@ Admin access is role-aware. When roles are enabled, users listed in `auth.defaul
 For a complete operational backup, include:
 
 - the SQLite database file configured at `database.path`
-- configured `app_storage` directories
-- legacy output folders such as `files/`, `data/`, and `archive_folder/` if still used by configured tasks
+- task-owned output folders such as `files/`, `data/`, `archive_folder/`, and any split task `split_dir` used by configured tasks
 - reference CSVs and schema/config files
 
 If the database is restored without the files, the UI may show registered artifacts whose paths no longer exist. If files are restored without the database, the system may still have exports on disk, but batch/task/review history will be incomplete.
@@ -785,7 +779,7 @@ pipeline:
   - `configuration_id`: optional saved LlamaCloud split configuration ID.
   - `categories`: optional list of category definitions. Required when `configuration_id` is not provided.
   - `allow_uncategorized`: string, one of `"include"`, `"forbid"`, or `"omit"`. Default is `"include"`.
-  - `split_dir`: string. Destination for generated child PDFs. Defaults to `app_storage.split_dir`.
+  - `split_dir`: string, required. Destination for generated child PDFs. Because the key ends in `_dir`, `ConfigManager` auto-creates it at startup when possible.
   - `project_id` / `organization_id`: optional provider scoping values.
   - `poll_interval_seconds`: optional polling interval. Default is `1.0`.
   - `timeout_seconds`: optional timeout. Default is `7200.0`.
@@ -1391,7 +1385,7 @@ A: Processed PDF documents are saved by the "`store_file_to_localdrive`" task to
 - CSV files: `tasks.store_metadata_csv.params.data_dir`
 - JSON files: `tasks.store_metadata_json.params.data_dir`
 
-When SQLite document context exists, generated PDFs, CSV files, JSON files, archives, source originals, and split PDFs are also registered as document artifacts in SQLite. Split child PDFs are written to the configured split directory, typically `app_storage.split_dir`.
+When SQLite document context exists, generated PDFs, CSV files, JSON files, archives, source originals, and split PDFs are also registered as document artifacts in SQLite. Split child PDFs are written to the configured split task directory at `tasks.<split_task>.params.split_dir`.
 
 **Q: What happens if the same filename already exists?**
 A: Storage tasks generate unique filenames automatically by appending a numeric suffix (`_1`, `_2`, …) to avoid overwriting, as implemented by the utility in [`modules.utils.generate_unique_filepath()`](modules/utils.py:95).

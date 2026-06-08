@@ -142,7 +142,8 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
         params = task_config.get("params", {})
         params_path = f"tasks.{task_name}.params"
         module_name = task_config.get("module")
-        classification = _classify_task(module_name, params)
+        class_name = task_config.get("class")
+        classification = _classify_task(module_name, class_name, params)
 
         if classification == "extraction":
             _validate_extraction_params(
@@ -211,6 +212,8 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
             _validate_context_params(params, params_path, errors)
         elif classification == "housekeeping":
             _validate_housekeeping_params(params, params_path, errors)
+        elif classification == "split":
+            _validate_split_params(params, params_path, errors)
 
     return ParameterValidationResult(errors=errors, warnings=warnings)
 
@@ -301,7 +304,9 @@ def _validate_standard_storage_params(
 
 
 
-def _classify_task(module_name: Optional[str], params: Any) -> Optional[str]:
+def _classify_task(module_name: Optional[str], class_name: Optional[str], params: Any) -> Optional[str]:
+    if class_name == "LlamaCloudSplitTask":
+        return "split"
     if isinstance(module_name, str):
         for prefix, classification in MODULE_PREFIX_CLASSIFICATION.items():
             if module_name.startswith(prefix):
@@ -841,7 +846,6 @@ def _validate_housekeeping_params(
         )
         return
 
-    # Task 18: Validate CleanupTask processing_dir if provided
     if "processing_dir" in params:
         processing_dir = params["processing_dir"]
         if not isinstance(processing_dir, str) or not processing_dir.strip():
@@ -853,6 +857,28 @@ def _validate_housekeeping_params(
                     details={"config_key": f"{params_path}.processing_dir"},
                 )
             )
+
+
+def _validate_split_params(params: Any, params_path: str, errors: List[ParameterIssue]) -> None:
+    """Validate LlamaCloud split task parameters."""
+    if not isinstance(params, dict):
+        errors.append(
+            ParameterIssue(
+                path=params_path,
+                message="split task params must be a mapping",
+                code="param-split-not-mapping",
+                details={"config_key": params_path},
+            )
+        )
+        return
+
+    _validate_required_string(
+        params,
+        params_path,
+        "split_dir",
+        errors,
+        code="param-split-missing-split-dir",
+    )
 
 
 def _iter_string_values(node: Any, base_path: str) -> Iterable[Tuple[str, str]]:

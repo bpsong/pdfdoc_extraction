@@ -88,6 +88,11 @@ This document provides a comprehensive reference of all validation error codes u
 | `param-rules-clause-context` | Error | Clause from_context must be non-empty string | Provide valid from_context for each clause |
 | `param-rules-clause-number-type` | Error | Clause number flag must be boolean | Set number to true/false or remove it |
 
+### Split Task Parameters
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `param-split-missing-split-dir` | Error | LlamaCloud split task requires `params.split_dir` | Add a non-empty split output directory under the split task params |
+
 ## Error Severity Levels
 
 ### Error (Exit Code 1)

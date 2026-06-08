@@ -75,18 +75,13 @@
         }
     }
 
-    function renderPaths(paths) {
-        const appStorage = paths.app_storage || {};
+    function renderPaths(paths, split) {
         const rows = [
             { label: "Watch folder", value: paths.watch_folder_dir },
             { label: "Processing folder", value: paths.processing_dir },
             { label: "Upload folder", value: paths.upload_dir },
             { label: "SQLite database", value: paths.database_path },
-            { label: "Originals", value: appStorage.originals_dir },
-            { label: "Working", value: appStorage.working_dir },
-            { label: "Split", value: appStorage.split_dir },
-            { label: "Exports", value: appStorage.exports_dir },
-            { label: "Archive", value: appStorage.archive_dir },
+            { label: "Split output", value: split && split.configured ? split.split_dir : null },
         ];
         document.getElementById("settings-paths-body").innerHTML = tableRows(rows);
     }
@@ -129,7 +124,7 @@
 
     function render(payload) {
         renderSummary(payload);
-        renderPaths(payload.paths || {});
+        renderPaths(payload.paths || {}, payload.split || {});
         renderReview(payload.review || {});
         renderPipeline(payload.pipeline || []);
     }

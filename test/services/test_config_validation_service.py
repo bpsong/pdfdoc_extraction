@@ -104,6 +104,7 @@ def test_validate_pipeline_reports_split_param_and_fanout_warnings(tmp_path: Pat
     result = service.validate_pipeline({"config": config})
 
     assert result["valid"] is False
+    assert "split-missing-split-dir" in _codes(result)
     assert "split-missing-categories-or-configuration" in _codes(result)
     assert "split-invalid-allow-uncategorized" in _codes(result)
 
@@ -120,7 +121,7 @@ def test_validate_pipeline_enforces_singleton_and_order_rules(tmp_path: Path) ->
             "split": {
                 "module": "standard_step.split.llamacloud_split",
                 "class": "LlamaCloudSplitTask",
-                "params": {"enabled": False},
+                "params": {"enabled": False, "split_dir": str(tmp_path / "split")},
             },
             "review": {
                 "module": "standard_step.review.review_gate",

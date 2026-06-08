@@ -29,10 +29,6 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
             "strict_mode_default": False,
         },
         "review": {"lock_timeout_minutes": 60, "default_queue_name": "default_review"},
-        "app_storage": {
-            "split_dir": str(split_dir),
-            "exports_dir": str(export_dir),
-        },
         "tasks": {
             "split": {
                 "module": "standard_step.split.llamacloud_split",
@@ -41,6 +37,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                     "enabled": True,
                     "adapter": "mock",
                     "categories": [{"name": "invoice"}],
+                    "split_dir": str(split_dir),
                 },
             },
             "extract": {

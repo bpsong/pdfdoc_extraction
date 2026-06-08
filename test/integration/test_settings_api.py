@@ -32,14 +32,6 @@ def _config(tmp_path: Path) -> TempConfig:
                 "processing_dir": str(processing_dir),
             },
             "review": {"lock_timeout_minutes": 45, "default_queue_name": "priority_review"},
-            "app_storage": {
-                "split_dir": str(split_dir),
-                "exports_dir": str(tmp_path / "exports"),
-                "nested": {
-                    "access_token": "storage-access-token",
-                    "safe_label": "storage",
-                },
-            },
             "tasks": {
                 "split": {
                     "module": "standard_step.split.llamacloud_split",
@@ -110,7 +102,6 @@ def test_settings_api_returns_non_secret_runtime_settings(
         "llx-secret",
         "extract-secret",
         "Bearer extract-token",
-        "storage-access-token",
     ):
         assert secret not in body
     assert "[REDACTED]" in body
@@ -121,7 +112,7 @@ def test_settings_api_returns_non_secret_runtime_settings(
     assert payload["paths"]["watch_folder_dir"] == str(tmp_path / "watch")
     assert payload["paths"]["processing_dir"] == str(tmp_path / "processing")
     assert payload["paths"]["upload_dir"] == str(tmp_path / "uploads")
-    assert payload["paths"]["app_storage"]["nested"]["access_token"] == "[REDACTED]"
+    assert "app_storage" not in payload["paths"]
 
     assert payload["review"]["lock_timeout_minutes"] == 45
     assert payload["review"]["default_queue_name"] == "priority_review"
@@ -140,6 +131,7 @@ def test_settings_api_returns_non_secret_runtime_settings(
     assert payload["split"]["enabled"] is True
     assert payload["split"]["categories_count"] == 1
     assert payload["split"]["api_key_configured"] is True
+    assert payload["split"]["split_dir"] == str(tmp_path / "split")
 
     steps = {step["key"]: step for step in payload["pipeline"]}
     assert steps["split"]["params"]["api_key"] == "[REDACTED]"

@@ -254,6 +254,16 @@ class PipelineValidationService:
                 )
                 continue
 
+            if not isinstance(params.get("split_dir"), str) or not params.get("split_dir", "").strip():
+                findings.append(
+                    _finding(
+                        severity="error",
+                        path=f"tasks.{task_key}.params.split_dir",
+                        message="LlamaCloudSplitTask requires split_dir.",
+                        code="split-missing-split-dir",
+                    )
+                )
+
             if params.get("enabled", False):
                 if not params.get("configuration_id") and not params.get("categories"):
                     findings.append(

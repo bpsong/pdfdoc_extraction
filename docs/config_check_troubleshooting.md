@@ -156,6 +156,26 @@ Suggestion: Create the directory or update the path in config
 - If not provided, the task defaults to using `'processing'` as the directory name.
 - Ensure the directory exists and the service account has read/write permissions.
 
+## Split Task Configuration Errors
+
+**Symptom**
+```
+[ERROR] tasks.split_documents.params.split_dir: Parameter 'split_dir' is required and must be a non-empty string
+```
+
+**Fixes**
+- Add `split_dir` under the configured `LlamaCloudSplitTask` params.
+- Use a directory path owned by the split task, for example:
+  ```yaml
+  tasks:
+    split_documents:
+      module: standard_step.split.llamacloud_split
+      class: LlamaCloudSplitTask
+      params:
+        split_dir: "data/app/split"
+  ```
+- `split_dir` is auto-created by `ConfigManager` because the key ends in `_dir`.
+
 ## Web Server Configuration Errors
 
 **Symptoms**

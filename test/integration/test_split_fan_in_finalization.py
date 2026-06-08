@@ -59,7 +59,6 @@ def test_split_fan_in_finalizes_root_and_batch_after_child_workflows(tmp_path, m
     config = TempConfig(
         tmp_path / "app.sqlite3",
         {
-            "app_storage": {"split_dir": str(tmp_path / "split")},
             "watch_folder": {"processing_dir": str(processing_dir)},
             "pipeline": ["split", "leaf_done"],
             "tasks": {
@@ -70,6 +69,7 @@ def test_split_fan_in_finalizes_root_and_batch_after_child_workflows(tmp_path, m
                         "enabled": True,
                         "adapter": FakeSplitAdapter(),
                         "categories": [{"name": "invoice"}],
+                        "split_dir": str(tmp_path / "split"),
                     },
                     "on_error": "stop",
                 },

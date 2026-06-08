@@ -73,8 +73,8 @@ class LlamaCloudSplitTask(BaseTask):
         self.timeout_seconds = float(params.get("timeout_seconds", 7200.0))
         self.adapter = params.get("adapter")
 
-        split_dir = params.get("split_dir") or config_manager.get("app_storage.split_dir", "data/app/split")
-        self.split_dir = Path(str(split_dir))
+        split_dir = params.get("split_dir")
+        self.split_dir: Path | None = Path(str(split_dir)) if isinstance(split_dir, str) and split_dir.strip() else None
 
     def on_start(self, context: dict[str, Any]) -> None:
         """Initialize context and log task start."""
@@ -83,6 +83,8 @@ class LlamaCloudSplitTask(BaseTask):
 
     def validate_required_fields(self, context: dict[str, Any]) -> None:
         """Validate split task configuration and current context."""
+        if self.split_dir is None:
+            raise TaskError("LlamaCloudSplitTask requires split_dir.")
         if not self.enabled:
             return
         if self.allow_uncategorized not in {"include", "forbid", "omit"}:
@@ -245,6 +247,8 @@ class LlamaCloudSplitTask(BaseTask):
         for index, segment in enumerate(split_result.segments, start=1):
             category = sanitize_filename(segment.category or "uncategorized")
             output_base = f"{base_name}_segment_{index:03d}_{category}_p{segment.page_start}-{segment.page_end}"
+            if self.split_dir is None:
+                raise TaskError("LlamaCloudSplitTask requires split_dir.")
             output_path = generate_unique_filepath(self.split_dir, output_base, ".pdf")
             create_split_pdf(source_pdf_path, str(output_path), segment.pages)
 

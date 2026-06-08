@@ -104,7 +104,11 @@ def test_post_pipeline_validate_reports_split_findings(tmp_path: Path, monkeypat
     values["tasks"]["split"] = {
         "module": "standard_step.split.llamacloud_split",
         "class": "LlamaCloudSplitTask",
-        "params": {"enabled": True, "categories": [{"name": "invoice"}]},
+        "params": {
+            "enabled": True,
+            "categories": [{"name": "invoice"}],
+            "split_dir": str(tmp_path / "split"),
+        },
         "on_error": "stop",
     }
     values["pipeline"] = ["split", "extract"]

@@ -170,9 +170,6 @@ class ConfigModel(BaseModel):
     database: Optional[Dict[str, Any]] = Field(
         default=None, description="SQLite database configuration"
     )
-    app_storage: Optional[Dict[str, Any]] = Field(
-        default=None, description="Application-managed artifact storage paths"
-    )
     review: Optional[Dict[str, Any]] = Field(
         default=None, description="Human review workflow settings"
     )

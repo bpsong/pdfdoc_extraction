@@ -119,6 +119,32 @@ def test_extraction_table_requires_item_fields():
 
     assert any("item_fields" in issue.path for issue in result.errors)
 
+
+def test_split_task_requires_split_dir():
+    tasks = _base_tasks()
+    tasks["split_documents"] = {
+        "module": "custom.tasks",
+        "class": "LlamaCloudSplitTask",
+        "params": {"enabled": False},
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert any(issue.code == "param-split-missing-split-dir" for issue in result.errors)
+
+
+def test_split_task_accepts_split_dir():
+    tasks = _base_tasks()
+    tasks["split_documents"] = {
+        "module": "standard_step.split.llamacloud_split",
+        "class": "LlamaCloudSplitTask",
+        "params": {"enabled": False, "split_dir": "data/app/split"},
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert all(issue.code != "param-split-missing-split-dir" for issue in result.errors)
+
 def test_invalid_field_type_reports_error():
     tasks = _base_tasks()
     tasks["extract_metadata"]["params"]["fields"]["supplier_name"]["type"] = "InvalidType"

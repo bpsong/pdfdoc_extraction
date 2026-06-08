@@ -185,7 +185,7 @@ The architecture keeps schema-driven forms and corrected final values, but the s
 
 Split processing classifies or separates source PDFs into child documents. The parent/source document records split status and child relationships. Child documents run extraction/review/storage workflows independently. Fan-in aggregates child document state so the source batch can display completion, partial completion, failure, or review-required state.
 
-Split artifacts are stored as working files or child source artifacts and are associated with their documents in `document_files`.
+Split artifacts are stored in `tasks.<split_task>.params.split_dir` as working files or child source artifacts and are associated with their documents in `document_files`.
 
 ## Admin Configuration, Audit, and Versioning
 
@@ -226,7 +226,7 @@ This preserves the boundary between workflow state and business files:
 - ConfigManager validates `_dir` existence and `_file` presence at startup
 - `config.yaml` contains `tasks` registry; each task entry must include `module`, `class`, and `params`
 - `database.path` controls SQLite state storage; migrations run on startup when configured
-- `app_storage` controls app-managed artifact directories
+- Task output directories are owned by task parameters such as `data_dir`, `files_dir`, `archive_dir`, `processing_dir`, and split task `split_dir`; `_dir` paths are auto-created at startup except `watch_folder.dir`
 - `review` controls review queue defaults and lock behavior
 - Admin configuration flows validate pipeline, review-gate, split, and schema settings before publishing changes
 - Validation guidance:

@@ -21,7 +21,6 @@ def _base_config(tmp_path: Path, *, split_api_key: str = "llx-secret") -> dict[s
         "auth": {"roles_enabled": True, "default_admin_users": ["admin"]},
         "authentication": {"username": "admin"},
         "review": {"lock_timeout_minutes": 60, "default_queue_name": "default_review"},
-        "app_storage": {"split_dir": str(split_dir)},
         "tasks": {
             "split": {
                 "module": "standard_step.split.llamacloud_split",
@@ -31,6 +30,7 @@ def _base_config(tmp_path: Path, *, split_api_key: str = "llx-secret") -> dict[s
                     "api_key": split_api_key,
                     "categories": [{"name": "invoice", "description": "Invoices"}],
                     "allow_uncategorized": "include",
+                    "split_dir": str(split_dir),
                 },
             },
             "extract": {

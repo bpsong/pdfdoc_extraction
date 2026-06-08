@@ -78,32 +78,6 @@ EDITABLE_SETTINGS: dict[str, dict[str, Any]] = {
         "type": "positive_int",
         "default": 60,
     },
-    "app_storage.root_dir": {"group": "storage", "label": "Storage Root", "type": "path", "default": "data/app"},
-    "app_storage.originals_dir": {
-        "group": "storage",
-        "label": "Originals Directory",
-        "type": "path",
-        "default": "data/app/originals",
-    },
-    "app_storage.working_dir": {
-        "group": "storage",
-        "label": "Working Directory",
-        "type": "path",
-        "default": "data/app/working",
-    },
-    "app_storage.split_dir": {"group": "storage", "label": "Split Directory", "type": "path", "default": "data/app/split"},
-    "app_storage.exports_dir": {
-        "group": "storage",
-        "label": "Exports Directory",
-        "type": "path",
-        "default": "data/app/exports",
-    },
-    "app_storage.archive_dir": {
-        "group": "storage",
-        "label": "Archive Directory",
-        "type": "path",
-        "default": "data/app/archive",
-    },
 }
 
 
@@ -424,12 +398,11 @@ class AdminSettingsService:
 
     def _split_defaults(self, config: dict[str, Any]) -> dict[str, Any]:
         """Return split defaults derived from runtime config."""
-        app_storage = config.get("app_storage") if isinstance(config.get("app_storage"), dict) else {}
         return {
             "enabled": False,
             "categories": [],
             "allow_uncategorized": "include",
-            "split_dir": str(app_storage.get("split_dir") or "data/app/split"),
+            "split_dir": "data/app/split",
             "configuration_id": "",
             "project_id": "",
             "organization_id": "",

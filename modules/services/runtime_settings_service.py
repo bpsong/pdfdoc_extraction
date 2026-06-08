@@ -52,7 +52,6 @@ class RuntimeSettingsService:
                 "processing_dir": self._get("watch_folder.processing_dir"),
                 "upload_dir": self._get("web.upload_dir"),
                 "database_path": self._get("database.path"),
-                "app_storage": _redact_secrets(self._get("app_storage", {})),
             },
             "review": {
                 "lock_timeout_minutes": self._get("review.lock_timeout_minutes", 60),
@@ -76,7 +75,7 @@ class RuntimeSettingsService:
                 if isinstance(split_params.get("categories"), list)
                 else 0,
                 "allow_uncategorized": split_params.get("allow_uncategorized", "include"),
-                "split_dir": split_params.get("split_dir") or self._get("app_storage.split_dir"),
+                "split_dir": split_params.get("split_dir"),
                 "api_key_configured": bool(split_params.get("api_key")),
             },
             "pipeline": self._pipeline_steps(),

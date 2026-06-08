@@ -139,7 +139,7 @@ C:\Python313\python.exe -m pytest -v
 
 - [x] 1.0 Add SQLite database foundation
   - Acceptance: Database initializes from `config.yaml`, schema is created in a temp database during tests, and existing app startup still works.
-  - [x] 1.1 Add `database` and `app_storage` defaults to config handling without breaking existing configs.
+  - [x] 1.1 Add `database` defaults to config handling without breaking existing configs.
   - [x] 1.2 Create `modules/db/schema.sql` with tables from the design document.
   - [x] 1.3 Create `modules/db/connection.py` with row factory, foreign keys, transaction helper, and JSON utility helpers.
   - [x] 1.4 Create `modules/db/migrations.py` with idempotent startup migration execution.

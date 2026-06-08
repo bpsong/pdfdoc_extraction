@@ -15,7 +15,11 @@ def test_task_catalog_discovers_standard_tasks_and_configured_metadata(tmp_path:
                 "split_documents": {
                     "module": "standard_step.split.llamacloud_split",
                     "class": "LlamaCloudSplitTask",
-                    "params": {"enabled": True, "api_key": "secret-key"},
+                    "params": {
+                        "enabled": True,
+                        "api_key": "secret-key",
+                        "split_dir": str(tmp_path / "split"),
+                    },
                     "on_error": "stop",
                 },
                 "extract_document_data": {

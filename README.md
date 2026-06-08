@@ -121,13 +121,6 @@ database:
   path: "data/app_state.sqlite3"
   run_migrations_on_startup: true
 
-app_storage:
-  originals_dir: "data/app/originals"
-  working_dir: "data/app/working"
-  split_dir: "data/app/split"
-  exports_dir: "data/app/exports"
-  archive_dir: "data/app/archive"
-
 review:
   enabled: true
   default_queue_name: "default_review"
@@ -172,6 +165,8 @@ tasks:
 pipeline:
   - extract_document_data
 ```
+
+Output folders are task-owned. For example, CSV/JSON tasks use `params.data_dir`, local PDF storage uses `params.files_dir`, archive tasks use `params.archive_dir`, and split tasks use required `params.split_dir`; `_dir` paths are auto-created at startup except `watch_folder.dir`.
 
 The current runtime uses the `llama-cloud` SDK and `LlamaCloud` client. New code should not use the legacy `llama-cloud-services` / `LlamaExtract` agent flow. `agent_id` is legacy; use `configuration_id` for saved Extract v2 configurations or omit it to build an inline schema from `fields`.
 
