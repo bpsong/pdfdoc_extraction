@@ -428,10 +428,69 @@ def build_router() -> APIRouter:
         content_type: str
         data: bytes
 
+    @dataclass
+    class UploadLimits:
+        """Server-side limits for multipart upload requests."""
+
+        max_file_bytes: int
+        max_files: int
+        max_request_bytes: int
+
+    def _config_int(config: ConfigManager, key: str, default_value: int) -> int:
+        """Read a positive integer config value with a safe fallback."""
+        try:
+            value = config.get(key, default_value)
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default_value
+        return parsed if parsed > 0 else default_value
+
+    def _upload_limits(config: ConfigManager) -> UploadLimits:
+        """Return configured upload limits with conservative defaults."""
+        max_upload_mb = _config_int(
+            config,
+            "web.max_upload_mb",
+            _config_int(config, "ui.max_upload_mb", 50),
+        )
+        max_files = _config_int(config, "web.max_upload_files", 20)
+        default_request_mb = max(1, int(max_upload_mb * max_files * 1.25))
+        max_request_mb = _config_int(
+            config,
+            "web.max_upload_request_mb",
+            default_request_mb,
+        )
+        return UploadLimits(
+            max_file_bytes=max_upload_mb * 1024 * 1024,
+            max_files=max_files,
+            max_request_bytes=max_request_mb * 1024 * 1024,
+        )
+
+    def _reject_large_content_length(request: Request, limits: UploadLimits) -> None:
+        """Reject oversized requests before reading the body into memory."""
+        content_length = request.headers.get("content-length")
+        if content_length is None:
+            return
+        try:
+            length = int(content_length)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid Content-Length header",
+            )
+        if length > limits.max_request_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    "Upload request is too large. "
+                    f"Maximum request size is {limits.max_request_bytes // (1024 * 1024)} MB."
+                ),
+            )
+
     async def _parse_multipart_uploads(
         request: Request,
         *,
         field_names: set[str] | None = None,
+        max_files: int | None = None,
     ) -> list[ParsedUpload]:
         """Parse the multipart body and extract one or more uploaded files."""
 
@@ -439,9 +498,22 @@ def build_router() -> APIRouter:
         if "multipart/form-data" not in content_type.lower():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported content type")
 
+        config, _, _, _, _ = get_dependencies()
+        limits = _upload_limits(config)
+        effective_max_files = max_files if max_files is not None else limits.max_files
+        _reject_large_content_length(request, limits)
+
         body = await request.body()
         if not body:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty upload payload")
+        if len(body) > limits.max_request_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    "Upload request is too large. "
+                    f"Maximum request size is {limits.max_request_bytes // (1024 * 1024)} MB."
+                ),
+            )
 
         header_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("latin-1", errors="ignore")
         message = cast(EmailMessage, BytesParser(policy=cast(Any, default)).parsebytes(header_bytes + body))
@@ -467,6 +539,19 @@ def build_router() -> APIRouter:
                     file_bytes = str(raw_payload).encode("utf-8", errors="ignore")
                 except Exception:
                     file_bytes = b""
+            if len(uploads) >= effective_max_files:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"Too many files uploaded. Maximum file count is {effective_max_files}.",
+                )
+            if len(file_bytes) > limits.max_file_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=(
+                        f"{filename} is too large. "
+                        f"Maximum file size is {limits.max_file_bytes // (1024 * 1024)} MB."
+                    ),
+                )
             content = part.get_content_type() or "application/octet-stream"
             uploads.append(ParsedUpload(filename=filename, content_type=content, data=file_bytes))
 
@@ -477,7 +562,7 @@ def build_router() -> APIRouter:
     async def _parse_multipart_upload(request: Request) -> ParsedUpload:
         """Parse the multipart body and extract the uploaded file."""
 
-        return (await _parse_multipart_uploads(request, field_names={"file"}))[0]
+        return (await _parse_multipart_uploads(request, field_names={"file"}, max_files=1))[0]
 
     async def _json_body(request: Request) -> dict[str, Any]:
         """Parse an optional JSON request body."""
@@ -661,6 +746,8 @@ def build_router() -> APIRouter:
             
             # Redirect to dashboard page immediately after upload
             return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error uploading file: {e}")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

@@ -133,3 +133,72 @@ def test_batch_upload_api_rejects_invalid_pdf_without_persisting_state(tmp_path,
     assert batch_count == 0
     assert document_count == 0
     assert workflow.calls == []
+
+
+def test_batch_upload_api_rejects_oversized_request_before_persisting_state(tmp_path, monkeypatch):
+    client, config, workflow = build_client(tmp_path, monkeypatch)
+    config._values["web.max_upload_request_mb"] = 1
+
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("large.pdf", b"%PDF-" + (b"A" * (1024 * 1024)), "application/pdf")),
+        ],
+    )
+
+    assert response.status_code == 413
+    assert "request is too large" in response.json()["detail"]
+    with connect(config) as conn:
+        batch_count = conn.execute("SELECT COUNT(*) AS count FROM batches").fetchone()["count"]
+        document_count = conn.execute("SELECT COUNT(*) AS count FROM documents").fetchone()["count"]
+
+    assert batch_count == 0
+    assert document_count == 0
+    assert workflow.calls == []
+
+
+def test_batch_upload_api_rejects_oversized_file_without_persisting_state(tmp_path, monkeypatch):
+    client, config, workflow = build_client(tmp_path, monkeypatch)
+    config._values["web.max_upload_mb"] = 1
+    config._values["web.max_upload_request_mb"] = 5
+
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("large.pdf", b"%PDF-" + (b"A" * (1024 * 1024)), "application/pdf")),
+        ],
+    )
+
+    assert response.status_code == 413
+    assert "too large" in response.json()["detail"]
+    with connect(config) as conn:
+        batch_count = conn.execute("SELECT COUNT(*) AS count FROM batches").fetchone()["count"]
+        document_count = conn.execute("SELECT COUNT(*) AS count FROM documents").fetchone()["count"]
+
+    assert batch_count == 0
+    assert document_count == 0
+    assert workflow.calls == []
+
+
+def test_batch_upload_api_rejects_too_many_files_without_persisting_state(tmp_path, monkeypatch):
+    client, config, workflow = build_client(tmp_path, monkeypatch)
+    config._values["web.max_upload_files"] = 1
+    config._values["web.max_upload_request_mb"] = 5
+
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("invoice_a.pdf", b"%PDF-1.4\ninvoice-a", "application/pdf")),
+            ("files", ("invoice_b.pdf", b"%PDF-1.4\ninvoice-b", "application/pdf")),
+        ],
+    )
+
+    assert response.status_code == 413
+    assert "Too many files" in response.json()["detail"]
+    with connect(config) as conn:
+        batch_count = conn.execute("SELECT COUNT(*) AS count FROM batches").fetchone()["count"]
+        document_count = conn.execute("SELECT COUNT(*) AS count FROM documents").fetchone()["count"]
+
+    assert batch_count == 0
+    assert document_count == 0
+    assert workflow.calls == []

@@ -39,6 +39,10 @@ class WebConfig(BaseModel):
         le=65535,
         description="Port number for the web server"
     )
+    cors_allowed_origins: List[str] = Field(
+        default_factory=list,
+        description="Explicit trusted browser origins allowed to call the API cross-origin",
+    )
 
     @field_validator("host")
     @classmethod
@@ -55,6 +59,22 @@ class WebConfig(BaseModel):
         if not isinstance(value, int) or value < 1 or value > 65535:
             raise ValueError("Port must be an integer between 1 and 65535")
         return value
+
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def validate_cors_allowed_origins(cls, value: Any) -> List[str]:
+        """Validate and normalize the CORS allowed origins list."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            origins = [origin.strip() for origin in value.split(",") if origin.strip()]
+        elif isinstance(value, list):
+            origins = [str(origin).strip() for origin in value if str(origin).strip()]
+        else:
+            raise ValueError("CORS allowed origins must be a list of strings")
+        if any(origin == "*" for origin in origins):
+            raise ValueError("CORS allowed origins must not use wildcard '*'")
+        return origins
 
 
 class AuthenticationConfig(BaseModel):

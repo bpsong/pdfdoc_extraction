@@ -3,7 +3,7 @@
 Responsibilities:
 - Provide an app factory to construct the FastAPI application.
 - Configure and mount static and template directories (Jinja2).
-- Set up permissive CORS for local development.
+- Configure CORS only when explicit allowed origins are provided.
 - Define simple HTML routes: login, dashboard, and upload.
 - Include API routes assembled via modules.api_router.build_router().
 - Register graceful shutdown hook via ShutdownManager.
@@ -31,6 +31,21 @@ from modules.auth_utils import AuthUtils, AuthError
 from modules.db.migrations import initialize_database
 
 
+def _cors_allowed_origins(config: ConfigManager) -> list[str]:
+    """Return explicitly configured CORS origins.
+
+    Same-origin browser use does not need CORS, so the safe default is an
+    empty list. A comma-separated string is accepted for simple env-driven
+    configuration.
+    """
+    value = config.get("web.cors_allowed_origins", [])
+    if isinstance(value, str):
+        return [origin.strip() for origin in value.split(",") if origin.strip()]
+    if isinstance(value, list):
+        return [str(origin).strip() for origin in value if str(origin).strip()]
+    return []
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -45,12 +60,13 @@ def create_app() -> FastAPI:
 
     Notes:
         - The 'web/static' and 'web/templates' directories are created if missing.
-        - CORS is permissive (allow all origins, methods, and headers) to
-          simplify local development.
+        - CORS is disabled by default because the app serves its own browser UI.
+          Configure web.cors_allowed_origins only for a separate trusted frontend.
         - API routes are composed via modules.api_router.build_router().
         - ShutdownManager is registered to handle application shutdown events.
     """
     app = FastAPI(title="PDF Processing Web Interface", version="1.0.0")
+    logger = logging.getLogger("web.server")
 
     # Static and Templates
     static_dir = Path("web/static")
@@ -61,19 +77,17 @@ def create_app() -> FastAPI:
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     templates = Jinja2Templates(directory=str(templates_dir))
 
-    # CORS (allow localhost by default)
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-        allow_credentials=True,
-    )
-
-    logger = logging.getLogger("web.server")
-
     try:
         config, _, _, _, _ = get_dependencies()
+        allowed_origins = _cors_allowed_origins(config)
+        if allowed_origins:
+            app.add_middleware(
+                CORSMiddleware,
+                allow_origins=allowed_origins,
+                allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                allow_headers=["Authorization", "Content-Type"],
+                allow_credentials=True,
+            )
         if bool(config.get("database.run_migrations_on_startup", True)):
             initialize_database(config)
     except Exception as exc:

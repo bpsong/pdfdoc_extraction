@@ -204,6 +204,44 @@ def test_valid_web_port_passes_validation():
     assert result.model.web.port == 3000
 
 
+def test_valid_cors_allowed_origins_passes_validation():
+    """Test that explicit CORS origins are accepted."""
+    config = _build_minimal_config()
+    config["web"]["cors_allowed_origins"] = ["https://trusted.example"]
+
+    result = validate_config_against_schema(config)
+
+    assert result.errors == []
+    assert result.model is not None
+    assert result.model.web.cors_allowed_origins == ["https://trusted.example"]
+
+
+def test_cors_allowed_origins_defaults_to_empty_list():
+    """Test that CORS is disabled by default for same-origin browser use."""
+    config = _build_minimal_config()
+
+    result = validate_config_against_schema(config)
+
+    assert result.errors == []
+    assert result.model is not None
+    assert result.model.web.cors_allowed_origins == []
+
+
+def test_wildcard_cors_allowed_origin_reports_error():
+    """Test that wildcard CORS origins are rejected."""
+    config = _build_minimal_config()
+    config["web"]["cors_allowed_origins"] = ["*"]
+
+    result = validate_config_against_schema(config)
+
+    assert result.model is None
+    assert any(
+        issue.path == "web.cors_allowed_origins"
+        and "must not use wildcard" in issue.message
+        for issue in result.errors
+    )
+
+
 def test_web_host_defaults_to_localhost():
     """Test that web.host defaults to 127.0.0.1 when not specified."""
     config = _build_minimal_config()

@@ -15,9 +15,15 @@ TOKEN = "test-token"
 class FakeConfig:
     """Config stub for UI route tests."""
 
-    def __init__(self, *, admin_users: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        admin_users: list[str] | None = None,
+        cors_allowed_origins: list[str] | None = None,
+    ) -> None:
         self.values: dict[str, Any] = {
             "database": {"run_migrations_on_startup": False},
+            "web": {"cors_allowed_origins": cors_allowed_origins or []},
             "ui": {
                 "app_name": "DocFlow AI",
                 "admin_enabled": True,
@@ -52,8 +58,17 @@ class FakeAuth:
         raise AuthError("Invalid token")
 
 
-def build_client(monkeypatch, *, username: str = "operator", admin_users: list[str] | None = None) -> TestClient:
-    config = FakeConfig(admin_users=admin_users)
+def build_client(
+    monkeypatch,
+    *,
+    username: str = "operator",
+    admin_users: list[str] | None = None,
+    cors_allowed_origins: list[str] | None = None,
+) -> TestClient:
+    config = FakeConfig(
+        admin_users=admin_users,
+        cors_allowed_origins=cors_allowed_origins,
+    )
     auth = FakeAuth(username)
 
     def fake_get_dependencies():
@@ -76,6 +91,56 @@ def test_app_routes_require_authentication(monkeypatch) -> None:
 
     assert response.status_code == 307
     assert response.headers["location"] == "/login"
+
+
+def test_cors_is_disabled_by_default_for_same_origin_app(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+
+    response = client.options(
+        "/api/login",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_allows_explicit_configured_origin(monkeypatch) -> None:
+    client = build_client(
+        monkeypatch,
+        cors_allowed_origins=["https://trusted.example"],
+    )
+
+    response = client.options(
+        "/api/login",
+        headers={
+            "Origin": "https://trusted.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "https://trusted.example"
+    assert response.headers["access-control-allow-credentials"] == "true"
+
+
+def test_cors_rejects_unconfigured_origin(monkeypatch) -> None:
+    client = build_client(
+        monkeypatch,
+        cors_allowed_origins=["https://trusted.example"],
+    )
+
+    response = client.options(
+        "/api/login",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+
+    assert "access-control-allow-origin" not in response.headers
 
 
 def test_app_root_redirects_to_upload_for_authenticated_user(monkeypatch) -> None:

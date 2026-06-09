@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 4
-- Assessed but not fixed: 1
-- Open: 11
+- Fixed: 6
+- Assessed but not fixed: 0
+- Open: 10
 
 ## Effort Highlights
 
@@ -56,7 +56,9 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-02: Replace permissive CORS with an explicit allowlist.
   - Effort: Easy
   - Value: Medium
+  - Status: Fixed
   - Needs decision: Which origins are allowed for local/dev/prod.
+  - Notes: CORS is now disabled by default for same-origin browser use. Explicit origins can still be configured for a future trusted separate frontend.
 
 - M-03, partial: Add `TrustedHostMiddleware`, disable production docs, and basic security headers.
   - Effort: Easy to medium
@@ -67,8 +69,9 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - H-03, minimal: Reject oversized requests before `request.body()`.
   - Effort: Easy to medium
   - Value: High
+  - Status: Fixed
   - Needs decision: Server-side max upload size and max file count.
-  - Notes: Full streaming multipart parsing is a medium-effort follow-up.
+  - Notes: Minimal server-side request, per-file, and file-count limits are implemented. Full streaming multipart parsing remains a medium-effort follow-up.
 
 ### Medium or Higher Effort
 
@@ -139,6 +142,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 - M-02: Replace wildcard CORS with explicit allowed origins.
   - Regression risk: Low to medium
+  - Status: Fixed
   - Why: Same-origin browser usage should keep working, but any separate frontend host, alternate localhost port, or browser automation using cross-origin requests may fail.
   - Possible downside: Development workflows break if allowed origins are too strict.
   - Safer fix shape: Default to no CORS in production, allow common localhost origins in dev, and read extra origins from config.
@@ -162,6 +166,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 - H-03, minimal: Reject oversized requests before `request.body()`.
   - Regression risk: Medium
+  - Status: Fixed
   - Why: The check is simple, but request-size semantics are tricky for multipart batches, missing `Content-Length`, reverse proxies, and clients that use chunked transfer.
   - Possible downside: Legitimate batch uploads may be rejected if the limit is per-request but users expect it to be per-file. Tests may also need to set or account for generated multipart overhead.
   - Safer fix shape: Define both `max_upload_mb_per_file` and `max_upload_request_mb`; reject clearly with 413; keep the existing UI limit in sync with server config.
@@ -195,13 +200,20 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `C:\Python313\python.exe -m py_compile standard_step\extraction\extract_pdf.py tools\llamacloud_extract_smoke.py`
     - `rg -n "eval\(" . --glob "!security_best_practices_report.md"`
 
-- [ ] H-03: Upload and Request Body Memory Exhaustion
-  - Status: Assessed, not fixed
-  - Effort: Easy to medium for a minimal limit; medium for streaming parser refactor
+- [x] H-03: Upload and Request Body Memory Exhaustion
+  - Status: Fixed and verified
+  - Effort: Completed for minimal fix; medium for future streaming parser refactor
   - Primary location: `modules/api_router.py`
   - Likelihood: Medium overall; higher in exposed deployments with authenticated users or stolen tokens.
   - Impact: High if triggered because the server reads full multipart bodies into memory before parsing.
-  - Notes: Upload endpoints require authentication before parsing, which reduces anonymous exposure. Client-side upload limits are bypassable and do not protect the server.
+  - Fix summary: Added server-side upload limits before multipart body reads when `Content-Length` is available, plus post-read request-size validation, per-file size validation, and max file-count validation.
+  - Default limits:
+    - `web.max_upload_mb`: 50 MB per file
+    - `web.max_upload_files`: 20 files
+    - `web.max_upload_request_mb`: 125% of per-file limit times max file count, unless explicitly configured
+  - Verification:
+    - `C:\Python313\python.exe -m py_compile modules\api_router.py`
+    - `C:\Python313\python.exe -m pytest -v test\integration\test_batch_upload_api.py test\integration\test_input_processing.py`
 
 - [ ] H-04: Secrets in Local YAML and Weak Default JWT Secret
   - Status: Open
@@ -232,11 +244,15 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `modules/api_router.py`
   - Notes: Not fixed yet.
 
-- [ ] M-02: Permissive CORS With Credentials
-  - Status: Open
-  - Effort: Easy
+- [x] M-02: Permissive CORS With Credentials
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary location: `web/server.py`
-  - Notes: Not fixed yet.
+  - Fix summary: Removed wildcard credentialed CORS as the default. CORS middleware is now installed only when `web.cors_allowed_origins` is explicitly configured.
+  - User experience: No visible change for normal users accessing the webapp directly in the browser from the same origin.
+  - Verification:
+    - `C:\Python313\python.exe -m py_compile web\server.py`
+    - `C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
 
 - [ ] M-03: Missing Trusted Host, Security Headers, and Production Docs Controls
   - Status: Open
@@ -316,19 +332,16 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 If optimizing for lowest effort:
 
-1. M-02: Replace wildcard CORS with an explicit allowlist.
-2. M-05: Apply safe schema-name validation to reads.
-3. M-04: Add PDF base-directory checks.
-4. H-03 minimal: Enforce request size and file count before body reads.
-5. M-03 partial: Add deployment hardening controls with careful host config.
+1. M-05: Apply safe schema-name validation to reads.
+2. M-04: Add PDF base-directory checks.
+3. M-03 partial: Add deployment hardening controls with careful host config.
 
 If optimizing for risk reduction:
 
 1. H-01: Stored XSS in the legacy dashboard.
-2. H-03: Server-side request and upload size enforcement.
-3. H-04: Move secrets out of YAML and rotate exposed keys.
-4. M-01: Add CSRF protection or split cookie-auth HTML from bearer-auth API mutations.
-5. M-02: Replace wildcard CORS with an explicit allowlist.
+2. H-04: Move secrets out of YAML and rotate exposed keys.
+3. M-01: Add CSRF protection or split cookie-auth HTML from bearer-auth API mutations.
+4. M-05: Apply safe schema-name validation to reads.
 
 ## Latest Verification
 
@@ -341,3 +354,21 @@ If optimizing for risk reduction:
   - Verified `/login` rendered with username/password fields and submit button.
   - Verified `/app/upload` redirected unauthenticated users back to `/login`.
   - Browser console errors: none observed.
+
+## Latest H-03 Verification
+
+- Date: 2026-06-09
+- Targeted upload tests: `C:\Python313\python.exe -m pytest -v test\integration\test_batch_upload_api.py test\integration\test_input_processing.py`
+- Result: 13 passed, 2 warnings
+- Full suite attempt: `C:\Python313\python.exe -m pytest -v`
+- Result: 511 passed, 4 skipped, 1 failed, 41 warnings
+- Full-suite failure note: The failing test was `test/third_party/llamacloud_connection_test.py::test_llamacloud_connection`, caused by a live LlamaCloud configuration lookup returning 404. The failure is unrelated to the H-03 upload-limit changes.
+
+## Latest M-02 Verification
+
+- Date: 2026-06-09
+- Targeted CORS/UI tests: `C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
+- Result: 26 passed, 29 warnings
+- Full suite attempt: `C:\Python313\python.exe -m pytest -v`
+- Result: 514 passed, 4 skipped, 1 failed, 41 warnings
+- Full-suite failure note: The failing test was `test/third_party/llamacloud_connection_test.py::test_llamacloud_connection`, caused by a live LlamaCloud configuration lookup returning 404. The failure is unrelated to the M-02 CORS changes.

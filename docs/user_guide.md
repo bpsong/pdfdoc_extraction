@@ -407,6 +407,7 @@ watch_folder:
 
 web:
   upload_dir: "web_upload"            # Directory for future web uploads (must pre-exist; validated at startup)
+  cors_allowed_origins: []            # Keep empty for same-origin browser use
 
 database:
   path: "data/app_state.sqlite3"       # SQLite workflow-state database
@@ -428,10 +429,27 @@ review:
 
 - **logging:** Controls logging behavior.
 - **watch_folder:** Defines ingestion and processing folder behavior.
-- **web:** Defines web upload directory and web server settings (host, port, secret key).
+- **web:** Defines web upload directory and web server settings (host, port, secret key, optional CORS allowed origins).
 - **database:** Defines the SQLite workflow-state path and migration behavior.
 - **review:** Defines review queue behavior, queue name, and review lock duration.
 - Task output directories are owned by task parameters such as `data_dir`, `files_dir`, `archive_dir`, `processing_dir`, and `split_dir`. Except for `watch_folder.dir`, directory paths whose keys end in `_dir` are auto-created by `ConfigManager`.
+
+For normal browser use, where users open the web application directly from the same FastAPI server, keep `web.cors_allowed_origins` as an empty list:
+
+```yaml
+web:
+  cors_allowed_origins: []
+```
+
+This disables cross-origin browser access by default while preserving the normal `/app/*` user experience. Only add values when a separate trusted frontend is hosted on another origin, such as a different domain, scheme, or port:
+
+```yaml
+web:
+  cors_allowed_origins:
+    - "https://trusted-frontend.example.com"
+```
+
+Do not use `*` for this setting. Command-line tools, Python scripts, and same-origin browser pages do not require CORS.
 
 #### 4.3.3. Workflows and Matching
 
@@ -1235,6 +1253,7 @@ web:
   port: 8000
   secret_key: "your_secret_key"
   upload_dir: "web_upload"
+  cors_allowed_origins: []
 
 watch_folder:
   dir: "watch_folder"
