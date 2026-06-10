@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 6
+- Fixed: 7
 - Assessed but not fixed: 0
-- Open: 10
+- Open: 9
 
 ## Effort Highlights
 
@@ -322,11 +322,15 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `C:\Python313\python.exe -m pytest -v test\test_main_reload.py`
     - `C:\Python313\python.exe -m pytest -v`
 
-- [ ] L-03: Dependency Hygiene Needs a Dedicated Project Environment
-  - Status: Open
-  - Effort: Medium
+- [x] L-03: Dependency Hygiene Needs a Dedicated Project Environment
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary location: `requirements.txt`
-  - Notes: Not fixed yet.
+  - Fix summary: Created a project-local `.venv`, installed dependencies from `requirements.txt`, and added missing explicit `pytest-mock` test dependency so the suite no longer relies on globally installed packages.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
+    - `.\.venv\Scripts\python.exe -m pytest -v`
+    - Venv-backed browser smoke test on `http://127.0.0.1:8765/login` and authenticated `/app/upload`.
 
 ## Next Recommended Fixes
 
@@ -369,6 +373,22 @@ If optimizing for risk reduction:
 - Date: 2026-06-09
 - Targeted CORS/UI tests: `C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
 - Result: 26 passed, 29 warnings
+- Config/docs follow-up: Added `web.cors_allowed_origins: []` to all YAML config files with a `web:` section, documented the setting under the admin guide, and added config-check schema validation for explicit origins and wildcard rejection.
+- Config/docs focused tests: `C:\Python313\python.exe -m pytest -v test\tools\config_check\test_schema_validation.py test\integration\test_new_ui_routes.py test\tools\config_check\test_integration.py`
+- Result: 58 passed, 28 warnings
 - Full suite attempt: `C:\Python313\python.exe -m pytest -v`
-- Result: 514 passed, 4 skipped, 1 failed, 41 warnings
+- Result: 517 passed, 4 skipped, 1 failed, 41 warnings
 - Full-suite failure note: The failing test was `test/third_party/llamacloud_connection_test.py::test_llamacloud_connection`, caused by a live LlamaCloud configuration lookup returning 404. The failure is unrelated to the M-02 CORS changes.
+
+## Latest L-03 Verification
+
+- Date: 2026-06-10
+- Environment setup: `C:\Python313\python.exe -m venv .venv`
+- Dependency install: `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
+- Full suite: `.\.venv\Scripts\python.exe -m pytest -v`
+- Result: 518 passed, 4 skipped, 40 warnings
+- Dependency note: The first isolated run exposed missing `pytest-mock`; it is now declared in `requirements.txt`.
+- Visual smoke test:
+  - Started Uvicorn from `.venv\Scripts\python.exe` on `http://127.0.0.1:8765`.
+  - Verified `/login` rendered, logged in as `admin`, and confirmed `/app/upload` loaded.
+  - Screenshot artifact: `output/playwright/l03-venv-upload-smoke.png`

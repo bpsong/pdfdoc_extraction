@@ -9,5 +9,6 @@ pypdf>=6.6
 pandas==2.2.3
 uvicorn==0.34.2
 pytest==8.3.5
+pytest-mock==3.15.1
 nanoid==2.0.0
 bcrypt==5.0.0
