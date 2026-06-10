@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 7
+- Fixed: 8
 - Assessed but not fixed: 0
-- Open: 9
+- Open: 8
 
 ## Effort Highlights
 
@@ -88,7 +88,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-07: Login rate limiting.
   - Effort: Medium
   - Value: Medium
-  - Notes: Needs a storage decision for failed attempts if multiple workers are used.
+  - Status: Fixed
+  - Notes: Implemented in-memory throttling for repeated failed logins. Distributed deployments still need shared storage such as Redis.
 
 - H-04: Move secrets out of YAML and rotate exposed keys.
   - Effort: Medium
@@ -284,14 +285,22 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `modules/services/pipeline_config_service.py`
   - Notes: Not fixed yet.
 
-- [ ] M-07: No Login Rate Limiting or Account Throttling
-  - Status: Open
-  - Effort: Medium
+- [x] M-07: No Login Rate Limiting or Account Throttling
+  - Status: Fixed and verified
+  - Effort: Completed for single-process in-memory throttling
   - Primary locations:
     - `web/server.py`
     - `modules/api_router.py`
     - `modules/auth_utils.py`
-  - Notes: Not fixed yet.
+  - Fix summary: Added shared in-memory failed-login throttling keyed by username and client address. Both `/login` and `/api/login` return 429 after repeated failed attempts, and successful login clears prior failures.
+  - Default limits:
+    - `auth.login_rate_limit_enabled`: true
+    - `auth.login_max_failed_attempts`: 5
+    - `auth.login_window_seconds`: 600
+    - `auth.login_cooldown_seconds`: 600
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m pytest -v test\security\test_security_logging.py test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v`
 
 - [ ] M-08: Starlette Version Has File Response DoS Advisory
   - Status: Open
@@ -392,3 +401,12 @@ If optimizing for risk reduction:
   - Started Uvicorn from `.venv\Scripts\python.exe` on `http://127.0.0.1:8765`.
   - Verified `/login` rendered, logged in as `admin`, and confirmed `/app/upload` loaded.
   - Screenshot artifact: `output/playwright/l03-venv-upload-smoke.png`
+
+## Latest M-07 Verification
+
+- Date: 2026-06-10
+- Focused tests: `.\.venv\Scripts\python.exe -m pytest -v test\security\test_security_logging.py test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py`
+- Result: 31 passed, 32 warnings
+- Full suite: `.\.venv\Scripts\python.exe -m pytest -v`
+- Result: 522 passed, 4 skipped, 43 warnings
+- Note: No visual test was run because the normal successful login flow and page rendering are unchanged; behavior is verified through endpoint and AuthUtils tests.

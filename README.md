@@ -250,6 +250,8 @@ C:\Python313\python.exe main.py --no-web
 - `POST /login`: User authentication
 - `POST /logout`: Session termination
 
+Repeated failed login attempts are temporarily throttled and may return HTTP `429 Too Many Requests`.
+
 ### File Operations
 - `POST /upload`: Upload PDF for processing
 - `POST /api/batches/upload`: Upload a batch of PDFs and create SQLite batch/document records

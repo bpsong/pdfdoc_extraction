@@ -1,8 +1,10 @@
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import bcrypt
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import FastAPI
 
 import modules.api_router as api_router
 from web.server import create_app
@@ -50,7 +52,7 @@ def mock_auth(monkeypatch):
             self.algorithm = "HS256"
             self.token_exp_minutes = 30
 
-        def login(self, username: str, password: str) -> str:
+        def login(self, username: str, password: str, client_id: str | None = None) -> str:
             if username == "admin" and password == "secret":
                 # Return a dummy JWT-like token (router accepts it during tests via patched decode)
                 return "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiJ9.signature"
@@ -126,6 +128,104 @@ def test_login_failure_returns_login_page_with_error(client, mock_auth):
     # On failure web UI renders the login form again.
     assert resp.status_code == 200
     assert 'form action="/auth/login"' in resp.text
+
+
+def test_api_login_rate_limit_returns_429(monkeypatch, tmp_path: Path):
+    password_hash = bcrypt.hashpw(b"secret", bcrypt.gensalt()).decode("utf-8")
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "database": {"run_migrations_on_startup": False},
+            "authentication": {
+                "username": "admin",
+                "password_hash": password_hash,
+            },
+            "web": {
+                "secret_key": "test-secret-key-with-enough-entropy",
+                "token_exp_minutes": 30,
+            },
+            "auth": {
+                "login_max_failed_attempts": 2,
+                "login_window_seconds": 600,
+                "login_cooldown_seconds": 600,
+            },
+        },
+    )
+    auth = AuthUtils(config)
+    AuthUtils.reset_login_rate_limits()
+    monkeypatch.setattr(api_router, "get_dependencies", lambda: (config, auth, None, None, None))
+
+    app = FastAPI()
+    app.include_router(api_router.build_router())
+    with TestClient(app) as local_client:
+        first = local_client.post("/api/login", json={"username": "admin", "password": "wrong"})
+        second = local_client.post("/api/login", json={"username": "admin", "password": "wrong"})
+        blocked = local_client.post("/api/login", json={"username": "admin", "password": "wrong"})
+
+    assert first.status_code == 401
+    assert second.status_code == 401
+    assert blocked.status_code == 429
+    assert blocked.json()["detail"] == "Too many failed login attempts. Try again later."
+
+
+def test_browser_login_rate_limit_renders_429(monkeypatch, tmp_path: Path):
+    password_hash = bcrypt.hashpw(b"secret", bcrypt.gensalt()).decode("utf-8")
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "database": {"run_migrations_on_startup": False},
+            "authentication": {
+                "username": "admin",
+                "password_hash": password_hash,
+            },
+            "web": {
+                "secret_key": "test-secret-key-with-enough-entropy",
+                "token_exp_minutes": 30,
+            },
+            "auth": {
+                "login_max_failed_attempts": 2,
+                "login_window_seconds": 600,
+                "login_cooldown_seconds": 600,
+                "roles_enabled": True,
+                "default_admin_users": ["admin"],
+            },
+            "ui": {
+                "app_name": "DocFlow AI",
+                "admin_enabled": True,
+            },
+        },
+    )
+    auth = AuthUtils(config)
+    AuthUtils.reset_login_rate_limits()
+
+    def fake_get_dependencies():
+        return config, auth, None, None, None
+
+    monkeypatch.setattr(api_router, "get_dependencies", fake_get_dependencies)
+    monkeypatch.setattr("web.server.get_dependencies", fake_get_dependencies)
+
+    app = create_app()
+    with TestClient(app) as local_client:
+        first = local_client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        second = local_client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        blocked = local_client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert blocked.status_code == 429
+    assert "Too many failed login attempts. Try again later." in blocked.text
 
 
 def test_upload_requires_auth(api_client):

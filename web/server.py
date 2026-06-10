@@ -27,7 +27,7 @@ from fastapi.templating import Jinja2Templates
 from modules.api_router import build_router, get_dependencies
 from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
-from modules.auth_utils import AuthUtils, AuthError
+from modules.auth_utils import AuthUtils, AuthError, LoginRateLimitError
 from modules.db.migrations import initialize_database
 
 
@@ -264,6 +264,13 @@ def create_app() -> FastAPI:
 
         return "", ""
 
+    def _client_identifier(request: Request) -> str:
+        """Return a stable client identifier for login throttling."""
+
+        if request.client and request.client.host:
+            return request.client.host
+        return "unknown"
+
     @app.post("/login")
     async def login_post(request: Request):
         """Handles login form submission, verifies credentials, sets cookie, redirects.
@@ -289,7 +296,7 @@ def create_app() -> FastAPI:
         try:
             # Get auth instance from dependencies to ensure monkeypatching works
             _, auth, _, _, _ = get_dependencies()
-            token = auth.login(username, password)
+            token = auth.login(username, password, client_id=_client_identifier(request))
             logger.info(f"Login successful for user: {username}")
             
             # Create response with redirect
@@ -313,6 +320,22 @@ def create_app() -> FastAPI:
             )
             
             logger.debug(f"Set cookie with token, expires in {auth.token_exp_minutes} minutes")
+            return response
+
+        except LoginRateLimitError:
+            logger.warning(f"Login rate limited for user: {username}")
+            response = templates.TemplateResponse(
+                "login.html",
+                {
+                    "request": request,
+                    "error": "Too many failed login attempts. Try again later.",
+                    "is_authenticated": False
+                },
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
             return response
             
         except AuthError:

@@ -66,7 +66,7 @@ def test_login_success(client, monkeypatch):
     class FakeAuth:
         def __init__(self, *a, **k):
             self.token_exp_minutes = 30
-        def login(self, u, p) -> str:
+        def login(self, u, p, client_id=None) -> str:
             if u == "admin" and p == "secret":
                 return "fake.jwt.token"
             raise Exception("Invalid credentials")
@@ -84,7 +84,7 @@ def test_login_invalid_credentials(client, monkeypatch):
     class FakeAuth:
         def __init__(self, *a, **k):
             self.token_exp_minutes = 30
-        def login(self, u, p) -> str:
+        def login(self, u, p, client_id=None) -> str:
             # Raise the domain-specific error expected by the router
             raise AuthError("Invalid credentials")
 

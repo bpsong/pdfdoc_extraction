@@ -509,6 +509,7 @@ Generating bcrypt password hashes:
 Notes:
 - bcrypt enforces a hard 72-byte password limit; choose passwords under that length or generation/verification will fail.
 - Keep the `bcrypt` version aligned with `requirements.txt` (currently `5.0.0`) to avoid compatibility issues.
+- Repeated failed login attempts are temporarily throttled by default. Administrators can tune this with `auth.login_rate_limit_enabled`, `auth.login_max_failed_attempts`, `auth.login_window_seconds`, and `auth.login_cooldown_seconds` in `config.yaml`.
 
 Optional helper script:
 
@@ -1420,6 +1421,8 @@ A: Right-click the folder, select Properties > Security tab, and ensure the syst
 
 **Q: Why do I get "Invalid credentials" error when logging into the web interface?**
 A: Verify that the `authentication.username` and `authentication.password_hash` values in `config.yaml` match your intended login credentials. The username should be a plain text string, and the password_hash should be a valid bcrypt hash. If you've forgotten your password, regenerate the hash using the bcrypt command shown in section 4.4 and update the configuration.
+
+After repeated failed login attempts, the system may temporarily throttle additional attempts. Wait for the cooldown period or ask an administrator to review the `auth.login_*` settings if the lockout is unexpected.
 
 **Q: Why does my login session expire quickly or tokens become invalid?**
 A: Authentication tokens are valid for 30 minutes by default. If sessions are expiring too quickly, ensure your system's clock is accurate, as token expiration is time-sensitive. Administrators can adjust the timeout with `web.token_exp_minutes` in `config.yaml`.

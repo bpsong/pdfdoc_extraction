@@ -41,7 +41,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
-from .auth_utils import AuthUtils, AuthError
+from .auth_utils import AuthUtils, AuthError, LoginRateLimitError
 from .config_manager import ConfigManager
 from .status_manager import StatusManager
 from .workflow_manager import WorkflowManager
@@ -420,6 +420,13 @@ def build_router() -> APIRouter:
 
         return "", ""
 
+    def _client_identifier(request: Request) -> str:
+        """Return a stable client identifier for login throttling."""
+
+        if request.client and request.client.host:
+            return request.client.host
+        return "unknown"
+
     @dataclass
     class ParsedUpload:
         """Simple data container for a parsed upload payload."""
@@ -666,9 +673,14 @@ def build_router() -> APIRouter:
 
         _, auth, _, _, _ = get_dependencies()
         try:
-            token = auth.login(username, password)
+            token = auth.login(username, password, client_id=_client_identifier(request))
             exp_minutes = auth.token_exp_minutes
             return TokenResponse(access_token=token, expires_in=exp_minutes * 60)
+        except LoginRateLimitError:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many failed login attempts. Try again later.",
+            )
         except AuthError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 

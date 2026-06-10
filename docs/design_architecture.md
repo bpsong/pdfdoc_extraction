@@ -370,6 +370,7 @@ items:  # Workflow field key, used in context["data"]
 - **JWT-based authentication**: Single-user authentication system using JSON Web Tokens
 - **Password security**: Bcrypt password hashing with configurable salt rounds via [`tools/generate_password_hash.py`](tools/generate_password_hash.py:1)
 - **Session management**: Automatic session expiry with configurable timeout periods
+- **Login throttling**: In-memory failed-login rate limiting protects the local login endpoints; multi-worker deployments should use shared backing storage for consistent throttling.
 - **Security features**:
   - Secure password storage in configuration files
   - Token-based API authentication for all protected endpoints
