@@ -105,9 +105,14 @@ class ReviewGateTask(BaseTask):
         if split_confidence in self.split_confidence_levels:
             reasons.append({"reason": "split_confidence", "value": split_confidence})
 
+        schema = SchemaService(self.config_manager).load_schema(str(self.schema_file)) if self.schema_file else None
+        required_schema_fields = self._required_schema_fields(schema)
+
         for field in fields:
             field_key = str(field["field_key"])
             confidence = field.get("confidence")
+            if not self._should_check_field_confidence(field_key, required_schema_fields):
+                continue
             threshold = self._threshold_for_field(field_key, context, document)
             if confidence is None:
                 if self.require_missing_confidence:
@@ -133,10 +138,7 @@ class ReviewGateTask(BaseTask):
 
         if self.schema_file:
             payload = context.get("data") if isinstance(context.get("data"), dict) else self._fields_payload(fields)
-            schema_errors = SchemaService(self.config_manager).validate_payload(
-                payload,
-                schema_name=str(self.schema_file),
-            )
+            schema_errors = SchemaService(self.config_manager).validate_payload(payload, schema=schema)
             for error in schema_errors:
                 if not self.require_missing_required and "Required field" in error.get("message", ""):
                     continue
@@ -197,6 +199,30 @@ class ReviewGateTask(BaseTask):
         if not isinstance(value, dict):
             return {}
         return {str(key): float(item) for key, item in value.items() if str(key)}
+
+    @staticmethod
+    def _required_schema_fields(schema: dict[str, Any] | None) -> set[str] | None:
+        """Return top-level required field keys from a review schema.
+
+        ``None`` means no schema was available, so the legacy behavior is to
+        evaluate confidence for every extracted field.
+        """
+        if schema is None:
+            return None
+        fields = schema.get("fields")
+        if not isinstance(fields, dict):
+            return set()
+        return {
+            str(field_key)
+            for field_key, field_config in fields.items()
+            if isinstance(field_config, dict) and bool(field_config.get("required", False))
+        }
+
+    def _should_check_field_confidence(self, field_key: str, required_schema_fields: set[str] | None) -> bool:
+        """Return whether confidence rules should gate review for a field."""
+        if required_schema_fields is None:
+            return True
+        return field_key in required_schema_fields or field_key in self.field_threshold_overrides
 
     def _threshold_for_field(
         self,

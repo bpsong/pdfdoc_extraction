@@ -1522,7 +1522,12 @@ def build_router() -> APIRouter:
                 continue
             path = Path(str(raw_path))
             if path.exists() and path.is_file():
-                return FileResponse(str(path), media_type="application/pdf", filename=path.name)
+                return FileResponse(
+                    str(path),
+                    media_type="application/pdf",
+                    filename=path.name,
+                    content_disposition_type="inline",
+                )
         raise HTTPException(status_code=404, detail="PDF file not found")
 
     @router.get("/api/documents/{document_id}/fields")

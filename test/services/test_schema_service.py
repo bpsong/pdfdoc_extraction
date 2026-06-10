@@ -54,3 +54,25 @@ fields:
     assert normalized["fields"][3]["children"][0]["key"] == "city"
     assert normalized["fields"][4]["editor"] == "object_array"
     assert {error["path"] for error in errors} >= {"supplier", "total", "status"}
+
+
+def test_schema_service_resolves_config_relative_schema_paths(tmp_path):
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    (schema_dir / "invoice.yaml").write_text(
+        """
+title: Invoice
+fields:
+  total:
+    type: float
+""",
+        encoding="utf-8",
+    )
+    config = TempConfig(tmp_path / "app.sqlite3", {"schema": {"directories": [str(schema_dir)]}})
+    service = SchemaService(config)
+
+    normalized = service.normalize_schema("schemas/invoice.yaml")
+
+    assert normalized is not None
+    assert normalized["title"] == "Invoice"
+    assert normalized["fields"][0]["key"] == "total"

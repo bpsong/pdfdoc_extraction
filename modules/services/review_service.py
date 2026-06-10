@@ -9,7 +9,7 @@ from typing import Any
 
 from modules.config_manager import ConfigManager
 from modules.db.connection import json_loads
-from modules.db.repositories import AuditRepository, DocumentRepository, ExtractionRepository, ReviewRepository
+from modules.db.repositories import AuditRepository, DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
 from modules.services.schema_service import SchemaService
 
 
@@ -26,6 +26,7 @@ class ReviewService:
         self.reviews = ReviewRepository(conn)
         self.documents = DocumentRepository(conn)
         self.extractions = ExtractionRepository(conn)
+        self.task_runs = TaskRunRepository(conn)
         self.audit = AuditRepository(conn)
 
     def list_items(self, *, status: str | None = None, queue_name: str | None = None) -> list[dict[str, Any]]:
@@ -176,6 +177,7 @@ class ReviewService:
         metadata["completed_corrections"] = corrections
         self.reviews.update_metadata(review_item_id, metadata)
         self.reviews.complete(review_item_id, user)
+        self._complete_review_task_run(item, metadata)
         self.documents.update_status(document_id, "review_completed")
         self.audit.append(
             event_type="review_completed",
@@ -192,6 +194,25 @@ class ReviewService:
 
             resume_triggered = ResumeManager(self.config_manager).resume_document(document_id, user=user)
         return {"review_item_id": review_item_id, "status": "completed", "resume_triggered": resume_triggered}
+
+    def _complete_review_task_run(self, item: dict[str, Any], metadata: dict[str, Any]) -> None:
+        """Mark the paused review-gate task run completed after human approval."""
+        task_run_id = item.get("created_by_task_run_id")
+        if not task_run_id:
+            return
+        task_run = self.task_runs.get(str(task_run_id))
+        if task_run is None or str(task_run.get("status") or "").lower() == "completed":
+            return
+        output = json_loads(task_run.get("output_json"), {})
+        output.update(
+            {
+                "review_required": True,
+                "review_gate_status": "completed",
+                "review_item_id": item.get("id"),
+                "review_completed_by": metadata.get("completed_by"),
+            }
+        )
+        self.task_runs.mark_completed(str(task_run_id), output)
 
     def _require_item(self, review_item_id: str) -> dict[str, Any]:
         item = self.reviews.get(review_item_id)

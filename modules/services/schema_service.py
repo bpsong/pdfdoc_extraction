@@ -184,6 +184,11 @@ class SchemaService:
         candidate = Path(schema_name)
         if candidate.is_absolute() and candidate.exists():
             return candidate
+        config_path = getattr(self.config_manager, "_config_path", None)
+        base_dir = Path(config_path).parent if config_path else Path.cwd()
+        config_relative = base_dir / candidate
+        if config_relative.exists():
+            return config_relative
         for directory in self.schema_directories():
             path = directory / schema_name
             if path.exists():

@@ -235,3 +235,95 @@ def test_processing_state_handles_split_fan_out_applicability(tmp_path):
     assert root_states["extract_invoice"] == "skipped"
     assert child_states["split_pdf"] == "skipped"
     assert child_states["extract_invoice"] == "running"
+
+
+def test_processing_state_labels_completed_review_gate_pass_through_as_skipped(tmp_path):
+    config = _config(tmp_path)
+    initialize_database(config)
+    snapshot = build_pipeline_snapshot(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch_with_documents(
+            source="web",
+            files=[{"file_path": str(tmp_path / "invoice.pdf"), "original_filename": "invoice.pdf", "document_id": "doc-a"}],
+            metadata={"pipeline_snapshot": snapshot},
+            status="completed",
+        )
+        documents = DocumentRepository(conn)
+        documents.update_current_task("doc-a", 4, "store_json")
+        documents.update_status("doc-a", "completed")
+        runs = TaskRunRepository(conn)
+        review_run = runs.create_started(
+            batch_id=created["batch"]["id"],
+            document_id="doc-a",
+            task_key="review_gate",
+            task_index=3,
+            module_name="standard_step.review.review_gate",
+            class_name="ReviewGateTask",
+        )
+        runs.mark_completed(
+            review_run["id"],
+            {
+                "pipeline_state": None,
+                "review_item_id": None,
+                "data_keys": ["invoice_amount"],
+                "metadata_keys": ["extraction_metadata"],
+            },
+        )
+
+        payload = ProcessingStateService(config, conn).get_batch_state(created["batch"]["id"])
+
+    assert payload is not None
+    review_step = next(step for step in payload["aggregate_step_states"] if step["key"] == "review_gate")
+    assert review_step["state"] == "completed"
+    assert review_step["detail"] == "skipped"
+
+
+def test_processing_state_treats_review_gate_as_done_after_resume_completes_downstream(tmp_path):
+    config = _config(tmp_path)
+    initialize_database(config)
+    snapshot = build_pipeline_snapshot(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch_with_documents(
+            source="web",
+            files=[{"file_path": str(tmp_path / "invoice.pdf"), "original_filename": "invoice.pdf", "document_id": "doc-a"}],
+            metadata={"pipeline_snapshot": snapshot},
+            status="completed",
+        )
+        documents = DocumentRepository(conn)
+        documents.update_current_task("doc-a", 4, "store_json")
+        documents.update_status("doc-a", "completed")
+        runs = TaskRunRepository(conn)
+        review_run = runs.create_started(
+            batch_id=created["batch"]["id"],
+            document_id="doc-a",
+            task_key="review_gate",
+            task_index=3,
+            module_name="standard_step.review.review_gate",
+            class_name="ReviewGateTask",
+        )
+        runs.mark_paused(
+            review_run["id"],
+            {
+                "pipeline_state": "paused",
+                "review_item_id": "review-1",
+            },
+        )
+        store_run = runs.create_started(
+            batch_id=created["batch"]["id"],
+            document_id="doc-a",
+            task_key="store_json",
+            task_index=4,
+            module_name="standard_step.storage.store_metadata_as_json",
+            class_name="StoreMetadataAsJson",
+        )
+        runs.mark_completed(store_run["id"])
+
+        payload = ProcessingStateService(config, conn).get_batch_state(created["batch"]["id"])
+
+    assert payload is not None
+    review_step = next(step for step in payload["aggregate_step_states"] if step["key"] == "review_gate")
+    assert review_step["state"] == "completed"
+    assert review_step["counts"]["completed"] == 1
+    assert "detail" not in review_step

@@ -191,7 +191,11 @@ class ProcessingStateService:
                 if match:
                     states.append(str(match.get("state") or "pending"))
             counts = {state: states.count(state) for state in ("pending", "running", "completed", "paused", "failed", "skipped")}
-            aggregate.append({**step, "state": _aggregate_state(states), "counts": counts})
+            aggregate_step = {**step, "state": _aggregate_state(states), "counts": counts}
+            detail = _aggregate_step_detail(step, document_payloads, states)
+            if detail:
+                aggregate_step["detail"] = detail
+            aggregate.append(aggregate_step)
         return aggregate
 
 
@@ -285,17 +289,21 @@ def _document_step_state(
     statuses = [str(run.get("status") or "").lower() for run in runs]
     if "failed" in statuses:
         return "failed"
+    document_status = str(document.get("status") or "").lower()
+    current_key = str(document.get("current_task_key") or "")
+    current_index = int(document.get("current_task_index") or 0)
+    step_position = int(step.get("position") or 0)
     if "paused" in statuses:
+        if _has_completed_downstream(task_runs, step_position) or (
+            document_status in TERMINAL_DOCUMENT_STATUSES and current_index > step_position
+        ):
+            return "completed"
         return "paused"
     if "running" in statuses:
         return "running"
     if "completed" in statuses:
         return "completed"
 
-    document_status = str(document.get("status") or "").lower()
-    current_key = str(document.get("current_task_key") or "")
-    current_index = int(document.get("current_task_index") or 0)
-    step_position = int(step.get("position") or 0)
     if document_status in FAILED_DOCUMENT_STATUSES and (current_key == key or current_index == step_position):
         return "failed"
     if document_status in PAUSED_DOCUMENT_STATUSES and current_key == key:
@@ -307,6 +315,51 @@ def _document_step_state(
     if document_status in {"completed", "review_completed"}:
         return "completed"
     return "pending"
+
+
+def _has_completed_downstream(task_runs: list[dict[str, Any]], step_position: int) -> bool:
+    """Return True when a later step completed after this step paused."""
+    return any(
+        int(run.get("task_index") or 0) > step_position
+        and str(run.get("status") or "").lower() == "completed"
+        for run in task_runs
+    )
+
+
+def _aggregate_step_detail(
+    step: dict[str, Any],
+    document_payloads: list[dict[str, Any]],
+    states: list[str],
+) -> str | None:
+    """Return an outcome-specific aggregate detail for special step types."""
+    if step.get("category") != "review":
+        return None
+    relevant = [state for state in states if state != "skipped"]
+    if not relevant or any(state != "completed" for state in relevant):
+        return None
+    review_runs = []
+    step_key = step.get("key")
+    for document in document_payloads:
+        for run in document.get("task_runs") or []:
+            if run.get("task_key") == step_key:
+                review_runs.append(run)
+    if not review_runs:
+        return None
+    if all(_review_gate_was_skipped(run) for run in review_runs):
+        return "skipped"
+    return None
+
+
+def _review_gate_was_skipped(task_run: dict[str, Any]) -> bool:
+    """Return True when a completed review gate passed without human review."""
+    if str(task_run.get("status") or "").lower() != "completed":
+        return False
+    output = json_loads(task_run.get("output_json"), {})
+    return (
+        output.get("review_required") is False
+        or output.get("review_gate_status") == "passed"
+        or (output.get("pipeline_state") is None and output.get("review_item_id") is None)
+    )
 
 
 def _aggregate_state(states: list[str]) -> str:

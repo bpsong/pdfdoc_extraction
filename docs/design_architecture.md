@@ -159,7 +159,7 @@ Task output summaries are stored for operational visibility. Document status is 
 
 ## Review Flow
 
-The review gate evaluates extracted fields and configured review policies. Documents can be marked `review_required`, and review items are inserted into the queue. Operators use `/app/review` to claim work, inspect the source PDF and extracted fields, save drafts, compute diffs, and complete review.
+The review gate evaluates extracted fields and configured review policies. When a review schema is configured, `required: true` fields are treated as mandatory for missing-confidence review gating, while optional schema fields can be displayed and edited without forcing review solely because they have no value or confidence score. Documents can be marked `review_required`, and review items are inserted into the queue. Operators use `/app/review` to claim work, inspect the source PDF and extracted fields, save drafts, compute diffs, and complete review.
 
 Completed review persists corrected field values and review metadata in SQLite. After review, the document can resume downstream workflow steps through `POST /api/documents/{document_id}/resume`.
 

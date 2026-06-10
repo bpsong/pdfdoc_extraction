@@ -653,6 +653,8 @@ The `/app/admin/*` pages provide configuration and governance workflows for admi
 - `/app/admin/audit`: review administrative and governance events such as settings changes, pipeline publishing, split tests, and schema changes.
 - `/app/settings/validation`: review active configuration, schema, and pipeline validation findings.
 
+For schema-driven review UI field configuration, see `docs/review_schema_admin_guide.md`.
+
 Admin access is role-aware. When roles are enabled, users listed in `auth.default_admin_users` or `ui.default_admin_users` can access admin pages. If no admin list is configured, the configured `authentication.username` is treated as the administrator. Secret values are not exposed through runtime settings, and split settings updates do not save secret keys such as `api_key`; configure those secrets through `config.yaml` or your deployment secret-management process.
 
 #### 4.5.6. Backup and Recovery
@@ -1020,7 +1022,7 @@ pipeline:
   - `per_document_type_thresholds`: optional map of document type or split category to threshold.
   - `field_threshold_overrides`: optional map of field key to threshold.
   - `split_confidence_levels_requiring_review`: optional list of split confidence labels such as `high`, `medium`, or `low` that should force review.
-  - `require_review_when_missing_confidence`: boolean. Default is `true`.
+  - `require_review_when_missing_confidence`: boolean. Default is `true`. When `schema_file` is configured, missing-confidence review gating applies to fields marked `required: true` in the schema and to fields explicitly listed in `field_threshold_overrides`; optional schema fields do not force review solely because confidence is missing.
   - `require_review_for_missing_required_fields`: boolean. Default is `true` when schema validation is used.
   - `always_review`: boolean. If `true`, every document entering this task requires review.
   - `schema_file`: optional schema name used to validate corrected/final field values.
@@ -1029,12 +1031,14 @@ pipeline:
   - `allow_operator_to_edit_high_confidence_fields`: boolean. Default is `true`.
   - `resume_policy`: currently supports `"next_task"`.
 - **Behavior:**
-  - Evaluates persisted extracted fields, confidence values, missing-confidence conditions, schema errors, split confidence, and business rule flags.
+  - Evaluates persisted extracted fields, confidence values, missing-confidence conditions for mandatory schema fields, schema errors, split confidence, and business rule flags.
   - Marks fields requiring review and creates a review queue item in SQLite when review is required.
   - Sets document state to `review_required` and pauses the workflow.
   - Operators can claim the item, save draft corrections, preview diffs, and complete review from `/app/review/{review_item_id}`.
   - Completed corrections are persisted in SQLite and the document resumes downstream workflow steps according to `resume_policy`.
 - **Locking:** Review claims use `review.lock_timeout_minutes`, defaulting to 60 minutes.
+
+For schema-driven review UI field types, validation behavior, and LlamaCloud date-format guidance, see `docs/review_schema_admin_guide.md`.
 
 **YAML configuration example:**
 
@@ -1468,7 +1472,7 @@ A: Large files require more processing time due to increased I/O, PDF handling, 
 A: When field values required for matching are not found in the pipeline context, the task logs a warning and continues without matching any rows. The task will not append new rows. It updates matched rows only, creating the configured `update_field` column at runtime if needed. Check your extraction field configuration and ensure the required fields (like `purchase_order_number` or `invoice_amount`) are being extracted correctly.
 
 **Q: Why is my document waiting for review?**
-A: A configured review gate can pause a document when extracted field confidence is below threshold, confidence is missing, required/schema fields are missing or invalid, split confidence rules require review, business-rule flags request review, or `always_review` is enabled. Operators should open `/app/review`, claim the item, inspect the PDF and fields, then complete review when corrected values are ready.
+A: A configured review gate can pause a document when a mandatory or explicitly-thresholded field confidence is below threshold, mandatory field confidence is missing, required/schema fields are missing or invalid, split confidence rules require review, business-rule flags request review, or `always_review` is enabled. Optional schema fields do not force review solely because their value or confidence score is missing. Operators should open `/app/review`, claim the item, inspect the PDF and fields, then complete review when corrected values are ready.
 
 **Q: What happens after review is completed?**
 A: Corrected values are persisted in SQLite with the document extraction state. If the review gate uses `resume_policy: "next_task"`, the document resumes the downstream workflow steps after review completion.

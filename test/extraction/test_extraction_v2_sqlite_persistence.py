@@ -2,6 +2,7 @@ from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import ExtractionRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
+from standard_step.extraction.llama_cloud_v2 import extract_numeric_confidence, _to_plain_dict
 from standard_step.extraction.extract_pdf_v2 import ExtractPdfV2Task
 from test.helpers_sqlite import TempConfig
 
@@ -75,3 +76,42 @@ def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_
     assert fields["invoice_total"]["confidence"] == 0.67
     assert fields["invoice_total"]["confidence_label"] == "medium"
     assert json_loads(fields["invoice_total"]["final_value_json"]) == 12.5
+
+
+def test_llamacloud_metadata_model_is_normalized_to_plain_dict() -> None:
+    class MetadataModel:
+        def model_dump(self, *, mode: str, exclude_none: bool) -> dict:
+            return {
+                "field_metadata": {
+                    "document_metadata": {
+                        "Supplier": {"confidence": 0.91},
+                    },
+                    "page_metadata": None,
+                }
+            }
+
+    metadata = _to_plain_dict(MetadataModel())
+
+    assert metadata == {
+        "field_metadata": {
+            "document_metadata": {
+                "Supplier": {"confidence": 0.91},
+            },
+            "page_metadata": None,
+        }
+    }
+    assert extract_numeric_confidence(metadata, "supplier", "Supplier") == 0.91
+
+
+def test_confidence_parser_accepts_direct_field_metadata_shape() -> None:
+    metadata = {
+        "field_metadata": {
+            "supplier": {
+                "parsing_confidence": 0.88,
+                "extraction_confidence": 0.83,
+                "confidence": 0.85,
+            }
+        }
+    }
+
+    assert extract_numeric_confidence(metadata, "supplier", "Supplier") == 0.85

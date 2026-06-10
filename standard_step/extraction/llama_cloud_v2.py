@@ -144,14 +144,14 @@ def run_extract_v2_job(
         error_message = getattr(job, "error_message", None) or getattr(job, "error", None)
         raise TaskError(f"LlamaCloud extraction job {job.id} ended with status {job.status}: {error_message}")
 
-    metadata: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = _to_plain_dict(getattr(job, "extract_metadata", None))
     try:
         detailed_job = client.extract.get(
             job.id,
             expand=["extract_metadata"],
             **request_scope,
         )
-        metadata = getattr(detailed_job, "extract_metadata", {}) or {}
+        metadata = _to_plain_dict(getattr(detailed_job, "extract_metadata", None)) or metadata
     except Exception as exc:  # pragma: no cover - metadata is best-effort.
         if logger:
             logger.warning("Failed to fetch LlamaCloud extraction metadata for %s: %s", job.id, exc)
@@ -162,6 +162,21 @@ def run_extract_v2_job(
         job_id=job.id,
         status=job.status,
     )
+
+
+def _to_plain_dict(value: Any) -> Dict[str, Any]:
+    """Convert SDK metadata models into plain dictionaries for persistence."""
+    if value is None:
+        return {}
+    if isinstance(value, dict):
+        return value
+    if hasattr(value, "model_dump"):
+        dumped = value.model_dump(mode="json", exclude_none=True)
+        return dumped if isinstance(dumped, dict) else {}
+    if hasattr(value, "dict"):
+        dumped = value.dict(exclude_none=True)
+        return dumped if isinstance(dumped, dict) else {}
+    return {}
 
 
 def _optional_scope(
@@ -235,6 +250,7 @@ def metadata_candidates(metadata: Dict[str, Any], field_key: str, alias: str) ->
 
     field_metadata = metadata.get("field_metadata")
     if isinstance(field_metadata, dict):
+        _extend_named_metadata(candidates, field_metadata, names)
         document_metadata = field_metadata.get("document_metadata")
         if isinstance(document_metadata, dict):
             _extend_named_metadata(candidates, document_metadata, names)
