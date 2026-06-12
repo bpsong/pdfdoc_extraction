@@ -26,15 +26,30 @@ fields:
   supplier:
     type: string
     required: true
+    min_length: 2
+    pattern: "^A"
+  invoice_amount:
+    type: number
+    required: true
+    step: 0.01
+    decimal_places: 2
+    format: money
+  approved:
+    type: boolean
+    required: true
+  reviewed_at:
+    type: datetime
   address:
     type: object
     properties:
       city:
         type: string
+        readonly: true
   tags:
     type: array
     items:
-      type: string
+      type: enum
+      choices: [urgent, standard]
   line_items:
     type: array
     items:
@@ -44,6 +59,8 @@ fields:
           type: string
         quantity:
           type: number
+          step: 0.01
+          decimal_places: 2
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -78,6 +95,9 @@ fields:
             extraction_result_id=extraction["id"],
             fields=[
                 {"field_key": "supplier", "field_alias": "Supplier", "extracted_value": "Acme", "confidence": 0.61, "requires_review": True},
+                {"field_key": "invoice_amount", "field_alias": "Invoice Amount", "extracted_value": 70, "confidence": 0.8},
+                {"field_key": "approved", "field_alias": "Approved", "extracted_value": None, "confidence": 0.7},
+                {"field_key": "reviewed_at", "field_alias": "Reviewed At", "extracted_value": "2026-06-12T09:30:00Z", "confidence": 0.7},
                 {"field_key": "address", "field_alias": "Address", "extracted_value": {"city": "Singapore"}, "confidence": 0.95},
                 {"field_key": "tags", "field_alias": "Tags", "extracted_value": ["urgent"], "confidence": 0.9},
                 {
@@ -97,7 +117,7 @@ fields:
             metadata={
                 "schema_file": "invoice.yaml",
                 "highlight_fields": ["supplier"],
-                "editable_fields": ["supplier", "address", "tags", "line_items"],
+                "editable_fields": ["supplier", "invoice_amount", "approved", "reviewed_at", "address", "tags", "line_items"],
             },
         )
 
@@ -134,10 +154,24 @@ def test_review_detail_api_returns_schema_pdf_and_parsed_fields(tmp_path, monkey
     payload = response.json()
     assert payload["document"]["preview_url"].endswith("/file/pdf")
     assert payload["schema"]["name"] == "invoice.yaml"
-    assert [field["key"] for field in payload["schema"]["fields"]] == ["supplier", "address", "tags", "line_items"]
-    assert payload["schema"]["fields"][2]["editor"] == "scalar_array"
-    assert payload["schema"]["fields"][3]["editor"] == "object_array"
-    assert payload["fields"][1]["final_value"] == {"city": "Singapore"}
+    assert [field["key"] for field in payload["schema"]["fields"]] == [
+        "supplier",
+        "invoice_amount",
+        "approved",
+        "reviewed_at",
+        "address",
+        "tags",
+        "line_items",
+    ]
+    assert payload["schema"]["fields"][0]["pattern"] == "^A"
+    assert payload["schema"]["fields"][1]["step"] == 0.01
+    assert payload["schema"]["fields"][1]["decimal_places"] == 2
+    assert payload["schema"]["fields"][4]["children"][0]["readonly"] is True
+    assert payload["schema"]["fields"][5]["editor"] == "scalar_array"
+    assert payload["schema"]["fields"][5]["item_schema"]["option_items"][0]["value"] == "urgent"
+    assert payload["schema"]["fields"][6]["editor"] == "object_array"
+    assert payload["schema"]["fields"][6]["item_schema"]["fields"][1]["step"] == 0.01
+    assert payload["fields"][4]["final_value"] == {"city": "Singapore"}
     assert payload["fields"][0]["confidence_band"] == "low"
 
 

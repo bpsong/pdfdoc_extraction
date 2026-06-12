@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -229,9 +230,22 @@ class SchemaService:
                 "type": field_type,
                 "required": bool(config.get("required", False)),
                 "description": config.get("description") or config.get("help"),
+                "help": config.get("help") or config.get("description"),
                 "default": config.get("default"),
                 "options": config.get("choices") or config.get("enum"),
+                "option_items": self._normalize_options(config.get("choices") or config.get("enum")),
                 "editor": self._editor_for(config),
+                "readonly": bool(config.get("readonly", False)),
+                "placeholder": config.get("placeholder"),
+                "multiline": bool(config.get("multiline", False)),
+                "min_length": config.get("min_length"),
+                "max_length": config.get("max_length"),
+                "pattern": config.get("pattern"),
+                "min_value": config.get("min_value"),
+                "max_value": config.get("max_value"),
+                "step": self._numeric_step(config),
+                "decimal_places": self._decimal_places(config),
+                "format": config.get("format"),
                 "children": [],
                 "item_schema": None,
                 "metadata": {
@@ -248,6 +262,17 @@ class SchemaService:
                         "default",
                         "choices",
                         "enum",
+                        "readonly",
+                        "placeholder",
+                        "multiline",
+                        "min_length",
+                        "max_length",
+                        "pattern",
+                        "min_value",
+                        "max_value",
+                        "step",
+                        "decimal_places",
+                        "format",
                         "properties",
                         "items",
                     }
@@ -270,13 +295,68 @@ class SchemaService:
         return normalized
 
     @staticmethod
-    def _normalize_array_item(item_config: Any) -> dict[str, Any]:
+    def _normalize_options(options: Any) -> list[dict[str, Any]]:
+        """Return options as label/value objects while preserving scalar values."""
+
+        if not isinstance(options, list):
+            return []
+        normalized: list[dict[str, Any]] = []
+        for option in options:
+            if isinstance(option, dict):
+                value = option.get("value", option.get("id", option.get("label")))
+                label = option.get("label", value)
+                normalized.append({"label": str(label), "value": value})
+            else:
+                normalized.append({"label": str(option), "value": option})
+        return normalized
+
+    @staticmethod
+    def _numeric_step(field_config: dict[str, Any]) -> int | float | None:
+        field_type = field_config.get("type", "string")
+        if field_type not in {"number", "integer", "float"}:
+            return field_config.get("step")
+        if field_config.get("step") is not None:
+            return field_config.get("step")
+        if field_type == "integer":
+            return 1
+        if field_config.get("format") == "money" or field_config.get("decimal_places") is not None:
+            places = int(field_config.get("decimal_places", 2))
+            return 10 ** -places
+        return None
+
+    @staticmethod
+    def _decimal_places(field_config: dict[str, Any]) -> int | None:
+        if field_config.get("decimal_places") is not None:
+            return int(field_config["decimal_places"])
+        if field_config.get("format") == "money":
+            return 2
+        return None
+
+    @classmethod
+    def _normalize_array_item(cls, item_config: Any) -> dict[str, Any]:
         if not isinstance(item_config, dict):
             return {"type": "string"}
         return {
             "type": item_config.get("type", "string"),
             "label": item_config.get("label"),
+            "required": bool(item_config.get("required", False)),
+            "description": item_config.get("description") or item_config.get("help"),
+            "help": item_config.get("help") or item_config.get("description"),
+            "default": item_config.get("default"),
             "options": item_config.get("choices") or item_config.get("enum"),
+            "option_items": cls._normalize_options(item_config.get("choices") or item_config.get("enum")),
+            "editor": cls._editor_for(item_config),
+            "readonly": bool(item_config.get("readonly", False)),
+            "placeholder": item_config.get("placeholder"),
+            "multiline": bool(item_config.get("multiline", False)),
+            "min_length": item_config.get("min_length"),
+            "max_length": item_config.get("max_length"),
+            "pattern": item_config.get("pattern"),
+            "min_value": item_config.get("min_value"),
+            "max_value": item_config.get("max_value"),
+            "step": cls._numeric_step(item_config),
+            "decimal_places": cls._decimal_places(item_config),
+            "format": item_config.get("format"),
         }
 
     @staticmethod
@@ -307,6 +387,14 @@ class SchemaService:
             findings.append({"path": f"{path}.type", "message": f"Unsupported field type: {field_type}."})
         if field_type == "enum" and not field_config.get("choices") and not field_config.get("enum"):
             findings.append({"path": f"{path}.choices", "message": "Enum fields require choices."})
+        choices = field_config.get("choices") or field_config.get("enum")
+        default = field_config.get("default")
+        if choices and default not in (None, ""):
+            values = [item.get("value", item.get("label")) if isinstance(item, dict) else item for item in choices]
+            if default not in values:
+                findings.append({"path": f"{path}.default", "message": "Default value must be one of the configured choices."})
+        if field_type in {"number", "integer", "float"}:
+            findings.extend(self._validate_numeric_config(path, field_config))
         if field_type == "object":
             properties = field_config.get("properties")
             if not isinstance(properties, dict):
@@ -314,8 +402,39 @@ class SchemaService:
             else:
                 for child_key, child_config in properties.items():
                     findings.extend(self._validate_field_config(f"{path}.{child_key}", child_config))
-        if field_type == "array" and "items" not in field_config:
-            findings.append({"path": f"{path}.items", "message": "Array fields require an items definition."})
+        if field_type == "array":
+            if "items" not in field_config:
+                findings.append({"path": f"{path}.items", "message": "Array fields require an items definition."})
+            elif isinstance(field_config.get("items"), dict):
+                item_config = dict(field_config["items"])
+                item_type = item_config.get("type", "string")
+                item_path = f"{path}.items"
+                findings.extend(self._validate_field_config(item_path, item_config))
+                if item_type != "object" and "properties" in item_config:
+                    findings.append({"path": f"{item_path}.properties", "message": "Scalar array items cannot define properties."})
+                if item_type != "enum" and (item_config.get("choices") or item_config.get("enum")):
+                    findings.append({"path": f"{item_path}.choices", "message": "Only enum array items can define choices."})
+            else:
+                findings.append({"path": f"{path}.items", "message": "Array items must be a mapping."})
+        return findings
+
+    @staticmethod
+    def _validate_numeric_config(path: str, field_config: dict[str, Any]) -> list[dict[str, str]]:
+        findings: list[dict[str, str]] = []
+        min_value = field_config.get("min_value")
+        max_value = field_config.get("max_value")
+        step = field_config.get("step")
+        decimal_places = field_config.get("decimal_places")
+        for key, value in (("min_value", min_value), ("max_value", max_value), ("step", step)):
+            if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool)):
+                findings.append({"path": f"{path}.{key}", "message": f"{key} must be numeric."})
+        if min_value is not None and max_value is not None and min_value > max_value:
+            findings.append({"path": f"{path}.min_value", "message": "min_value cannot be greater than max_value."})
+        if step is not None and isinstance(step, (int, float)) and step <= 0:
+            findings.append({"path": f"{path}.step", "message": "step must be greater than zero."})
+        if decimal_places is not None:
+            if not isinstance(decimal_places, int) or isinstance(decimal_places, bool) or decimal_places < 0:
+                findings.append({"path": f"{path}.decimal_places", "message": "decimal_places must be a non-negative integer."})
         return findings
 
     def _validate_value(self, path: str, value: Any, field_config: Any) -> list[dict[str, str]]:
@@ -352,8 +471,27 @@ class SchemaService:
                     findings.append({"path": path, "message": f"Value must be at most {field_config['max_value']}."})
         elif field_type == "boolean" and not isinstance(value, bool):
             findings.append({"path": path, "message": "Value must be a boolean."})
+        elif field_type == "date":
+            if not isinstance(value, str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", value):
+                findings.append({"path": path, "message": "Value must be an ISO date string (YYYY-MM-DD)."})
+            else:
+                try:
+                    datetime.strptime(value, "%Y-%m-%d")
+                except ValueError:
+                    findings.append({"path": path, "message": "Value must be a valid ISO date."})
+        elif field_type == "datetime":
+            if not isinstance(value, str):
+                findings.append({"path": path, "message": "Value must be an ISO datetime string."})
+            else:
+                try:
+                    datetime.fromisoformat(value.replace("Z", "+00:00"))
+                except ValueError:
+                    findings.append({"path": path, "message": "Value must be a valid ISO datetime."})
         elif field_type == "enum":
-            choices = field_config.get("choices") or field_config.get("enum") or []
+            choices = [
+                item.get("value", item.get("label")) if isinstance(item, dict) else item
+                for item in (field_config.get("choices") or field_config.get("enum") or [])
+            ]
             if value not in choices:
                 findings.append({"path": path, "message": f"Value must be one of: {choices}."})
         elif field_type == "object":

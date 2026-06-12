@@ -1,0 +1,23 @@
+- generic [ref=e2]:
+  - link "DocFlow AI" [ref=e4] [cursor=pointer]:
+    - /url: /login
+    - img [ref=e6]
+    - generic [ref=e8]: DocFlow AI
+  - main [ref=e9]:
+    - generic [ref=e11]:
+      - heading "Sign In" [level=1] [ref=e12]
+      - paragraph [ref=e13]: Access upload, review, reports, and admin workflows.
+    - generic [ref=e15]:
+      - generic [ref=e16]:
+        - img [ref=e18]
+        - generic [ref=e20]:
+          - heading "Welcome Back" [level=2] [ref=e21]
+          - paragraph [ref=e22]: Use your configured DocFlow account.
+      - generic [ref=e23]:
+        - generic [ref=e24]:
+          - generic [ref=e25]: Username
+          - textbox "Username" [active] [ref=e26]
+        - generic [ref=e27]:
+          - generic [ref=e28]: Password
+          - textbox "Password" [ref=e29]
+        - button "Login" [ref=e30] [cursor=pointer]

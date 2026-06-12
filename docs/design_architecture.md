@@ -110,7 +110,7 @@ graph TD
 - Unified Web Interface
   - **Authentication**: JWT-based single-user authentication with session management via [`modules/auth_utils.py`](modules/auth_utils.py:1)
   - **Operator UI**: `/app/upload`, `/app/processing`, `/app/batches/{batch_id}`, `/app/batches/{batch_id}/split-results`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
-  - **Admin UI**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`.
+  - **Admin UI**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
   - **Primary APIs**: batch, document, extraction, review, reports, settings, admin settings, pipeline, review-gate, split, schema, and audit endpoints in [`modules/api_router.py`](modules/api_router.py:1).
   - **Legacy APIs**: `/api/files` and `/api/status/{file_id}` return SQLite-backed compatibility responses. New UI code should use the primary SQLite APIs.
 
@@ -194,7 +194,7 @@ Admin UI routes manage runtime settings, pipeline drafts, task catalog views, re
 - who initiated the change
 - what setting or configuration was changed
 - old/new values or safe summaries
-- validation or dry-run results
+- validation or review-gate simulator results
 - timestamps and request context where available
 
 Secrets must not be exposed through runtime settings responses or audit payloads.

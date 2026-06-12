@@ -91,6 +91,70 @@
         window.setTimeout(() => alert.remove(), 4500);
     }
 
+    function storageGet(key) {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function storageSet(key, value) {
+        try {
+            window.localStorage.setItem(key, value);
+        } catch (error) {
+            // Ignore storage failures; the visible toggle state still updates.
+        }
+    }
+
+    function isReviewDetailPath(path) {
+        return /^\/app\/review\/[^/]+/.test(path || "");
+    }
+
+    function shouldAutoCollapseSidebar() {
+        return isReviewDetailPath(window.location.pathname)
+            && window.matchMedia("(max-width: 1535px)").matches;
+    }
+
+    function applySidebarCollapsed(collapsed) {
+        const toggle = document.getElementById("sidebar-collapse-toggle");
+        document.body.classList.toggle("sidebar-collapsed", collapsed);
+        if (!toggle) {
+            return;
+        }
+        toggle.setAttribute("aria-pressed", collapsed ? "true" : "false");
+        toggle.setAttribute("aria-label", collapsed ? "Expand navigation" : "Collapse navigation");
+        toggle.title = collapsed ? "Expand navigation" : "Collapse navigation";
+    }
+
+    function initializeSidebar() {
+        const toggle = document.getElementById("sidebar-collapse-toggle");
+        if (!toggle) {
+            return;
+        }
+        const path = window.location.pathname;
+        document.body.classList.toggle("review-detail-route", isReviewDetailPath(path));
+        const stored = storageGet("docflow.sidebarCollapsed");
+        const initialCollapsed = stored === "true" || (stored !== "false" && shouldAutoCollapseSidebar());
+        applySidebarCollapsed(initialCollapsed);
+        toggle.addEventListener("click", () => {
+            const collapsed = !document.body.classList.contains("sidebar-collapsed");
+            storageSet("docflow.sidebarCollapsed", collapsed ? "true" : "false");
+            applySidebarCollapsed(collapsed);
+        });
+        const laptopQuery = window.matchMedia("(max-width: 1535px)");
+        const syncAutoCollapse = () => {
+            if (storageGet("docflow.sidebarCollapsed") === null) {
+                applySidebarCollapsed(shouldAutoCollapseSidebar());
+            }
+        };
+        if (typeof laptopQuery.addEventListener === "function") {
+            laptopQuery.addEventListener("change", syncAutoCollapse);
+        } else if (typeof laptopQuery.addListener === "function") {
+            laptopQuery.addListener(syncAutoCollapse);
+        }
+    }
+
     function setActiveNav() {
         const path = window.location.pathname;
         const routeAlias = path === "/app/processing" || path.startsWith("/app/batches") || path.startsWith("/app/documents")
@@ -129,5 +193,8 @@
         setActiveNav,
     };
 
-    document.addEventListener("DOMContentLoaded", setActiveNav);
+    document.addEventListener("DOMContentLoaded", () => {
+        initializeSidebar();
+        setActiveNav();
+    });
 })();

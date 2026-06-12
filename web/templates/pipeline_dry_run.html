@@ -1,7 +1,7 @@
 {% extends "app_base.html" %}
 
 {% block header_actions %}
-<button class="btn btn-primary btn-sm" id="dry-run-run-button" type="button">Run Dry Run</button>
+<button class="btn btn-primary btn-sm" id="dry-run-run-button" type="button">Run Preview</button>
 {% endblock %}
 
 {% block content %}
@@ -10,18 +10,23 @@
         <section class="card bg-base-100 shadow-sm dry-run-controls-panel">
             <div class="panel-header">
                 <div>
-                    <h2 class="font-semibold">Sample</h2>
-                    <p class="text-xs text-base-content/50">Draft pipeline input</p>
+                    <h2 class="font-semibold">Review Gate Simulator</h2>
+                    <p class="text-xs text-base-content/50">Mock extraction confidence input</p>
                 </div>
             </div>
             <div class="card-body p-4 gap-4">
-                <label class="form-control">
+                <div class="alert alert-info text-sm">
+                    This preview does not process a PDF or call extraction/split adapters. It validates the pipeline model and evaluates the review gate against the mock JSON below.
+                </div>
+                <label class="form-control opacity-60">
                     <span class="label-text">Sample PDF</span>
-                    <input class="file-input file-input-bordered file-input-sm" id="dry-run-file-input" type="file" accept="application/pdf,.pdf">
+                    <input class="file-input file-input-bordered file-input-sm" id="dry-run-file-input" type="file" accept="application/pdf,.pdf" disabled>
+                    <span class="label-text-alt">PDF processing is not part of this simulator.</span>
                 </label>
-                <label class="form-control">
+                <label class="form-control opacity-60">
                     <span class="label-text">Existing Document ID</span>
-                    <input class="input input-bordered input-sm" id="dry-run-document-id" placeholder="document id">
+                    <input class="input input-bordered input-sm" id="dry-run-document-id" placeholder="document id" disabled>
+                    <span class="label-text-alt">Document lookup is not used by the current backend.</span>
                 </label>
                 <label class="form-control">
                     <span class="label-text">Mock Results JSON</span>
@@ -74,7 +79,7 @@
                         </thead>
                         <tbody id="dry-run-decision-body">
                             <tr>
-                                <td colspan="3" class="text-center text-base-content/50 py-10">No dry-run result</td>
+                                <td colspan="3" class="text-center text-base-content/50 py-4">Run a preview to evaluate the mock confidence values.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -88,9 +93,10 @@
                     <h2 class="font-semibold">Raw Result</h2>
                     <p class="text-xs text-base-content/50">Redacted response payload</p>
                 </div>
+                <button class="btn btn-outline btn-sm" id="dry-run-raw-toggle" type="button">Show raw result</button>
             </div>
             <div class="card-body p-0">
-                <pre class="dry-run-json" id="dry-run-json">{}</pre>
+                <pre class="dry-run-json hidden" id="dry-run-json">{}</pre>
             </div>
         </section>
     </div>

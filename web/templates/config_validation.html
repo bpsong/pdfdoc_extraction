@@ -1,8 +1,9 @@
 {% extends "app_base.html" %}
 
 {% block header_actions %}
-<button class="btn btn-outline btn-sm" id="validation-active-button" type="button">Validate Active</button>
-<button class="btn btn-primary btn-sm" id="validation-draft-button" type="button">Validate Draft</button>
+<button class="btn btn-outline btn-sm" id="validation-active-button" type="button" title="Checks the running config.yaml">Validate Config File</button>
+<button class="btn btn-outline btn-sm" id="validation-pipeline-button" type="button" title="Checks the active pipeline configuration">Validate Pipeline</button>
+<button class="btn btn-outline btn-sm" id="validation-schemas-button" type="button" title="Checks all schema YAML files on disk">Validate Schemas</button>
 {% endblock %}
 
 {% block content %}
@@ -10,12 +11,14 @@
     <section class="card bg-base-100 shadow-sm validation-controls-panel">
         <div class="panel-header">
             <div>
-                <h2 class="font-semibold">Validation Controls</h2>
+                <h2 class="font-semibold">Run Validation</h2>
                 <p class="text-xs text-base-content/50" id="validation-source-label">Active configuration</p>
             </div>
-            <button class="btn btn-outline btn-sm" id="validation-schemas-button" type="button">Validate Schemas</button>
         </div>
         <div class="card-body gap-4">
+            <p class="text-sm text-base-content/70">
+                Choose what to validate. Config File checks the running config.yaml. Pasted YAML checks a draft below without saving. Pipeline checks the active task sequence. Schemas checks schema files on disk.
+            </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label class="label cursor-pointer justify-start gap-3">
                     <input class="toggle toggle-sm" id="validation-strict-toggle" type="checkbox">
@@ -27,11 +30,12 @@
                 </label>
             </div>
             <label class="form-control">
-                <span class="label-text">Draft config YAML</span>
+                <span class="label-text">Pasted YAML draft</span>
                 <textarea class="textarea textarea-bordered font-mono text-xs validation-draft-yaml"
                     id="validation-draft-yaml"
                     placeholder="Paste config YAML to validate without saving"></textarea>
             </label>
+            <button class="btn btn-primary btn-sm self-start" id="validation-draft-button" type="button">Validate Pasted YAML</button>
             <div class="alert alert-info text-sm">
                 Validation runs do not save or auto-fix YAML. Secret-like keys are redacted in displayed details.
             </div>
@@ -64,6 +68,7 @@
                 <p class="text-xs text-base-content/50" id="validation-findings-summary">No validation run</p>
             </div>
         </div>
+        <div class="px-4 pt-4 hidden" id="validation-success-banner"></div>
         <div class="overflow-x-auto">
             <table class="table table-sm validation-findings-table">
                 <thead>
@@ -88,9 +93,9 @@
     <section class="card bg-base-100 shadow-sm validation-raw-panel">
         <div class="panel-header">
             <h2 class="font-semibold">Raw Details</h2>
-            <button class="btn btn-outline btn-sm" id="validation-raw-toggle" type="button">Hide</button>
+            <button class="btn btn-outline btn-sm" id="validation-raw-toggle" type="button">Show raw details</button>
         </div>
-        <pre class="validation-raw-json" id="validation-raw-json">{}</pre>
+        <pre class="validation-raw-json hidden" id="validation-raw-json">{}</pre>
     </section>
 </div>
 {% endblock %}

@@ -2,11 +2,24 @@
 
 {% block header_actions %}
 <button class="btn btn-outline btn-sm" id="pipeline-refresh-button" type="button">Refresh</button>
-<button class="btn btn-primary btn-sm" id="pipeline-publish-button" type="button" disabled>Publish</button>
+<button class="btn btn-primary btn-sm" id="pipeline-publish-button" type="button" disabled title="Save and validate the draft before publishing">Publish</button>
 {% endblock %}
 
 {% block content %}
 <div class="pipeline-config-workspace" id="pipeline-config-workspace">
+    <section class="card bg-base-100 shadow-sm pipeline-guide-panel">
+        <div class="card-body p-4">
+            <div class="flex flex-wrap items-center gap-3 text-sm">
+                <span class="font-semibold">Publish sequence</span>
+                <span class="badge badge-outline">1 Edit draft</span>
+                <span class="badge badge-outline">2 Save Draft</span>
+                <span class="badge badge-outline">3 Validate</span>
+                <span class="badge badge-outline">4 Publish</span>
+                <span class="text-base-content/60" id="pipeline-publish-help">Publish unlocks after the saved draft validates without blocking findings.</span>
+                <a class="link link-primary ml-auto" href="/app/admin/tasks">Open Task Catalog</a>
+            </div>
+        </div>
+    </section>
     <section class="card bg-base-100 shadow-sm pipeline-active-panel">
         <div class="panel-header">
             <div>
@@ -26,6 +39,7 @@
                 <p class="text-xs text-base-content/50" id="pipeline-draft-summary">0 steps</p>
             </div>
             <div class="flex gap-2">
+                <button class="btn btn-ghost btn-sm" id="pipeline-reset-button" type="button">Reset to Active</button>
                 <button class="btn btn-outline btn-sm" id="pipeline-save-draft-button" type="button">Save Draft</button>
                 <button class="btn btn-outline btn-sm" id="pipeline-validate-button" type="button">Validate</button>
             </div>

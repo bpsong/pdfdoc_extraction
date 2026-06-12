@@ -637,7 +637,7 @@ No remaining text file should be required to reconstruct workflow state. If a le
 #### 4.5.4. Operator and Admin State Views
 
 - Operators use `/app/processing`, `/app/batches/{batch_id}`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
-- Administrators use `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`.
+- Administrators use `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
 - Legacy `/dashboard`, `/api/files`, and `/api/status/{file_id}` are compatibility paths only.
 
 #### 4.5.5. Admin Workflow Details
@@ -649,7 +649,7 @@ The `/app/admin/*` pages provide configuration and governance workflows for admi
 - `/app/admin/tasks`: inspect available task classes and their configured module/class information.
 - `/app/admin/review-gate`: maintain review thresholds, field/document-type overrides, review scope, queue name, schema reference, and resume policy.
 - `/app/admin/split`: maintain non-secret split settings such as enablement, categories, uncategorized behavior, split directory, saved configuration ID, project/organization IDs, polling interval, and timeout.
-- `/app/admin/dry-run`: preview split, extraction, review-gate, and export decisions without writing final exports or workflow state.
+- `/app/admin/dry-run`: use the Review Gate Simulator to validate the pipeline model and evaluate review-gate behavior from mock JSON without writing final exports or workflow state. It does not process PDFs or call extraction/split adapters.
 - `/app/admin/audit`: review administrative and governance events such as settings changes, pipeline publishing, split tests, and schema changes.
 - `/app/settings/validation`: review active configuration, schema, and pipeline validation findings.
 
@@ -1481,7 +1481,7 @@ A: Corrected values are persisted in SQLite with the document extraction state. 
 A: If the split task is configured and enabled, the source PDF can be split into child documents based on provider segments, categories, confidence, and page ranges. Use `/app/batches/{batch_id}/split-results` to inspect source documents, child document IDs, categories, confidence, pages, and statuses.
 
 **Q: Can administrators change pipeline, review, or split settings in the UI?**
-A: Yes. Admin users can use `/app/admin/pipeline` for pipeline draft/diff/validate/publish workflows, `/app/admin/review-gate` for review rules, `/app/admin/split` for non-secret split settings, `/app/admin/dry-run` for previews, and `/app/settings/validation` for validation findings. Secret values such as `api_key` are not saved through split settings and should be managed through `config.yaml` or deployment secret management.
+A: Yes. Admin users can use `/app/admin/pipeline` for pipeline draft/diff/validate/publish workflows, `/app/admin/review-gate` for review rules, `/app/admin/split` for non-secret split settings, `/app/admin/dry-run` for review-gate simulation from mock JSON, and `/app/settings/validation` for validation findings. Secret values such as `api_key` are not saved through split settings and should be managed through `config.yaml` or deployment secret management.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
 A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.

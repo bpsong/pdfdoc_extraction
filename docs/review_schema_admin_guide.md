@@ -62,11 +62,11 @@ The review schema supports these field types:
 | `float` | Number input | Value must be numeric |
 | `number` | Number input | Value must be numeric |
 | `integer` | Number input with integer step | Value must be an integer |
-| `boolean` | Checkbox | Value must be true or false |
-| `date` | Date picker | Browser expects `YYYY-MM-DD` |
-| `datetime` | Date/time input | Browser expects date-time compatible input |
-| `enum` | Select list | Value must be one of the configured choices |
-| `array` | List editor | Value must be an array |
+| `boolean` | True/false/missing selector | Value must be true or false when present |
+| `date` | Date picker | Value must be a valid ISO date, `YYYY-MM-DD` |
+| `datetime` | Date/time input | Value must be a valid ISO datetime |
+| `enum` | Select list with scalar or label/value choices | Value must be one of the configured choices |
+| `array` | List editor with typed item controls | Value must be an array |
 | `object` | Nested editor or JSON editor | Value must be an object |
 
 Additional schema options include:
@@ -76,12 +76,20 @@ Additional schema options include:
 | `label` | all fields | Human-readable field label |
 | `required` | all fields | Requires a value before completion and makes the field subject to missing-confidence review gating |
 | `description` | all fields | Help text in the review UI |
+| `help` | all fields | Help text in the review UI; equivalent to `description` for display |
+| `readonly` | all fields | Shows the value but disables editing in review |
+| `default` | all fields | Default value used by schema-aware editors when creating values |
 | `multiline: true` | `string` | Renders a textarea for long values |
+| `placeholder` | `string` | Placeholder text for empty string inputs |
 | `choices` or `enum` | `enum` | Allowed values for select fields |
-| `items` | `array` | Defines array item type |
-| `properties` | `object` | Defines nested object fields |
+| `items` | `array` | Defines array item type and item-level metadata |
+| `properties` | `object` | Defines nested object fields and property-level metadata |
 | `min_length`, `max_length`, `pattern` | `string` | Text validation rules |
-| `min_value`, `max_value` | numeric fields | Numeric validation rules |
+| `min_value`, `max_value`, `step`, `decimal_places`, `format` | numeric fields | Numeric validation and display rules |
+
+For money-like values, use either `format: money` or `decimal_places: 2`. The review UI will display two decimals and use a `0.01` increment unless a different `step` is configured.
+
+Array `items` may use scalar types (`string`, `number`, `integer`, `float`, `boolean`, `date`, `datetime`, `enum`) or `object`. Scalar items can define the same type-specific options as top-level fields. Object-array item `properties` can define their own numeric, enum, boolean, date, text, required, readonly, default, and help metadata.
 
 ## Date Fields and LlamaCloud Output
 
@@ -128,6 +136,8 @@ fields:
     type: float
     label: Invoice amount
     required: true
+    format: money
+    decimal_places: 2
 
   insurance_start_date:
     type: date
@@ -179,4 +189,10 @@ To validate schema behavior through tests:
 
 ```powershell
 C:\Python313\python.exe -m pytest -v test\services\test_schema_service.py test\standard_step\review\test_review_gate.py
+```
+
+To run the schema-driven review and schema-editor visual checks:
+
+```powershell
+C:\Python313\python.exe -m pytest -v test\visual\test_schema_review_visual.py
 ```

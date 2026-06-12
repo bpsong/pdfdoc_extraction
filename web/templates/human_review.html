@@ -1,7 +1,7 @@
 {% extends "app_base.html" %}
 
 {% block header_actions %}
-<div class="flex items-center gap-2">
+<div class="review-actions flex items-center gap-2">
     <a href="/app/review" class="btn btn-outline btn-sm">Back to Queue</a>
     <button class="btn btn-outline btn-sm" id="review-claim-button" type="button">Claim</button>
     <button class="btn btn-outline btn-sm" id="review-release-button" type="button" disabled>Release</button>
@@ -19,7 +19,13 @@
                 <h2 class="font-semibold truncate" id="review-document-title">Source PDF</h2>
                 <p class="text-xs text-base-content/50 truncate" id="review-document-subtitle">Preview loads after review details are available.</p>
             </div>
-            <a class="btn btn-outline btn-xs hidden" id="review-pdf-open-link" href="#" target="_blank" rel="noreferrer">Open</a>
+            <div class="review-pdf-actions">
+                <button class="btn btn-outline btn-xs review-pdf-fit-button" id="review-pdf-fit-width-button" type="button"
+                    aria-pressed="false">Fit width</button>
+                <button class="btn btn-outline btn-xs review-pdf-fit-button" id="review-pdf-fit-page-button" type="button"
+                    aria-pressed="false">Fit page</button>
+                <a class="btn btn-outline btn-xs hidden" id="review-pdf-open-link" href="#" target="_blank" rel="noreferrer">Open</a>
+            </div>
         </div>
         <div class="review-pdf-body" id="review-pdf-body">
             <div class="empty-panel">Source PDF unavailable</div>
@@ -33,10 +39,21 @@
                     <h2 class="font-semibold">Review Fields</h2>
                     <span class="badge badge-outline" id="review-item-badge">{{ review_item_id|default('') }}</span>
                     <span class="badge hidden" id="review-status-badge"></span>
+                    <span class="review-lock-summary hidden" id="review-lock-summary"></span>
                 </div>
                 <p class="text-xs text-base-content/50 truncate" id="review-reason-summary">Loading review details...</p>
             </div>
-            <button class="btn btn-outline btn-xs" id="review-diff-button" type="button" disabled>Preview Diff</button>
+            <div class="review-panel-actions">
+                <label class="review-source-mode-control" for="review-source-mode-select">
+                    <span>Source</span>
+                    <select id="review-source-mode-select" class="select select-bordered select-xs">
+                        <option value="review">Review only</option>
+                        <option value="all">All</option>
+                        <option value="hidden">Hidden</option>
+                    </select>
+                </label>
+                <button class="btn btn-outline btn-xs" id="review-diff-button" type="button" disabled>Preview Diff</button>
+            </div>
         </div>
 
         <div class="review-lock-banner hidden" id="review-lock-banner"></div>
@@ -59,6 +76,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/pdf_viewer.js?v=task19" defer></script>
-<script src="/static/js/human_review.js?v=task19" defer></script>
+<script src="/static/js/pdf_viewer.js?v=task27-review-refinement" defer></script>
+<script src="/static/js/human_review.js?v=task27-review-refinement" defer></script>
 {% endblock %}

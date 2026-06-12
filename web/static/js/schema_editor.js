@@ -7,6 +7,7 @@
     }
 
     const schemaList = document.getElementById("schema-list");
+    const schemaSearchInput = document.getElementById("schema-search-input");
     const schemaCount = document.getElementById("schema-count");
     const detailTitle = document.getElementById("schema-detail-title");
     const detailHash = document.getElementById("schema-detail-hash");
@@ -27,6 +28,7 @@
     let currentName = workspace.dataset.schemaName || "";
     let draft = emptySchema();
     let dirty = false;
+    let schemaSearch = "";
 
     function emptySchema() {
         return { title: "", description: "", fields: {} };
@@ -106,7 +108,15 @@
             schemaList.innerHTML = '<div class="empty-panel">No schemas</div>';
             return;
         }
-        schemaList.innerHTML = schemas.map((schema) => `
+        const visibleSchemas = schemas.filter((schema) => {
+            const haystack = [schema.name, schema.title].join(" ").toLowerCase();
+            return haystack.includes(schemaSearch.toLowerCase());
+        });
+        if (!visibleSchemas.length) {
+            schemaList.innerHTML = '<div class="empty-panel">No matching schemas</div>';
+            return;
+        }
+        schemaList.innerHTML = visibleSchemas.map((schema) => `
             <button class="schema-list-item ${schema.name === currentName ? "active" : ""}" type="button" data-schema-name="${escapeHtml(schema.name)}">
                 <div class="font-medium text-sm truncate">${escapeHtml(schema.title || schema.name)}</div>
                 <div class="text-xs text-base-content/50 truncate">${escapeHtml(schema.name)}</div>
@@ -122,14 +132,111 @@
         return entries.map(([key, config]) => renderFieldRow(key, config, path)).join("");
     }
 
+    function fieldControl(path, prop, label, value, type = "text") {
+        return `
+            <label class="form-control">
+                <span class="label-text">${escapeHtml(label)}</span>
+                <input class="input input-bordered input-xs" type="${escapeHtml(type)}" data-field-prop="${escapeHtml(prop)}" data-field-path="${escapeHtml(path)}" value="${escapeHtml(value ?? "")}">
+            </label>
+        `;
+    }
+
+    function checkboxControl(path, prop, label, checked) {
+        return `
+            <label class="label cursor-pointer justify-start gap-2">
+                <input class="checkbox checkbox-xs" type="checkbox" data-field-prop="${escapeHtml(prop)}" data-field-path="${escapeHtml(path)}" ${checked ? "checked" : ""}>
+                <span class="label-text">${escapeHtml(label)}</span>
+            </label>
+        `;
+    }
+
+    function selectControl(path, prop, label, value, options) {
+        const optionHtml = options.map((option) => `<option value="${escapeHtml(option)}" ${value === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("");
+        return `
+            <label class="form-control">
+                <span class="label-text">${escapeHtml(label)}</span>
+                <select class="select select-bordered select-xs" data-field-prop="${escapeHtml(prop)}" data-field-path="${escapeHtml(path)}">${optionHtml}</select>
+            </label>
+        `;
+    }
+
+    function numericControls(config, path, prefix = "") {
+        const target = prefix ? config.items || {} : config;
+        return `
+            ${fieldControl(path, `${prefix}min_value`, "Min value", target.min_value, "number")}
+            ${fieldControl(path, `${prefix}max_value`, "Max value", target.max_value, "number")}
+            ${fieldControl(path, `${prefix}step`, "Step", target.step, "number")}
+            ${fieldControl(path, `${prefix}decimal_places`, "Decimal places", target.decimal_places, "number")}
+            ${selectControl(path, `${prefix}format`, "Format", target.format || "", ["", "money"])}
+        `;
+    }
+
+    function stringControls(config, path, prefix = "") {
+        const target = prefix ? config.items || {} : config;
+        return `
+            ${fieldControl(path, `${prefix}min_length`, "Min length", target.min_length, "number")}
+            ${fieldControl(path, `${prefix}max_length`, "Max length", target.max_length, "number")}
+            ${fieldControl(path, `${prefix}pattern`, "Pattern", target.pattern)}
+            ${fieldControl(path, `${prefix}placeholder`, "Placeholder", target.placeholder)}
+            ${checkboxControl(path, `${prefix}multiline`, "Multiline", Boolean(target.multiline))}
+        `;
+    }
+
+    function choicesText(config) {
+        const choices = config.choices || config.enum || [];
+        return choices.map((choice) => {
+            if (choice && typeof choice === "object") {
+                return `${choice.label ?? choice.value}:${choice.value ?? choice.label}`;
+            }
+            return String(choice);
+        }).join(", ");
+    }
+
+    function renderArrayItemControls(config, path) {
+        const itemTypeValue = itemType(config);
+        const itemTypeOptions = ["string", "number", "integer", "float", "boolean", "date", "datetime", "enum", "object"];
+        let details = "";
+        if (["number", "integer", "float"].includes(itemTypeValue)) {
+            details = numericControls(config, path, "items.");
+        } else if (itemTypeValue === "string") {
+            details = stringControls(config, path, "items.");
+        } else if (itemTypeValue === "enum") {
+            details = `
+                ${fieldControl(path, "items.choices", "Item choices", choicesText(config.items || {}))}
+                ${fieldControl(path, "items.default", "Item default", (config.items || {}).default)}
+            `;
+        } else if (itemTypeValue === "boolean") {
+            details = selectControl(path, "items.default", "Item default", String((config.items || {}).default ?? ""), ["", "true", "false"]);
+        }
+        return `
+            ${selectControl(path, "array_item_type", "Items", itemTypeValue, itemTypeOptions)}
+            ${details}
+        `;
+    }
+
+    function defaultControl(config, path) {
+        if (config.type === "boolean") {
+            return selectControl(path, "default", "Default", String(config.default ?? ""), ["", "true", "false"]);
+        }
+        const inputType = ["number", "integer", "float"].includes(config.type) ? "number" : "text";
+        return fieldControl(path, "default", "Default", config.default, inputType);
+    }
+
     function renderFieldRow(key, config, path) {
         const fullPath = [...path, key].join(".");
         const typeOptions = fieldTypes.map((type) => `<option value="${type}" ${config.type === type ? "selected" : ""}>${type}</option>`).join("");
         const extra = config.type === "enum"
-            ? `<label class="form-control"><span class="label-text">Choices</span><input class="input input-bordered input-xs" data-field-prop="choices" data-field-path="${escapeHtml(fullPath)}" value="${escapeHtml((config.choices || config.enum || []).join(", "))}"></label>`
+            ? `
+                ${fieldControl(fullPath, "choices", "Choices", choicesText(config))}
+            `
             : config.type === "array"
-                ? `<label class="form-control"><span class="label-text">Items</span><select class="select select-bordered select-xs" data-field-prop="array_item_type" data-field-path="${escapeHtml(fullPath)}"><option value="string" ${itemType(config) === "string" ? "selected" : ""}>string</option><option value="number" ${itemType(config) === "number" ? "selected" : ""}>number</option><option value="object" ${itemType(config) === "object" ? "selected" : ""}>object</option></select></label>`
+                ? renderArrayItemControls(config, fullPath)
                 : '<div></div>';
+        const limits = ["number", "integer", "float"].includes(config.type)
+            ? numericControls(config, fullPath)
+            : config.type === "string"
+                ? stringControls(config, fullPath)
+                : "";
         const childContainer = config.type === "object"
             ? config.properties || {}
             : config.type === "array" && itemType(config) === "object"
@@ -153,8 +260,15 @@
                     <input class="checkbox checkbox-xs" type="checkbox" data-field-prop="required" data-field-path="${escapeHtml(fullPath)}" ${config.required ? "checked" : ""}>
                     <span class="label-text">Required</span>
                 </label>
+                ${checkboxControl(fullPath, "readonly", "Read only", Boolean(config.readonly))}
                 <button class="btn btn-ghost btn-xs" type="button" data-delete-field="${escapeHtml(fullPath)}">Delete</button>
                 ${extra}
+                <label class="form-control">
+                    <span class="label-text">Help</span>
+                    <input class="input input-bordered input-xs" data-field-prop="help" data-field-path="${escapeHtml(fullPath)}" value="${escapeHtml(config.help || "")}">
+                </label>
+                ${defaultControl(config, fullPath)}
+                ${limits}
                 ${childContainer ? `
                     <div class="schema-field-children">
                         <div class="flex items-center gap-2 mb-2">
@@ -245,6 +359,14 @@
     async function saveSchema() {
         syncMeta();
         const name = nameInput.value.trim();
+        const validation = await window.DocFlow.apiPost(`/api/schemas/${encodeURIComponent(name || currentName || "draft.yaml")}/validate`, { schema: draft });
+        if (!validation.valid) {
+            validationResults.innerHTML = (validation.findings || []).map((finding) => `
+                <div class="text-error">${escapeHtml(finding.path)}: ${escapeHtml(finding.message)}</div>
+            `).join("") || '<span class="text-error font-medium">Schema validation failed</span>';
+            setBox(errorBox, "Fix validation findings before saving this schema.");
+            return;
+        }
         const method = currentName ? window.DocFlow.apiPut : window.DocFlow.apiPost;
         const url = currentName ? `/api/schemas/${encodeURIComponent(currentName)}` : "/api/schemas";
         const payload = currentName ? { schema: draft } : { name, schema: draft };
@@ -302,9 +424,15 @@
         if (!found.container || !found.key || !found.field) {
             return;
         }
+        const target = targetForProp(found.field, prop);
+        const propName = prop.startsWith("items.") ? prop.slice("items.".length) : prop;
         if (prop === "key") {
             const nextKey = String(value || "").trim();
-            if (!nextKey || nextKey === found.key || found.container[nextKey]) {
+            if (!nextKey || nextKey === found.key) {
+                return;
+            }
+            if (found.container[nextKey]) {
+                setBox(errorBox, `Field key "${nextKey}" already exists at this level.`);
                 return;
             }
             found.container[nextKey] = found.field;
@@ -330,14 +458,124 @@
             }
         } else if (prop === "required") {
             found.field.required = Boolean(value);
+        } else if (prop === "readonly") {
+            found.field.readonly = Boolean(value);
         } else if (prop === "choices") {
-            found.field.choices = String(value).split(",").map((item) => item.trim()).filter(Boolean);
+            found.field.choices = parseChoices(value);
         } else if (prop === "array_item_type") {
             found.field.items = value === "object" ? { type: "object", properties: {} } : { type: value };
+        } else if (prop.startsWith("items.")) {
+            updateScalarProperty(target, propName, value);
+        } else if (["min_value", "max_value", "step", "min_length", "max_length", "decimal_places"].includes(prop)) {
+            if (String(value).trim() === "") {
+                delete found.field[prop];
+            } else if (prop === "decimal_places" || prop === "min_length" || prop === "max_length") {
+                found.field[prop] = Number.parseInt(value, 10);
+            } else {
+                found.field[prop] = Number(value);
+            }
+        } else if (prop === "default") {
+            if (String(value).trim() === "") {
+                delete found.field.default;
+            } else {
+                found.field.default = coerceDefaultValue(found.field.type, value);
+            }
+        } else if (prop === "multiline") {
+            found.field.multiline = Boolean(value);
+        } else if (prop === "format") {
+            if (String(value).trim() === "") {
+                delete found.field.format;
+            } else {
+                found.field.format = value;
+            }
         } else {
             found.field[prop] = value;
         }
+        setBox(errorBox, "");
         markDirty();
+    }
+
+    function targetForProp(field, prop) {
+        if (!prop.startsWith("items.")) {
+            return field;
+        }
+        field.items = field.items || { type: "string" };
+        return field.items;
+    }
+
+    function updateScalarProperty(target, prop, value) {
+        if (prop === "choices") {
+            target.choices = parseChoices(value);
+            return;
+        }
+        if (prop === "default") {
+            if (String(value).trim() === "") {
+                delete target.default;
+            } else {
+                target.default = coerceDefaultValue(target.type, value);
+            }
+            return;
+        }
+        if (prop === "multiline") {
+            target.multiline = Boolean(value);
+            return;
+        }
+        if (prop === "format") {
+            if (String(value).trim() === "") {
+                delete target.format;
+            } else {
+                target.format = value;
+            }
+            return;
+        }
+        if (["min_value", "max_value", "step"].includes(prop)) {
+            if (String(value).trim() === "") {
+                delete target[prop];
+            } else {
+                target[prop] = Number(value);
+            }
+            return;
+        }
+        if (["min_length", "max_length", "decimal_places"].includes(prop)) {
+            if (String(value).trim() === "") {
+                delete target[prop];
+            } else {
+                target[prop] = Number.parseInt(value, 10);
+            }
+            return;
+        }
+        if (String(value).trim() === "") {
+            delete target[prop];
+        } else {
+            target[prop] = value;
+        }
+    }
+
+    function parseChoices(value) {
+        return String(value)
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .map((item) => {
+                if (!item.includes(":")) {
+                    return item;
+                }
+                const [label, ...rest] = item.split(":");
+                return { label: label.trim(), value: rest.join(":").trim() };
+            });
+    }
+
+    function coerceDefaultValue(fieldType, value) {
+        if (fieldType === "boolean") {
+            return value === true || value === "true";
+        }
+        if (fieldType === "integer") {
+            return Number.parseInt(value, 10);
+        }
+        if (fieldType === "number" || fieldType === "float") {
+            return Number(value);
+        }
+        return value;
     }
 
     function deleteField(pathText) {
@@ -388,6 +626,10 @@
     });
 
     nameInput.addEventListener("input", render);
+    schemaSearchInput.addEventListener("input", (event) => {
+        schemaSearch = event.target.value || "";
+        renderSchemaList();
+    });
     saveButton.addEventListener("click", () => saveSchema().catch((error) => setBox(errorBox, error.message)));
     validateButton.addEventListener("click", () => validateSchema().catch((error) => setBox(errorBox, error.message)));
     createButton.addEventListener("click", () => {
@@ -418,6 +660,22 @@
             await loadSchema(currentName);
         } catch (error) {
             setBox(errorBox, error.message);
+        }
+    });
+    window.addEventListener("beforeunload", (event) => {
+        if (!dirty) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = "";
+    });
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[href]");
+        if (!link || !dirty || link.target || link.href === window.location.href) {
+            return;
+        }
+        if (!window.confirm("Leave this page and discard unsaved schema changes?")) {
+            event.preventDefault();
         }
     });
 

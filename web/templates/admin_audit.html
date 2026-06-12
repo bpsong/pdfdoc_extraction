@@ -11,7 +11,8 @@
             <div class="admin-audit-filters">
                 <label class="form-control">
                     <span class="label-text">Event Type</span>
-                    <input class="input input-bordered input-sm" id="admin-audit-event-type" placeholder="admin_pipeline_published">
+                    <input class="input input-bordered input-sm" id="admin-audit-event-type" list="admin-audit-event-types" placeholder="Choose or type event type">
+                    <datalist id="admin-audit-event-types"></datalist>
                 </label>
                 <label class="form-control">
                     <span class="label-text">User</span>
@@ -47,7 +48,7 @@
                 </thead>
                 <tbody id="admin-audit-body">
                     <tr>
-                        <td colspan="5" class="text-center text-base-content/50 py-10">Loading audit events</td>
+                        <td colspan="5" class="text-center text-base-content/50 py-4">Loading audit events</td>
                     </tr>
                 </tbody>
             </table>
@@ -61,7 +62,7 @@
                 </div>
             </div>
             <div class="card-body p-0">
-                <pre class="admin-audit-json" id="admin-audit-detail-json">{}</pre>
+                <pre class="admin-audit-json" id="admin-audit-detail-json">Select an audit event to view details.</pre>
             </div>
         </section>
     </div>

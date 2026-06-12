@@ -13,6 +13,9 @@
         originalValues: {},
         values: {},
         lock: null,
+        sourceValueMode: "review",
+        sourceValueReveals: new Set(),
+        pdfFitMode: "width",
     };
 
     const elements = {};
@@ -23,16 +26,20 @@
         elements.documentSubtitle = document.getElementById("review-document-subtitle");
         elements.pdfBody = document.getElementById("review-pdf-body");
         elements.pdfOpenLink = document.getElementById("review-pdf-open-link");
+        elements.pdfFitWidthButton = document.getElementById("review-pdf-fit-width-button");
+        elements.pdfFitPageButton = document.getElementById("review-pdf-fit-page-button");
         elements.itemBadge = document.getElementById("review-item-badge");
         elements.statusBadge = document.getElementById("review-status-badge");
         elements.reasonSummary = document.getElementById("review-reason-summary");
         elements.fieldsContainer = document.getElementById("review-fields-container");
         elements.lockBanner = document.getElementById("review-lock-banner");
+        elements.lockSummary = document.getElementById("review-lock-summary");
         elements.claimButton = document.getElementById("review-claim-button");
         elements.releaseButton = document.getElementById("review-release-button");
         elements.saveButton = document.getElementById("review-save-button");
         elements.completeButton = document.getElementById("review-complete-button");
         elements.diffButton = document.getElementById("review-diff-button");
+        elements.sourceModeSelect = document.getElementById("review-source-mode-select");
         elements.diffPanel = document.getElementById("review-diff-panel");
         elements.diffBody = document.getElementById("review-diff-body");
         elements.diffCloseButton = document.getElementById("review-diff-close-button");
@@ -74,6 +81,97 @@
         } catch (error) {
             return fallback;
         }
+    }
+
+    function storageGet(key) {
+        try {
+            return window.localStorage.getItem(key);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function storageSet(key, value) {
+        try {
+            window.localStorage.setItem(key, value);
+        } catch (error) {
+            // Preference persistence is optional; keep the current in-page state.
+        }
+    }
+
+    function normalizeSourceValueMode(mode) {
+        return ["review", "all", "hidden"].includes(mode) ? mode : "review";
+    }
+
+    function initializeSourceValueMode() {
+        state.sourceValueMode = normalizeSourceValueMode(storageGet("docflow.review.sourceValueMode"));
+        if (elements.sourceModeSelect) {
+            elements.sourceModeSelect.value = state.sourceValueMode;
+        }
+        if (elements.workspace) {
+            elements.workspace.dataset.sourceValueMode = state.sourceValueMode;
+        }
+    }
+
+    function setSourceValueMode(mode) {
+        state.sourceValueMode = normalizeSourceValueMode(mode);
+        state.sourceValueReveals.clear();
+        storageSet("docflow.review.sourceValueMode", state.sourceValueMode);
+        if (elements.sourceModeSelect) {
+            elements.sourceModeSelect.value = state.sourceValueMode;
+        }
+        if (elements.workspace) {
+            elements.workspace.dataset.sourceValueMode = state.sourceValueMode;
+        }
+        renderEditor();
+    }
+
+    function normalizePdfFitMode(mode) {
+        return ["width", "page"].includes(mode) ? mode : "width";
+    }
+
+    function initializePdfFitMode() {
+        state.pdfFitMode = normalizePdfFitMode(storageGet("docflow.review.pdfFitMode"));
+        updatePdfFitControls();
+    }
+
+    function updatePdfFitControls() {
+        [
+            [elements.pdfFitWidthButton, "width"],
+            [elements.pdfFitPageButton, "page"],
+        ].forEach(([button, mode]) => {
+            if (!button) {
+                return;
+            }
+            const active = state.pdfFitMode === mode;
+            button.classList.toggle("btn-active", active);
+            button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+    }
+
+    function renderPdfPreview() {
+        const documentPayload = state.document || {};
+        const filename = documentPayload.filename || documentPayload.original_filename || "Document";
+        if (documentPayload.preview_url) {
+            elements.pdfOpenLink.href = documentPayload.preview_url;
+            elements.pdfOpenLink.classList.remove("hidden");
+            window.DocFlowPdfViewer.renderIframeFallback(
+                elements.pdfBody,
+                documentPayload.preview_url,
+                filename,
+                { fitMode: state.pdfFitMode },
+            );
+        } else {
+            elements.pdfOpenLink.classList.add("hidden");
+            window.DocFlowPdfViewer.renderIframeFallback(elements.pdfBody, null, filename);
+        }
+        updatePdfFitControls();
+    }
+
+    function setPdfFitMode(mode) {
+        state.pdfFitMode = normalizePdfFitMode(mode);
+        storageSet("docflow.review.pdfFitMode", state.pdfFitMode);
+        renderPdfPreview();
     }
 
     function valueFromField(field, preferredKey) {
@@ -123,7 +221,10 @@
             return [];
         }
         if (field.type === "boolean") {
-            return false;
+            return field.required ? null : false;
+        }
+        if (field.type === "number" || field.type === "float" || field.type === "integer") {
+            return field.required ? null : "";
         }
         return "";
     }
@@ -157,7 +258,7 @@
 
     function formatValue(value) {
         if (value === null || value === undefined || value === "") {
-            return "";
+            return "Missing";
         }
         if (Array.isArray(value)) {
             return `${value.length} item${value.length === 1 ? "" : "s"}`;
@@ -166,6 +267,125 @@
             return JSON.stringify(value);
         }
         return String(value);
+    }
+
+    function optionItems(field) {
+        if (Array.isArray(field.option_items) && field.option_items.length) {
+            return field.option_items;
+        }
+        return (field.options || []).map((option) => ({ label: String(option), value: option }));
+    }
+
+    function encodedOptionValue(value) {
+        return JSON.stringify(value);
+    }
+
+    function decodedOptionValue(value) {
+        if (value === "") {
+            return null;
+        }
+        try {
+            return JSON.parse(value);
+        } catch (error) {
+            return value;
+        }
+    }
+
+    function decimalPlaces(field) {
+        if (field.decimal_places !== null && field.decimal_places !== undefined && field.decimal_places !== "") {
+            const numeric = Number(field.decimal_places);
+            return Number.isInteger(numeric) && numeric >= 0 ? numeric : null;
+        }
+        if (field.format === "money") {
+            return 2;
+        }
+        return null;
+    }
+
+    function numberStep(field) {
+        if (field.type === "integer") {
+            return "1";
+        }
+        if (field.step !== null && field.step !== undefined && field.step !== "") {
+            return String(field.step);
+        }
+        const places = decimalPlaces(field);
+        if (places !== null) {
+            return String(10 ** -places);
+        }
+        return "any";
+    }
+
+    function formatInputValue(field, value) {
+        if (value === null || value === undefined) {
+            return "";
+        }
+        if (field.type === "number" || field.type === "float") {
+            const places = decimalPlaces(field);
+            const numeric = Number(value);
+            if (places !== null && Number.isFinite(numeric)) {
+                return numeric.toFixed(places);
+            }
+        }
+        if (field.type === "date") {
+            return normalizeDateValue(value);
+        }
+        if (field.type === "datetime") {
+            return normalizeDateTimeValue(value);
+        }
+        return String(value);
+    }
+
+    function normalizeDateValue(value) {
+        if (!value) {
+            return "";
+        }
+        const text = String(value);
+        const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+        return match ? match[1] : text;
+    }
+
+    function normalizeDateTimeValue(value) {
+        if (!value) {
+            return "";
+        }
+        const text = String(value);
+        const match = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+        return match ? `${match[1]}T${match[2]}` : text;
+    }
+
+    function applyInputConstraints(input, field) {
+        if (field.required) {
+            input.required = true;
+        }
+        if (field.placeholder) {
+            input.placeholder = field.placeholder;
+        }
+        if (field.min_length !== null && field.min_length !== undefined && input.type !== "number") {
+            input.minLength = Number(field.min_length);
+        }
+        if (field.max_length !== null && field.max_length !== undefined && input.type !== "number") {
+            input.maxLength = Number(field.max_length);
+        }
+        if (field.pattern && input.tagName !== "TEXTAREA") {
+            input.pattern = field.pattern;
+        }
+        if (input.type === "number") {
+            if (field.min_value !== null && field.min_value !== undefined && field.min_value !== "") {
+                input.min = String(field.min_value);
+            }
+            if (field.max_value !== null && field.max_value !== undefined && field.max_value !== "") {
+                input.max = String(field.max_value);
+            }
+            input.step = numberStep(field);
+        }
+    }
+
+    function setConstraintState(input, wrapper) {
+        const invalid = Boolean(input.value) && input.validity && !input.validity.valid;
+        input.classList.toggle("input-error", invalid);
+        input.classList.toggle("textarea-error", invalid);
+        wrapper.classList.toggle("review-input-invalid", invalid);
     }
 
     function deepEqual(left, right) {
@@ -181,6 +401,63 @@
             element.textContent = text;
         }
         return element;
+    }
+
+    function iconSvg(paths) {
+        return `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                ${paths}
+            </svg>
+        `;
+    }
+
+    function createTooltipIcon(className, tooltip, ariaLabel, iconPaths) {
+        const icon = createElement("span", `${className} tooltip tooltip-right`);
+        icon.tabIndex = 0;
+        icon.title = tooltip;
+        icon.setAttribute("data-tip", tooltip);
+        icon.setAttribute("aria-label", ariaLabel);
+        icon.innerHTML = iconSvg(iconPaths);
+        return icon;
+    }
+
+    function createIconButton(className, tooltip, ariaLabel, iconPaths) {
+        const button = createElement("button", `${className} tooltip tooltip-left`);
+        button.type = "button";
+        button.title = tooltip;
+        button.setAttribute("data-tip", tooltip);
+        button.setAttribute("aria-label", ariaLabel);
+        button.innerHTML = iconSvg(iconPaths);
+        return button;
+    }
+
+    function fieldLabel(field) {
+        return field.label || titleCase(field.key);
+    }
+
+    function fieldHelpText(field) {
+        return field.help || field.description || "";
+    }
+
+    function appendFieldLabelContent(labelLine, field, options) {
+        const settings = options || {};
+        const label = fieldLabel(field);
+        labelLine.appendChild(createElement("span", settings.labelClass || "font-medium text-sm", label));
+        const helpText = fieldHelpText(field);
+        if (helpText) {
+            labelLine.appendChild(createTooltipIcon(
+                "review-field-info",
+                helpText,
+                `${label}: ${helpText}`,
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 17v-6m0-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />',
+            ));
+        }
+        if (field.required) {
+            labelLine.appendChild(createElement("span", "badge badge-warning badge-xs", settings.shortBadges ? "Req" : "Required"));
+        }
+        if (field.readonly) {
+            labelLine.appendChild(createElement("span", "badge badge-ghost badge-xs", settings.shortBadges ? "RO" : "Read only"));
+        }
     }
 
     function statusBadge(status) {
@@ -224,6 +501,10 @@
         if (!hasOwnLock() || isComplete()) {
             return false;
         }
+        const schemaField = fieldForSchemaPath(pathParts);
+        if (schemaField && schemaField.readonly) {
+            return false;
+        }
         const editableFields = state.metadata.editable_fields || [];
         if (!editableFields.length) {
             return true;
@@ -243,8 +524,49 @@
         return highlighted.includes(fullPath) || highlighted.includes(rootKey);
     }
 
+    function shouldShowSourceValue(pathParts, fieldInfo, currentValue, extractedValue) {
+        const sourcePath = pathString(pathParts);
+        const confidence = Number(fieldInfo && fieldInfo.confidence);
+        const lowConfidence = fieldInfo
+            && (fieldInfo.confidence_band === "low" || fieldInfo.confidence_band === "medium" || (Number.isFinite(confidence) && confidence < 0.9));
+        if (state.sourceValueReveals.has(sourcePath)) {
+            return true;
+        }
+        if (state.sourceValueMode === "all") {
+            return true;
+        }
+        if (state.sourceValueMode === "hidden") {
+            return false;
+        }
+        return isHighlighted(pathParts)
+            || Boolean(fieldInfo && fieldInfo.requires_review)
+            || Boolean(lowConfidence)
+            || Boolean(fieldInfo && fieldInfo.corrected_value !== null && fieldInfo.corrected_value !== undefined)
+            || !deepEqual(currentValue, extractedValue);
+    }
+
+    function updateSourceVisibility(row, pathParts, fieldInfo, extractedValue) {
+        const currentValue = getByPath(state.values, pathParts);
+        const visible = shouldShowSourceValue(pathParts, fieldInfo, currentValue, extractedValue);
+        row.classList.toggle("source-hidden", !visible);
+        row.classList.toggle("source-visible", visible);
+    }
+
     function fieldForPath(pathParts) {
         return state.fieldsByKey.get(String(pathParts[0])) || null;
+    }
+
+    function fieldForSchemaPath(pathParts) {
+        let current = (state.schemaFields || []).find((field) => field.key === pathParts[0]);
+        for (let index = 1; index < pathParts.length && current; index += 1) {
+            const part = pathParts[index];
+            if (typeof part === "number") {
+                continue;
+            }
+            const children = current.children || (current.item_schema && current.item_schema.fields) || [];
+            current = children.find((child) => child.key === part);
+        }
+        return current || null;
     }
 
     function inferredFieldFromValue(key, value) {
@@ -345,28 +667,30 @@
             elements.reasonSummary.textContent = titleCase(state.reviewItem && state.reviewItem.reason);
         }
 
-        if (documentPayload.preview_url) {
-            elements.pdfOpenLink.href = documentPayload.preview_url;
-            elements.pdfOpenLink.classList.remove("hidden");
-            window.DocFlowPdfViewer.renderIframeFallback(elements.pdfBody, documentPayload.preview_url, filename);
-        } else {
-            elements.pdfOpenLink.classList.add("hidden");
-            window.DocFlowPdfViewer.renderIframeFallback(elements.pdfBody, null, filename);
-        }
+        renderPdfPreview();
     }
 
     function renderLockState() {
         const lockedBy = state.lock && state.lock.locked_by;
         const ownsLock = hasOwnLock();
-        elements.lockBanner.classList.toggle("hidden", !state.lock);
-        if (state.lock) {
-            elements.lockBanner.textContent = ownsLock
-                ? `Claimed by you until ${window.DocFlow.formatDateTime(state.lock.expires_at)}.`
-                : `Locked by ${lockedBy || "another operator"} until ${window.DocFlow.formatDateTime(state.lock.expires_at)}.`;
+        const completed = isComplete();
+        const showBlockingBanner = Boolean(state.lock && !ownsLock);
+        elements.lockBanner.classList.toggle("hidden", !showBlockingBanner);
+        if (showBlockingBanner) {
+            elements.lockBanner.textContent = `Locked by ${lockedBy || "another operator"} until ${window.DocFlow.formatDateTime(state.lock.expires_at)}.`;
         }
 
-        const completed = isComplete();
-        elements.claimButton.disabled = completed || ownsLock;
+        if (elements.lockSummary) {
+            const showOwnLockSummary = Boolean(state.lock && ownsLock);
+            elements.lockSummary.classList.toggle("hidden", !showOwnLockSummary);
+            elements.lockSummary.textContent = showOwnLockSummary
+                ? `Claimed until ${window.DocFlow.formatDateTime(state.lock.expires_at)}`
+                : "";
+        }
+
+        const claimDisabled = completed || Boolean(state.lock);
+        elements.claimButton.disabled = claimDisabled;
+        elements.claimButton.classList.toggle("hidden", claimDisabled);
         elements.releaseButton.disabled = completed || !ownsLock;
         elements.saveButton.disabled = completed || !ownsLock;
         elements.completeButton.disabled = completed || !ownsLock;
@@ -374,22 +698,21 @@
     }
 
     function renderScalarInput(field, pathParts, value, editable) {
-        const wrapper = createElement("div", "");
-        const options = field.options || [];
+        const wrapper = createElement("div", "review-input-wrap");
+        const options = optionItems(field);
         let input;
         if (options.length) {
             input = createElement("select", "select select-bordered select-sm w-full");
             input.appendChild(new Option("", ""));
-            options.forEach((option) => input.appendChild(new Option(String(option), String(option))));
-            input.value = value ?? "";
+            options.forEach((option) => input.appendChild(new Option(option.label, encodedOptionValue(option.value))));
+            input.value = value === null || value === undefined ? "" : encodedOptionValue(value);
         } else if (field.type === "boolean" || field.editor === "checkbox") {
-            const label = createElement("label", "label cursor-pointer justify-start gap-2");
-            input = createElement("input", "checkbox checkbox-sm");
-            input.type = "checkbox";
-            input.checked = Boolean(value);
-            label.appendChild(input);
-            label.appendChild(createElement("span", "label-text", "True"));
-            wrapper.appendChild(label);
+            input = createElement("select", "select select-bordered select-sm w-full");
+            input.appendChild(new Option(field.required ? "Missing - choose true or false" : "Missing", ""));
+            input.appendChild(new Option("True", "true"));
+            input.appendChild(new Option("False", "false"));
+            input.value = value === true ? "true" : value === false ? "false" : "";
+            input.classList.toggle("select-warning", field.required && value === null);
         } else if (field.editor === "textarea") {
             input = createElement("textarea", "textarea textarea-bordered textarea-sm w-full");
             input.rows = 2;
@@ -403,26 +726,33 @@
                     : field.type === "datetime"
                         ? "datetime-local"
                         : "text";
-            if (input.type === "number") {
-                input.step = field.type === "integer" ? "1" : "any";
-            }
-            input.value = value ?? "";
+            input.value = formatInputValue(field, value);
         }
 
+        input.dataset.fieldPath = pathString(pathParts);
+        applyInputConstraints(input, field);
         input.disabled = !editable;
-        const eventName = input.type === "checkbox" ? "change" : "input";
+        const eventName = input.tagName === "SELECT" ? "change" : "input";
         input.addEventListener(eventName, () => {
             setByPath(state.values, pathParts, parseInputValue(input, field));
+            setConstraintState(input, wrapper);
         });
         if (!wrapper.children.length) {
             wrapper.appendChild(input);
         }
+        setConstraintState(input, wrapper);
         return wrapper;
     }
 
     function parseInputValue(input, field) {
-        if (input.type === "checkbox") {
-            return input.checked;
+        if (field.type === "boolean" || field.editor === "checkbox") {
+            if (input.value === "") {
+                return null;
+            }
+            return input.value === "true";
+        }
+        if ((field.options || field.option_items) && input.tagName === "SELECT") {
+            return decodedOptionValue(input.value);
         }
         if (field.type === "number" || field.type === "float" || field.type === "integer") {
             if (input.value === "") {
@@ -430,6 +760,12 @@
             }
             const value = field.type === "integer" ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
             return Number.isNaN(value) ? null : value;
+        }
+        if (field.type === "date") {
+            return input.value || null;
+        }
+        if (field.type === "datetime") {
+            return input.value || null;
         }
         return input.value;
     }
@@ -440,23 +776,39 @@
         const extracted = getByPath({ [pathParts[0]]: fieldInfo ? fieldInfo.extracted_value : undefined }, pathParts);
         const editable = canEditPath(pathParts);
         const row = createElement("div", "review-field-row");
+        row.dataset.fieldPath = pathString(pathParts);
         row.classList.toggle("highlight", isHighlighted(pathParts));
         row.classList.toggle("locked", !editable);
 
         const labelCell = createElement("div", "review-field-label");
-        labelCell.appendChild(createElement("div", "font-medium text-sm", field.label || titleCase(field.key)));
-        if (field.description) {
-            labelCell.appendChild(createElement("div", "text-xs text-base-content/50", field.description));
-        }
+        const labelLine = createElement("div", "review-label-line");
+        appendFieldLabelContent(labelLine, field);
+        labelCell.appendChild(labelLine);
         row.appendChild(labelCell);
 
-        row.appendChild(createElement("div", "review-extracted-value", formatValue(extracted)));
+        const sourceCell = createElement("div", "review-source-cell");
+        sourceCell.appendChild(createElement("div", "review-extracted-value", `Source: ${formatValue(extracted)}`));
+        const revealButton = createIconButton(
+            "btn btn-ghost btn-xs btn-square review-source-reveal",
+            "Show source value",
+            `Show source value for ${fieldLabel(field)}`,
+            '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />',
+        );
+        revealButton.addEventListener("click", () => {
+            state.sourceValueReveals.add(pathString(pathParts));
+            updateSourceVisibility(row, pathParts, fieldInfo, extracted);
+        });
+        sourceCell.appendChild(revealButton);
+        row.appendChild(sourceCell);
 
-        const confidence = createElement("div", "");
+        const confidence = createElement("div", "review-confidence-cell");
         confidence.innerHTML = confidenceBadge(fieldInfo);
         row.appendChild(confidence);
 
         row.appendChild(renderScalarInput(field, pathParts, value, editable));
+        row.addEventListener("input", () => updateSourceVisibility(row, pathParts, fieldInfo, extracted));
+        row.addEventListener("change", () => updateSourceVisibility(row, pathParts, fieldInfo, extracted));
+        updateSourceVisibility(row, pathParts, fieldInfo, extracted);
         container.appendChild(row);
     }
 
@@ -467,10 +819,9 @@
         }
         const group = createElement("div", "review-nested-group");
         const header = createElement("div", "review-nested-header");
-        header.appendChild(createElement("div", "font-medium text-sm", field.label || titleCase(field.key)));
-        if (field.description) {
-            header.appendChild(createElement("div", "text-xs text-base-content/50", field.description));
-        }
+        const title = createElement("div", "review-label-line");
+        appendFieldLabelContent(title, field);
+        header.appendChild(title);
         group.appendChild(header);
 
         const body = createElement("div", "review-nested-body");
@@ -480,11 +831,14 @@
             textarea.rows = 4;
             textarea.value = JSON.stringify(getByPath(state.values, pathParts) || {}, null, 2);
             textarea.disabled = !canEditPath(pathParts);
+            textarea.classList.add("review-json-editor");
             textarea.addEventListener("input", () => {
                 try {
                     setByPath(state.values, pathParts, JSON.parse(textarea.value || "{}"));
+                    textarea.classList.remove("textarea-error");
                 } catch (error) {
                     setByPath(state.values, pathParts, textarea.value);
+                    textarea.classList.add("textarea-error");
                 }
             });
             body.appendChild(textarea);
@@ -503,12 +857,16 @@
         }
         const group = createElement("div", "review-nested-group");
         const header = createElement("div", "review-nested-header flex items-center justify-between gap-2");
-        header.appendChild(createElement("div", "font-medium text-sm", field.label || titleCase(field.key)));
+        const titleWrap = createElement("div", "");
+        const title = createElement("div", "review-label-line");
+        appendFieldLabelContent(title, field);
+        titleWrap.appendChild(title);
+        header.appendChild(titleWrap);
         const addButton = createElement("button", "btn btn-outline btn-xs", "Add");
         addButton.type = "button";
         addButton.disabled = !canEditPath(pathParts);
         addButton.addEventListener("click", () => {
-            value.push("");
+            value.push(defaultValueForField(field.item_schema || { type: "string" }));
             renderEditor();
         });
         header.appendChild(addButton);
@@ -553,7 +911,11 @@
         const itemFields = field.item_schema && Array.isArray(field.item_schema.fields) ? field.item_schema.fields : [];
         const group = createElement("div", "review-nested-group");
         const header = createElement("div", "review-nested-header flex items-center justify-between gap-2");
-        header.appendChild(createElement("div", "font-medium text-sm", field.label || titleCase(field.key)));
+        const titleWrap = createElement("div", "");
+        const title = createElement("div", "review-label-line");
+        appendFieldLabelContent(title, field);
+        titleWrap.appendChild(title);
+        header.appendChild(titleWrap);
         const addButton = createElement("button", "btn btn-outline btn-xs", "Add Row");
         addButton.type = "button";
         addButton.disabled = !canEditPath(pathParts);
@@ -568,9 +930,18 @@
         if (!itemFields.length) {
             body.appendChild(createElement("div", "text-sm text-base-content/50", "No item schema available"));
         } else {
-            const table = createElement("table", "table table-xs");
+            const table = createElement("table", "table table-xs review-object-array-table");
             const thead = createElement("thead");
-            thead.innerHTML = `<tr>${itemFields.map((itemField) => `<th>${escapeHtml(itemField.label || titleCase(itemField.key))}</th>`).join("")}<th></th></tr>`;
+            const headerRow = createElement("tr");
+            itemFields.forEach((itemField) => {
+                const headingCell = createElement("th");
+                const heading = createElement("div", "review-table-heading");
+                appendFieldLabelContent(heading, itemField, { labelClass: "", shortBadges: true });
+                headingCell.appendChild(heading);
+                headerRow.appendChild(headingCell);
+            });
+            headerRow.appendChild(createElement("th"));
+            thead.appendChild(headerRow);
             table.appendChild(thead);
             const tbody = createElement("tbody");
             if (!value.length) {
@@ -583,7 +954,7 @@
                 itemFields.forEach((itemField) => {
                     const cell = createElement("td");
                     const itemPath = [...pathParts, index, itemField.key];
-                    cell.appendChild(renderScalarInput(itemField, itemPath, item ? item[itemField.key] : "", canEditPath(pathParts)));
+                    cell.appendChild(renderScalarInput(itemField, itemPath, item ? item[itemField.key] : "", canEditPath(pathParts) && !itemField.readonly));
                     row.appendChild(cell);
                 });
                 const actionCell = createElement("td", "text-right");
@@ -759,6 +1130,15 @@
         elements.diffButton.addEventListener("click", previewDiff);
         elements.completeButton.addEventListener("click", completeReview);
         elements.diffCloseButton.addEventListener("click", () => elements.diffPanel.classList.add("hidden"));
+        if (elements.sourceModeSelect) {
+            elements.sourceModeSelect.addEventListener("change", () => setSourceValueMode(elements.sourceModeSelect.value));
+        }
+        if (elements.pdfFitWidthButton) {
+            elements.pdfFitWidthButton.addEventListener("click", () => setPdfFitMode("width"));
+        }
+        if (elements.pdfFitPageButton) {
+            elements.pdfFitPageButton.addEventListener("click", () => setPdfFitMode("page"));
+        }
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -768,6 +1148,8 @@
         }
         state.reviewItemId = elements.workspace.dataset.reviewItemId || "";
         state.operator = elements.workspace.dataset.reviewOperator || "";
+        initializeSourceValueMode();
+        initializePdfFitMode();
         if (!state.reviewItemId) {
             elements.fieldsContainer.innerHTML = '<div class="empty-panel text-error">Missing review item id</div>';
             return;

@@ -11,6 +11,7 @@
         taskKey: "",
         source: "",
         adapterStatus: {},
+        dirty: false,
     };
 
     function escapeHtml(value) {
@@ -30,7 +31,7 @@
 
     function categoryRows(categories) {
         if (!Array.isArray(categories) || !categories.length) {
-            return `<tr><td colspan="3" class="text-center text-base-content/50 py-8">No categories</td></tr>`;
+            return `<tr><td colspan="3" class="text-center text-base-content/50 py-4">No categories configured</td></tr>`;
         }
         return categories.map((category, index) => `
             <tr data-category-row data-index="${index}">
@@ -120,6 +121,7 @@
         document.getElementById("split-settings-poll-interval").value = settings.poll_interval_seconds || 1;
         document.getElementById("split-settings-timeout").value = settings.timeout_seconds || 7200;
         document.getElementById("split-settings-category-body").innerHTML = categoryRows(settings.categories || []);
+        document.getElementById("split-settings-test-button").disabled = !settings.enabled || state.dirty;
     }
 
     function render() {
@@ -134,20 +136,33 @@
         state.taskKey = payload.task_key || "";
         state.source = payload.source || "";
         state.adapterStatus = payload.adapter_status || {};
+        state.dirty = false;
         render();
     }
 
     async function saveSettings() {
+        if (!window.confirm("Save split settings? This changes how uploaded documents are split.")) {
+            return;
+        }
         const payload = await window.DocFlow.apiPut("/api/admin/split-settings", { settings: readSettings() });
         state.settings = payload.settings || {};
         state.taskKey = payload.task_key || "";
         state.source = payload.source || "";
         state.adapterStatus = payload.adapter_status || {};
+        state.dirty = false;
         render();
         window.DocFlow.showToast("Split settings saved", "success");
     }
 
     async function testConnection() {
+        if (!state.settings.enabled) {
+            window.DocFlow.showToast("Enable and save split settings before testing.", "warning");
+            return;
+        }
+        if (state.dirty) {
+            window.DocFlow.showToast("Save changes before testing the connection.", "warning");
+            return;
+        }
         const status = await window.DocFlow.apiPost("/api/admin/split-settings/test-connection", {});
         state.adapterStatus = status || {};
         renderSummary();
@@ -157,17 +172,27 @@
 
     function addCategory() {
         state.settings = readSettings();
-        state.settings.categories.push({ name: "invoice", description: "" });
+        state.settings.categories.push({ name: "", description: "" });
+        state.dirty = true;
         render();
     }
 
     function removeCategory(index) {
         state.settings = readSettings();
         state.settings.categories.splice(index, 1);
+        state.dirty = true;
         render();
     }
 
+    function markDirty() {
+        state.dirty = true;
+        document.getElementById("split-settings-test-button").disabled = true;
+    }
+
     document.getElementById("split-settings-refresh-button").addEventListener("click", () => {
+        if (state.dirty && !window.confirm("Discard unsaved split settings and refresh?")) {
+            return;
+        }
         loadSettings().catch((error) => window.DocFlow.showToast(error.message || "Unable to load split settings", "error"));
     });
     document.getElementById("split-settings-save-button").addEventListener("click", () => {
@@ -181,6 +206,32 @@
         const button = event.target.closest("[data-remove-category]");
         if (button) {
             removeCategory(Number(button.dataset.removeCategory));
+        }
+    });
+    workspace.addEventListener("input", (event) => {
+        if (event.target.matches("input, textarea, select")) {
+            markDirty();
+        }
+    });
+    workspace.addEventListener("change", (event) => {
+        if (event.target.matches("input, textarea, select")) {
+            markDirty();
+        }
+    });
+    window.addEventListener("beforeunload", (event) => {
+        if (!state.dirty) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = "";
+    });
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[href]");
+        if (!link || !state.dirty || link.target || link.href === window.location.href) {
+            return;
+        }
+        if (!window.confirm("Leave this page and discard unsaved split settings?")) {
+            event.preventDefault();
         }
     });
 

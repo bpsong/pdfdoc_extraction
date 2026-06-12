@@ -27,7 +27,7 @@
 
     function configuredBadge(task) {
         if (!task.is_configured) {
-            return '<span class="text-base-content/40">-</span>';
+            return '<span class="badge badge-ghost badge-sm">Not in pipeline</span>';
         }
         return (task.configured_keys || [])
             .map((key) => `<span class="badge badge-primary badge-sm">${escapeHtml(key)}</span>`)
@@ -76,7 +76,14 @@
 
     function renderTable() {
         const body = document.getElementById("task-catalog-body");
-        const tasks = state.tasks.filter(matchesFilters);
+        const tasks = state.tasks
+            .filter(matchesFilters)
+            .sort((a, b) => {
+                if (a.import_status !== b.import_status) {
+                    return a.import_status === "failed" ? -1 : 1;
+                }
+                return String(a.label || "").localeCompare(String(b.label || ""));
+            });
         if (!tasks.length) {
             body.innerHTML = '<tr><td colspan="6" class="text-center text-base-content/50 py-10">No matching tasks</td></tr>';
             return;
@@ -172,6 +179,7 @@
                 ${statusBadge(task)}
                 ${task.is_configured ? '<span class="badge badge-primary badge-sm">Configured</span>' : '<span class="badge badge-outline badge-sm">Available</span>'}
                 <span class="badge badge-ghost badge-sm">${escapeHtml(task.category)}</span>
+                ${task.import_status === "ok" ? '<a class="btn btn-outline btn-xs ml-auto" href="/app/admin/pipeline">Add in Pipeline</a>' : ""}
             </div>
             ${task.import_error ? `<div class="alert alert-error text-sm"><span>${escapeHtml(task.import_error)}</span></div>` : ""}
             <div>
@@ -180,11 +188,11 @@
             </div>
             <div>
                 <h3 class="font-semibold text-sm mb-2">Expected Inputs</h3>
-                <div class="flex flex-wrap gap-1">${(task.expected_inputs || []).map((item) => `<span class="badge badge-outline badge-sm">${escapeHtml(item)}</span>`).join("")}</div>
+                <div class="flex flex-wrap gap-1">${(task.expected_inputs || []).length ? (task.expected_inputs || []).map((item) => `<span class="badge badge-outline badge-sm">${escapeHtml(item)}</span>`).join("") : '<span class="text-sm text-base-content/50">No declared inputs.</span>'}</div>
             </div>
             <div>
                 <h3 class="font-semibold text-sm mb-2">Expected Outputs</h3>
-                <div class="flex flex-wrap gap-1">${(task.expected_outputs || []).map((item) => `<span class="badge badge-outline badge-sm">${escapeHtml(item)}</span>`).join("")}</div>
+                <div class="flex flex-wrap gap-1">${(task.expected_outputs || []).length ? (task.expected_outputs || []).map((item) => `<span class="badge badge-outline badge-sm">${escapeHtml(item)}</span>`).join("") : '<span class="text-sm text-base-content/50">No declared outputs.</span>'}</div>
             </div>
             <div>
                 <h3 class="font-semibold text-sm mb-2">Constructor Parameters</h3>
@@ -210,9 +218,6 @@
         try {
             const payload = await window.DocFlow.apiGet("/api/admin/task-catalog");
             state.tasks = payload.tasks || [];
-            if (!state.selectedId && state.tasks.length) {
-                state.selectedId = state.tasks[0].id;
-            }
             render(payload);
         } catch (error) {
             body.innerHTML = '<tr><td colspan="6" class="text-center text-error py-10">Task catalog failed to load</td></tr>';

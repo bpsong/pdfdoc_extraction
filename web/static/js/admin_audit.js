@@ -54,7 +54,7 @@
     function renderTable() {
         const body = document.getElementById("admin-audit-body");
         if (!state.events.length) {
-            body.innerHTML = '<tr><td colspan="5" class="text-center text-base-content/50 py-10">No admin audit events</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" class="text-center text-base-content/50 py-4">No admin audit events match these filters.</td></tr>';
             renderDetail(null);
             return;
         }
@@ -76,13 +76,22 @@
         document.getElementById("admin-audit-detail-subtitle").textContent = event
             ? `${event.user || "system"} - ${window.DocFlow.formatDateTime(event.created_at)}`
             : "Select an event";
-        document.getElementById("admin-audit-detail-json").textContent = JSON.stringify(event || {}, null, 2);
+        document.getElementById("admin-audit-detail-json").textContent = event
+            ? JSON.stringify(event, null, 2)
+            : "Select an audit event to view details.";
+    }
+
+    function renderEventTypeOptions() {
+        const datalist = document.getElementById("admin-audit-event-types");
+        const types = [...new Set(state.events.map((event) => event.event_type).filter(Boolean))].sort();
+        datalist.innerHTML = types.map((type) => `<option value="${escapeHtml(type)}"></option>`).join("");
     }
 
     async function loadAudit() {
         const payload = await window.DocFlow.apiGet(`/api/admin/audit${queryString()}`);
         state.events = payload.events || [];
         state.selectedId = state.events[0] ? state.events[0].id : null;
+        renderEventTypeOptions();
         renderTable();
         renderDetail(state.events[0] || null);
     }

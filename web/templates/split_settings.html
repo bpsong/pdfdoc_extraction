@@ -2,7 +2,7 @@
 
 {% block header_actions %}
 <button class="btn btn-outline btn-sm" id="split-settings-refresh-button" type="button">Refresh</button>
-<button class="btn btn-outline btn-sm" id="split-settings-test-button" type="button">Test</button>
+<button class="btn btn-outline btn-sm" id="split-settings-test-button" type="button" title="Tests the saved adapter configuration">Test Saved Connection</button>
 <button class="btn btn-primary btn-sm" id="split-settings-save-button" type="button">Save</button>
 {% endblock %}
 
@@ -42,7 +42,10 @@
     <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div class="card bg-base-100 shadow-sm xl:col-span-2">
             <div class="panel-header">
-                <h2 class="font-semibold">Split Settings</h2>
+                <div>
+                    <h2 class="font-semibold">Split Settings</h2>
+                    <p class="text-xs text-base-content/50">Save changes before testing. The connection test uses the saved adapter configuration, not unsaved form edits.</p>
+                </div>
             </div>
             <div class="card-body grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <label class="label cursor-pointer justify-start gap-3 pt-7">
@@ -63,15 +66,15 @@
                 </label>
                 <label class="form-control">
                     <span class="label-text">Configuration ID</span>
-                    <input class="input input-bordered input-sm" id="split-settings-configuration-id" type="text">
+                    <input class="input input-bordered input-sm" id="split-settings-configuration-id" type="text" placeholder="LlamaCloud parsing configuration id">
                 </label>
                 <label class="form-control">
                     <span class="label-text">Project ID</span>
-                    <input class="input input-bordered input-sm" id="split-settings-project-id" type="text">
+                    <input class="input input-bordered input-sm" id="split-settings-project-id" type="text" placeholder="LlamaCloud project id">
                 </label>
                 <label class="form-control">
                     <span class="label-text">Organization ID</span>
-                    <input class="input input-bordered input-sm" id="split-settings-organization-id" type="text">
+                    <input class="input input-bordered input-sm" id="split-settings-organization-id" type="text" placeholder="LlamaCloud organization id">
                 </label>
                 <label class="form-control">
                     <span class="label-text">Poll interval seconds</span>
@@ -103,9 +106,12 @@
     </section>
 
     <section class="card bg-base-100 shadow-sm">
-        <div class="panel-header">
-            <h2 class="font-semibold">Split Categories</h2>
-            <button class="btn btn-outline btn-sm" id="split-settings-add-category" type="button">Add</button>
+            <div class="panel-header">
+            <div>
+                <h2 class="font-semibold">Split Categories</h2>
+                <p class="text-xs text-base-content/50">Add document categories the split adapter should return.</p>
+            </div>
+            <button class="btn btn-outline btn-sm" id="split-settings-add-category" type="button">Add Category</button>
         </div>
         <div class="overflow-x-auto">
             <table class="table table-sm">
@@ -118,7 +124,7 @@
                 </thead>
                 <tbody id="split-settings-category-body">
                     <tr>
-                        <td colspan="3" class="text-center text-base-content/50 py-8">No categories</td>
+                        <td colspan="3" class="text-center text-base-content/50 py-4">No categories configured</td>
                     </tr>
                 </tbody>
             </table>

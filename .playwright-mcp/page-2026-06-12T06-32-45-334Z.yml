@@ -1,0 +1,97 @@
+- generic [ref=e2]:
+  - complementary [ref=e3]:
+    - generic [ref=e4]:
+      - link "DocFlow AI" [ref=e5] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=e7]
+        - generic [ref=e9]: DocFlow AI
+      - button "Collapse navigation" [ref=e10] [cursor=pointer]:
+        - img [ref=e11]
+    - navigation "Primary navigation" [ref=e13]:
+      - link "Upload & Process" [ref=e14] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=e15]
+        - generic [ref=e17]: Upload & Process
+      - link "Review Queue" [ref=e18] [cursor=pointer]:
+        - /url: /app/review
+        - img [ref=e19]
+        - generic [ref=e21]: Review Queue
+      - link "Reports" [ref=e22] [cursor=pointer]:
+        - /url: /app/reports
+        - img [ref=e23]
+        - generic [ref=e25]: Reports
+      - link "Settings" [ref=e26] [cursor=pointer]:
+        - /url: /app/settings
+        - img [ref=e27]
+        - generic [ref=e30]: Settings
+    - generic [ref=e31]: Admin
+    - navigation "Admin navigation" [ref=e32]:
+      - link "Admin Home" [ref=e33] [cursor=pointer]:
+        - /url: /app/admin
+        - img [ref=e34]
+        - generic [ref=e36]: Admin Home
+      - generic [ref=e37]: Quality
+      - link "Schemas" [ref=e38] [cursor=pointer]:
+        - /url: /app/schemas
+        - img [ref=e39]
+        - generic [ref=e41]: Schemas
+      - link "Validation" [ref=e42] [cursor=pointer]:
+        - /url: /app/settings/validation
+        - img [ref=e43]
+        - generic [ref=e45]: Validation
+      - generic [ref=e46]: Configuration
+      - link "Pipeline" [ref=e47] [cursor=pointer]:
+        - /url: /app/admin/pipeline
+        - img [ref=e48]
+        - generic [ref=e50]: Pipeline
+      - link "Tasks" [ref=e51] [cursor=pointer]:
+        - /url: /app/admin/tasks
+        - img [ref=e52]
+        - generic [ref=e54]: Tasks
+      - link "Review Gate" [ref=e55] [cursor=pointer]:
+        - /url: /app/admin/review-gate
+        - img [ref=e56]
+        - generic [ref=e58]: Review Gate
+      - link "Split Settings" [ref=e59] [cursor=pointer]:
+        - /url: /app/admin/split
+        - img [ref=e60]
+        - generic [ref=e62]: Split Settings
+      - generic [ref=e63]: Compliance
+      - link "Audit" [ref=e64] [cursor=pointer]:
+        - /url: /app/admin/audit
+        - img [ref=e65]
+        - generic [ref=e67]: Audit
+      - generic [ref=e68]: Tools
+      - link "Review Simulator" [ref=e69] [cursor=pointer]:
+        - /url: /app/admin/dry-run
+        - img [ref=e70]
+        - generic [ref=e73]: Review Simulator
+    - generic [ref=e74]: Signed in as admin
+  - main [ref=e75]:
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - heading "Upload & Process" [level=1] [ref=e78]
+        - paragraph [ref=e79]: Upload PDF files to split, extract data, and review results.
+      - generic [ref=e80]:
+        - button "Notifications" [ref=e81] [cursor=pointer]:
+          - img [ref=e82]
+        - button "admin" [ref=e85] [cursor=pointer]
+    - generic [ref=e87]:
+      - generic [ref=e89]:
+        - img [ref=e91]
+        - paragraph [ref=e93]: Drag and drop PDF files here
+        - paragraph [ref=e94]: or
+        - generic [ref=e95] [cursor=pointer]:
+          - img [ref=e96]
+          - text: Choose Files
+        - paragraph [ref=e98]: PDF only, up to 50 MB per file
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - heading "Selected Files" [level=2] [ref=e102]
+          - generic [ref=e103]: 0 files
+        - generic [ref=e105]: No files selected
+        - generic [ref=e108]: "Total files: 0 | Total size: 0 B"
+        - generic [ref=e109]:
+          - button "Start Processing" [disabled]:
+            - img
+            - text: Start Processing

@@ -2,6 +2,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    position: relative;
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     font-size: 0.875rem;
@@ -21,6 +22,107 @@
 
 .nav-link svg {
     flex-shrink: 0;
+}
+
+.app-sidebar {
+    width: 14rem !important;
+    overflow-x: hidden;
+    transition: width 0.18s ease, padding 0.18s ease;
+}
+
+.sidebar-brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-brand-link {
+    flex: 1;
+}
+
+.sidebar-collapse-toggle {
+    flex-shrink: 0;
+    width: 2rem;
+    min-height: 2rem;
+    padding-left: 0;
+    padding-right: 0;
+    position: relative;
+    z-index: 2;
+}
+
+.sidebar-collapse-icon {
+    transition: transform 0.18s ease;
+}
+
+.sidebar-collapsed .app-sidebar {
+    width: 4.75rem !important;
+    overflow: visible;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+}
+
+.sidebar-collapsed .app-sidebar .sidebar-brand-row {
+    justify-content: center;
+    flex-direction: column;
+}
+
+.sidebar-collapsed .app-sidebar .sidebar-brand-link {
+    flex: 0 0 auto;
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+}
+
+.sidebar-collapsed .app-sidebar .sidebar-collapse-toggle {
+    margin-top: 0.25rem;
+    border: 1px solid oklch(var(--b3));
+    background: oklch(var(--b1));
+}
+
+.sidebar-collapsed .app-sidebar .sidebar-collapse-icon {
+    transform: rotate(180deg);
+}
+
+.sidebar-collapsed .app-sidebar .nav-link {
+    justify-content: center;
+    padding-left: 0.625rem;
+    padding-right: 0.625rem;
+}
+
+.sidebar-collapsed .app-sidebar .nav-link span,
+.sidebar-collapsed .app-sidebar .divider,
+.sidebar-collapsed .app-sidebar .mt-auto,
+.sidebar-collapsed .app-sidebar .sidebar-brand-link span.font-bold {
+    display: none;
+}
+
+.sidebar-collapsed .app-sidebar .nav-link[data-nav-label]::after {
+    content: attr(data-nav-label);
+    position: absolute;
+    left: calc(100% + 0.5rem);
+    top: 50%;
+    z-index: 60;
+    transform: translateY(-50%);
+    display: block;
+    max-width: 12rem;
+    padding: 0.25rem 0.5rem;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.375rem;
+    background: oklch(var(--b1));
+    box-shadow: 0 0.5rem 1.25rem rgba(15, 23, 42, 0.16);
+    color: oklch(var(--bc));
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.25;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    transition: opacity 0.12s ease;
+}
+
+.sidebar-collapsed .app-sidebar .nav-link[data-nav-label]:hover::after,
+.sidebar-collapsed .app-sidebar .nav-link[data-nav-label]:focus-visible::after {
+    opacity: 1;
 }
 
 .login-shell {
@@ -255,7 +357,7 @@
 }
 
 .empty-panel {
-    min-height: 14rem;
+    min-height: 5rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -299,6 +401,20 @@
     background: oklch(var(--b1));
 }
 
+.review-pdf-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.review-pdf-fit-button.btn-active {
+    border-color: oklch(var(--p));
+    background: oklch(var(--p) / 0.1);
+    color: oklch(var(--p));
+}
+
 .review-editor-panel {
     display: flex;
     flex-direction: column;
@@ -311,6 +427,23 @@
     overflow: auto;
 }
 
+.review-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.review-source-mode-control {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    color: oklch(var(--bc) / 0.65);
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
 .review-fields-container {
     display: flex;
     flex-direction: column;
@@ -321,6 +454,7 @@
 .review-field-row {
     display: grid;
     grid-template-columns: minmax(9rem, 0.8fr) minmax(8rem, 0.9fr) minmax(5rem, max-content) minmax(10rem, 1fr);
+    grid-template-areas: "label source confidence input";
     gap: 0.75rem;
     align-items: center;
     padding: 0.75rem;
@@ -339,12 +473,94 @@
 }
 
 .review-field-label {
+    grid-area: label;
     min-width: 0;
+}
+
+.review-label-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.review-field-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.125rem;
+    height: 1.125rem;
+    color: oklch(var(--bc) / 0.55);
+    cursor: help;
+}
+
+.review-field-info:hover,
+.review-field-info:focus-visible {
+    color: oklch(var(--p));
+}
+
+.review-source-cell {
+    grid-area: source;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
 }
 
 .review-extracted-value {
     min-width: 0;
     font-size: 0.875rem;
+    overflow-wrap: anywhere;
+    color: oklch(var(--bc) / 0.72);
+}
+
+.review-field-row.source-hidden {
+    grid-template-columns: minmax(9rem, 0.85fr) minmax(5rem, max-content) minmax(12rem, 1.35fr) max-content;
+    grid-template-areas: "label confidence input source";
+}
+
+.review-field-row.source-hidden .review-extracted-value {
+    display: none;
+}
+
+.review-field-row.source-visible .review-source-reveal {
+    display: none;
+}
+
+.review-source-reveal {
+    color: oklch(var(--bc) / 0.58);
+}
+
+.review-source-reveal:hover,
+.review-source-reveal:focus-visible {
+    color: oklch(var(--p));
+}
+
+.review-confidence-cell {
+    grid-area: confidence;
+}
+
+.review-input-wrap {
+    grid-area: input;
+    min-width: 0;
+}
+
+.review-input-invalid::after {
+    content: "Check the required format";
+    display: block;
+    margin-top: 0.25rem;
+    color: oklch(var(--er));
+    font-size: 0.6875rem;
+    line-height: 1.2;
+}
+
+.review-field-help,
+.review-field-hint {
+    margin-top: 0.25rem;
+    color: oklch(var(--bc) / 0.55);
+    font-size: 0.6875rem;
+    line-height: 1.25;
     overflow-wrap: anywhere;
 }
 
@@ -389,12 +605,55 @@
     min-width: 36rem;
 }
 
+.review-object-array-table th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: oklch(var(--b2));
+}
+
+.review-table-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.review-json-editor {
+    min-height: 7rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-size: 0.75rem;
+}
+
 .review-lock-banner {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid oklch(var(--b3));
     background: oklch(var(--in) / 0.1);
     color: oklch(var(--bc) / 0.75);
     font-size: 0.875rem;
+}
+
+.review-lock-summary {
+    display: inline-flex;
+    align-items: center;
+    max-width: 18rem;
+    min-height: 1.25rem;
+    padding: 0.125rem 0.5rem;
+    border: 1px solid oklch(var(--in) / 0.35);
+    border-radius: 9999px;
+    background: oklch(var(--in) / 0.1);
+    color: oklch(var(--bc) / 0.72);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    line-height: 1.2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.review-lock-summary.hidden {
+    display: none;
 }
 
 .review-diff-panel {
@@ -419,7 +678,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(22rem, 0.42fr);
     gap: 1rem;
-    min-height: calc(100vh - 18rem);
+    min-height: 0;
 }
 
 .task-catalog-table {
@@ -489,11 +748,16 @@
     display: grid;
     grid-template-columns: minmax(16rem, 0.7fr) minmax(26rem, 1fr) minmax(22rem, 0.9fr);
     grid-template-areas:
+        "guide guide guide"
         "active draft editor"
         "yaml yaml validation"
         "yaml yaml diff";
     gap: 1rem;
     align-items: start;
+}
+
+.pipeline-guide-panel {
+    grid-area: guide;
 }
 
 .pipeline-active-panel {
@@ -602,13 +866,13 @@
 }
 
 .pipeline-params-editor {
-    min-height: 15rem;
+    min-height: 9rem;
     resize: vertical;
 }
 
 .pipeline-yaml-preview,
 .pipeline-diff-preview {
-    min-height: 18rem;
+    min-height: 5rem;
     max-height: 34rem;
     margin: 0;
     padding: 1rem;
@@ -655,12 +919,12 @@
 }
 
 .validation-draft-yaml {
-    min-height: 14rem;
+    min-height: 7rem;
     resize: vertical;
 }
 
 .validation-findings-table {
-    min-width: 62rem;
+    min-width: 44rem;
 }
 
 .validation-findings-table th,
@@ -670,7 +934,7 @@
 }
 
 .validation-raw-json {
-    min-height: 12rem;
+    min-height: 5rem;
     max-height: 28rem;
     margin: 0;
     padding: 1rem;
@@ -775,7 +1039,7 @@
 
 .admin-audit-json,
 .dry-run-json {
-    min-height: 24rem;
+    min-height: 5rem;
     max-height: 34rem;
     margin: 0;
     padding: 1rem;
@@ -808,7 +1072,7 @@
 }
 
 .dry-run-mock-json {
-    min-height: 14rem;
+    min-height: 9rem;
     resize: vertical;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     font-size: 0.75rem;
@@ -908,7 +1172,7 @@
     display: grid;
     grid-template-columns: 18rem minmax(0, 1fr) minmax(22rem, 0.8fr);
     gap: 1rem;
-    min-height: calc(100vh - 8rem);
+    align-items: start;
 }
 
 .schema-list-panel,
@@ -1001,8 +1265,8 @@
 }
 
 .schema-yaml-preview {
-    flex: 1;
-    min-height: 26rem;
+    min-height: 6rem;
+    max-height: 34rem;
     margin: 0;
     padding: 1rem;
     overflow: auto;
@@ -1090,6 +1354,87 @@
     line-height: 1.45;
 }
 
+@media (min-width: 901px) and (max-width: 1599px) {
+    body.review-detail-route main header {
+        align-items: flex-start;
+        padding: 0.75rem 1rem;
+    }
+
+    body.review-detail-route main header p,
+    body.review-detail-route main header .btn-circle[aria-label="Notifications"] {
+        display: none;
+    }
+
+    body.review-detail-route main > .flex-1 {
+        padding: 1rem;
+    }
+
+    .review-detail-route .review-actions {
+        flex-wrap: nowrap;
+        gap: 0.375rem;
+    }
+
+    .review-detail-route .review-actions .btn {
+        min-height: 2rem;
+        padding-left: 0.625rem;
+        padding-right: 0.625rem;
+        white-space: nowrap;
+    }
+
+    .review-detail-route .review-workspace {
+        grid-template-columns: minmax(23rem, 1.08fr) minmax(24rem, 0.92fr);
+        gap: 0.75rem;
+        min-height: calc(100vh - 6.5rem);
+    }
+
+    .review-detail-route .review-editor-panel {
+        min-height: calc(100vh - 6.5rem);
+    }
+
+    .review-detail-route .review-pdf-body,
+    .review-detail-route .review-pdf-frame {
+        min-height: calc(100vh - 9.5rem);
+    }
+
+    .review-detail-route .panel-header {
+        min-height: 3rem;
+        padding: 0.75rem;
+    }
+
+    .review-detail-route .review-fields-container {
+        gap: 0.625rem;
+        padding: 0.75rem;
+    }
+
+    .review-detail-route .review-field-row {
+        grid-template-columns: minmax(0, 1fr) max-content;
+        grid-template-areas:
+            "label confidence"
+            "input input"
+            "source source";
+        align-items: start;
+        gap: 0.5rem 0.75rem;
+        padding: 0.625rem;
+    }
+
+    .review-detail-route .review-field-row.source-hidden {
+        grid-template-columns: minmax(0, 1fr) max-content;
+        grid-template-areas:
+            "label confidence"
+            "input source";
+    }
+
+    .review-detail-route .review-source-cell {
+        align-items: flex-start;
+        font-size: 0.8125rem;
+    }
+
+    .review-detail-route .review-field-row.source-hidden .review-source-cell {
+        align-items: center;
+        justify-content: flex-end;
+    }
+}
+
 @media (max-width: 900px) {
     .login-shell {
         grid-template-columns: 1fr;
@@ -1165,6 +1510,30 @@
         grid-template-columns: 1fr;
     }
 
+    .review-field-row {
+        grid-template-areas:
+            "label"
+            "source"
+            "confidence"
+            "input";
+    }
+
+    .review-field-row.source-hidden {
+        grid-template-areas:
+            "label"
+            "confidence"
+            "input"
+            "source";
+    }
+
+    .review-array-row {
+        grid-template-columns: 1fr;
+    }
+
+    .review-object-array table {
+        min-width: 44rem;
+    }
+
     .task-catalog-layout {
         grid-template-columns: 1fr;
     }
@@ -1177,6 +1546,7 @@
     .pipeline-config-workspace {
         grid-template-columns: 1fr;
         grid-template-areas:
+            "guide"
             "active"
             "draft"
             "editor"

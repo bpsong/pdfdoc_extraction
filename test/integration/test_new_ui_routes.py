@@ -246,7 +246,8 @@ def test_config_validation_page_includes_task_23_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="config-validation-workspace"' in response.text
     assert "/static/js/config_validation.js" in response.text
-    assert "Validate Active" in response.text
+    assert "Validate Config File" in response.text
+    assert "Validate Pipeline" in response.text
 
 
 def test_task_catalog_page_includes_task_20_assets(monkeypatch) -> None:

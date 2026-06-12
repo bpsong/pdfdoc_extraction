@@ -43,7 +43,7 @@ def test_admin_can_access_admin_app_routes(monkeypatch) -> None:
         "/app/admin/review-gate": "Review Gate",
         "/app/admin/split": "Split Settings",
         "/app/admin/audit": "Admin Audit",
-        "/app/admin/dry-run": "Pipeline Dry Run",
+        "/app/admin/dry-run": "Review Gate Simulator",
     }
 
     for route, title in expected_titles.items():

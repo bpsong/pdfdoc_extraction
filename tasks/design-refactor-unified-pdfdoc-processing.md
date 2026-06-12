@@ -1436,7 +1436,7 @@ Sidebar requirements:
   - Review Gate -> `/app/admin/review-gate`
   - Split Settings -> `/app/admin/split`
   - Audit -> `/app/admin/audit`
-  - Dry Run -> `/app/admin/dry-run`
+  - Review Gate Simulator -> `/app/admin/dry-run`
 - Operators must not see the `Admin` group.
 - Use the same compact, operational sidebar style from the prototype.
 - Icons may initially remain inline SVG copied from the prototype. Do not block the refactor on icon library setup.
@@ -2784,7 +2784,7 @@ API endpoint:
 GET /api/admin/audit
 ```
 
-#### 13.16.7 Pipeline Dry Run Page
+#### 13.16.7 Review Gate Simulator Page
 
 Template: `pipeline_dry_run.html`.
 
@@ -2796,11 +2796,10 @@ GET /app/admin/dry-run
 
 Required sections:
 
-- Sample PDF upload or document selector.
-- Pipeline draft selector.
-- Run dry-run button.
-- Split decision summary.
-- Extraction summary.
+- Mock results JSON input.
+- Run preview button.
+- Split mock summary.
+- Extraction mock-field summary.
 - Review-gate decision summary.
 - Validation findings.
 
@@ -2814,7 +2813,7 @@ Dry run rules:
 
 - Do not write final exports.
 - Use mocked external calls in tests.
-- Store the dry-run result as an admin audit event.
+- Store the simulator result as an admin audit event.
 - Redact secrets in request/response details.
 
 ### 13.17 UI State and Polling Rules
@@ -2912,7 +2911,7 @@ The UI refactor is acceptable when:
 - Build Pipeline Configuration with draft, diff, validate, and publish.
 - Build Review Gate Rules and Split Settings.
 - Build Validation Center after validation services and admin configuration APIs exist.
-- Build admin dashboard, audit, settings, and pipeline dry-run.
+- Build admin dashboard, audit, settings, and review-gate simulator.
 
 ### Phase 8
 

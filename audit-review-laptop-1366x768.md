@@ -1,0 +1,63 @@
+- generic [ref=e2] [box=0,0,1351,1357]:
+  - complementary [ref=e3] [box=0,0,76,1357]:
+    - generic [ref=e4] [box=8,16,59,92]:
+      - link [ref=e5] [cursor=pointer] [box=14,16,48,52]:
+        - /url: /app/upload
+        - img [ref=e7] [box=30,34,16,16]
+      - button "Expand navigation" [pressed] [ref=e9] [cursor=pointer] [box=22,76,32,32]:
+        - img [ref=e10] [box=30,84,16,16]
+    - navigation "Primary navigation" [ref=e12] [box=8,120,59,140]:
+      - link [ref=e13] [cursor=pointer] [box=8,120,59,32]:
+        - /url: /app/upload
+        - img [ref=e14] [box=30,128,16,16]
+      - link [ref=e16] [cursor=pointer] [box=8,156,59,32]:
+        - /url: /app/review
+        - img [ref=e17] [box=30,164,16,16]
+      - link [ref=e19] [cursor=pointer] [box=8,192,59,32]:
+        - /url: /app/reports
+        - img [ref=e20] [box=30,200,16,16]
+      - link [ref=e22] [cursor=pointer] [box=8,228,59,32]:
+        - /url: /app/settings
+        - img [ref=e23] [box=30,236,16,16]
+    - navigation "Admin navigation" [ref=e26] [box=8,264,59,320]:
+      - link [ref=e27] [cursor=pointer] [box=8,264,59,32]:
+        - /url: /app/admin
+        - img [ref=e28] [box=30,272,16,16]
+      - link [ref=e30] [cursor=pointer] [box=8,300,59,32]:
+        - /url: /app/schemas
+        - img [ref=e31] [box=30,308,16,16]
+      - link [ref=e33] [cursor=pointer] [box=8,336,59,32]:
+        - /url: /app/settings/validation
+        - img [ref=e34] [box=30,344,16,16]
+      - link [ref=e36] [cursor=pointer] [box=8,372,59,32]:
+        - /url: /app/admin/pipeline
+        - img [ref=e37] [box=30,380,16,16]
+      - link [ref=e39] [cursor=pointer] [box=8,408,59,32]:
+        - /url: /app/admin/tasks
+        - img [ref=e40] [box=30,416,16,16]
+      - link [ref=e42] [cursor=pointer] [box=8,444,59,32]:
+        - /url: /app/admin/review-gate
+        - img [ref=e43] [box=30,452,16,16]
+      - link [ref=e45] [cursor=pointer] [box=8,480,59,32]:
+        - /url: /app/admin/split
+        - img [ref=e46] [box=30,488,16,16]
+      - link [ref=e48] [cursor=pointer] [box=8,516,59,32]:
+        - /url: /app/admin/audit
+        - img [ref=e49] [box=30,524,16,16]
+      - link [ref=e51] [cursor=pointer] [box=8,552,59,32]:
+        - /url: /app/admin/dry-run
+        - img [ref=e52] [box=30,560,16,16]
+  - main [ref=e55] [box=76,0,1275,1357]:
+    - generic [ref=e56] [box=76,0,1275,57]:
+      - heading "Human Review" [level=1] [ref=e58] [box=92,12,127,28]
+      - generic [ref=e59] [box=775,12,560,32]:
+        - generic [ref=e60] [box=775,12,486,32]
+        - button "admin" [ref=e64] [cursor=pointer] [box=1269,12,66,32]
+    - generic [ref=e66] [box=92,73,1243,1268]:
+      - generic [ref=e67] [box=92,73,665,1268]:
+        - generic [ref=e68] [box=92,73,665,65]
+        - generic [ref=e72] [box=92,138,665,616]
+      - generic [ref=e74] [box=769,73,566,1268]:
+        - generic [ref=e75] [box=769,73,566,121]
+        - generic [ref=e99] [box=769,194,566,46]: Claimed by you until 12 Jun 2026, 15:28.
+        - generic [ref=e86] [box=769,240,566,1101]

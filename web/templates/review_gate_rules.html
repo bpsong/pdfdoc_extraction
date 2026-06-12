@@ -41,7 +41,10 @@
     <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div class="card bg-base-100 shadow-sm xl:col-span-2">
             <div class="panel-header">
-                <h2 class="font-semibold">Confidence Rules</h2>
+                <div>
+                    <h2 class="font-semibold">Confidence Rules</h2>
+                    <p class="text-xs text-base-content/50">Saving updates the review gate task settings used by the pipeline. Pipeline YAML values remain the source when this task is configured there.</p>
+                </div>
             </div>
             <div class="card-body grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <label class="form-control">
@@ -72,10 +75,11 @@
                 <label class="form-control">
                     <span class="label-text">Schema file</span>
                     <input class="input input-bordered input-sm" id="review-gate-schema-file" type="text">
+                    <span class="label-text-alt"><a class="link link-primary" href="/app/schemas">Open Schema Editor</a></span>
                 </label>
                 <label class="form-control">
                     <span class="label-text">Resume policy</span>
-                    <select class="select select-bordered select-sm" id="review-gate-resume-policy">
+                    <select class="select select-bordered select-sm bg-base-200" id="review-gate-resume-policy" disabled>
                         <option value="next_task">Next task</option>
                     </select>
                 </label>
@@ -127,7 +131,7 @@
                 </div>
                 <label class="form-control">
                     <span class="label-text">Business rule flags</span>
-                    <textarea class="textarea textarea-bordered text-sm" id="review-gate-business-flags"></textarea>
+                    <textarea class="textarea textarea-bordered text-sm" id="review-gate-business-flags" placeholder="One flag per line, for example: missing_purchase_order"></textarea>
                 </label>
             </div>
         </div>
@@ -150,7 +154,7 @@
                     </thead>
                     <tbody id="review-gate-document-threshold-body">
                         <tr>
-                            <td colspan="3" class="text-center text-base-content/50 py-8">No overrides</td>
+                            <td colspan="3" class="text-center text-base-content/50 py-4">No overrides. The global threshold applies.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -173,7 +177,7 @@
                     </thead>
                     <tbody id="review-gate-field-threshold-body">
                         <tr>
-                            <td colspan="3" class="text-center text-base-content/50 py-8">No overrides</td>
+                            <td colspan="3" class="text-center text-base-content/50 py-4">No overrides. The global threshold applies.</td>
                         </tr>
                     </tbody>
                 </table>

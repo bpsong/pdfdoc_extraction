@@ -11,6 +11,9 @@
             <h2 class="font-semibold text-sm">Schemas</h2>
             <span id="schema-count" class="badge badge-ghost badge-sm">0</span>
         </div>
+        <div class="px-3 pt-3">
+            <input id="schema-search-input" class="input input-bordered input-sm w-full" type="search" placeholder="Search schemas">
+        </div>
         <div id="schema-list" class="schema-list">
             <div class="empty-panel">No schemas</div>
         </div>
@@ -47,7 +50,8 @@
         </div>
 
         <div class="schema-toolbar">
-            <button class="btn btn-outline btn-xs" type="button" data-add-field="string">String</button>
+            <div class="basis-full text-xs text-base-content/60">Add a top-level field. Use nested Add buttons inside object fields for child fields.</div>
+            <button class="btn btn-outline btn-xs" type="button" data-add-field="string" title="Add top-level string field">String</button>
             <button class="btn btn-outline btn-xs" type="button" data-add-field="number">Number</button>
             <button class="btn btn-outline btn-xs" type="button" data-add-field="boolean">Boolean</button>
             <button class="btn btn-outline btn-xs" type="button" data-add-field="enum">Enum</button>

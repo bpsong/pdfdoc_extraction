@@ -26,7 +26,7 @@ The target application should keep the useful pipeline architecture from `pdfdoc
   - Review queue.
   - Human review.
   - Reports and settings.
-- Provide an administrator UI that includes all operator capabilities plus schema management, validation, pipeline task reconfiguration, review-gate rules, task catalog, split settings, admin audit history, and dry-run tools.
+- Provide an administrator UI that includes all operator capabilities plus schema management, validation, pipeline task reconfiguration, review-gate rules, task catalog, split settings, admin audit history, and review-gate simulation tools.
 - Add a configurable `ReviewGateTask` that administrators can place anywhere in the YAML pipeline.
 - Support pause/resume workflow behavior when a document requires human review.
 - Support one-to-many processing where one uploaded PDF can produce multiple child documents after splitting.
@@ -534,9 +534,9 @@ The admin view must include:
 - LlamaCloud Split Settings for split categories, thresholds, adapter status, and connection checks.
 - System Settings for watch folders, output/archive folders, SQLite path, upload limits, and retention settings.
 - Admin Audit History for schema, pipeline, validation, settings, and publish events.
-- Pipeline Dry Run for testing a sample PDF through split/extract/review-gate decisions without final export.
+- Review Gate Simulator for validating the pipeline model and testing review-gate behavior from mock JSON without final export.
 
-The first admin implementation should prioritize Schema Management, Validation Center, Pipeline Configuration, and Review Gate Rules. Task Catalog, Split Settings, Admin Audit History, and Pipeline Dry Run may be implemented incrementally but must be represented in the UI architecture.
+The first admin implementation should prioritize Schema Management, Validation Center, Pipeline Configuration, and Review Gate Rules. Task Catalog, Split Settings, Admin Audit History, and Review Gate Simulator may be implemented incrementally but must be represented in the UI architecture.
 
 ### 11.2 Upload and Process
 
@@ -636,7 +636,7 @@ The validation center must support:
 - Validate path and storage filename token references.
 - Display errors, warnings, and info findings with suggestions.
 
-#### 11.6.5 Admin Audit and Dry Run
+#### 11.6.5 Admin Audit and Review Gate Simulator
 
 The admin UI must record and expose:
 
@@ -647,7 +647,7 @@ The admin UI must record and expose:
 - Review-gate rule changes.
 - Split settings changes.
 
-The dry-run tool must let an administrator upload or select a sample PDF, choose a pipeline draft, and preview split, extraction, and review-gate decisions without writing final exports.
+The review-gate simulator must let an administrator validate the pipeline model and evaluate review-gate decisions from mock JSON without processing PDFs, calling extraction/split adapters, or writing final exports.
 
 ### 11.7 Visual Style
 
@@ -800,7 +800,7 @@ The refactor must include tests for:
 - Pipeline configuration tests for draft, diff, validation, and publish behavior.
 - Task catalog tests for module/class discovery and import failure reporting.
 - Review-gate rules UI/API tests.
-- Pipeline dry-run tests with mocked extraction and split calls.
+- Review-gate simulator tests with mocked confidence inputs.
 - LlamaCloud Split adapter with mocked HTTP responses.
 
 All tests must use pytest and follow the project Windows command convention:
@@ -892,7 +892,7 @@ The refactor is acceptable when:
 - Build Pipeline Configuration with draft, diff, validate, and publish.
 - Build Review Gate Rules and Split Settings screens.
 - Build Validation Center after the validation services and admin configuration APIs exist.
-- Add admin dashboard, audit visibility, settings, and pipeline dry-run scaffolding.
+- Add admin dashboard, audit visibility, settings, and review-gate simulator scaffolding.
 
 ### Milestone 8: Reports, Migration Cleanup, and Documentation
 

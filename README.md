@@ -37,7 +37,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Modern Web Interface
 - **FastAPI Backend**: High-performance REST API
 - **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/reports`, and `/app/settings`
-- **Admin App**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`
+- **Admin App**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator)
 - **Review Workflows**: Human review queues for low-confidence or policy-triggered extracted fields
 - **Responsive Design**: Mobile-friendly interface
 
@@ -223,7 +223,7 @@ Text status files are not required for configured workflow state. `/api/files` a
 3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track splitting, extraction, review, and completion state
 4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
 5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
-6. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, review-gate, split, audit, dry-run, and schema workflows
+6. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, review-gate, split, audit, review-gate simulation, and schema workflows
 
 ### Watch Folder
 

@@ -21,7 +21,7 @@
 
     const state = {
         result: null,
-        rawVisible: true,
+        rawVisible: false,
     };
 
     function escapeHtml(value) {
@@ -100,16 +100,23 @@
 
     function renderFindings(findings) {
         const body = document.getElementById("validation-findings-body");
+        const successBanner = document.getElementById("validation-success-banner");
         document.getElementById("validation-findings-summary").textContent = findings.length
             ? `${findings.length} findings`
             : state.result
                 ? "Validation passed"
                 : "No validation run";
+        successBanner.className = "px-4 pt-4 hidden";
+        successBanner.innerHTML = "";
 
         if (!findings.length) {
+            if (state.result) {
+                successBanner.className = "px-4 pt-4";
+                successBanner.innerHTML = '<div class="alert alert-success text-sm">Validation passed with no findings.</div>';
+            }
             body.innerHTML = state.result
-                ? '<tr><td colspan="6" class="text-center text-success py-10">Validation passed</td></tr>'
-                : '<tr><td colspan="6" class="text-center text-base-content/50 py-10">No validation findings</td></tr>';
+                ? '<tr><td colspan="6" class="text-center text-base-content/50 py-4">No findings to display</td></tr>'
+                : '<tr><td colspan="6" class="text-center text-base-content/50 py-4">No validation run yet</td></tr>';
             return;
         }
 
@@ -128,7 +135,7 @@
     function renderRawJson() {
         const rawPanel = document.getElementById("validation-raw-json");
         rawPanel.classList.toggle("hidden", !state.rawVisible);
-        document.getElementById("validation-raw-toggle").textContent = state.rawVisible ? "Hide" : "Show";
+        document.getElementById("validation-raw-toggle").textContent = state.rawVisible ? "Hide raw details" : "Show raw details";
         rawPanel.textContent = JSON.stringify(redactSecrets(state.result || {}), null, 2);
     }
 
@@ -152,6 +159,16 @@
 
     async function validateAllSchemas() {
         state.result = await window.DocFlow.apiPost("/api/admin/schemas/validate-all", {});
+        render();
+    }
+
+    async function validatePipeline() {
+        const payload = await window.DocFlow.apiGet("/api/admin/pipeline");
+        const model = payload.draft && payload.draft.model
+            ? payload.draft.model
+            : payload.active && payload.active.model;
+        state.result = await window.DocFlow.apiPost("/api/admin/pipeline/validate", { model });
+        state.result.source = "pipeline";
         render();
     }
 
@@ -182,6 +199,9 @@
     });
     document.getElementById("validation-schemas-button").addEventListener("click", () => {
         validateAllSchemas().catch((error) => window.DocFlow.showToast(error.message || "Unable to validate schemas", "error"));
+    });
+    document.getElementById("validation-pipeline-button").addEventListener("click", () => {
+        validatePipeline().catch((error) => window.DocFlow.showToast(error.message || "Unable to validate pipeline", "error"));
     });
     document.getElementById("validation-raw-toggle").addEventListener("click", toggleRawJson);
 

@@ -11,6 +11,7 @@
         taskKey: "",
         source: "",
         passThrough: {},
+        dirty: false,
     };
 
     function escapeHtml(value) {
@@ -43,7 +44,7 @@
     function thresholdRows(map, type) {
         const entries = Object.entries(map || {});
         if (!entries.length) {
-            return `<tr><td colspan="3" class="text-center text-base-content/50 py-8">No overrides</td></tr>`;
+            return `<tr><td colspan="3" class="text-center text-base-content/50 py-4">No overrides. The global threshold applies.</td></tr>`;
         }
         return entries.map(([key, value], index) => `
             <tr data-threshold-row="${escapeHtml(type)}" data-index="${index}">
@@ -119,7 +120,7 @@
         document.getElementById("review-gate-lock-summary").textContent = `${settings.lock_timeout_minutes || 60} min lock`;
         document.getElementById("review-gate-pass-summary").textContent = titleCase(state.passThrough.status || "passed");
         document.getElementById("review-gate-pass-status").textContent = state.passThrough.review_required === false
-            ? "No review item"
+            ? "Preview: no review item"
             : "-";
     }
 
@@ -165,15 +166,20 @@
         state.taskKey = payload.task_key || "";
         state.source = payload.source || "";
         state.passThrough = payload.pass_through_behavior || {};
+        state.dirty = false;
         render();
     }
 
     async function saveRules() {
+        if (!window.confirm("Save review gate rules? These thresholds affect documents that enter review.")) {
+            return;
+        }
         const payload = await window.DocFlow.apiPut("/api/admin/review-gate-rules", { settings: readSettings() });
         state.settings = payload.settings || {};
         state.taskKey = payload.task_key || "";
         state.source = payload.source || "";
         state.passThrough = payload.pass_through_behavior || {};
+        state.dirty = false;
         render();
         window.DocFlow.showToast("Review gate rules saved", "success");
     }
@@ -201,15 +207,24 @@
         render();
     }
 
+    function markDirty() {
+        state.dirty = true;
+    }
+
     document.getElementById("review-gate-confidence-range").addEventListener("input", (event) => {
+        markDirty();
         document.getElementById("review-gate-confidence-input").value = event.target.value;
         document.getElementById("review-gate-threshold-summary").textContent = percent(event.target.value);
     });
     document.getElementById("review-gate-confidence-input").addEventListener("input", (event) => {
+        markDirty();
         document.getElementById("review-gate-confidence-range").value = event.target.value;
         document.getElementById("review-gate-threshold-summary").textContent = percent(event.target.value);
     });
     document.getElementById("review-gate-refresh-button").addEventListener("click", () => {
+        if (state.dirty && !window.confirm("Discard unsaved review gate changes and refresh?")) {
+            return;
+        }
         loadRules().catch((error) => window.DocFlow.showToast(error.message || "Unable to load rules", "error"));
     });
     document.getElementById("review-gate-save-button").addEventListener("click", () => {
@@ -221,6 +236,32 @@
         const button = event.target.closest("[data-remove-threshold]");
         if (button) {
             removeThreshold(button.dataset.removeThreshold, Number(button.dataset.index));
+        }
+    });
+    workspace.addEventListener("input", (event) => {
+        if (event.target.matches("input, textarea, select")) {
+            markDirty();
+        }
+    });
+    workspace.addEventListener("change", (event) => {
+        if (event.target.matches("input, textarea, select")) {
+            markDirty();
+        }
+    });
+    window.addEventListener("beforeunload", (event) => {
+        if (!state.dirty) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = "";
+    });
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[href]");
+        if (!link || !state.dirty || link.target || link.href === window.location.href) {
+            return;
+        }
+        if (!window.confirm("Leave this page and discard unsaved review gate changes?")) {
+            event.preventDefault();
         }
     });
 

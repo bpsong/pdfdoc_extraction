@@ -9,6 +9,7 @@
     const SECRET_KEYS = ["api_key", "apikey", "password", "secret", "secret_key", "token"];
     const state = {
         result: null,
+        rawVisible: false,
     };
 
     function escapeHtml(value) {
@@ -88,7 +89,7 @@
     function renderDecisionTable(result) {
         const body = document.getElementById("dry-run-decision-body");
         if (!result) {
-            body.innerHTML = '<tr><td colspan="3" class="text-center text-base-content/50 py-10">No dry-run result</td></tr>';
+            body.innerHTML = '<tr><td colspan="3" class="text-center text-base-content/50 py-4">Run a preview to evaluate the mock confidence values.</td></tr>';
             return;
         }
         const rows = [
@@ -121,7 +122,10 @@
             ? `${result.pipeline?.summary?.enabled_steps || 0} enabled steps`
             : "No dry run yet";
         document.getElementById("dry-run-audit-id").textContent = result?.audit_event_id || "No audit event";
-        document.getElementById("dry-run-json").textContent = JSON.stringify(redactSecrets(result || {}), null, 2);
+        const rawJson = document.getElementById("dry-run-json");
+        rawJson.classList.toggle("hidden", !state.rawVisible);
+        rawJson.textContent = JSON.stringify(redactSecrets(result || {}), null, 2);
+        document.getElementById("dry-run-raw-toggle").textContent = state.rawVisible ? "Hide raw result" : "Show raw result";
         renderDecisionTable(result);
     }
 
@@ -134,6 +138,10 @@
 
     document.getElementById("dry-run-run-button").addEventListener("click", () => {
         runDryRun().catch((error) => window.DocFlow.showToast(error.message || "Unable to run dry run", "error"));
+    });
+    document.getElementById("dry-run-raw-toggle").addEventListener("click", () => {
+        state.rawVisible = !state.rawVisible;
+        render();
     });
 
     render();

@@ -13,6 +13,7 @@
         selectedIndex: 0,
         validation: null,
         dirty: false,
+        paramsInvalid: false,
     };
 
     const activeList = document.getElementById("pipeline-active-list");
@@ -28,6 +29,8 @@
     const diffPreview = document.getElementById("pipeline-diff-preview");
     const addTaskSelect = document.getElementById("pipeline-add-task-select");
     const publishButton = document.getElementById("pipeline-publish-button");
+    const saveDraftButton = document.getElementById("pipeline-save-draft-button");
+    const publishHelp = document.getElementById("pipeline-publish-help");
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -232,18 +235,18 @@
                 </label>
                 <label class="form-control">
                     <span class="label-text">Module</span>
-                    <input class="input input-bordered input-sm" data-step-field="module" value="${escapeHtml(step.module || "")}">
+                    <input class="input input-bordered input-sm bg-base-200" value="${escapeHtml(step.module || "")}" readonly>
                 </label>
                 <label class="form-control">
                     <span class="label-text">Class</span>
-                    <input class="input input-bordered input-sm" data-step-field="class" value="${escapeHtml(step.class || "")}">
+                    <input class="input input-bordered input-sm bg-base-200" value="${escapeHtml(step.class || "")}" readonly>
                 </label>
                 <label class="form-control">
                     <span class="label-text">On Error</span>
                     <select class="select select-bordered select-sm" data-step-field="on_error">
-                        <option value="" ${!step.on_error ? "selected" : ""}>Default</option>
-                        <option value="stop" ${step.on_error === "stop" ? "selected" : ""}>Stop</option>
-                        <option value="continue" ${step.on_error === "continue" ? "selected" : ""}>Continue</option>
+                        <option value="" ${!step.on_error ? "selected" : ""}>Default runtime behavior</option>
+                        <option value="stop" ${step.on_error === "stop" ? "selected" : ""}>Stop pipeline on error</option>
+                        <option value="continue" ${step.on_error === "continue" ? "selected" : ""}>Continue after error</option>
                     </select>
                 </label>
                 <label class="label cursor-pointer justify-start gap-3 pt-7">
@@ -268,7 +271,19 @@
         validationSummary.textContent = state.validation
             ? `${errors} blocking, ${warnings} warnings`
             : "Not validated";
-        publishButton.disabled = !state.validation || errors > 0 || state.dirty;
+        publishButton.disabled = !state.validation || errors > 0 || state.dirty || state.paramsInvalid;
+        saveDraftButton.disabled = state.paramsInvalid;
+        if (state.paramsInvalid) {
+            publishHelp.textContent = "Fix invalid Params JSON before saving or publishing.";
+        } else if (state.dirty) {
+            publishHelp.textContent = "Save Draft, then Validate, before publishing.";
+        } else if (!state.validation) {
+            publishHelp.textContent = "Validate the saved draft before publishing.";
+        } else if (errors > 0) {
+            publishHelp.textContent = "Resolve blocking validation findings before publishing.";
+        } else {
+            publishHelp.textContent = "Draft is validated and ready to publish.";
+        }
 
         if (!state.validation) {
             validationResults.innerHTML = '<div class="empty-panel">No validation run</div>';
@@ -344,11 +359,16 @@
         state.selectedIndex = stepsOf(state.draft).length ? 0 : -1;
         state.validation = null;
         state.dirty = false;
+        state.paramsInvalid = false;
         diffPreview.textContent = "No diff loaded";
         render();
     }
 
     async function saveDraft() {
+        if (state.paramsInvalid) {
+            window.DocFlow.showToast("Fix invalid Params JSON before saving.", "warning");
+            return;
+        }
         const payload = await window.DocFlow.apiPut("/api/admin/pipeline/draft", { model: state.draft });
         state.draft = clone(payload.draft.model);
         state.dirty = false;
@@ -357,6 +377,10 @@
     }
 
     async function validateDraftPipeline() {
+        if (state.paramsInvalid) {
+            window.DocFlow.showToast("Fix invalid Params JSON before validating.", "warning");
+            return;
+        }
         const validation = await window.DocFlow.apiPost("/api/admin/pipeline/validate", { model: state.draft });
         state.validation = validation;
         state.dirty = false;
@@ -370,6 +394,9 @@
 
     async function publishDraftPipeline() {
         if (publishButton.disabled) {
+            return;
+        }
+        if (!window.confirm("Publish this draft pipeline as the live configuration?")) {
             return;
         }
         const payload = await window.DocFlow.apiPost("/api/admin/pipeline/publish", { model: state.draft });
@@ -413,6 +440,9 @@
     }
 
     function deleteTask(index) {
+        if (!window.confirm("Remove this step from the draft pipeline?")) {
+            return;
+        }
         const steps = stepsOf(state.draft);
         steps.splice(index, 1);
         state.selectedIndex = Math.min(index, steps.length - 1);
@@ -434,12 +464,15 @@
                     error.classList.add("hidden");
                     error.textContent = "";
                 }
+                state.paramsInvalid = false;
             } catch (err) {
                 const error = document.getElementById("pipeline-params-error");
                 if (error) {
                     error.textContent = err.message || "Invalid JSON";
                     error.classList.remove("hidden");
                 }
+                state.paramsInvalid = true;
+                renderValidation();
                 return;
             }
         } else {
@@ -497,7 +530,22 @@
     }, true);
 
     document.getElementById("pipeline-refresh-button").addEventListener("click", () => {
+        if (state.dirty && !window.confirm("Discard unsaved draft changes and refresh?")) {
+            return;
+        }
         loadPipelineConfig().catch((error) => window.DocFlow.showToast(error.message, "error"));
+    });
+    document.getElementById("pipeline-reset-button").addEventListener("click", () => {
+        if (!window.confirm("Reset the draft pipeline to the active configuration?")) {
+            return;
+        }
+        state.draft = clone(state.active);
+        state.selectedIndex = stepsOf(state.draft).length ? 0 : -1;
+        state.validation = null;
+        state.dirty = true;
+        state.paramsInvalid = false;
+        diffPreview.textContent = "No diff loaded";
+        render();
     });
     document.getElementById("pipeline-save-draft-button").addEventListener("click", () => {
         saveDraft().catch((error) => window.DocFlow.showToast(error.message, "error"));
@@ -511,6 +559,22 @@
     document.getElementById("pipeline-add-task-button").addEventListener("click", addTaskFromCatalog);
     publishButton.addEventListener("click", () => {
         publishDraftPipeline().catch((error) => window.DocFlow.showToast(error.message, "error"));
+    });
+    window.addEventListener("beforeunload", (event) => {
+        if (!state.dirty) {
+            return;
+        }
+        event.preventDefault();
+        event.returnValue = "";
+    });
+    document.addEventListener("click", (event) => {
+        const link = event.target.closest("a[href]");
+        if (!link || !state.dirty || link.target || link.href === window.location.href) {
+            return;
+        }
+        if (!window.confirm("Leave this page and discard unsaved pipeline changes?")) {
+            event.preventDefault();
+        }
     });
 
     loadPipelineConfig().catch((error) => {
