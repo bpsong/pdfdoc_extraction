@@ -4,7 +4,7 @@ This module defines the FastAPI router and related dependencies for the web API.
 It exposes the following endpoints:
 
 - POST /login: Obtain an OAuth2 bearer token using username and password.
-- POST /upload: Upload a PDF for processing; redirects to the dashboard page.
+- POST /upload: Legacy upload endpoint; redirects to the app processing page.
 - GET /api/files: Legacy compatibility list backed by SQLite documents.
 - GET /api/status/{file_id}: Legacy compatibility status backed by SQLite documents.
 
@@ -698,13 +698,13 @@ def build_router() -> APIRouter:
             user: The authenticated user identifier, injected via dependency.
 
         Returns:
-            RedirectResponse: Redirects to the dashboard page immediately after file upload.
+            RedirectResponse: Redirects to the app processing page immediately after file upload.
 
         Raises:
             HTTPException: 400 if the upload or processing fails.
 
         HTTP Error Codes:
-            - 303: Successful upload, redirects to dashboard
+            - 303: Successful upload, redirects to the app processing page
             - 400: Invalid PDF file or upload/processing failure
             - 401: Authentication required or failed
         """
@@ -756,8 +756,8 @@ def build_router() -> APIRouter:
             # Add the processing task to background tasks
             background_tasks.add_task(process_file_in_background, file_processor, temp_path, file_id, upload.filename)
             
-            # Redirect to dashboard page immediately after upload
-            return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+            # Redirect to the app processing page immediately after upload.
+            return RedirectResponse(url="/app/processing", status_code=status.HTTP_303_SEE_OTHER)
         except HTTPException:
             raise
         except Exception as e:

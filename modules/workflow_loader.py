@@ -254,6 +254,13 @@ class WorkflowLoader:
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to TaskError in task '{task_name}'.")
                         break
+                except SystemExit as e:
+                    self.logger.error(f"Task '{task_name}' setup failed: {e}")
+                    current_context["error"] = f"Task setup failed: {e}"
+                    current_context["error_step"] = task_name
+                    if state_service is not None and task_run_id:
+                        state_service.fail_task(task_run_id, str(current_context["error"]), self._context_summary(current_context))
+                    raise
                 except Exception as e:
                     self.logger.error(f"Unexpected error in task '{task_name}': {e}")
                     current_context["error"] = f"Unexpected error: {e}"

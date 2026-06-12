@@ -236,17 +236,16 @@ def test_upload_requires_auth(api_client):
 
 
 @patch("modules.api_router.FileProcessor")
-def test_upload_pdf_success_redirects_to_dashboard(mock_fp_cls, api_client, mock_auth):
-    # The API upload endpoint schedules background processing and returns a redirect to /dashboard
+def test_upload_pdf_success_redirects_to_processing(mock_fp_cls, api_client, mock_auth):
+    # The legacy API upload endpoint schedules processing and returns a redirect to the app workflow page.
     mock_fp = MagicMock()
     mock_fp.process_file.return_value = None
     mock_fp_cls.return_value = mock_fp
 
     files = {"file": ("test.pdf", b"%PDF- dummy", "application/pdf")}
     resp = api_client.post("/upload", files=files, headers={"Authorization": f"Bearer {TOKEN}"}, follow_redirects=False)
-    # API router's upload returns RedirectResponse to /dashboard
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/dashboard"
+    assert resp.headers["location"] == "/app/processing"
 
 
 def test_list_files_requires_auth(api_client):

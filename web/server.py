@@ -371,35 +371,19 @@ def create_app() -> FastAPI:
         logger.info("User logged out, cookie cleared")
         return response
 
-    @app.get("/dashboard", response_class=HTMLResponse)
+    @app.get("/dashboard")
     async def dashboard_page(request: Request):
-        """Serves the dashboard page, requires authentication."""
-        try:
-            username = await get_current_active_user(request)
-            logger.info(f"/dashboard GET: authenticated user={username}")
-            return templates.TemplateResponse(
-                "dashboard.html", 
-                {"request": request, "is_authenticated": True, "username": username}
-            )
-        except HTTPException as e:
-            if e.status_code == status.HTTP_307_TEMPORARY_REDIRECT:
-                return RedirectResponse(url="/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-            raise
+        """Redirect the retired legacy dashboard to the reports workspace."""
 
-    @app.get("/upload", response_class=HTMLResponse)
+        await get_current_active_user(request)
+        return RedirectResponse(url="/app/reports", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
+
+    @app.get("/upload")
     async def upload_page(request: Request):
-        """Serves the upload page, requires authentication."""
-        try:
-            username = await get_current_active_user(request)
-            logger.info(f"/upload GET: authenticated user={username}")
-            return templates.TemplateResponse(
-                "upload.html", 
-                {"request": request, "is_authenticated": True, "username": username}
-            )
-        except HTTPException as e:
-            if e.status_code == status.HTTP_307_TEMPORARY_REDIRECT:
-                return RedirectResponse(url="/login", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-            raise
+        """Redirect the retired legacy upload page to the app upload workspace."""
+
+        await get_current_active_user(request)
+        return RedirectResponse(url="/app/upload", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
     @app.get("/app", response_class=HTMLResponse)
     async def app_root(request: Request):

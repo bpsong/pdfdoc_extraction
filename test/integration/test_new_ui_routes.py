@@ -153,6 +153,19 @@ def test_app_root_redirects_to_upload_for_authenticated_user(monkeypatch) -> Non
     assert response.headers["location"] == "/app/upload"
 
 
+def test_retired_legacy_pages_redirect_to_new_app_surfaces(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+    authenticate(client)
+
+    dashboard = client.get("/dashboard", follow_redirects=False)
+    upload = client.get("/upload", follow_redirects=False)
+
+    assert dashboard.status_code == 307
+    assert dashboard.headers["location"] == "/app/reports"
+    assert upload.status_code == 307
+    assert upload.headers["location"] == "/app/upload"
+
+
 def test_operator_app_routes_render_shared_shell_without_admin_navigation(monkeypatch) -> None:
     client = build_client(monkeypatch, username="operator", admin_users=["admin"])
     authenticate(client)
@@ -296,6 +309,7 @@ def test_reports_page_includes_task_25_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="reports-workspace"' in response.text
+    assert 'id="batch-detail-modal"' in response.text
     assert "/static/js/reports.js" in response.text
 
 

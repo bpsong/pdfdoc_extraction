@@ -56,7 +56,7 @@ The system is organized around pipelines defined in configuration (YAML). For ea
 - SQLite Repository Layer: owns persistence for batches, documents, task runs, extraction results, review items, document files, settings, and audit history.
 - Service Layer: coordinates use cases such as batch upload, review, reports, runtime settings, admin settings, audit events, and artifact registration.
 - Unified Web App: `/app/*` pages provide operator and administrator workflows over SQLite-backed APIs.
-- Legacy Compatibility: `StatusManager`, `/dashboard`, `/api/files`, and `/api/status/{file_id}` remain compatibility surfaces. They are not the primary state path for configured workflows.
+- Legacy Compatibility: `StatusManager`, `/api/files`, and `/api/status/{file_id}` remain compatibility surfaces. Legacy `/dashboard` and `/upload` HTML pages redirect to the unified `/app/*` interface and are not primary workflow surfaces.
 
 ## Data flow
 
@@ -109,7 +109,7 @@ graph TD
 
 - Unified Web Interface
   - **Authentication**: JWT-based single-user authentication with session management via [`modules/auth_utils.py`](modules/auth_utils.py:1)
-  - **Operator UI**: `/app/upload`, `/app/processing`, `/app/batches/{batch_id}`, `/app/batches/{batch_id}/split-results`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
+  - **Operator UI**: `/app/upload`, `/app/processing`, `/app/batches/{batch_id}`, `/app/batches/{batch_id}/split-results`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`. Reports expose recent batch records with a modal task-run timeline for each batch.
   - **Admin UI**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
   - **Primary APIs**: batch, document, extraction, review, reports, settings, admin settings, pipeline, review-gate, split, schema, and audit endpoints in [`modules/api_router.py`](modules/api_router.py:1).
   - **Legacy APIs**: `/api/files` and `/api/status/{file_id}` return SQLite-backed compatibility responses. New UI code should use the primary SQLite APIs.

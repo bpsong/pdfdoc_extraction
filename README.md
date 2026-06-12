@@ -212,7 +212,7 @@ SQLite is the primary workflow-state store. The application records:
 - registered document artifacts
 - admin settings versions and audit events
 
-Text status files are not required for configured workflow state. `/api/files` and `/api/status/{file_id}` remain as legacy compatibility APIs, but they read from SQLite.
+Text status files are not required for configured workflow state. `/api/files` and `/api/status/{file_id}` remain as legacy compatibility APIs, but they read from SQLite. Legacy HTML dashboard/upload pages are retired; use `/app/*` pages for browser workflows.
 
 ## Usage
 
@@ -223,7 +223,8 @@ Text status files are not required for configured workflow state. `/api/files` a
 3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track splitting, extraction, review, and completion state
 4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
 5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
-6. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, review-gate, split, audit, review-gate simulation, and schema workflows
+6. **Inspect Batch History**: Use `/app/reports` and click a recent batch row to view document task timelines and task-run details
+7. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, review-gate, split, audit, review-gate simulation, and schema workflows
 
 ### Watch Folder
 
@@ -253,7 +254,7 @@ C:\Python313\python.exe main.py --no-web
 Repeated failed login attempts are temporarily throttled and may return HTTP `429 Too Many Requests`.
 
 ### File Operations
-- `POST /upload`: Upload PDF for processing
+- `POST /upload`: Legacy single-PDF upload endpoint; redirects to `/app/processing` after scheduling
 - `POST /api/batches/upload`: Upload a batch of PDFs and create SQLite batch/document records
 - `GET /api/batches`: List ingestion batches
 - `GET /api/batches/{batch_id}`: Get batch details

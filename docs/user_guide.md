@@ -255,7 +255,7 @@ The primary operator experience is under `/app/*`.
 | `/app/documents/{document_id}/extraction` | Review extracted fields, confidence, metadata, and source PDF access. |
 | `/app/review` | Work the review queue for documents requiring human intervention. |
 | `/app/review/{review_item_id}` | Claim, inspect, edit, diff, and complete a review item. |
-| `/app/reports` | View processing and review activity summaries. |
+| `/app/reports` | View processing and review activity summaries. Click a recent batch row to inspect document task timelines and task-run details. |
 | `/app/settings` | View non-secret runtime settings and configured paths. |
 | `/app/settings/validation` | View configuration, schema, and pipeline validation findings. |
 | `/app/schemas` | Admin-only schema list and creation workflow. |
@@ -310,7 +310,7 @@ When split processing is enabled, a batch may create child documents from one so
 
 #### Legacy Dashboard
 
-Legacy `/dashboard`, `/api/files`, and `/api/status/{file_id}` routes may still exist for compatibility. New operational workflows should use `/app/*` pages. The legacy status APIs are backed by SQLite compatibility responses and should not be treated as the primary state model.
+The legacy `/dashboard` and `/upload` HTML pages are retired and redirect to the unified `/app/*` experience. `/api/files` and `/api/status/{file_id}` may still exist as SQLite-backed compatibility APIs, but they should not be treated as the primary state model.
 
 ---
 
@@ -638,7 +638,7 @@ No remaining text file should be required to reconstruct workflow state. If a le
 
 - Operators use `/app/processing`, `/app/batches/{batch_id}`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
 - Administrators use `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
-- Legacy `/dashboard`, `/api/files`, and `/api/status/{file_id}` are compatibility paths only.
+- Legacy `/dashboard` and `/upload` HTML pages redirect to the unified app. `/api/files` and `/api/status/{file_id}` are compatibility APIs only.
 
 #### 4.5.5. Admin Workflow Details
 

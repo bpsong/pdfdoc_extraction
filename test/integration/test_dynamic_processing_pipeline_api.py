@@ -94,7 +94,15 @@ def test_batch_processing_state_api_returns_snapshot_and_task_states(tmp_path, m
     assert [step["key"] for step in payload["pipeline_snapshot"]["steps"]] == ["extract_invoice", "review_gate"]
     assert payload["aggregate_step_states"][0]["state"] == "completed"
     assert payload["documents"][0]["last_completed_step"]["key"] == "extract_invoice"
+    assert payload["documents"][0]["task_runs"][0]["started_at"]
+    assert payload["documents"][0]["task_runs"][0]["ended_at"]
     assert "params" not in payload["pipeline_snapshot"]["steps"][0]
+
+    task_runs_response = client.get(f"/api/documents/{created['documents'][0]['id']}/task-runs")
+    assert task_runs_response.status_code == 200
+    task_runs = task_runs_response.json()
+    assert task_runs[0]["task_key"] == "extract_invoice"
+    assert task_runs[0]["status"] == "completed"
 
 
 def test_processing_state_api_returns_404_for_missing_batch(tmp_path, monkeypatch):

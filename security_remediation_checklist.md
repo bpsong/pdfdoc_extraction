@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 8
+- Fixed: 9
 - Assessed but not fixed: 0
-- Open: 8
+- Open: 7
 
 ## Effort Highlights
 
@@ -78,7 +78,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - H-01: Stored XSS in legacy dashboard.
   - Effort: Medium
   - Value: High
-  - Notes: The code changes are straightforward, but the UI needs regression testing because it touches table/modal rendering.
+  - Status: Fixed
+  - Notes: Legacy HTML dashboard/upload pages are retired, and the new Reports batch modal renders task-run details with escaped content.
 
 - M-01: CSRF protection or cookie-vs-bearer auth split.
   - Effort: Medium
@@ -182,11 +183,18 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 ## High Severity
 
-- [ ] H-01: Stored XSS in Legacy Dashboard Rendering
-  - Status: Open
-  - Effort: Medium
-  - Primary location: `web/templates/dashboard.html`
-  - Notes: Not fixed yet.
+- [x] H-01: Stored XSS in Legacy Dashboard Rendering
+  - Status: Fixed and verified
+  - Effort: Completed
+  - Primary locations:
+    - `web/server.py`
+    - `web/templates/reports.html`
+    - `web/static/js/reports.js`
+  - Fix summary: Retired the legacy dashboard/upload HTML rendering path, redirected old page routes to the unified app, removed obsolete legacy templates, and added a Reports batch-detail modal that escapes persisted task-run data before display.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m pytest -v`
+    - `node --check web\static\js\reports.js`
+    - Browser visual check on `http://127.0.0.1:8765/dashboard` confirmed redirect to `/app/reports` and a readable Recent Batches task-run detail modal.
 
 - [x] H-02: Config-Driven `eval()` in Legacy PDF Extraction
   - Status: Fixed and verified
@@ -351,10 +359,10 @@ If optimizing for lowest effort:
 
 If optimizing for risk reduction:
 
-1. H-01: Stored XSS in the legacy dashboard.
-2. H-04: Move secrets out of YAML and rotate exposed keys.
-3. M-01: Add CSRF protection or split cookie-auth HTML from bearer-auth API mutations.
-4. M-05: Apply safe schema-name validation to reads.
+1. H-04: Move secrets out of YAML and rotate exposed keys.
+2. M-01: Add CSRF protection or split cookie-auth HTML from bearer-auth API mutations.
+3. M-05: Apply safe schema-name validation to reads.
+4. M-04: Add PDF base-directory checks.
 
 ## Latest Verification
 

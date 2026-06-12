@@ -140,9 +140,29 @@
             </div>
         </section>
     </div>
+
+    <dialog class="reports-dialog" id="batch-detail-modal">
+        <div class="modal-box reports-batch-modal">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-3 top-3" type="submit" aria-label="Close">x</button>
+            </form>
+            <div class="reports-batch-modal-header">
+                <div class="min-w-0">
+                    <h2 class="font-semibold truncate" id="batch-detail-title">Batch details</h2>
+                    <p class="text-xs text-base-content/50 truncate" id="batch-detail-subtitle"></p>
+                </div>
+                <div class="reports-batch-modal-actions">
+                    <a class="btn btn-outline btn-sm hidden" id="batch-detail-processing-link" href="/app/processing">Processing</a>
+                </div>
+            </div>
+            <div id="batch-detail-body">
+                <div class="empty-panel">Select a batch to view workflow details</div>
+            </div>
+        </div>
+    </dialog>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/reports.js?v=task25" defer></script>
+<script src="/static/js/reports.js?v=task25-h01" defer></script>
 {% endblock %}
