@@ -33,7 +33,15 @@ pipeline:
   - store_metadata_json
 ```
 
-Use a path that exists from the project root when running config validation. The runtime schema loader also supports schema files stored under the configured schema directory, which defaults to `schemas`.
+Use a schema file that resolves under a configured schema directory. The runtime schema loader supports `schema.directories`, `schema.dirs`, `schema.directory`, and `schemas.directory`; if none is configured, it defaults to `schemas` relative to the config file. Absolute schema paths and relative paths are accepted only when they resolve under one of those configured directories.
+
+Example schema root configuration:
+
+```yaml
+schema:
+  directories:
+    - "schemas"
+```
 
 ## Field Keys and Labels
 

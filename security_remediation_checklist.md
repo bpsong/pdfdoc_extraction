@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 11
+- Fixed: 12
 - Assessed but not fixed: 0
-- Open: 5
+- Open: 4
 
 ## Effort Highlights
 
@@ -44,7 +44,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-05: Sanitize schema names for reads as well as writes.
   - Effort: Easy to medium
   - Value: Medium
-  - Notes: Existing `_safe_schema_name()` gives a clear pattern.
+  - Status: Fixed
+  - Notes: Schema reads now resolve only under configured schema directories.
 
 - M-04: Add a base-directory check before serving PDF paths.
   - Effort: Easy to medium
@@ -154,10 +155,11 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 - M-05: Sanitize schema names for reads as well as writes.
   - Regression risk: Low to medium
+  - Status: Fixed
   - Why: The intended UI/API already uses file names like `invoice.yaml`, but pipeline config may currently reference schema paths.
-  - Possible downside: Existing configs that use absolute schema paths or subdirectory paths stop loading.
-  - Safer fix shape: Apply strict file-name validation only to web/API-supplied schema names first; handle pipeline config separately if path-based schemas are a supported feature.
-  - Suggested test: Add tests for `invoice.yaml` success and absolute path, `..`, slash, and backslash rejection through API/service calls.
+  - Possible downside: Existing configs that use absolute schema paths outside configured schema directories stop loading.
+  - Safer fix shape: Allow filenames, configured-relative paths, and absolute paths only when the resolved path stays under a configured schema directory.
+  - Suggested test: Add tests for `invoice.yaml` success, configured-relative path success, allowed absolute path success, and outside-root absolute or `..` rejection through service calls.
 
 - M-04: Add a base-directory check before serving PDF paths.
   - Regression risk: Low to medium
@@ -289,13 +291,20 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `.\.venv\Scripts\python.exe -m py_compile modules\api_router.py`
     - `.\.venv\Scripts\python.exe -m pytest -v test\integration\test_extraction_results_api.py`
 
-- [ ] M-05: Admin Schema Names Can Resolve Outside Schema Directories
-  - Status: Open
-  - Effort: Easy to medium
+- [x] M-05: Admin Schema Names Can Resolve Outside Schema Directories
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary locations:
     - `modules/services/schema_service.py`
-    - `modules/api_router.py`
-  - Notes: Not fixed yet.
+    - `config.yaml`
+    - `dev_config.yaml`
+    - `dev_config fts.yaml`
+    - `fts_config org.yaml`
+  - Fix summary: Schema reads now resolve candidate paths and load only files under configured schema directories. Absolute paths and relative traversal outside those roots are rejected. Main app configs now explicitly set `schema.directories`.
+  - User experience: Admin schema editor behavior is unchanged for schemas in the configured schema directory. Arbitrary filesystem paths are no longer accepted unless they resolve under a configured schema root.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m py_compile modules\services\schema_service.py`
+    - `.\.venv\Scripts\python.exe -m pytest -q test\services\test_schema_service.py test\integration\test_schema_api.py test\standard_step\review\test_review_gate.py`
 
 - [ ] M-06: Dynamic Task Imports Are an Admin RCE Boundary
   - Status: Open
@@ -365,16 +374,16 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 If optimizing for lowest effort:
 
-1. M-05: Apply safe schema-name validation to reads.
-2. M-03 partial: Add deployment hardening controls with careful host config.
-3. H-04: Move secrets out of YAML and rotate exposed keys.
+1. M-03 partial: Add deployment hardening controls with careful host config.
+2. H-04: Move secrets out of YAML and rotate exposed keys.
+3. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
 
 If optimizing for risk reduction:
 
 1. H-04: Move secrets out of YAML and rotate exposed keys.
-2. M-05: Apply safe schema-name validation to reads.
-3. M-06: Restrict dynamic task imports.
-4. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
+2. M-06: Restrict dynamic task imports.
+3. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
+4. M-03 partial: Add deployment hardening controls with careful host config.
 
 ## Latest Verification
 

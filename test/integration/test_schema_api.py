@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -106,6 +107,25 @@ def test_schema_api_requires_admin_user(tmp_path, monkeypatch) -> None:
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Admin role required"
+
+
+def test_schema_api_rejects_absolute_path_outside_schema_directory(tmp_path, monkeypatch) -> None:
+    client, _ = _client(tmp_path, monkeypatch)
+    outside_schema = tmp_path / "outside.yaml"
+    outside_schema.write_text(
+        """
+title: Outside
+fields:
+  total:
+    type: float
+""",
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/schemas/{quote(str(outside_schema), safe='')}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Schema not found"
 
 
 def test_schema_update_reports_active_review_warning(tmp_path, monkeypatch) -> None:

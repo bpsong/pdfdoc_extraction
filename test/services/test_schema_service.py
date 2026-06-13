@@ -138,6 +138,71 @@ fields:
     assert normalized["fields"][0]["key"] == "total"
 
 
+def test_schema_service_rejects_absolute_path_outside_schema_directories(tmp_path):
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    outside_schema = outside_dir / "outside.yaml"
+    outside_schema.write_text(
+        """
+title: Outside
+fields:
+  total:
+    type: float
+""",
+        encoding="utf-8",
+    )
+    config = TempConfig(tmp_path / "app.sqlite3", {"schema": {"directories": [str(schema_dir)]}})
+    service = SchemaService(config)
+
+    assert service.load_schema(str(outside_schema)) is None
+    assert service.schema_content(str(outside_schema)) is None
+    assert service.schema_hash(str(outside_schema)) is None
+
+
+def test_schema_service_allows_absolute_path_inside_schema_directories(tmp_path):
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    schema_file = schema_dir / "invoice.yaml"
+    schema_file.write_text(
+        """
+title: Invoice
+fields:
+  total:
+    type: float
+""",
+        encoding="utf-8",
+    )
+    config = TempConfig(tmp_path / "app.sqlite3", {"schema": {"directories": [str(schema_dir)]}})
+    service = SchemaService(config)
+
+    normalized = service.normalize_schema(str(schema_file))
+
+    assert normalized is not None
+    assert normalized["title"] == "Invoice"
+    assert normalized["fields"][0]["key"] == "total"
+
+
+def test_schema_service_rejects_relative_traversal_outside_schema_directories(tmp_path):
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir()
+    outside_schema = tmp_path / "outside.yaml"
+    outside_schema.write_text(
+        """
+title: Outside
+fields:
+  total:
+    type: float
+""",
+        encoding="utf-8",
+    )
+    config = TempConfig(tmp_path / "app.sqlite3", {"schema": {"directories": [str(schema_dir)]}})
+    service = SchemaService(config)
+
+    assert service.load_schema("../outside.yaml") is None
+
+
 def test_schema_service_rejects_incompatible_array_item_config(tmp_path):
     schema_dir = tmp_path / "schemas"
     schema_dir.mkdir()

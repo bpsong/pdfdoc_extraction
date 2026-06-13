@@ -181,6 +181,8 @@ Replacement mapping:
 
 The architecture keeps schema-driven forms and corrected final values, but the source of truth is now the main app database and app-managed schema/config flows.
 
+Schema files are resolved only under configured schema directories; arbitrary absolute paths are rejected unless they remain within an allowed schema root.
+
 ## Split Fan-out and Fan-in
 
 Split processing classifies or separates source PDFs into child documents. The parent/source document records split status and child relationships. Child documents run extraction/review/storage workflows independently. Fan-in aggregates child document state so the source batch can display completion, partial completion, failure, or review-required state.

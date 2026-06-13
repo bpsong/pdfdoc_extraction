@@ -1028,7 +1028,7 @@ pipeline:
   - `require_review_when_missing_confidence`: boolean. Default is `true`. When `schema_file` is configured, missing-confidence review gating applies to fields marked `required: true` in the schema and to fields explicitly listed in `field_threshold_overrides`; optional schema fields do not force review solely because confidence is missing.
   - `require_review_for_missing_required_fields`: boolean. Default is `true` when schema validation is used.
   - `always_review`: boolean. If `true`, every document entering this task requires review.
-  - `schema_file`: optional schema name used to validate corrected/final field values.
+  - `schema_file`: optional schema name or path used to validate corrected/final field values. It must resolve under a configured schema directory such as `schema.directories`; by default this is `schemas` relative to the config file.
   - `queue_name`: review queue name. Defaults to `review.default_queue_name` or `default_review`.
   - `review_scope`: review scope, commonly `"low_confidence_fields"`.
   - `allow_operator_to_edit_high_confidence_fields`: boolean. Default is `true`.

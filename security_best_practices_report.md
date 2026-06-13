@@ -318,6 +318,8 @@ Recommended fix:
 
 Use `_safe_schema_name()` for every externally supplied schema name, including reads and validation. Resolve paths and require them to remain under configured schema directories.
 
+Remediation status: Fixed and verified in `security_remediation_checklist.md` under M-05.
+
 ### M-06: Dynamic Task Imports Are an Admin RCE Boundary
 
 Severity: Medium

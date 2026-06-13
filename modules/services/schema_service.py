@@ -49,9 +49,19 @@ class SchemaService:
         config_path = getattr(self.config_manager, "_config_path", None)
         base_dir = Path(config_path).parent if config_path else Path.cwd()
         directories: list[Path] = []
+        seen: set[str] = set()
         for raw_dir in raw_dirs:
             path = Path(str(raw_dir))
-            directories.append(path if path.is_absolute() else base_dir / path)
+            directory = path if path.is_absolute() else base_dir / path
+            try:
+                resolved = directory.expanduser().resolve()
+            except (OSError, RuntimeError):
+                continue
+            key = str(resolved).casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            directories.append(resolved)
         return directories
 
     def list_schemas(self) -> list[dict[str, Any]]:
@@ -182,19 +192,44 @@ class SchemaService:
         return hashlib.sha256(path.read_bytes()).hexdigest()
 
     def _resolve_schema_path(self, schema_name: str) -> Path | None:
-        candidate = Path(schema_name)
-        if candidate.is_absolute() and candidate.exists():
-            return candidate
-        config_path = getattr(self.config_manager, "_config_path", None)
-        base_dir = Path(config_path).parent if config_path else Path.cwd()
-        config_relative = base_dir / candidate
-        if config_relative.exists():
-            return config_relative
-        for directory in self.schema_directories():
-            path = directory / schema_name
-            if path.exists():
-                return path
-        return self.schema_directories()[0] / schema_name
+        raw_name = str(schema_name or "").strip()
+        if not raw_name:
+            return None
+        candidate = Path(raw_name)
+        if candidate.suffix.lower() not in SCHEMA_SUFFIXES:
+            return None
+        allowed_roots = self.schema_directories()
+        candidates: list[Path] = []
+        if candidate.is_absolute():
+            candidates.append(candidate)
+        else:
+            if any(part == ".." for part in candidate.parts):
+                return None
+            config_path = getattr(self.config_manager, "_config_path", None)
+            base_dir = Path(config_path).parent if config_path else Path.cwd()
+            candidates.append(base_dir / candidate)
+            candidates.extend(directory / candidate for directory in allowed_roots)
+
+        for path in candidates:
+            try:
+                resolved = path.expanduser().resolve()
+            except (OSError, RuntimeError):
+                continue
+            if self._path_is_within_directories(resolved, allowed_roots):
+                return resolved
+        return None
+
+    @staticmethod
+    def _path_is_within_directories(path: Path, directories: list[Path]) -> bool:
+        """Return True when path resolves under one configured schema directory."""
+
+        for directory in directories:
+            try:
+                path.relative_to(directory)
+                return True
+            except ValueError:
+                continue
+        return False
 
     def _writable_schema_path(self, schema_name: str) -> Path:
         name = self._safe_schema_name(schema_name)
