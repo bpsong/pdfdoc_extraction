@@ -12,7 +12,7 @@ Recommended priority order:
 
 1. Fix stored XSS in the legacy dashboard template.
 2. Remove `eval()` from config-driven extraction schema handling.
-3. Enforce upload/request size limits and upgrade FastAPI/Starlette on a compatible path.
+3. Enforce upload/request size limits and keep FastAPI/Starlette on a patched compatible path.
 4. Move runtime secrets out of YAML, rotate any exposed API keys, and stop logging password hashes or extracted document contents.
 5. Add CSRF protection or require bearer headers for mutating API endpoints when cookie authentication is accepted.
 
@@ -378,13 +378,13 @@ Severity: Medium
 
 Locations:
 
-- Runtime dependency: `starlette 0.46.2`
+- Reviewed runtime dependency: `starlette 0.46.2` before remediation
 - `modules/api_router.py:1379`
 - `web/server.py:61`
 
 Evidence:
 
-The local runtime uses Starlette 0.46.2 through FastAPI 0.115.12. A current Starlette advisory covers versions from 0.39.0 through 0.49.0 for CPU exhaustion through crafted Range headers in `FileResponse` and `StaticFiles`. This application uses both.
+The reviewed runtime used Starlette 0.46.2 through FastAPI 0.115.12. A current Starlette advisory covers versions from 0.39.0 through 0.49.0 for CPU exhaustion through crafted Range headers in `FileResponse` and `StaticFiles`. This application uses both.
 
 Impact:
 
@@ -393,6 +393,8 @@ An attacker can cause disproportionate CPU usage by requesting static files or P
 Recommended fix:
 
 Upgrade FastAPI and Starlette together on a compatible path. The installed FastAPI metadata constrains Starlette to `<0.47.0`, so patching this specific issue requires a FastAPI upgrade as well. As a short-term mitigation, strip or reject multi-range `Range` headers at a reverse proxy or middleware for static/PDF routes.
+
+Remediation status: Fixed and verified in `security_remediation_checklist.md` under M-08. FastAPI is now pinned to `0.136.3`, `requirements.txt` requires `starlette>=0.49.1,<1.0.0`, and the installed environment resolves Starlette to `0.52.1`.
 
 Source:
 
@@ -501,4 +503,4 @@ External sources checked:
 3. Rotate runtime secrets, move them to environment-backed configuration, and remove sensitive logging.
 4. Add CSRF protection or split cookie-auth HTML from bearer-auth API mutation endpoints.
 5. Add deployment hardening: trusted hosts, explicit CORS allowlist, security headers, protected docs, and production cookie `secure=True`.
-6. Upgrade FastAPI and Starlette together after tests pass, then add `pip-audit`, `pip check`, and `bandit` to CI.
+6. Keep FastAPI and Starlette on patched compatible versions, then add `pip-audit`, `pip check`, and `bandit` to CI.

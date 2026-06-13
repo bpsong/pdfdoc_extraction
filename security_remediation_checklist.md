@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 13
+- Fixed: 14
 - Assessed but not fixed: 0
-- Open: 3
+- Open: 2
 
 ## Effort Highlights
 
@@ -103,7 +103,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-08: FastAPI/Starlette upgrade for FileResponse DoS advisory.
   - Effort: Medium to high
   - Value: Medium
-  - Notes: Requires dependency compatibility testing.
+  - Status: Fixed
+  - Notes: FastAPI was upgraded and Starlette now resolves above the advisory fix floor.
 
 - M-06: Restrict dynamic task imports.
   - Effort: Medium to high
@@ -339,14 +340,20 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `.\.venv\Scripts\python.exe -m pytest -v test\security\test_security_logging.py test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py`
     - `.\.venv\Scripts\python.exe -m pytest -v`
 
-- [ ] M-08: Starlette Version Has File Response DoS Advisory
-  - Status: Open
-  - Effort: Medium to high
+- [x] M-08: Starlette Version Has File Response DoS Advisory
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary locations:
     - `requirements.txt`
-    - `modules/api_router.py`
-    - `web/server.py`
-  - Notes: Not fixed yet. Requires compatible FastAPI/Starlette upgrade planning.
+    - `test/security/test_dependency_versions.py`
+  - Fix summary: Upgraded FastAPI to `0.136.3` and added an explicit `starlette>=0.49.1,<1.0.0` requirement. The installed environment now resolves Starlette to `0.52.1`, above the fixed advisory floor. Added a regression test so affected Starlette versions are not reintroduced.
+  - User experience: PDF preview and static assets should behave the same for browser users.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
+    - `.\.venv\Scripts\python.exe -m pip check`
+    - `.\.venv\Scripts\python.exe -m pytest -q test\security\test_dependency_versions.py test\integration\test_extraction_results_api.py test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
+    - `.\.venv\Scripts\python.exe -m pytest -q`
+    - Browser visual check on `http://127.0.0.1:8765/app/review/849252d0-bdcb-42b9-bd60-cffa11015ade` confirmed the PDF viewer loaded with a 200 PDF response.
 
 ## Low Severity
 
@@ -384,13 +391,11 @@ If optimizing for lowest effort:
 
 1. M-03 partial: Add deployment hardening controls with careful host config.
 2. H-04: Move secrets out of YAML and rotate exposed keys.
-3. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
 
 If optimizing for risk reduction:
 
 1. H-04: Move secrets out of YAML and rotate exposed keys.
-2. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
-3. M-03 partial: Add deployment hardening controls with careful host config.
+2. M-03 partial: Add deployment hardening controls with careful host config.
 
 ## Latest Verification
 
@@ -454,4 +459,18 @@ If optimizing for risk reduction:
 - Result: 66 passed, 2 warnings
 - Full suite: `.\.venv\Scripts\python.exe -m pytest -q`
 - Result: 552 passed, 5 skipped, 44 warnings
+- Note: A Prefect temporary-server logging cleanup message appeared after pytest completed, but pytest exited successfully.
+
+## Latest M-08 Verification
+
+- Date: 2026-06-13
+- Dependency install: `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
+- Dependency check: `.\.venv\Scripts\python.exe -m pip check`
+- Installed versions: FastAPI `0.136.3`, Starlette `0.52.1`
+- Focused tests: `.\.venv\Scripts\python.exe -m pytest -q test\security\test_dependency_versions.py test\integration\test_extraction_results_api.py test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
+- Result: 36 passed, 33 warnings
+- Full suite: `.\.venv\Scripts\python.exe -m pytest -q`
+- Result: 557 passed, 4 skipped, 49 warnings
+- Visual smoke test: verified the pending human-review PDF viewer on `http://127.0.0.1:8765/app/review/849252d0-bdcb-42b9-bd60-cffa11015ade`; the PDF iframe requested `/api/documents/82e69aac-abed-4bbc-ae76-300976f66b77/file/pdf` and received HTTP 200.
+- Screenshot artifact: `output/playwright/m08-pdf-viewer-smoke.png`
 - Note: A Prefect temporary-server logging cleanup message appeared after pytest completed, but pytest exited successfully.

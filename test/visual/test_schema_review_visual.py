@@ -132,7 +132,7 @@ fields:
     )
     config._config_path = config_path
     initialize_database(config)
-    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path = tmp_path / "web_upload" / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n% visual test")
 
     with connect(config) as conn:
