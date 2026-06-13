@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 9
+- Fixed: 11
 - Assessed but not fixed: 0
-- Open: 7
+- Open: 5
 
 ## Effort Highlights
 
@@ -49,6 +49,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-04: Add a base-directory check before serving PDF paths.
   - Effort: Easy to medium
   - Value: Medium
+  - Status: Fixed
   - Notes: Add `Path.resolve()` and allowed-root validation plus a focused test.
 
 ### Easy With a Small Config or Deployment Decision
@@ -84,7 +85,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-01: CSRF protection or cookie-vs-bearer auth split.
   - Effort: Medium
   - Value: Medium to high
-  - Notes: Touches many mutating endpoints and frontend callers.
+  - Status: Fixed
+  - Notes: Cookie-authenticated mutating requests now require a matching CSRF header. Bearer-token API clients remain unchanged.
 
 - M-07: Login rate limiting.
   - Effort: Medium
@@ -159,6 +161,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 - M-04: Add a base-directory check before serving PDF paths.
   - Regression risk: Low to medium
+  - Status: Fixed
   - Why: Normal uploaded documents should live under configured processing/storage directories, but older records or custom tasks may store paths elsewhere.
   - Possible downside: Existing documents with source files outside allowed roots become unavailable through the PDF endpoint.
   - Safer fix shape: Start with an allowlist including current configured upload, processing, watch, and app storage roots; log rejected paths without returning the raw path.
@@ -245,13 +248,19 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 ## Medium Severity
 
-- [ ] M-01: Cookie Authentication Without CSRF Protection on Mutating Endpoints
-  - Status: Open
-  - Effort: Medium
+- [x] M-01: Cookie Authentication Without CSRF Protection on Mutating Endpoints
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary locations:
     - `web/server.py`
     - `modules/api_router.py`
-  - Notes: Not fixed yet.
+    - `web/static/js/app.js`
+    - `web/static/js/upload_process.js`
+  - Fix summary: Added double-submit CSRF protection for browser cookie authentication. Mutating requests using the `access_token` cookie must include a matching `X-CSRF-Token` header from the `csrf_token` cookie; Authorization-header bearer clients are exempt.
+  - User experience: Normal browser users should not see a change. Login sets the CSRF cookie, and authenticated app pages mint it for older sessions if missing.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m py_compile modules\api_router.py web\server.py`
+    - `.\.venv\Scripts\python.exe -m pytest -q test\integration\test_batch_upload_api.py test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py`
 
 - [x] M-02: Permissive CORS With Credentials
   - Status: Fixed and verified
@@ -271,11 +280,14 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `web/templates/app_base.html`
   - Notes: Not fixed yet.
 
-- [ ] M-04: FileResponse Serves Paths From Document Metadata Without a Base-Directory Check
-  - Status: Open
-  - Effort: Easy to medium
+- [x] M-04: FileResponse Serves Paths From Document Metadata Without a Base-Directory Check
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary location: `modules/api_router.py`
-  - Notes: Not fixed yet.
+  - Fix summary: Added resolved-path validation before PDF previews are served. Candidate document paths must be inside configured artifact roots such as upload, watch, processing, split, files, data, or archive directories before `FileResponse` is used.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m py_compile modules\api_router.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v test\integration\test_extraction_results_api.py`
 
 - [ ] M-05: Admin Schema Names Can Resolve Outside Schema Directories
   - Status: Open
@@ -354,15 +366,15 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 If optimizing for lowest effort:
 
 1. M-05: Apply safe schema-name validation to reads.
-2. M-04: Add PDF base-directory checks.
-3. M-03 partial: Add deployment hardening controls with careful host config.
+2. M-03 partial: Add deployment hardening controls with careful host config.
+3. H-04: Move secrets out of YAML and rotate exposed keys.
 
 If optimizing for risk reduction:
 
 1. H-04: Move secrets out of YAML and rotate exposed keys.
-2. M-01: Add CSRF protection or split cookie-auth HTML from bearer-auth API mutations.
-3. M-05: Apply safe schema-name validation to reads.
-4. M-04: Add PDF base-directory checks.
+2. M-05: Apply safe schema-name validation to reads.
+3. M-06: Restrict dynamic task imports.
+4. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
 
 ## Latest Verification
 

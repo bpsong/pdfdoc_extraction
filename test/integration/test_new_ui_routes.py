@@ -153,6 +153,16 @@ def test_app_root_redirects_to_upload_for_authenticated_user(monkeypatch) -> Non
     assert response.headers["location"] == "/app/upload"
 
 
+def test_authenticated_app_page_sets_missing_csrf_cookie(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+    authenticate(client)
+
+    response = client.get("/app/upload")
+
+    assert response.status_code == 200
+    assert "csrf_token" in response.cookies
+
+
 def test_retired_legacy_pages_redirect_to_new_app_surfaces(monkeypatch) -> None:
     client = build_client(monkeypatch)
     authenticate(client)

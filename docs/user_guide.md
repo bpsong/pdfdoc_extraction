@@ -510,6 +510,7 @@ Notes:
 - bcrypt enforces a hard 72-byte password limit; choose passwords under that length or generation/verification will fail.
 - Keep the `bcrypt` version aligned with `requirements.txt` (currently `5.0.0`) to avoid compatibility issues.
 - Repeated failed login attempts are temporarily throttled by default. Administrators can tune this with `auth.login_rate_limit_enabled`, `auth.login_max_failed_attempts`, `auth.login_window_seconds`, and `auth.login_cooldown_seconds` in `config.yaml`.
+- Browser sessions use an HttpOnly access-token cookie plus a separate CSRF cookie. The web app sends the CSRF token automatically on same-origin POST/PUT requests, so users do not need to enter or manage this value manually.
 
 Optional helper script:
 
@@ -633,6 +634,8 @@ The filesystem still stores durable business files and operational inputs:
 | Reference/config files | reference CSVs, YAML config, schema files | Managed by configuration and admin settings flows |
 
 No remaining text file should be required to reconstruct workflow state. If a legacy endpoint returns status, it should be treated as a SQLite compatibility response.
+
+PDF previews in the web app are served only when the registered file path resolves under configured artifact directories, such as upload, watch, processing, split, archive, data, or files directories. Records that point outside those configured roots are not served through the preview endpoint.
 
 #### 4.5.4. Operator and Admin State Views
 

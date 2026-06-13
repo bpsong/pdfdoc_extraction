@@ -1,13 +1,41 @@
 (function () {
     "use strict";
 
+    const CSRF_COOKIE_NAME = "csrf_token";
+    const CSRF_HEADER_NAME = "X-CSRF-Token";
+    const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+
+    function readCookie(name) {
+        const prefix = `${encodeURIComponent(name)}=`;
+        const cookies = document.cookie ? document.cookie.split(";") : [];
+        for (const rawCookie of cookies) {
+            const cookie = rawCookie.trim();
+            if (cookie.startsWith(prefix)) {
+                return decodeURIComponent(cookie.slice(prefix.length));
+            }
+        }
+        return "";
+    }
+
+    function csrfHeaders(method) {
+        const requestMethod = String(method || "GET").toUpperCase();
+        const token = readCookie(CSRF_COOKIE_NAME);
+        if (SAFE_METHODS.has(requestMethod) || !token) {
+            return {};
+        }
+        return { [CSRF_HEADER_NAME]: token };
+    }
+
     async function apiRequest(url, options) {
+        const requestOptions = options || {};
+        const requestMethod = requestOptions.method || "GET";
         const response = await fetch(url, {
             credentials: "same-origin",
-            ...options,
+            ...requestOptions,
             headers: {
                 "Accept": "application/json",
-                ...(options && options.headers ? options.headers : {}),
+                ...csrfHeaders(requestMethod),
+                ...(requestOptions.headers ? requestOptions.headers : {}),
             },
         });
 
@@ -188,6 +216,7 @@
         apiGet,
         apiPost,
         apiPut,
+        csrfHeaders,
         formatDateTime,
         showToast,
         setActiveNav,

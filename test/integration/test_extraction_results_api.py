@@ -18,9 +18,25 @@ class _FakeAuth:
 
 
 def _client(tmp_path: Path, monkeypatch) -> tuple[TestClient, TempConfig, dict]:
-    config = TempConfig(tmp_path / "app.sqlite3")
+    artifact_root = tmp_path / "artifacts"
+    artifact_root.mkdir()
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "web": {"upload_dir": str(artifact_root / "web_upload")},
+            "watch_folder": {
+                "dir": str(artifact_root / "watch"),
+                "processing_dir": str(artifact_root / "processing"),
+            },
+            "tasks": {
+                "split_documents": {"params": {"split_dir": str(artifact_root / "split")}},
+                "store_pdf": {"params": {"files_dir": str(artifact_root / "files")}},
+            },
+        },
+    )
     initialize_database(config)
-    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path = artifact_root / "processing" / "invoice.pdf"
+    pdf_path.parent.mkdir(parents=True)
     pdf_path.write_bytes(b"%PDF-1.4\n% test pdf")
 
     with connect(config) as conn:
@@ -130,3 +146,36 @@ def test_document_pdf_preview_serves_registered_file(tmp_path, monkeypatch) -> N
     assert response.headers["content-type"].startswith("application/pdf")
     assert response.headers["content-disposition"].startswith("inline;")
     assert response.content.startswith(b"%PDF-1.4")
+
+
+def test_document_pdf_preview_rejects_registered_file_outside_allowed_roots(tmp_path, monkeypatch) -> None:
+    client, config, state = _client(tmp_path, monkeypatch)
+    document_id = state["created"]["document"]["id"]
+    outside_pdf = tmp_path / "outside.pdf"
+    outside_pdf.write_bytes(b"%PDF-1.4\n% outside")
+
+    with connect(config) as conn:
+        conn.execute("UPDATE documents SET file_path = ? WHERE id = ?", (str(outside_pdf), document_id))
+        conn.execute("UPDATE document_files SET file_path = ? WHERE document_id = ?", (str(outside_pdf), document_id))
+        conn.commit()
+
+    response = client.get(f"/api/documents/{document_id}/file/pdf")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "PDF file not found"
+
+
+def test_document_pdf_preview_returns_404_for_missing_allowed_file(tmp_path, monkeypatch) -> None:
+    client, config, state = _client(tmp_path, monkeypatch)
+    document_id = state["created"]["document"]["id"]
+    missing_pdf = state["pdf_path"].parent / "missing.pdf"
+
+    with connect(config) as conn:
+        conn.execute("UPDATE documents SET file_path = ? WHERE id = ?", (str(missing_pdf), document_id))
+        conn.execute("UPDATE document_files SET file_path = ? WHERE document_id = ?", (str(missing_pdf), document_id))
+        conn.commit()
+
+    response = client.get(f"/api/documents/{document_id}/file/pdf")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "PDF file not found"

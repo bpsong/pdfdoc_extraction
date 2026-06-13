@@ -24,7 +24,12 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from modules.api_router import build_router, get_dependencies
+from modules.api_router import (
+    CSRF_COOKIE_NAME,
+    build_router,
+    generate_csrf_token,
+    get_dependencies,
+)
 from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
 from modules.auth_utils import AuthUtils, AuthError, LoginRateLimitError
@@ -76,6 +81,17 @@ def create_app() -> FastAPI:
 
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
     templates = Jinja2Templates(directory=str(templates_dir))
+
+    def _set_csrf_cookie(response: Any, token: str) -> None:
+        """Set the browser-readable CSRF cookie used by same-origin API calls."""
+
+        response.set_cookie(
+            key=CSRF_COOKIE_NAME,
+            value=token,
+            httponly=False,
+            samesite="lax",
+            path="/",
+        )
 
     try:
         config, _, _, _, _ = get_dependencies()
@@ -192,7 +208,7 @@ def create_app() -> FastAPI:
                 detail="Admin role required",
             )
 
-        return templates.TemplateResponse(
+        response = templates.TemplateResponse(
             template_name,
             {
                 "request": request,
@@ -207,6 +223,9 @@ def create_app() -> FastAPI:
                 **extra_context,
             },
         )
+        if request.cookies.get("access_token") and not request.cookies.get(CSRF_COOKIE_NAME):
+            _set_csrf_cookie(response, generate_csrf_token())
+        return response
 
     # --- Routes ---
 
@@ -318,6 +337,7 @@ def create_app() -> FastAPI:
                 max_age=int(expires_delta.total_seconds()),
                 expires=expires_at.strftime("%a, %d %b %Y %H:%M:%S GMT")
             )
+            _set_csrf_cookie(response, generate_csrf_token())
             
             logger.debug(f"Set cookie with token, expires in {auth.token_exp_minutes} minutes")
             return response
@@ -368,6 +388,7 @@ def create_app() -> FastAPI:
             status_code=status.HTTP_307_TEMPORARY_REDIRECT
         )
         response.delete_cookie("access_token")
+        response.delete_cookie(CSRF_COOKIE_NAME)
         logger.info("User logged out, cookie cleared")
         return response
 
@@ -662,6 +683,7 @@ def create_app() -> FastAPI:
             # Clear cookie when redirecting due to token/credentials issues
             if isinstance(exc.detail, str) and ("token" in exc.detail.lower() or "credentials" in exc.detail.lower() or "authenticated" in exc.detail.lower()):
                 response.delete_cookie("access_token")
+                response.delete_cookie(CSRF_COOKIE_NAME)
             return response
 
         # For API usage and tests, return a JSON response with the same status and detail

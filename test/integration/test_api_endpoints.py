@@ -117,6 +117,7 @@ def test_login_success_returns_redirect_and_cookie(client, mock_auth):
     # Check cookie is set
     cookies = resp.cookies
     assert "access_token" in cookies
+    assert "csrf_token" in cookies
 
 
 def test_login_failure_returns_login_page_with_error(client, mock_auth):

@@ -28,6 +28,7 @@ import os
 import json
 from pathlib import Path
 import logging
+import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
@@ -72,6 +73,37 @@ from .resume_manager import ResumeManager
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+logger = logging.getLogger("api_router")
+CSRF_COOKIE_NAME = "csrf_token"
+CSRF_HEADER_NAME = "x-csrf-token"
+CSRF_EXEMPT_PATHS = {"/api/login"}
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
+
+
+def generate_csrf_token() -> str:
+    """Return a random CSRF token suitable for a browser-readable cookie."""
+
+    return secrets.token_urlsafe(32)
+
+
+def require_csrf_for_cookie_auth(request: Request) -> None:
+    """Require a matching CSRF header for cookie-authenticated mutations."""
+
+    if request.method.upper() in SAFE_METHODS or request.url.path in CSRF_EXEMPT_PATHS:
+        return
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return
+    if not request.cookies.get("access_token"):
+        return
+
+    cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+    header_token = request.headers.get(CSRF_HEADER_NAME)
+    if not cookie_token or not header_token or not secrets.compare_digest(cookie_token, header_token):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token missing or invalid",
+        )
 
 # Custom dependency to get token from either header or cookie
 class CookieOrHeaderTokenBearer:
@@ -332,6 +364,74 @@ def _parsed_file_payload(file_record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _iter_config_directory_values(value: Any) -> list[str]:
+    """Return directory-like path values from nested config data."""
+    paths: list[str] = []
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            if isinstance(key, str) and key.endswith("_dir") and isinstance(nested, str) and nested.strip():
+                paths.append(nested)
+            paths.extend(_iter_config_directory_values(nested))
+    elif isinstance(value, list):
+        for nested in value:
+            paths.extend(_iter_config_directory_values(nested))
+    return paths
+
+
+def _configured_pdf_roots(config: Any) -> list[Path]:
+    """Return resolved directories that may contain application PDF artifacts."""
+    raw_roots = [
+        config.get("web.upload_dir"),
+        config.get("watch_folder.dir"),
+        config.get("watch_folder.processing_dir"),
+    ]
+    if hasattr(config, "get_all"):
+        raw_roots.extend(_iter_config_directory_values(config.get_all()))
+
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for raw_root in raw_roots:
+        if not isinstance(raw_root, str) or not raw_root.strip():
+            continue
+        try:
+            root = Path(raw_root).expanduser().resolve()
+        except (OSError, RuntimeError):
+            continue
+        key = str(root).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        roots.append(root)
+    return roots
+
+
+def _path_is_within_roots(path: Path, roots: list[Path]) -> bool:
+    """Return True when path is inside one of the configured artifact roots."""
+    for root in roots:
+        try:
+            path.relative_to(root)
+            return True
+        except ValueError:
+            continue
+    return False
+
+
+def _safe_pdf_candidate(raw_path: Any, allowed_roots: list[Path]) -> Path | None:
+    """Resolve and validate one PDF candidate path before serving it."""
+    if not raw_path:
+        return None
+    try:
+        path = Path(str(raw_path)).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return None
+    if not _path_is_within_roots(path, allowed_roots):
+        logger.warning("Rejected PDF preview path outside configured artifact roots")
+        return None
+    if path.exists() and path.is_file():
+        return path
+    return None
+
+
 # Background task function to process the uploaded file
 def process_file_in_background(file_processor: FileProcessor, temp_path: str, file_id: str, original_filename: Optional[str]) -> None:
     """Process the uploaded file in the background.
@@ -391,7 +491,7 @@ def build_router() -> APIRouter:
         For detailed system architecture, API design patterns, and endpoint integration
         with the overall system, refer to docs/design_architecture.md.
     """
-    router = APIRouter()
+    router = APIRouter(dependencies=[Depends(require_csrf_for_cookie_auth)])
     logger = logging.getLogger("api_router")
 
     async def _extract_login_credentials(request: Request) -> Tuple[str, str]:
@@ -1517,11 +1617,13 @@ def build_router() -> APIRouter:
             if file_record.get("file_type") in {"split_pdf", "source_original", "original_pdf"}
         ]
         candidate_paths.append(document.get("file_path"))
+        allowed_roots = _configured_pdf_roots(config)
+        if not allowed_roots:
+            logger.error("No configured artifact roots available for PDF preview")
+            raise HTTPException(status_code=404, detail="PDF file not found")
         for raw_path in candidate_paths:
-            if not raw_path:
-                continue
-            path = Path(str(raw_path))
-            if path.exists() and path.is_file():
+            path = _safe_pdf_candidate(raw_path, allowed_roots)
+            if path is not None:
                 return FileResponse(
                     str(path),
                     media_type="application/pdf",

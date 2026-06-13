@@ -145,6 +145,7 @@
             const response = await fetch("/api/batches/upload", {
                 method: "POST",
                 credentials: "same-origin",
+                headers: window.DocFlow ? window.DocFlow.csrfHeaders("POST") : {},
                 body: formData,
             });
             if (response.status === 401) {

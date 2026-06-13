@@ -115,6 +115,38 @@ def test_batch_upload_api_creates_one_batch_for_multiple_pdfs(tmp_path, monkeypa
     assert {call["document_id"] for call in workflow.calls} == set(payload["document_ids"])
 
 
+def test_batch_upload_api_rejects_cookie_auth_without_csrf_token(tmp_path, monkeypatch):
+    client, _, _ = build_client(tmp_path, monkeypatch)
+    client.cookies.set("access_token", "browser-token")
+
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("invoice_a.pdf", b"%PDF-1.4\ninvoice-a", "application/pdf")),
+        ],
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF token missing or invalid"
+
+
+def test_batch_upload_api_accepts_cookie_auth_with_csrf_token(tmp_path, monkeypatch):
+    client, _, _ = build_client(tmp_path, monkeypatch)
+    client.cookies.set("access_token", "browser-token")
+    client.cookies.set("csrf_token", "csrf-test-token")
+
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("invoice_a.pdf", b"%PDF-1.4\ninvoice-a", "application/pdf")),
+        ],
+        headers={"X-CSRF-Token": "csrf-test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+
+
 def test_batch_upload_api_rejects_invalid_pdf_without_persisting_state(tmp_path, monkeypatch):
     client, config, workflow = build_client(tmp_path, monkeypatch)
 
