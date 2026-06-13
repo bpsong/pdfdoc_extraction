@@ -108,6 +108,7 @@ from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.file_processor import FileProcessor
 from modules.workflow_manager import WorkflowManager
 from modules.db.migrations import initialize_database
+from modules.services.task_registry_service import validate_startup_task_registry
 
 from modules.logging_config import setup_logging
 
@@ -252,6 +253,7 @@ def main():
         initialize_database(config_manager)
     # Use centralized logging setup from modules.logging_config
     setup_logging(wrap_stdout_utf8=True)
+    validate_startup_task_registry(config_manager)
 
     # Initialize ShutdownManager singleton
     shutdown_manager = ShutdownManager()

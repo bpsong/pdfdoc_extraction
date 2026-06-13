@@ -10,6 +10,7 @@ from typing import Any
 
 from modules.base_task import BaseTask
 from modules.config_manager import ConfigManager
+from modules.services.task_registry_service import ApprovedTaskRegistry
 
 
 SECRET_KEY_PARTS = ("api_key", "password", "secret", "token", "credential")
@@ -31,6 +32,7 @@ class TaskCatalogService:
         if not (candidate_root / "standard_step").exists():
             candidate_root = Path.cwd()
         self.project_root = project_root or candidate_root
+        self.task_registry = ApprovedTaskRegistry(config_manager)
 
     def catalog(self) -> dict[str, Any]:
         """Return UI-ready task catalog entries and summary counts."""
@@ -73,7 +75,11 @@ class TaskCatalogService:
             if path.name == "__init__.py":
                 continue
             module_name = self._module_name(path)
-            class_names = self._class_names(path)
+            class_names = [
+                class_name
+                for class_name in self._class_names(path)
+                if self.task_registry.is_approved(module_name, class_name)
+            ]
             if not class_names:
                 continue
 
@@ -161,6 +167,18 @@ class TaskCatalogService:
         """Build an entry for a configured task outside standard_step discovery."""
         module_name = configured["module"]
         class_name = configured["class_name"]
+        if not self.task_registry.is_approved(module_name, class_name):
+            entry = self._failed_entry(
+                module_name=module_name,
+                class_name=class_name,
+                import_error=(
+                    "Task class is not approved for import. Add a deployment-controlled "
+                    "custom_steps.registry entry using the custom_step. module prefix."
+                ),
+            )
+            self._merge_configured(entry, configured)
+            return entry
+
         try:
             module = importlib.import_module(module_name)
             task_class = getattr(module, class_name)

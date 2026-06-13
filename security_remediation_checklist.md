@@ -13,9 +13,9 @@ Legend:
 
 ## Current Status
 
-- Fixed: 12
+- Fixed: 13
 - Assessed but not fixed: 0
-- Open: 4
+- Open: 3
 
 ## Effort Highlights
 
@@ -108,7 +108,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - M-06: Restrict dynamic task imports.
   - Effort: Medium to high
   - Value: Medium to high
-  - Notes: Requires a product/security decision about whether admins are trusted as code operators.
+  - Status: Fixed
+  - Notes: Active pipeline task imports are now limited to approved built-in tasks or deployment-registered `custom_step.*` tasks.
 
 ## Regression Risk For Easiest Fixes
 
@@ -306,13 +307,20 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `.\.venv\Scripts\python.exe -m py_compile modules\services\schema_service.py`
     - `.\.venv\Scripts\python.exe -m pytest -q test\services\test_schema_service.py test\integration\test_schema_api.py test\standard_step\review\test_review_gate.py`
 
-- [ ] M-06: Dynamic Task Imports Are an Admin RCE Boundary
-  - Status: Open
-  - Effort: Medium to high
+- [x] M-06: Dynamic Task Imports Are an Admin RCE Boundary
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary locations:
     - `modules/workflow_loader.py`
-    - `modules/services/pipeline_config_service.py`
-  - Notes: Not fixed yet.
+    - `modules/services/task_registry_service.py`
+    - `modules/services/pipeline_validation_service.py`
+    - `modules/services/task_catalog_service.py`
+    - `web/server.py`
+    - `main.py`
+  - Fix summary: Added a startup task trust gate, a shared approved task registry, runtime import blocking before `importlib`, and blocking admin pipeline validation for unapproved task pairs. Built-in `standard_step.*` task classes are approved in code; customer steps require deployment YAML under `custom_steps.registry` and must use the `custom_step.` module prefix.
+  - Verification:
+    - `.\.venv\Scripts\python.exe -m py_compile modules\services\task_registry_service.py modules\workflow_loader.py modules\services\pipeline_validation_service.py modules\services\task_catalog_service.py main.py web\server.py tools\config_check\schema.py`
+    - `.\.venv\Scripts\python.exe -m pytest -q test\services\test_task_registry_service.py test\workflow\test_workflow_loader_task_approval.py test\services\test_config_validation_service.py test\integration\test_config_validation_api.py test\services\test_task_catalog_service.py`
 
 - [x] M-07: No Login Rate Limiting or Account Throttling
   - Status: Fixed and verified
@@ -381,9 +389,8 @@ If optimizing for lowest effort:
 If optimizing for risk reduction:
 
 1. H-04: Move secrets out of YAML and rotate exposed keys.
-2. M-06: Restrict dynamic task imports.
-3. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
-4. M-03 partial: Add deployment hardening controls with careful host config.
+2. M-08: Upgrade FastAPI/Starlette for FileResponse Range-header DoS coverage.
+3. M-03 partial: Add deployment hardening controls with careful host config.
 
 ## Latest Verification
 
@@ -439,3 +446,12 @@ If optimizing for risk reduction:
 - Full suite: `.\.venv\Scripts\python.exe -m pytest -v`
 - Result: 522 passed, 4 skipped, 43 warnings
 - Note: No visual test was run because the normal successful login flow and page rendering are unchanged; behavior is verified through endpoint and AuthUtils tests.
+
+## Latest M-06 Verification
+
+- Date: 2026-06-13
+- Focused tests: `.\.venv\Scripts\python.exe -m pytest -q test\tools\config_check\test_schema_validation.py test\tools\config_check\test_integration.py test\services\test_task_registry_service.py test\workflow\test_workflow_loader_task_approval.py test\services\test_config_validation_service.py test\integration\test_config_validation_api.py test\services\test_task_catalog_service.py`
+- Result: 66 passed, 2 warnings
+- Full suite: `.\.venv\Scripts\python.exe -m pytest -q`
+- Result: 552 passed, 5 skipped, 44 warnings
+- Note: A Prefect temporary-server logging cleanup message appeared after pytest completed, but pytest exited successfully.

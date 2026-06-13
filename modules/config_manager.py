@@ -84,6 +84,10 @@ DEFAULT_CONFIG: dict = {
         "roles_enabled": True,
         "default_admin_users": [],
     },
+    "custom_steps": {
+        "enabled": False,
+        "registry": {},
+    },
 }
 
 

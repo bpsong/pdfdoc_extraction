@@ -29,6 +29,15 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
         },
         "authentication": {"username": "admin", "password_hash": BCRYPT_HASH},
         "schema": {"directories": [str(schema_dir)]},
+        "custom_steps": {
+            "enabled": True,
+            "registry": {
+                "fake_extract": {
+                    "module": "custom_step.extraction.fake_extract",
+                    "class": "FakeExtractTask",
+                }
+            },
+        },
         "tasks": {
             "extract": {
                 "module": "custom_step.extraction.fake_extract",

@@ -34,6 +34,7 @@ from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
 from modules.auth_utils import AuthUtils, AuthError, LoginRateLimitError
 from modules.db.migrations import initialize_database
+from modules.services.task_registry_service import validate_startup_task_registry
 
 
 def _cors_allowed_origins(config: ConfigManager) -> list[str]:
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
 
     try:
         config, _, _, _, _ = get_dependencies()
+        validate_startup_task_registry(config)
         allowed_origins = _cors_allowed_origins(config)
         if allowed_origins:
             app.add_middleware(

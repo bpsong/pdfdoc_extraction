@@ -343,6 +343,8 @@ Recommended fix:
 
 Restrict UI-publishable tasks to an explicit allowlist or catalog generated from approved packages such as `standard_step.*`. For custom tasks, require local filesystem deployment plus an explicit trusted registry entry, not arbitrary module/class strings from the web UI.
 
+Remediation status: Fixed and verified in `security_remediation_checklist.md` under M-06. The workflow loader now blocks unapproved task pairs before import, startup fails with a critical log for unapproved active pipeline tasks, and admin validation rejects unapproved draft task pairs.
+
 False-positive notes:
 
 If administrators are intentionally trusted as code operators, document that trust boundary clearly and protect admin access accordingly.

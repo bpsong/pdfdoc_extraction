@@ -164,6 +164,36 @@ class TaskDefinition(BaseModel):
         return normalized
 
 
+class CustomTaskRegistryEntry(BaseModel):
+    """Deployment-controlled approval entry for a custom workflow task."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    module: str = Field(..., min_length=1, description="Approved custom_step.* module")
+    class_name: str = Field(
+        ..., min_length=1, alias="class", description="Approved custom task class"
+    )
+
+    @field_validator("module")
+    @classmethod
+    def _validate_custom_module_prefix(cls, value: str) -> str:
+        if not value.startswith("custom_step."):
+            raise ValueError("custom task modules must use the custom_step. prefix")
+        return value
+
+
+class CustomStepsConfig(BaseModel):
+    """Configuration for deployment-approved custom workflow tasks."""
+
+    model_config = ConfigDict(extra="allow")
+
+    enabled: bool = Field(default=False, description="Enable deployment-approved custom tasks")
+    registry: Dict[str, CustomTaskRegistryEntry] = Field(
+        default_factory=dict,
+        description="Approved custom task module/class pairs keyed by deployment name",
+    )
+
+
 class ConfigModel(BaseModel):
     """Top-level configuration model for the PDF processing system."""
 
@@ -201,6 +231,9 @@ class ConfigModel(BaseModel):
     )
     auth: Optional[Dict[str, Any]] = Field(
         default=None, description="Role and authorization settings"
+    )
+    custom_steps: Optional[CustomStepsConfig] = Field(
+        default=None, description="Deployment-controlled custom task approval registry"
     )
     secrets: Optional[Dict[str, Any]] = Field(
         default=None, description="Secret management configuration"

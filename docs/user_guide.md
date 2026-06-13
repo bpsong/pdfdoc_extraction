@@ -455,6 +455,7 @@ Do not use `*` for this setting. Command-line tools, Python scripts, and same-or
 
 Workflows are defined by the ordered list under `pipeline:` and the task registry under `tasks:`. Each item in `pipeline` references a key in `tasks` which specifies `module`, `class`, and `params`.
 The current implementation runs the same pipeline for every file; dynamic workflow selection or matching by file metadata is not implemented.
+Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
 Example task categories include:
 
@@ -1368,12 +1369,26 @@ Notes:
 - The pipeline is an ordered list of task names defined under `tasks:`.
 - Housekeeping runs automatically as the final step of the workflow, invoked directly by the WorkflowLoader. It deletes temporary processing-folder PDFs while preserving registered business artifacts.
 - Each task references a Python module and class from the `standard_step` package and receives `params`.
+- Customer custom task modules can be used only after deployment approval in `custom_steps.registry`, and custom modules must use the `custom_step.` prefix.
 - The three storage-related tasks are separate:
   - `store_metadata_csv` writes CSV to `data_dir` using `filename` template.
   - `store_metadata_json` writes JSON to `data_dir` using `filename` template.
   - `store_file_to_localdrive` moves the original PDF to `files_dir` using `filename`.
 - Field placeholders in `filename` come from extracted data keys (e.g., `{supplier_name}`, `{invoice_amount}`, `{policy_number}`).
 - Use `on_error: stop|continue` per task to control failure behavior.
+
+Example custom task approval block:
+
+```yaml
+custom_steps:
+  enabled: true
+  registry:
+    customer_validation:
+      module: custom_step.customer_validation
+      class: CustomerValidationTask
+```
+
+The `module` and `class` values under `tasks:` still stay in the normal pipeline configuration. The registry only approves which custom task classes may be imported.
 ### 4.11. Housekeeping and the Processing Folder
 
 - The `processing_dir` contains temporary working files during processing. Workflow state is stored in SQLite.

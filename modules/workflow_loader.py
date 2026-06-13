@@ -23,6 +23,7 @@ from modules.base_task import BaseTask
 from modules.db.connection import connect
 from modules.exceptions import TaskError
 from modules.services.fan_in_service import FanInService
+from modules.services.task_registry_service import ApprovedTaskRegistry, TaskApprovalError
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 
@@ -75,16 +76,22 @@ class WorkflowLoader:
             The imported class object, guaranteed to be a subclass of BaseTask.
 
         Raises:
+            TaskApprovalError: If the module/class pair is not approved for import.
             TypeError: If the resolved class does not inherit from BaseTask.
             SystemExit: If any error occurs during import or attribute access; the
                 error is logged, shutdown is triggered, and the process exits.
         """
         try:
+            ApprovedTaskRegistry(self.config_manager).assert_approved(module_name, class_name)
             module = importlib.import_module(module_name)
             task_class = getattr(module, class_name)
             if not issubclass(task_class, BaseTask):
                 raise TypeError(f"'{class_name}' in '{module_name}' is not a subclass of BaseTask.")
             return task_class
+        except TaskApprovalError as e:
+            self.logger.critical(str(e))
+            self.shutdown_manager.shutdown()
+            raise SystemExit(1)
         except Exception as e:
             self.logger.critical(f"Failed to import task class '{module_name}.{class_name}': {e}")
             self.shutdown_manager.shutdown()

@@ -93,6 +93,7 @@ graph TD
 - WorkflowLoader
   - Responsibilities: load `config.yaml`, instantiate tasks from the configured `pipeline`, and append the housekeeping cleanup step as a final step. It dynamically creates task instances based on configuration, allowing flexible pipeline definitions without code changes.
   - Important contract: tasks are referenced by `module` and `class` and receive `params`. The loader passes a mutable context dictionary through each task. When SQLite context exists, the loader records task-run lifecycle state and output summaries in SQLite.
+  - Security boundary: before importing a configured task, the loader verifies the exact module/class pair against the approved task registry. Built-in `standard_step.*` tasks are approved in code; customer tasks require deployment YAML approval under `custom_steps.registry` and must use the `custom_step.` module prefix.
 
 - Standard Steps
   - Each standard step implements a task class; tasks extend `modules/base_task.BaseTask`. This base class defines the common interface for all tasks, including methods like `on_start`, `run`, `validate_required_fields`, and `register_error`.

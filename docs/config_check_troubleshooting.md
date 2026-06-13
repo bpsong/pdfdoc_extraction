@@ -61,6 +61,25 @@ Suggestion: Create the directory or update the path in config
 - Add the project root to `PYTHONPATH` or install the module in editable mode.
 - Verify the class name matches the exported symbol inside the module.
 
+## Unapproved Pipeline Task
+
+**Symptom**
+```
+[ERROR] tasks.customer_validation: Pipeline task 'customer_validation' uses unapproved task class custom_step.customer_validation.CustomerValidationTask.
+```
+
+**Fixes**
+- Use a built-in `standard_step.*` task class, or deploy the customer task under the `custom_step.` package.
+- Add the exact custom module/class pair to deployment YAML under `custom_steps.registry`.
+
+```yaml
+custom_steps:
+  enabled: true
+  registry:
+    customer_validation:
+      module: custom_step.customer_validation
+      class: CustomerValidationTask
+```
 
 ## Missing Extraction Credentials
 

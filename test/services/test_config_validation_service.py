@@ -33,6 +33,19 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
             "password_hash": BCRYPT_HASH,
         },
         "schema": {"directories": [str(schema_dir)]},
+        "custom_steps": {
+            "enabled": True,
+            "registry": {
+                "fake_extract": {
+                    "module": "custom_step.extraction.fake_extract",
+                    "class": "FakeExtractTask",
+                },
+                "other_extract": {
+                    "module": "custom_step.extraction.other_extract",
+                    "class": "OtherExtractTask",
+                },
+            },
+        },
         "tasks": {
             "extract": {
                 "module": "custom_step.extraction.fake_extract",
@@ -151,6 +164,22 @@ def test_validate_pipeline_enforces_singleton_and_order_rules(tmp_path: Path) ->
     assert "pipeline-split-after-extract" in codes
     assert "pipeline-review-before-extract" in codes
     assert "pipeline-duplicate-task-type" in codes
+
+
+def test_validate_pipeline_blocks_unapproved_task_pair(tmp_path: Path) -> None:
+    config = _base_config(tmp_path)
+    config["tasks"]["bad"] = {
+        "module": "untrusted.module",
+        "class": "BadTask",
+        "params": {},
+    }
+    config["pipeline"] = ["bad"]
+    service = _service(tmp_path, config)
+
+    result = service.validate_pipeline({"config": config})
+
+    assert result["valid"] is False
+    assert "pipeline-task-not-approved" in _codes(result)
 
 
 def test_validate_payload_accepts_yaml_payload(tmp_path: Path) -> None:

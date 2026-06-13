@@ -81,5 +81,5 @@ def test_task_catalog_reports_configured_import_failure(tmp_path: Path) -> None:
 
     assert missing["is_configured"] is True
     assert missing["import_status"] == "failed"
-    assert "No module named" in missing["import_error"]
+    assert "not approved" in missing["import_error"]
     assert catalog["summary"]["failed"] >= 1

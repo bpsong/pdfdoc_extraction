@@ -6,6 +6,7 @@ from typing import Any
 
 from modules.config_manager import ConfigManager
 from modules.services.schema_service import SchemaService
+from modules.services.task_registry_service import ApprovedTaskRegistry
 from tools.config_check.pipeline_validator import validate_pipeline
 
 
@@ -61,6 +62,7 @@ class PipelineValidationService:
         findings.extend(self._validate_review_gate(config_data))
         findings.extend(self._validate_split(config_data))
         findings.extend(self._validate_pipeline_task_cardinality(config_data))
+        findings.extend(self._validate_task_approvals(config_data))
         findings.extend(self._validate_schema_references(config_data))
 
         return {
@@ -129,6 +131,10 @@ class PipelineValidationService:
                         )
                     )
         return findings
+
+    def _validate_task_approvals(self, config_data: dict[str, Any]) -> list[dict[str, Any]]:
+        """Validate that active pipeline tasks are approved for dynamic import."""
+        return ApprovedTaskRegistry(self.config_manager, config_data=config_data).validate_pipeline_config(config_data)
 
     def _validate_pipeline_task_cardinality(self, config_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Validate required singleton task types and dependency ordering."""
