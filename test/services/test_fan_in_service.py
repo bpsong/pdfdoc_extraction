@@ -161,6 +161,35 @@ def test_fan_in_handles_unsplit_root_as_leaf(tmp_path):
     assert batch["total_documents"] == 1
 
 
+def test_fan_in_marks_unsplit_failed_root_failed(tmp_path):
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+        result = FanInService(conn).finalize_leaf(
+            {
+                "id": created["document"]["id"],
+                "document_id": created["document"]["id"],
+                "batch_id": created["batch"]["id"],
+                "error": "split failed",
+            }
+        )
+        document = DocumentRepository(conn).get(created["document"]["id"])
+        batch = BatchService(conn).get_batch(created["batch"]["id"])
+
+    assert result and result.root_status == "failed"
+    assert result.failed_leaves == 1
+    assert document and document["status"] == "failed"
+    assert batch and batch["status"] == "failed"
+    assert batch["failed_documents"] == 1
+
+
 def test_fan_in_audit_event_is_idempotent(tmp_path):
     config, created, children = _create_batch_with_children(tmp_path, child_count=1)
 

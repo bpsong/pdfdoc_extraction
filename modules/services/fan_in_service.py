@@ -198,6 +198,8 @@ class FanInService:
             status = "review_required"
         elif total and not all_terminal:
             status = "processing"
+        elif failed and failed == total:
+            status = FAILURE_STATUS
         elif failed:
             status = AGGREGATE_FAILURE_STATUS
         elif total:
