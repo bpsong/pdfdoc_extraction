@@ -1,0 +1,51 @@
+{% extends "app_base.html" %}
+
+{% block content %}
+<div id="failures-workspace" class="app-workspace">
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <h2 class="font-semibold">Failed Documents</h2>
+                <span id="failures-count" class="badge badge-error badge-sm">0</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="table table-sm">
+                    <thead>
+                        <tr class="text-xs text-base-content/50">
+                            <th>Document</th>
+                            <th>Failed Task</th>
+                            <th>Error</th>
+                            <th>Failed At</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="failures-table-body">
+                        <tr>
+                            <td colspan="5" class="text-center text-base-content/50 py-10">Loading failures</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="card bg-base-100 shadow-sm">
+        <div class="card-body">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <div class="min-w-0">
+                    <h2 id="failure-detail-title" class="font-semibold truncate">Failure Detail</h2>
+                    <p id="failure-detail-subtitle" class="text-xs text-base-content/50">Select a failed document</p>
+                </div>
+                <a id="failure-source-link" class="btn btn-outline btn-sm hidden" href="#" target="_blank" rel="noopener">Open Source PDF</a>
+            </div>
+            <div id="failure-detail-body" class="grid gap-4 lg:grid-cols-2">
+                <div class="empty-panel lg:col-span-2">Select a failure to inspect the source PDF and task error.</div>
+            </div>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/failures.js" defer></script>
+{% endblock %}

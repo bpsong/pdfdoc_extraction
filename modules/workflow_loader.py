@@ -22,6 +22,7 @@ from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect
 from modules.exceptions import TaskError
+from modules.services.failure_service import _redact, _redact_text
 from modules.services.fan_in_service import FanInService
 from modules.services.task_registry_service import ApprovedTaskRegistry, TaskApprovalError
 from modules.services.workflow_state_service import WorkflowStateService
@@ -109,10 +110,41 @@ class WorkflowLoader:
             "file_path": context.get("file_path"),
             "pipeline_state": context.get("pipeline_state"),
             "review_item_id": context.get("review_item_id"),
-            "error": context.get("error"),
+            "error": _redact_text(str(context.get("error") or "")) if context.get("error") else None,
             "error_step": context.get("error_step"),
+            "fatal_failure": _redact(context.get("fatal_failure")),
             "data_keys": sorted(data.keys()) if isinstance(data, dict) else [],
             "metadata_keys": sorted(metadata.keys()) if isinstance(metadata, dict) else [],
+        }
+
+    @staticmethod
+    def _ensure_fatal_failure(
+        context: Dict[str, Any],
+        *,
+        task_key: str,
+        task_index: int,
+        module_name: str,
+        class_name: str,
+        error: Any,
+    ) -> None:
+        """Attach a consistent fatal-failure payload for failed task reporting."""
+        if isinstance(context.get("fatal_failure"), dict):
+            context["fatal_failure"].setdefault("task_key", task_key)
+            context["fatal_failure"].setdefault("task_index", task_index)
+            context["fatal_failure"].setdefault("module_name", module_name)
+            context["fatal_failure"].setdefault("class_name", class_name)
+            return
+        context["fatal_failure"] = {
+            "failure_type": "task_failed",
+            "task_key": task_key,
+            "task_index": task_index,
+            "module_name": module_name,
+            "class_name": class_name,
+            "message": _redact_text(str(error)),
+            "operator_action": (
+                "Inspect the source PDF or task configuration outside this failed workflow, "
+                "then re-ingest as a new document if appropriate."
+            ),
         }
 
     def _state_service(self, context: Dict[str, Any]) -> WorkflowStateService | None:
@@ -224,8 +256,8 @@ class WorkflowLoader:
                     if task_run_id:
                         current_context["task_run_id"] = task_run_id
 
-                    output_summary = self._context_summary(current_context)
                     if current_context.get("pipeline_state") == "fan_out":
+                        output_summary = self._context_summary(current_context)
                         current_context.setdefault("fan_out_start_task_index", task_index + 1)
                         if state_service is not None and task_run_id:
                             state_service.complete_task(task_run_id, output_summary)
@@ -233,6 +265,7 @@ class WorkflowLoader:
                         return current_context
 
                     if current_context.get("pipeline_state") == "paused":
+                        output_summary = self._context_summary(current_context)
                         if state_service is not None and task_run_id:
                             state_service.pause_task(task_run_id, output_summary)
                             state_service.pause_document(str(current_context["document_id"]))
@@ -241,6 +274,16 @@ class WorkflowLoader:
                         return current_context
 
                     if current_context.get("error"):
+                        current_context["error"] = _redact_text(str(current_context["error"]))
+                        self._ensure_fatal_failure(
+                            current_context,
+                            task_key=task_key,
+                            task_index=task_index,
+                            module_name=str(module_name),
+                            class_name=str(class_name),
+                            error=current_context["error"],
+                        )
+                        output_summary = self._context_summary(current_context)
                         if state_service is not None and task_run_id:
                             state_service.fail_task(task_run_id, str(current_context["error"]), output_summary)
                         if on_error == "stop":
@@ -249,31 +292,67 @@ class WorkflowLoader:
                         else:
                             self.logger.warning(f"Continuing pipeline despite error in task '{task_name}'.")
                     else:
+                        output_summary = self._context_summary(current_context)
                         if state_service is not None and task_run_id:
                             state_service.complete_task(task_run_id, output_summary)
 
                 except TaskError as e:
                     self.logger.error(f"Task '{task_name}' failed with TaskError: {e}")
                     current_context["error"] = str(e)
+                    current_context["error"] = _redact_text(current_context["error"])
                     current_context["error_step"] = task_name
+                    self._ensure_fatal_failure(
+                        current_context,
+                        task_key=task_key,
+                        task_index=task_index,
+                        module_name=str(module_name),
+                        class_name=str(class_name),
+                        error=e,
+                    )
                     if state_service is not None and task_run_id:
-                        state_service.fail_task(task_run_id, str(e), self._context_summary(current_context))
+                        state_service.fail_task(
+                            task_run_id,
+                            str(current_context["error"]),
+                            self._context_summary(current_context),
+                        )
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to TaskError in task '{task_name}'.")
                         break
                 except SystemExit as e:
                     self.logger.error(f"Task '{task_name}' setup failed: {e}")
                     current_context["error"] = f"Task setup failed: {e}"
+                    current_context["error"] = _redact_text(current_context["error"])
                     current_context["error_step"] = task_name
+                    self._ensure_fatal_failure(
+                        current_context,
+                        task_key=task_key,
+                        task_index=task_index,
+                        module_name=str(module_name),
+                        class_name=str(class_name),
+                        error=current_context["error"],
+                    )
                     if state_service is not None and task_run_id:
                         state_service.fail_task(task_run_id, str(current_context["error"]), self._context_summary(current_context))
                     raise
                 except Exception as e:
                     self.logger.error(f"Unexpected error in task '{task_name}': {e}")
                     current_context["error"] = f"Unexpected error: {e}"
+                    current_context["error"] = _redact_text(current_context["error"])
                     current_context["error_step"] = task_name
+                    self._ensure_fatal_failure(
+                        current_context,
+                        task_key=task_key,
+                        task_index=task_index,
+                        module_name=str(module_name),
+                        class_name=str(class_name),
+                        error=e,
+                    )
                     if state_service is not None and task_run_id:
-                        state_service.fail_task(task_run_id, str(e), self._context_summary(current_context))
+                        state_service.fail_task(
+                            task_run_id,
+                            str(current_context["error"]),
+                            self._context_summary(current_context),
+                        )
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to unexpected error in task '{task_name}'.")
                         break

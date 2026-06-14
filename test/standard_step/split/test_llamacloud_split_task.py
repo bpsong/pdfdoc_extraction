@@ -47,6 +47,44 @@ class FakeSplitAdapter:
         )
 
 
+class LowConfidenceSplitAdapter:
+    def split_pdf(self, file_path, categories):
+        return SplitResult(
+            provider_job_id="spl-low",
+            status="completed",
+            segments=[
+                SplitSegment(
+                    category="invoice",
+                    confidence="low",
+                    pages=[1],
+                    page_start=1,
+                    page_end=1,
+                    metadata={"raw_segment": {"pages": [1]}},
+                ),
+            ],
+            raw_response={"id": "spl-low"},
+        )
+
+
+class UnknownCategorySplitAdapter:
+    def split_pdf(self, file_path, categories):
+        return SplitResult(
+            provider_job_id="spl-other",
+            status="completed",
+            segments=[
+                SplitSegment(
+                    category="other",
+                    confidence="high",
+                    pages=[1],
+                    page_start=1,
+                    page_end=1,
+                    metadata={"raw_segment": {"pages": [1]}},
+                ),
+            ],
+            raw_response={"id": "spl-other"},
+        )
+
+
 def test_create_split_pdf_copies_requested_pages(tmp_path):
     source = tmp_path / "source.pdf"
     output = tmp_path / "child.pdf"
@@ -75,7 +113,7 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
         config_manager=config,
         enabled=True,
         adapter=FakeSplitAdapter(),
-        categories=[{"name": "invoice"}],
+        categories=[{"name": "invoice"}, {"name": "delivery_order"}],
         split_dir=str(split_dir),
     )
     context = {
@@ -114,6 +152,81 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
     assert child_metadata["root_document_id"] == created["document"]["id"]
     assert child_metadata["source_original_filename"] == "bundle.pdf"
     assert child_metadata["split_pages"] == [1, 2]
+
+
+def test_llamacloud_split_task_fails_on_low_confidence_without_children(tmp_path):
+    source = tmp_path / "bundle.pdf"
+    split_dir = tmp_path / "split"
+    _write_pdf(source, 1)
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(source),
+            original_filename="bundle.pdf",
+        )
+
+    task = LlamaCloudSplitTask(
+        config_manager=config,
+        enabled=True,
+        adapter=LowConfidenceSplitAdapter(),
+        categories=[{"name": "invoice"}],
+        split_dir=str(split_dir),
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "file_path": str(source),
+        "original_filename": "bundle.pdf",
+        "current_task_index": 0,
+    }
+
+    result = task.run(context)
+
+    assert "low" in result["error"]
+    assert result["fatal_failure"]["failure_type"] == "split_policy_failed"
+    assert result["fatal_failure"]["provider_job_id"] == "spl-low"
+    with connect(config) as conn:
+        assert DocumentRepository(conn).list_children(created["document"]["id"]) == []
+
+
+def test_llamacloud_split_task_fails_on_unknown_category_without_children(tmp_path):
+    source = tmp_path / "bundle.pdf"
+    split_dir = tmp_path / "split"
+    _write_pdf(source, 1)
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(source),
+            original_filename="bundle.pdf",
+        )
+
+    task = LlamaCloudSplitTask(
+        config_manager=config,
+        enabled=True,
+        adapter=UnknownCategorySplitAdapter(),
+        categories=[{"name": "invoice"}],
+        split_dir=str(split_dir),
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "file_path": str(source),
+        "original_filename": "bundle.pdf",
+        "current_task_index": 0,
+    }
+
+    result = task.run(context)
+
+    assert "category 'other'" in result["error"]
+    assert result["fatal_failure"]["segments"][0]["category"] == "other"
+    with connect(config) as conn:
+        assert DocumentRepository(conn).list_children(created["document"]["id"]) == []
 
 
 def test_cleanup_preserves_registered_split_pdf(tmp_path):

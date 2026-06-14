@@ -7,7 +7,7 @@ import sqlite3
 from typing import Any
 import uuid
 
-from modules.db.connection import json_dumps, transaction, utc_now
+from modules.db.connection import json_dumps, json_loads, transaction, utc_now
 from modules.db.repositories import DocumentRepository
 
 
@@ -70,6 +70,7 @@ class FanInService:
             else:
                 leaf_status = self._leaf_status_from_context(context)
                 self._update_document_status(str(document["id"]), leaf_status)
+                self._update_failure_metadata(str(document["id"]), context)
                 document["status"] = leaf_status
 
             root = self._root_document(document)
@@ -218,6 +219,30 @@ class FanInService:
         self.conn.execute(
             "UPDATE documents SET status = ?, updated_at = ? WHERE id = ?",
             (status, utc_now(), document_id),
+        )
+
+    def _update_failure_metadata(self, document_id: str, context: dict[str, Any]) -> None:
+        """Persist structured fatal failure context on failed documents."""
+        if not context.get("error"):
+            return
+        document = self._get_document(document_id)
+        if document is None:
+            return
+        metadata = json_loads(document.get("metadata_json"), {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        fatal_failure = context.get("fatal_failure")
+        if not isinstance(fatal_failure, dict):
+            fatal_failure = {
+                "failure_type": "task_failed",
+                "message": str(context.get("error") or ""),
+            }
+        metadata["fatal_failure"] = fatal_failure
+        metadata["fatal_error"] = str(context.get("error") or "")
+        metadata["fatal_error_step"] = context.get("error_step") or context.get("current_task_key")
+        self.conn.execute(
+            "UPDATE documents SET metadata_json = ?, updated_at = ? WHERE id = ?",
+            (json_dumps(metadata), utc_now(), document_id),
         )
 
     def _update_batch_counts(self, *, batch_id: str, summary: dict[str, Any]) -> None:

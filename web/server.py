@@ -492,6 +492,18 @@ def create_app() -> FastAPI:
             active_nav="review",
         )
 
+    @app.get("/app/failures", response_class=HTMLResponse)
+    async def app_failures_page(request: Request):
+        """Serve the fatal failure queue page."""
+
+        return await render_app_page(
+            request,
+            "failures.html",
+            page_title="Failures",
+            page_subtitle="Inspect failed documents and source PDFs before re-ingestion.",
+            active_nav="failures",
+        )
+
     @app.get("/app/review/{review_item_id}", response_class=HTMLResponse)
     async def app_human_review_page(request: Request, review_item_id: str):
         """Serve the human review workspace."""

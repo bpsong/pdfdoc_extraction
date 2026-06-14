@@ -879,6 +879,44 @@ def _validate_split_params(params: Any, params_path: str, errors: List[Parameter
         errors,
         code="param-split-missing-split-dir",
     )
+    levels = params.get("fail_on_confidence_levels")
+    if levels is not None:
+        allowed = {"high", "medium", "low"}
+        if (
+            not isinstance(levels, list)
+            or any(not isinstance(level, str) or level.strip().lower() not in allowed for level in levels)
+        ):
+            errors.append(
+                ParameterIssue(
+                    path=f"{params_path}.fail_on_confidence_levels",
+                    message="fail_on_confidence_levels must be a list containing high, medium, or low.",
+                    code="param-split-invalid-fail-on-confidence-levels",
+                    details={"config_key": f"{params_path}.fail_on_confidence_levels"},
+                )
+            )
+    fail_on_unknown = params.get("fail_on_unknown_category")
+    if fail_on_unknown is not None and not isinstance(fail_on_unknown, bool):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.fail_on_unknown_category",
+                message="fail_on_unknown_category must be a boolean.",
+                code="param-split-invalid-fail-on-unknown-category",
+                details={"config_key": f"{params_path}.fail_on_unknown_category"},
+            )
+        )
+    allowed_categories = params.get("allowed_categories")
+    if allowed_categories is not None and (
+        not isinstance(allowed_categories, list)
+        or any(not isinstance(category, str) or not category.strip() for category in allowed_categories)
+    ):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.allowed_categories",
+                message="allowed_categories must be a list of non-empty strings.",
+                code="param-split-invalid-allowed-categories",
+                details={"config_key": f"{params_path}.allowed_categories"},
+            )
+        )
 
 
 def _iter_string_values(node: Any, base_path: str) -> Iterable[Tuple[str, str]]:

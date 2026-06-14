@@ -212,6 +212,43 @@
         }
     }
 
+    async function refreshFailureNotifications() {
+        const button = document.getElementById("failure-notification-button");
+        const badge = document.getElementById("failure-notification-badge");
+        if (!button || !badge) {
+            return { count: 0 };
+        }
+        try {
+            const payload = await apiGet("/api/failures/notifications");
+            const count = Number(payload && payload.count ? payload.count : 0);
+            if (count > 0) {
+                badge.textContent = count > 99 ? "99+" : String(count);
+                badge.classList.remove("hidden");
+                button.disabled = false;
+                button.classList.remove("btn-disabled");
+                button.title = `${count} fatal failure${count === 1 ? "" : "s"}`;
+                button.setAttribute("aria-label", `${count} fatal failure notifications`);
+                button.onclick = () => {
+                    window.location.href = "/app/failures";
+                };
+            } else {
+                badge.classList.add("hidden");
+                badge.textContent = "0";
+                button.disabled = true;
+                button.classList.add("btn-disabled");
+                button.title = "No fatal failure notifications";
+                button.setAttribute("aria-label", "No fatal failure notifications");
+                button.onclick = null;
+            }
+            return payload || { count: 0 };
+        } catch (error) {
+            badge.classList.add("hidden");
+            button.disabled = true;
+            button.onclick = null;
+            return { count: 0, error: error.message || "Unable to load failure notifications" };
+        }
+    }
+
     window.DocFlow = {
         apiGet,
         apiPost,
@@ -220,10 +257,12 @@
         formatDateTime,
         showToast,
         setActiveNav,
+        refreshFailureNotifications,
     };
 
     document.addEventListener("DOMContentLoaded", () => {
         initializeSidebar();
         setActiveNav();
+        refreshFailureNotifications();
     });
 })();

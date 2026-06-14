@@ -13,6 +13,7 @@ from modules.config_manager import ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError
+from modules.services.failure_service import _redact_text
 from modules.utils import generate_unique_filepath, sanitize_filename
 from standard_step.split.llamacloud_split_adapter import (
     LlamaCloudSplitAdapter,
@@ -69,6 +70,16 @@ class LlamaCloudSplitTask(BaseTask):
         self.project_id = params.get("project_id")
         self.organization_id = params.get("organization_id")
         self.allow_uncategorized = str(params.get("allow_uncategorized", "include"))
+        self.fail_on_confidence_levels = {
+            str(level).strip().lower()
+            for level in params.get("fail_on_confidence_levels", ["low"])
+            if str(level).strip()
+        }
+        self.fail_on_unknown_category = bool(params.get("fail_on_unknown_category", True))
+        allowed_categories = params.get("allowed_categories")
+        self.allowed_categories = self._normalize_allowed_categories(
+            allowed_categories if allowed_categories is not None else self.categories
+        )
         self.poll_interval_seconds = float(params.get("poll_interval_seconds", 1.0))
         self.timeout_seconds = float(params.get("timeout_seconds", 7200.0))
         self.adapter = params.get("adapter")
@@ -127,6 +138,7 @@ class LlamaCloudSplitTask(BaseTask):
                     }
                     return context
 
+                self._validate_split_policy(context, split_result)
                 self._validate_all_segment_pages(str(context["file_path"]), split_result.segments)
                 source_artifact = self._ensure_source_artifact(documents, document, context)
                 parent_metadata = json_loads(document.get("metadata_json"), {})
@@ -172,11 +184,25 @@ class LlamaCloudSplitTask(BaseTask):
             return context
         except TaskError as exc:
             self.logger.error("Split task failed: %s", exc)
-            self.register_error(context, exc)
+            redacted_message = _redact_text(str(getattr(exc, "message", str(exc))))
+            context.setdefault(
+                "fatal_failure",
+                {
+                    "failure_type": "split_task_failed",
+                    "message": redacted_message,
+                    "operator_action": "Inspect the source PDF or LlamaCloud split configuration, then re-ingest as a new document if appropriate.",
+                },
+            )
+            self.register_error(context, TaskError(redacted_message))
             return context
         except Exception as exc:
             self.logger.exception("Unexpected split task failure")
-            self.register_error(context, TaskError(f"Unexpected split error: {exc}"))
+            context["fatal_failure"] = {
+                "failure_type": "split_unexpected_error",
+                "message": _redact_text(f"Unexpected split error: {exc}"),
+                "operator_action": "Inspect the source PDF or LlamaCloud split configuration, then re-ingest as a new document if appropriate.",
+            }
+            self.register_error(context, TaskError(_redact_text(f"Unexpected split error: {exc}")))
             return context
 
     def _get_adapter(self) -> Any:
@@ -192,6 +218,75 @@ class LlamaCloudSplitTask(BaseTask):
             polling_interval_seconds=self.poll_interval_seconds,
             timeout_seconds=self.timeout_seconds,
         )
+
+    def _validate_split_policy(self, context: dict[str, Any], split_result: SplitResult) -> None:
+        """Fail fast when LlamaCloud returns uncertain or disallowed split decisions."""
+        policy_failures: list[dict[str, Any]] = []
+        for segment in split_result.segments:
+            category = str(segment.category or "").strip()
+            category_key = category.lower()
+            confidence = str(segment.confidence or "").strip().lower()
+            reasons: list[str] = []
+            if confidence and confidence in self.fail_on_confidence_levels:
+                reasons.append(f"confidence '{confidence}' is configured to fail")
+            if self.fail_on_unknown_category:
+                if not category_key:
+                    reasons.append("category is blank")
+                elif category_key in {"other", "uncategorized"}:
+                    reasons.append(f"category '{category}' is not accepted")
+                elif self.allowed_categories and category_key not in self.allowed_categories:
+                    reasons.append(f"category '{category}' is not in allowed categories")
+            if reasons:
+                policy_failures.append(
+                    {
+                        "category": category or None,
+                        "confidence": confidence or None,
+                        "pages": segment.pages,
+                        "page_start": segment.page_start,
+                        "page_end": segment.page_end,
+                        "reasons": reasons,
+                    }
+                )
+
+        if not policy_failures:
+            return
+
+        message_parts = [
+            f"pages {failure['pages']} category={failure.get('category') or 'blank'} "
+            f"confidence={failure.get('confidence') or 'unknown'}: {', '.join(failure['reasons'])}"
+            for failure in policy_failures
+        ]
+        message = "LlamaCloud Split returned decisions requiring manual source PDF examination: " + "; ".join(message_parts)
+        context["fatal_failure"] = {
+            "failure_type": "split_policy_failed",
+            "message": message,
+            "provider": "llamacloud_split",
+            "provider_job_id": split_result.provider_job_id,
+            "policy": {
+                "fail_on_confidence_levels": sorted(self.fail_on_confidence_levels),
+                "fail_on_unknown_category": self.fail_on_unknown_category,
+                "allowed_categories": sorted(self.allowed_categories),
+            },
+            "segments": policy_failures,
+            "operator_action": "Inspect the original source PDF outside the failed workflow, correct it or decide not to re-ingest it.",
+        }
+        raise TaskError(message)
+
+    @staticmethod
+    def _normalize_allowed_categories(value: Any) -> set[str]:
+        """Normalize inline or explicit split category configuration to lowercase names."""
+        categories: set[str] = set()
+        if not isinstance(value, list):
+            return categories
+        for item in value:
+            if isinstance(item, dict):
+                name = item.get("name")
+            else:
+                name = item
+            text = str(name or "").strip().lower()
+            if text:
+                categories.add(text)
+        return categories
 
     @staticmethod
     def _validate_all_segment_pages(source_pdf_path: str, segments: list[SplitSegment]) -> None:

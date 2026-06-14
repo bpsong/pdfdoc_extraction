@@ -6,11 +6,14 @@
         <div class="card-body">
             <div class="flex items-center justify-between gap-3 mb-4">
                 <h2 class="font-semibold">Pipeline Status</h2>
-                {% if batch_id is defined and batch_id %}
-                <span class="badge badge-outline badge-sm">{{ batch_id }}</span>
-                {% else %}
-                <span class="badge badge-ghost badge-sm">Active batches</span>
-                {% endif %}
+                <div class="flex items-center gap-2">
+                    <button id="clear-failure-notifications-button" class="btn btn-error btn-sm hidden" type="button">Clear Error Notification</button>
+                    {% if batch_id is defined and batch_id %}
+                    <span class="badge badge-outline badge-sm">{{ batch_id }}</span>
+                    {% else %}
+                    <span class="badge badge-ghost badge-sm">Active batches</span>
+                    {% endif %}
+                </div>
             </div>
             <div id="pipeline-step-list" class="pipeline-groups">
                 <div class="empty-panel">Loading pipeline</div>

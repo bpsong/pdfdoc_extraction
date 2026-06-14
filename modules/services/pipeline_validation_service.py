@@ -301,6 +301,47 @@ class PipelineValidationService:
                     )
                 )
 
+            fail_levels = params.get("fail_on_confidence_levels")
+            if fail_levels is not None:
+                allowed_levels = {"high", "medium", "low"}
+                if (
+                    not isinstance(fail_levels, list)
+                    or any(not isinstance(level, str) or level.strip().lower() not in allowed_levels for level in fail_levels)
+                ):
+                    findings.append(
+                        _finding(
+                            severity="error",
+                            path=f"tasks.{task_key}.params.fail_on_confidence_levels",
+                            message="fail_on_confidence_levels must be a list containing high, medium, or low.",
+                            code="split-invalid-fail-on-confidence-levels",
+                        )
+                    )
+
+            fail_unknown = params.get("fail_on_unknown_category")
+            if fail_unknown is not None and not isinstance(fail_unknown, bool):
+                findings.append(
+                    _finding(
+                        severity="error",
+                        path=f"tasks.{task_key}.params.fail_on_unknown_category",
+                        message="fail_on_unknown_category must be a boolean.",
+                        code="split-invalid-fail-on-unknown-category",
+                    )
+                )
+
+            allowed_categories = params.get("allowed_categories")
+            if allowed_categories is not None and (
+                not isinstance(allowed_categories, list)
+                or any(not isinstance(category, str) or not category.strip() for category in allowed_categories)
+            ):
+                findings.append(
+                    _finding(
+                        severity="error",
+                        path=f"tasks.{task_key}.params.allowed_categories",
+                        message="allowed_categories must be a list of non-empty strings.",
+                        code="split-invalid-allowed-categories",
+                    )
+                )
+
             categories = params.get("categories")
             if categories is not None and (
                 not isinstance(categories, list)

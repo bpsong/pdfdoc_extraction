@@ -188,6 +188,7 @@ def test_operator_app_routes_render_shared_shell_without_admin_navigation(monkey
         ("/app/documents/doc-1/extraction", "Extraction Results"),
         ("/app/review", "Review Queue"),
         ("/app/review/review-1", "Human Review"),
+        ("/app/failures", "Failures"),
         ("/app/reports", "Reports"),
         ("/app/settings", "Settings"),
     ]
@@ -220,6 +221,17 @@ def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -
     assert split_results.status_code == 200
     assert 'id="split-results-workspace"' in split_results.text
     assert "/static/js/split_results.js" in split_results.text
+
+
+def test_failures_page_includes_operator_assets(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/failures")
+
+    assert response.status_code == 200
+    assert 'id="failures-workspace"' in response.text
+    assert "/static/js/failures.js" in response.text
 
 
 def test_extraction_results_page_includes_task_18_assets(monkeypatch) -> None:

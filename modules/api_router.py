@@ -62,6 +62,7 @@ from .services.admin_settings_service import (
 from .services.audit_service import AuditService
 from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
+from .services.failure_service import FailureService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
 from .services.processing_state_service import ProcessingStateService, build_pipeline_snapshot
 from .services.reports_service import ReportsService
@@ -1533,6 +1534,41 @@ def build_router() -> APIRouter:
             },
             "sources": sources,
         }
+
+    @router.get("/api/failures/notifications")
+    def get_failure_notifications(user: str = Depends(get_current_user)):
+        """Return global fatal-failure notification status."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return FailureService(conn).notification_status()
+
+    @router.post("/api/failures/notifications/clear")
+    def clear_failure_notifications(user: str = Depends(get_current_user)):
+        """Globally clear current fatal-failure notification count."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return FailureService(conn).clear_notifications(user=user)
+
+    @router.get("/api/failures")
+    def list_failures(
+        limit: int = Query(default=100, ge=1, le=200),
+        offset: int = Query(default=0, ge=0),
+        user: str = Depends(get_current_user),
+    ):
+        """List documents with failed task runs for operator examination."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return FailureService(conn).list_failures(limit=limit, offset=offset)
+
+    @router.get("/api/failures/{document_id}")
+    def get_failure_detail(document_id: str, user: str = Depends(get_current_user)):
+        """Return failure details for one failed document."""
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            payload = FailureService(conn).get_failure(document_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail="Failure not found")
+        return payload
 
     @router.get("/api/documents/{document_id}/task-runs")
     def list_document_task_runs(document_id: str, user: str = Depends(get_current_user)):

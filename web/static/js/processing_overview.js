@@ -13,6 +13,7 @@
     const progressLabel = document.getElementById("overall-progress-label");
     const refreshNote = document.getElementById("processing-refresh-note");
     const splitResultsLink = document.getElementById("split-results-link");
+    const clearFailureNotificationsButton = document.getElementById("clear-failure-notifications-button");
     const terminalStatuses = new Set(["completed", "completed_with_errors", "failed", "cancelled", "review_completed"]);
     let pollTimer = null;
 
@@ -228,6 +229,9 @@
 
     function rowAction(batch, document) {
         const status = String(document.status || "").toLowerCase();
+        if (hasFailureEvidence(document)) {
+            return `<a href="/app/failures?document_id=${encodeURIComponent(document.id)}" class="btn btn-error btn-xs">Open Failure</a>`;
+        }
         if (["review_required", "in_review"].includes(status)) {
             return '<a href="/app/review" class="btn btn-warning btn-xs">Review</a>';
         }
@@ -238,6 +242,14 @@
             return `<a href="/app/batches/${encodeURIComponent(batch.id)}/split-results" class="btn btn-ghost btn-xs">Split</a>`;
         }
         return '<span class="text-xs text-base-content/40">Pending</span>';
+    }
+
+    function hasFailureEvidence(document) {
+        return Boolean(
+            String(document.status || "").toLowerCase() === "failed"
+            || (document.task_states || []).some((step) => step.state === "failed")
+            || (document.task_runs || []).some((run) => String(run.status || "").toLowerCase() === "failed")
+        );
     }
 
     function hasSplitEvidence(document) {
@@ -327,6 +339,7 @@
             renderPipeline(states);
             renderRows(states);
             updateSplitLink(states);
+            await updateFailureNotificationControl();
             const progress = aggregateProgress(states);
             progressBar.value = progress;
             progressLabel.textContent = `${progress}%`;
@@ -346,6 +359,27 @@
                 window.DocFlow.showToast(error.message || "Unable to load processing state", "error");
             }
         }
+    }
+
+    async function updateFailureNotificationControl() {
+        if (!clearFailureNotificationsButton || !window.DocFlow || !window.DocFlow.refreshFailureNotifications) {
+            return;
+        }
+        const payload = await window.DocFlow.refreshFailureNotifications();
+        const count = Number(payload && payload.count ? payload.count : 0);
+        clearFailureNotificationsButton.classList.toggle("hidden", count <= 0);
+    }
+
+    if (clearFailureNotificationsButton) {
+        clearFailureNotificationsButton.addEventListener("click", async () => {
+            try {
+                await window.DocFlow.apiPost("/api/failures/notifications/clear", {});
+                window.DocFlow.showToast("Error notification cleared", "success");
+                await updateFailureNotificationControl();
+            } catch (error) {
+                window.DocFlow.showToast(error.message || "Unable to clear error notification", "error");
+            }
+        });
     }
 
     document.addEventListener("visibilitychange", () => {
