@@ -1,0 +1,122 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.bg-canvas {
+  background:
+    linear-gradient(rgba(79, 70, 229, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79, 70, 229, 0.07) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 24px 24px;
+}
+
+.task-palette-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.5rem;
+  background: oklch(var(--b1));
+  padding: 0.625rem;
+  transition:
+    background 0.14s ease,
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.task-palette-item:hover,
+.task-palette-item:focus-visible {
+  border-color: oklch(var(--p));
+  background: oklch(var(--p) / 0.04);
+  box-shadow: 0 0.5rem 1.5rem rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.rete-node-card {
+  width: 230px;
+  min-height: 132px;
+  border: 1px solid #d7dbe8;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.875rem;
+  box-shadow: 0 1rem 2.25rem rgba(15, 23, 42, 0.13);
+  color: #111827;
+}
+
+.rete-node-card.split {
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.rete-node-card.extract {
+  border-color: rgba(79, 70, 229, 0.38);
+}
+
+.rete-node-card.storage {
+  border-color: rgba(22, 163, 74, 0.32);
+}
+
+.rete-node-card.review {
+  border-color: rgba(217, 119, 6, 0.36);
+}
+
+.node-icon {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.rete .socket {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #4f46e5;
+  background: #fff;
+}
+
+.rete .connection path {
+  stroke: #4f46e5;
+  stroke-width: 3px;
+}
+
+.yaml-box {
+  max-height: 24rem;
+  overflow: auto;
+  border: 1px solid oklch(var(--b3));
+  border-radius: 0.5rem;
+  background: #111827;
+  color: #e5e7eb;
+  padding: 0.875rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.form-control .input,
+.form-control .select,
+.form-control .textarea {
+  width: 100%;
+}
+
+@media (max-width: 1279px) {
+  .rete-node-card {
+    width: 215px;
+  }
+}
