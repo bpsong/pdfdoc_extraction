@@ -9,6 +9,8 @@ from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.db.repositories import DocumentRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
+from modules.services.failure_service import FailureService
+from modules.exceptions import TaskError
 from modules.status_manager import StatusManager
 from modules.workflow_loader import WorkflowLoader
 from modules.workflow_manager import WorkflowManager
@@ -70,7 +72,7 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
                     "params": {
                         "enabled": True,
                         "adapter": FakeSplitAdapter(),
-                        "categories": [{"name": "invoice"}],
+                        "categories": [{"name": "invoice"}, {"name": "receipt"}],
                         "split_dir": str(tmp_path / "split"),
                     },
                     "on_error": "stop",
@@ -153,6 +155,106 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
     assert all(context["source_original_filename"] == "bundle.pdf" for context in update_contexts)
     assert all(context["split_pages"] for context in update_contexts)
     assert [[run["task_key"] for run in runs] for runs in child_runs] == [["update_reference"], ["update_reference"]]
+
+
+def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, monkeypatch):
+    source = tmp_path / "bundle.pdf"
+    _write_pdf(source, 2)
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "watch_folder": {"processing_dir": str(processing_dir)},
+            "pipeline": ["split", "extract_document_data"],
+            "tasks": {
+                "split": {
+                    "module": "standard_step.split.llamacloud_split",
+                    "class": "LlamaCloudSplitTask",
+                    "params": {
+                        "enabled": True,
+                        "adapter": FakeSplitAdapter(),
+                        "categories": [{"name": "invoice"}, {"name": "receipt"}],
+                        "split_dir": str(tmp_path / "split"),
+                    },
+                    "on_error": "stop",
+                },
+                "extract_document_data": {
+                    "module": "standard_step.extraction.extract_pdf_v2",
+                    "class": "ExtractPdfV2Task",
+                    "params": {
+                        "api_key": "llx-bad",
+                        "configuration_id": "cfg-missing",
+                        "fields": {"invoiceNumber": {"alias": "Invoice Number", "type": "str"}},
+                    },
+                    "on_error": "stop",
+                },
+            },
+        },
+    )
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(source),
+            original_filename="bundle.pdf",
+        )
+
+    class CleanupTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            return context
+
+    _patch_prefect(monkeypatch)
+    WorkflowLoader._instance = None
+    StatusManager._instance = None
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", CleanupTask)
+    monkeypatch.setattr(
+        WorkflowLoader,
+        "_import_task_class",
+        lambda self, module_name, class_name: {"LlamaCloudSplitTask": LlamaCloudSplitTask}[class_name],
+    )
+    monkeypatch.setattr(
+        "modules.workflow_manager.preflight_extract_v2_access",
+        lambda **kwargs: (_ for _ in ()).throw(
+            TaskError("LlamaCloud Extract configuration 'cfg-missing' was not found.")
+        ),
+    )
+
+    ok = WorkflowManager(config).trigger_workflow_for_file(
+        file_path=str(source),
+        unique_id=created["document"]["id"],
+        original_filename="bundle.pdf",
+        source="web",
+        batch_id=created["batch"]["id"],
+        document_id=created["document"]["id"],
+    )
+
+    with connect(config) as conn:
+        documents = DocumentRepository(conn)
+        root = documents.get(created["document"]["id"])
+        children = documents.list_children(created["document"]["id"])
+        parent_runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+        child_runs = [TaskRunRepository(conn).list_by_document(child["id"]) for child in children]
+        notifications = FailureService(conn).notification_status()
+        failures = FailureService(conn).list_failures()
+
+    assert ok is True
+    assert root and root["status"] == "failed"
+    assert len(children) == 2
+    assert [child["status"] for child in children] == ["failed", "failed"]
+    assert [run["task_key"] for run in parent_runs] == ["split", "extract_document_data"]
+    assert [run["status"] for run in parent_runs] == ["completed", "failed"]
+    assert child_runs == [[], []]
+    assert notifications["count"] == 1
+    assert failures["total"] == 1
+    assert failures["failures"][0]["source_document"]["id"] == created["document"]["id"]
+    assert "cfg-missing" in failures["failures"][0]["failure"]["message"]
 
 
 def test_split_results_api_returns_parent_child_payload(tmp_path, monkeypatch):

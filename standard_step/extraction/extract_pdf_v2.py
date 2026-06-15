@@ -36,10 +36,13 @@ from modules.config_manager import ConfigManager
 from modules.db.connection import connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
+from modules.services.failure_service import _redact_text
 from standard_step.extraction.llama_cloud_v2 import (
     extract_confidence_label,
     extract_field_source,
     extract_numeric_confidence,
+    humanize_extract_error,
+    is_non_retryable_extract_error,
     run_extract_v2_job,
 )
 
@@ -250,9 +253,14 @@ class ExtractPdfV2Task(BaseTask):
                 return extracted_result
 
             except Exception as e:
+                if is_non_retryable_extract_error(e):
+                    error_msg = humanize_extract_error(e, configuration_id=self.configuration_id)
+                    self.logger.error(error_msg)
+                    raise TaskError(error_msg)
+
                 if attempt == max_retries - 1:
                     # Last attempt failed, raise the error
-                    error_msg = f"Extraction failed after {max_retries} attempts: {str(e)}"
+                    error_msg = humanize_extract_error(e, configuration_id=self.configuration_id)
                     self.logger.error(error_msg)
                     raise TaskError(error_msg)
 
@@ -353,13 +361,34 @@ class ExtractPdfV2Task(BaseTask):
 
         except TaskError as e:
             # Handle TaskError specifically
+            message = _redact_text(getattr(e, "message", str(e)))
+            context["fatal_failure"] = {
+                "failure_type": "extract_task_failed",
+                "message": message,
+                "provider": "llamacloud_extract_v2",
+                "configuration_id": self.configuration_id,
+                "operator_action": (
+                    "Inspect the source PDF or LlamaCloud Extract configuration, "
+                    "then re-ingest as a new document if appropriate."
+                ),
+            }
             self.register_error(context, e)
             raise
         except Exception as e:
             # Handle unexpected exceptions
-            error_msg = f"Unexpected error in {self.task_slug}: {str(e)}"
+            error_msg = _redact_text(f"Unexpected error in {self.task_slug}: {str(e)}")
             self.logger.error(error_msg)
             task_error = TaskError(error_msg)
+            context["fatal_failure"] = {
+                "failure_type": "extract_unexpected_error",
+                "message": error_msg,
+                "provider": "llamacloud_extract_v2",
+                "configuration_id": self.configuration_id,
+                "operator_action": (
+                    "Inspect the source PDF or LlamaCloud Extract configuration, "
+                    "then re-ingest as a new document if appropriate."
+                ),
+            }
             self.register_error(context, task_error)
             raise task_error
 

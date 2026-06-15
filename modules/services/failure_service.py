@@ -9,6 +9,7 @@ from typing import Any
 
 from modules.db.connection import json_loads, utc_now
 from modules.db.repositories import AppSettingsRepository, AuditRepository, DocumentRepository, TaskRunRepository
+from standard_step.extraction.llama_cloud_v2 import humanize_extract_error
 
 
 FAILURE_NOTIFICATION_SETTING = "fatal_failure_notifications"
@@ -28,7 +29,7 @@ class FailureService:
 
     def list_failures(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
         """Return failed documents with their latest failed task run."""
-        rows = self._failure_rows()
+        rows = self._group_failure_rows(self._failure_rows())
         total = len(rows)
         selected = rows[offset : offset + limit]
         return {
@@ -49,16 +50,26 @@ class FailureService:
             return None
         failed_run = self._latest_run(failed_runs)
         files = [self._file_payload(item) for item in self.documents.list_files(document_id)]
+        source_document = self._source_document(document)
+        source_files = [
+            self._file_payload(item) for item in self.documents.list_files(str(source_document["id"]))
+        ] if source_document else files
         metadata = json_loads(document.get("metadata_json"), {})
         if not isinstance(metadata, dict):
             metadata = {}
+        related_failures = self._related_group_failures(document, failed_run)
         return {
             "document": self._document_payload(document),
+            "source_document": self._document_payload(source_document) if source_document else self._document_payload(document),
+            "split_segment": self._split_segment_payload(document),
             "latest_failed_task": self._task_run_payload(failed_run),
             "failure": self._failure_detail(document, failed_run),
             "task_runs": [self._task_run_payload(run) for run in runs],
             "files": files,
+            "source_files": source_files,
             "preview_url": f"/api/documents/{document_id}/file/pdf",
+            "source_preview_url": f"/api/documents/{source_document['id']}/file/pdf" if source_document else f"/api/documents/{document_id}/file/pdf",
+            "related_failures": related_failures,
             "metadata": _redact(metadata),
         }
 
@@ -67,7 +78,7 @@ class FailureService:
         clear_state = self.settings.get(FAILURE_NOTIFICATION_SETTING, {})
         cleared_at = clear_state.get("cleared_at") if isinstance(clear_state, dict) else None
         rows = [
-            row for row in self._failure_rows()
+            row for row in self._group_failure_rows(self._failure_rows())
             if not cleared_at or str(row.get("failure_at") or "") > str(cleared_at)
         ]
         latest = self._failure_row_payload(rows[0]) if rows else None
@@ -127,10 +138,50 @@ class FailureService:
                 by_document[document_id] = payload
         return list(by_document.values())
 
+    def _group_failure_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Group repeated split-child extraction failures into one operator failure."""
+        groups: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            key = self._failure_group_key(row)
+            grouped = groups.get(key)
+            if grouped is None:
+                grouped = dict(row)
+                grouped["group_count"] = 0
+                grouped["grouped_document_ids"] = []
+                grouped["grouped_segments"] = []
+                groups[key] = grouped
+            grouped["group_count"] = int(grouped.get("group_count") or 0) + 1
+            grouped["grouped_document_ids"].append(row.get("id"))
+            segment = self._split_segment_payload(row)
+            if segment:
+                grouped["grouped_segments"].append(segment)
+            if str(row.get("failure_at") or "") > str(grouped.get("failure_at") or ""):
+                for key_name, value in row.items():
+                    grouped[key_name] = value
+        return sorted(
+            groups.values(),
+            key=lambda row: str(row.get("failure_at") or ""),
+            reverse=True,
+        )
+
+    @staticmethod
+    def _failure_group_key(row: dict[str, Any]) -> str:
+        """Return a stable key for source-level repeated operator failures."""
+        parent_document_id = row.get("parent_document_id")
+        failed_task_key = str(row.get("failed_task_key") or "")
+        if parent_document_id and "extract" in failed_task_key.lower():
+            message = _message_signature(row.get("failed_error") or "")
+            return f"source:{parent_document_id}:task:{failed_task_key}:message:{message}"
+        return f"document:{row.get('id')}:task_run:{row.get('failed_task_run_id')}"
+
     def _failure_row_payload(self, row: dict[str, Any]) -> dict[str, Any]:
         failure = self._failure_detail(row, row)
+        source_document = self._source_document(row)
+        group_count = int(row.get("group_count") or 1)
         return {
             "document": self._document_payload(row),
+            "source_document": self._document_payload(source_document) if source_document else self._document_payload(row),
+            "split_segment": self._split_segment_payload(row),
             "batch": {
                 "id": row.get("batch_id"),
                 "source": row.get("batch_source"),
@@ -148,6 +199,12 @@ class FailureService:
             "failure": failure,
             "failure_at": row.get("failure_at"),
             "preview_url": f"/api/documents/{row['id']}/file/pdf",
+            "source_preview_url": f"/api/documents/{source_document['id']}/file/pdf" if source_document else f"/api/documents/{row['id']}/file/pdf",
+            "group": {
+                "count": group_count,
+                "document_ids": row.get("grouped_document_ids") or [row.get("id")],
+                "segments": row.get("grouped_segments") or [],
+            },
         }
 
     @staticmethod
@@ -167,9 +224,61 @@ class FailureService:
             "page_end": document.get("page_end"),
         }
 
+    def _source_document(self, document: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Return the original source/root document for a split child."""
+        if not document:
+            return None
+        parent_id = document.get("parent_document_id")
+        if not parent_id:
+            return document
+        parent = self.documents.get(str(parent_id))
+        return parent or document
+
+    @staticmethod
+    def _split_segment_payload(document: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Return split segment metadata when the failed document is a split child."""
+        if not document or not document.get("parent_document_id"):
+            return None
+        metadata = json_loads(document.get("metadata_json"), {})
+        if not isinstance(metadata, dict):
+            metadata = {}
+        return {
+            "document_id": document.get("id"),
+            "filename": document.get("original_filename") or Path(str(document.get("file_path") or "")).name,
+            "category": document.get("split_category"),
+            "confidence": document.get("split_confidence"),
+            "pages": metadata.get("split_pages") or [],
+            "page_start": document.get("page_start"),
+            "page_end": document.get("page_end"),
+        }
+
+    def _related_group_failures(self, document: dict[str, Any], failed_run: dict[str, Any]) -> list[dict[str, Any]]:
+        """Return sibling failures grouped with this representative document."""
+        parent_id = document.get("parent_document_id")
+        if not parent_id or "extract" not in str(failed_run.get("task_key") or "").lower():
+            return []
+        signature = _message_signature(failed_run.get("error") or "")
+        related: list[dict[str, Any]] = []
+        for child in self.documents.list_children(str(parent_id)):
+            for run in self.task_runs.list_by_document(str(child["id"])):
+                if str(run.get("status") or "").lower() != "failed":
+                    continue
+                if run.get("task_key") != failed_run.get("task_key"):
+                    continue
+                if _message_signature(run.get("error") or "") != signature:
+                    continue
+                related.append(
+                    {
+                        "document": self._document_payload(child),
+                        "split_segment": self._split_segment_payload(child),
+                        "failed_task": self._task_run_payload(run),
+                    }
+                )
+        return related
+
     def _task_run_payload(self, run: dict[str, Any]) -> dict[str, Any]:
         payload = dict(run)
-        payload["error"] = _redact_text(str(payload.get("error") or ""))
+        payload["error"] = _operator_failure_message(payload, payload.get("error"))
         payload["input"] = _redact(json_loads(payload.get("input_json"), {}))
         payload["output"] = _redact(json_loads(payload.get("output_json"), {}))
         payload.pop("input_json", None)
@@ -202,11 +311,18 @@ class FailureService:
                 "message": failed_run.get("error") or failed_run.get("failed_error") or "Task failed",
             }
         fatal = _redact(fatal)
+        message = _operator_failure_message(
+            failed_run,
+            fatal.get("message") or failed_run.get("error") or failed_run.get("failed_error") or "",
+            configuration_id=fatal.get("configuration_id"),
+        )
         return {
             "failure_type": fatal.get("failure_type") or "task_failed",
-            "message": fatal.get("message") or _redact_text(str(failed_run.get("error") or failed_run.get("failed_error") or "")),
+            "message": message,
             "provider": fatal.get("provider"),
             "provider_job_id": fatal.get("provider_job_id"),
+            "configuration_id": fatal.get("configuration_id"),
+            "affected_split_documents": fatal.get("affected_split_documents"),
             "segments": fatal.get("segments") or [],
             "policy": fatal.get("policy") or {},
             "operator_action": fatal.get(
@@ -245,3 +361,40 @@ def _redact(value: Any) -> Any:
 def _redact_text(value: str) -> str:
     """Redact secret-looking tokens in text."""
     return SECRET_VALUE_PATTERN.sub("[REDACTED]", value)
+
+
+def _message_signature(value: Any) -> str:
+    """Return a normalized message signature for grouping repeated failures."""
+    text = _redact_text(str(value or "")).strip().lower()
+    text = re.sub(r"\s+", " ", text)
+    return text[:500]
+
+
+def _operator_failure_message(
+    failed_run: dict[str, Any],
+    message: Any,
+    *,
+    configuration_id: str | None = None,
+) -> str:
+    """Return a redacted message suitable for operator display."""
+    redacted = _redact_text(str(message or ""))
+    if not _is_extract_task_run(failed_run):
+        return redacted
+    if redacted.startswith("LlamaCloud Extract "):
+        return redacted
+    config_id = configuration_id or _extract_configuration_id(redacted)
+    return _redact_text(humanize_extract_error(redacted, configuration_id=config_id))
+
+
+def _is_extract_task_run(failed_run: dict[str, Any]) -> bool:
+    """Return True when a task run belongs to an extraction step."""
+    task_key = str(failed_run.get("task_key") or failed_run.get("failed_task_key") or "").lower()
+    class_name = str(failed_run.get("class_name") or failed_run.get("failed_class_name") or "").lower()
+    module_name = str(failed_run.get("module_name") or failed_run.get("failed_module_name") or "").lower()
+    return "extract" in task_key or "extract" in class_name or ".extraction" in module_name
+
+
+def _extract_configuration_id(message: str) -> str | None:
+    """Extract a LlamaCloud configuration id from a provider error message."""
+    match = re.search(r"\b(cfg-[A-Za-z0-9_-]+)\b", message)
+    return match.group(1) if match else None

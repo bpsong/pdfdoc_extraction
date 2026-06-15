@@ -53,13 +53,17 @@
         }
         tableBody.innerHTML = failures.map((item) => {
             const document = item.document || {};
+            const sourceDocument = item.source_document || document;
             const failedTask = item.failed_task || {};
             const failure = item.failure || {};
+            const group = item.group || {};
+            const groupCount = Number(group.count || 1);
             return `
                 <tr>
                     <td>
-                        <div class="font-medium">${escapeHtml(document.filename || document.id)}</div>
-                        <div class="text-xs text-base-content/50 font-mono">${escapeHtml(document.id || "")}</div>
+                        <div class="font-medium">${escapeHtml(sourceDocument.filename || document.filename || document.id)}</div>
+                        <div class="text-xs text-base-content/50 font-mono">${escapeHtml(sourceDocument.id || document.id || "")}</div>
+                        ${groupCount > 1 ? `<div class="badge badge-error badge-xs mt-1">${groupCount} split documents affected</div>` : ""}
                     </td>
                     <td>
                         <div class="text-sm">${escapeHtml(failedTask.task_key || "")}</div>
@@ -75,12 +79,15 @@
 
     function renderDetail(payload) {
         const documentPayload = payload.document || {};
+        const sourceDocument = payload.source_document || documentPayload;
+        const splitSegment = payload.split_segment || {};
         const failure = payload.failure || {};
         const failedTask = payload.latest_failed_task || {};
-        detailTitle.textContent = documentPayload.filename || documentPayload.id || "Failure Detail";
+        const relatedFailures = Array.isArray(payload.related_failures) ? payload.related_failures : [];
+        detailTitle.textContent = sourceDocument.filename || documentPayload.filename || documentPayload.id || "Failure Detail";
         detailSubtitle.textContent = `${failedTask.task_key || "failed task"} | ${titleCase(failure.failure_type || "task_failed")}`;
-        sourceLink.href = payload.preview_url || "#";
-        sourceLink.classList.toggle("hidden", !payload.preview_url);
+        sourceLink.href = payload.source_preview_url || payload.preview_url || "#";
+        sourceLink.classList.toggle("hidden", !(payload.source_preview_url || payload.preview_url));
         detailBody.innerHTML = `
             <div>
                 <div class="alert alert-error mb-4">
@@ -95,13 +102,30 @@
                         <div class="text-error whitespace-pre-wrap">${escapeHtml(failure.message || failedTask.error || "Task failed")}</div>
                     </div>
                     <div>
-                        <div class="text-xs text-base-content/50">Document</div>
-                        <div>${escapeHtml(documentPayload.filename || documentPayload.id || "")}</div>
-                        <div class="text-xs font-mono text-base-content/50">${escapeHtml(documentPayload.id || "")}</div>
+                        <div class="text-xs text-base-content/50">Original Source PDF</div>
+                        <div>${escapeHtml(sourceDocument.filename || sourceDocument.id || "")}</div>
+                        <div class="text-xs font-mono text-base-content/50">${escapeHtml(sourceDocument.id || "")}</div>
                     </div>
+                    ${splitSegment && splitSegment.document_id ? `
+                        <div>
+                            <div class="text-xs text-base-content/50">Failed Split Segment</div>
+                            <div>${escapeHtml(splitSegment.filename || documentPayload.filename || "")}</div>
+                            <div class="text-xs text-base-content/60">
+                                Pages ${escapeHtml((splitSegment.pages || []).join(", ") || `${splitSegment.page_start || "?"}-${splitSegment.page_end || "?"}`)}
+                                | ${escapeHtml(splitSegment.category || "unknown")}
+                                | ${escapeHtml(splitSegment.confidence || "unknown")} confidence
+                            </div>
+                        </div>
+                    ` : ""}
+                    ${relatedFailures.length > 1 ? `
+                        <div>
+                            <div class="text-xs text-base-content/50">Related Split Failures</div>
+                            <div class="text-sm">${relatedFailures.length} split documents failed with the same task error.</div>
+                        </div>
+                    ` : ""}
                     <div>
                         <div class="text-xs text-base-content/50">Source Path</div>
-                        <div class="text-xs font-mono break-all">${escapeHtml(documentPayload.file_path || "")}</div>
+                        <div class="text-xs font-mono break-all">${escapeHtml(sourceDocument.file_path || documentPayload.file_path || "")}</div>
                     </div>
                     <div>
                         <div class="text-xs text-base-content/50">Provider Job</div>
@@ -114,8 +138,8 @@
                 </div>
             </div>
             <div>
-                ${payload.preview_url
-                    ? `<iframe class="extraction-pdf-frame" src="${escapeHtml(payload.preview_url)}" title="Source PDF preview"></iframe>`
+                ${payload.source_preview_url || payload.preview_url
+                    ? `<iframe class="extraction-pdf-frame" src="${escapeHtml(payload.source_preview_url || payload.preview_url)}" title="Source PDF preview"></iframe>`
                     : '<div class="empty-panel">Source PDF preview unavailable</div>'}
                 <div class="mt-4">
                     <div class="text-xs font-medium mb-1">Failed Task Output</div>

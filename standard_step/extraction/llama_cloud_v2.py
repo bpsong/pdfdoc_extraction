@@ -164,6 +164,60 @@ def run_extract_v2_job(
     )
 
 
+def preflight_extract_v2_access(
+    *,
+    api_key: str,
+    configuration_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+) -> None:
+    """Validate LlamaCloud Extract credentials/configuration without extracting a file."""
+    client = LlamaCloud(api_key=api_key)
+    request_scope = _optional_scope(
+        project_id=project_id,
+        organization_id=organization_id,
+    )
+    try:
+        if configuration_id:
+            client.configurations.retrieve(configuration_id, **request_scope)
+        else:
+            client.projects.list(organization_id=organization_id)
+    except Exception as exc:
+        raise TaskError(humanize_extract_error(exc, configuration_id=configuration_id)) from exc
+
+
+def humanize_extract_error(error: Any, *, configuration_id: Optional[str] = None) -> str:
+    """Return an operator-friendly LlamaCloud Extract error message."""
+    text = str(error)
+    lowered = text.lower()
+    if "invalid api key" in lowered or "401" in lowered:
+        return (
+            "LlamaCloud Extract authentication failed. Check the Extract task API key "
+            "and LlamaCloud region, then re-ingest the source PDF."
+        )
+    if "configuration" in lowered and ("not found" in lowered or "404" in lowered):
+        config_part = f" '{configuration_id}'" if configuration_id else ""
+        return (
+            f"LlamaCloud Extract configuration{config_part} was not found. "
+            "Check the Extract task configuration_id, then re-ingest the source PDF."
+        )
+    if "cancelled" in lowered:
+        return "LlamaCloud Extract job was cancelled before completion."
+    if "timeout" in lowered or "timed out" in lowered:
+        return "LlamaCloud Extract job timed out before completion."
+    return f"LlamaCloud Extract failed: {text}"
+
+
+def is_non_retryable_extract_error(error: Any) -> bool:
+    """Return True for auth/config errors that should fail without retry loops."""
+    text = str(error).lower()
+    return (
+        "invalid api key" in text
+        or "401" in text
+        or ("configuration" in text and ("not found" in text or "404" in text))
+    )
+
+
 def _to_plain_dict(value: Any) -> Dict[str, Any]:
     """Convert SDK metadata models into plain dictionaries for persistence."""
     if value is None:

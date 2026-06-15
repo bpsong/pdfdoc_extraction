@@ -138,8 +138,25 @@
 
     function ingestionStep(state) {
         const documentCount = (state.documents || []).length;
+        const sourceDocuments = (state.documents || []).filter((document) => !document.parent_document_id);
+        const splitDocuments = (state.documents || []).filter((document) => document.parent_document_id);
         const failed = (state.documents || []).filter((document) => String(document.status || "").toLowerCase() === "failed").length;
+        const failedSources = sourceDocuments.filter((document) => String(document.status || "").toLowerCase() === "failed").length;
+        const failedSplits = splitDocuments.filter((document) => String(document.status || "").toLowerCase() === "failed").length;
         const running = (state.documents || []).filter((document) => !isTerminal(document.status)).length;
+        const sourceLabel = `${sourceDocuments.length} source${sourceDocuments.length === 1 ? "" : "s"}`;
+        const splitLabel = `${splitDocuments.length} split document${splitDocuments.length === 1 ? "" : "s"}`;
+        let detail = documentCount ? `${documentCount} files${failed ? `, ${failed} failed` : ""}` : "Pending";
+        if (splitDocuments.length) {
+            const failureParts = [];
+            if (failedSources) {
+                failureParts.push(`${failedSources} source${failedSources === 1 ? "" : "s"} failed`);
+            }
+            if (failedSplits) {
+                failureParts.push(`${failedSplits} split document${failedSplits === 1 ? "" : "s"} failed`);
+            }
+            detail = `${sourceLabel}, ${splitLabel}${failureParts.length ? `, ${failureParts.join(", ")}` : ""}`;
+        }
         return {
             key: "ingestion",
             label: "Uploaded",
@@ -153,7 +170,7 @@
                 pending: documentCount ? 0 : 1,
                 skipped: 0,
             },
-            detail: documentCount ? `${documentCount} files${failed ? `, ${failed} failed` : ""}` : "Pending",
+            detail,
         };
     }
 
