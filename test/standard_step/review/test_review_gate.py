@@ -95,6 +95,75 @@ def _create_document_with_fields(tmp_path, fields):
     return config, created, task_run
 
 
+def _create_document_with_required_line_items(tmp_path, confidence, nested_confidences=None):
+    pdf_path = tmp_path / "invoice-line-items.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    schema_dir = tmp_path / "schemas"
+    schema_dir.mkdir(exist_ok=True)
+    (schema_dir / "invoice.yaml").write_text(
+        "\n".join(
+            [
+                "fields:",
+                "  line_items:",
+                "    type: array",
+                "    required: true",
+                "    items:",
+                "      type: object",
+                "      properties:",
+                "        sku:",
+                "          type: string",
+                "        quantity:",
+                "          type: number",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config = TempConfig(tmp_path / "app.sqlite3", {"schema": {"directories": [str(schema_dir)]}})
+    initialize_database(config)
+    source = {}
+    if nested_confidences is not None:
+        source = {
+            "confidence_details": {
+                "aggregation": "minimum_nested_confidence",
+                "confidence": confidence,
+                "nested_confidences": nested_confidences,
+            }
+        }
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename=pdf_path.name,
+        )
+        task_run = TaskRunRepository(conn).create_started(
+            batch_id=created["batch"]["id"],
+            document_id=created["document"]["id"],
+            task_key="review_gate",
+            task_index=1,
+            module_name="standard_step.review.review_gate",
+            class_name="ReviewGateTask",
+        )
+        result = ExtractionRepository(conn).save_result(
+            document_id=created["document"]["id"],
+            provider="test",
+            data={"line_items": [{"sku": "ABC", "quantity": 2}]},
+        )
+        ExtractionRepository(conn).save_fields(
+            document_id=created["document"]["id"],
+            extraction_result_id=result["id"],
+            fields=[
+                {
+                    "field_key": "line_items",
+                    "extracted_value": [{"sku": "ABC", "quantity": 2}],
+                    "confidence": confidence,
+                    "source": source,
+                }
+            ],
+        )
+    return config, created, task_run
+
+
 def test_review_gate_passes_when_all_rules_are_satisfied(tmp_path):
     config, created, task_run = _create_document_with_field(tmp_path, 0.95)
     task = ReviewGateTask(config, confidence_threshold=0.8, schema_file="invoice.yaml")
@@ -229,3 +298,61 @@ def test_review_gate_pauses_for_required_field_missing_confidence(tmp_path):
     assert result["review_required"] is True
     assert metadata["highlight_fields"] == ["supplier"]
     assert metadata["reasons"] == [{"reason": "missing_confidence", "field_key": "supplier"}]
+
+
+def test_review_gate_passes_required_array_when_aggregate_confidence_is_high(tmp_path):
+    config, created, task_run = _create_document_with_required_line_items(
+        tmp_path,
+        0.96,
+        {
+            "0.sku": {"confidence": 0.98},
+            "0.quantity": {"confidence": 0.96},
+        },
+    )
+    task = ReviewGateTask(config, confidence_threshold=0.95, schema_file="invoice.yaml")
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "data": {"line_items": [{"sku": "ABC", "quantity": 2}]},
+    }
+
+    result = task.run(context)
+
+    with connect(config) as conn:
+        reviews = ReviewRepository(conn).list_queue()
+
+    assert result["review_required"] is False
+    assert result["review_gate_status"] == "passed"
+    assert reviews == []
+
+
+def test_review_gate_records_nested_low_confidence_paths_for_required_array(tmp_path):
+    config, created, task_run = _create_document_with_required_line_items(
+        tmp_path,
+        0.82,
+        {
+            "0.sku": {"confidence": 0.98},
+            "0.quantity": {"confidence": 0.82},
+        },
+    )
+    task = ReviewGateTask(config, confidence_threshold=0.95, schema_file="invoice.yaml")
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "data": {"line_items": [{"sku": "ABC", "quantity": 2}]},
+    }
+
+    result = task.run(context)
+
+    with connect(config) as conn:
+        reviews = ReviewRepository(conn).list_queue()
+        metadata = json_loads(reviews[0]["metadata_json"])
+
+    assert result["review_required"] is True
+    assert metadata["highlight_fields"] == ["line_items"]
+    assert metadata["low_confidence_fields"] == ["line_items"]
+    assert metadata["low_confidence_paths"] == ["line_items.0.quantity"]

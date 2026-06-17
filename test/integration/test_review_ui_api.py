@@ -105,6 +105,16 @@ fields:
                     "field_alias": "Line Items",
                     "extracted_value": [{"sku": "ABC", "quantity": 2}],
                     "confidence": 0.88,
+                    "source": {
+                        "confidence_details": {
+                            "aggregation": "minimum_nested_confidence",
+                            "confidence": 0.88,
+                            "nested_confidences": {
+                                "0.sku": {"confidence": 0.96, "confidence_band": "high"},
+                                "0.quantity": {"confidence": 0.88, "confidence_band": "medium"},
+                            },
+                        }
+                    },
                 },
             ],
         )
@@ -173,6 +183,9 @@ def test_review_detail_api_returns_schema_pdf_and_parsed_fields(tmp_path, monkey
     assert payload["schema"]["fields"][6]["item_schema"]["fields"][1]["step"] == 0.01
     assert payload["fields"][4]["final_value"] == {"city": "Singapore"}
     assert payload["fields"][0]["confidence_band"] == "low"
+    line_items = next(field for field in payload["fields"] if field["field_key"] == "line_items")
+    assert line_items["confidence_details"]["confidence"] == 0.88
+    assert line_items["confidence_details"]["nested_confidences"]["0.quantity"]["confidence_band"] == "medium"
 
 
 def test_review_ui_actions_claim_draft_diff_and_release(tmp_path, monkeypatch) -> None:

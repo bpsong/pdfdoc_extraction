@@ -6,6 +6,8 @@ Review schemas control how extracted fields appear in the human review UI and ho
 
 When a review schema is configured, the review gate uses `required: true` to decide which fields are mandatory for confidence gating. Optional fields still appear in the review UI, but a missing value or missing confidence score on an optional field does not force review by itself. Explicit review policies such as `field_threshold_overrides`, split-confidence rules, business-rule flags, schema validation errors, or `always_review` can still force review.
 
+For object, scalar-array, and object-array fields, confidence gating uses the aggregate field confidence persisted by extraction. New LlamaCloud Extract v2 runs compute that aggregate as the minimum nested numeric confidence. For example, a required `line_items` array with one low-confidence `line_items.0.quantity` cell can route the top-level `line_items` field to review while the UI highlights the specific low-confidence cell.
+
 ## How Review Schemas Connect to the Pipeline
 
 The review gate task references a schema through `tasks.<review_gate_task>.params.schema_file`.
@@ -99,6 +101,8 @@ For money-like values, use either `format: money` or `decimal_places: 2`. The re
 
 Array `items` may use scalar types (`string`, `number`, `integer`, `float`, `boolean`, `date`, `datetime`, `enum`) or `object`. Scalar items can define the same type-specific options as top-level fields. Object-array item `properties` can define their own numeric, enum, boolean, date, text, required, readonly, default, and help metadata.
 
+When extraction metadata includes nested confidence, the review UI displays an aggregate badge on array/object group headers and per-cell badges for object arrays. Nested details are stored in `source_json.confidence_details`; no review schema changes or database migration are required.
+
 ## Date Fields and LlamaCloud Output
 
 For `type: date`, the review UI uses a browser date input. Browser date inputs require ISO date strings:
@@ -184,6 +188,7 @@ fields:
 - A date field is configured as `date`, but LlamaCloud returns `MM-DD-YYYY`, `DD/MMM/YYYY`, or another non-ISO format.
 - `required: true` is used on optional business data, causing missing values or missing confidence to route documents to review.
 - A saved LlamaCloud configuration returns aliases that do not map to the workflow field keys.
+- Older extraction records created before nested confidence persistence may still show missing array/object confidence because historical data is not backfilled automatically.
 
 ## Validation
 

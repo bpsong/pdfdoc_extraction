@@ -87,6 +87,15 @@ def _client(tmp_path: Path, monkeypatch) -> tuple[TestClient, TempConfig, dict]:
                     "confidence": 0.62,
                     "requires_review": True,
                     "review_status": "required",
+                    "source": {
+                        "confidence_details": {
+                            "aggregation": "minimum_nested_confidence",
+                            "confidence": 0.62,
+                            "nested_confidences": {
+                                "value": {"confidence": 0.62, "confidence_band": "low"},
+                            },
+                        }
+                    },
                 },
             ],
         )
@@ -124,6 +133,7 @@ def test_document_extraction_api_returns_ui_ready_payload(tmp_path, monkeypatch)
     assert payload["fields"][0]["field_key"] == "supplier"
     assert payload["fields"][0]["confidence_band"] == "high"
     assert payload["fields"][1]["confidence_band"] == "low"
+    assert payload["fields"][1]["confidence_details"]["nested_confidences"]["value"]["confidence"] == 0.62
     assert payload["fields"][1]["requires_review"] is True
     assert payload["files"][0]["filename"] == "invoice.pdf"
 

@@ -541,6 +541,18 @@
     grid-area: confidence;
 }
 
+.review-inline-confidence,
+.review-cell-confidence {
+    display: inline-flex;
+    align-items: center;
+    width: max-content;
+    white-space: nowrap;
+}
+
+.review-cell-confidence {
+    margin-bottom: 0.25rem;
+}
+
 .review-input-wrap {
     grid-area: input;
     min-width: 0;
@@ -592,9 +604,14 @@
 
 .review-array-row {
     display: grid;
-    grid-template-columns: 1fr max-content;
+    grid-template-columns: max-content 1fr max-content;
     gap: 0.5rem;
     align-items: center;
+}
+
+.review-array-row.highlight,
+.review-object-array-table td.highlight {
+    background: oklch(var(--wa) / 0.08);
 }
 
 .review-object-array {

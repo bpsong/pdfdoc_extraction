@@ -307,10 +307,12 @@ class ReviewService:
     def _field_payload(field: dict[str, Any]) -> dict[str, Any]:
         """Return a normalized field payload for schema-driven review editing."""
         payload = dict(field)
+        source = json_loads(field.get("source_json"), {})
         payload["extracted_value"] = json_loads(field.get("extracted_value_json"))
         payload["corrected_value"] = json_loads(field.get("corrected_value_json"))
         payload["final_value"] = json_loads(field.get("final_value_json"))
-        payload["source"] = json_loads(field.get("source_json"), {})
+        payload["source"] = source
+        payload["confidence_details"] = source.get("confidence_details", {}) if isinstance(source, dict) else {}
         payload["requires_review"] = bool(field.get("requires_review"))
         payload["confidence_band"] = ReviewService._confidence_band(field.get("confidence"))
         return payload

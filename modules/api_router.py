@@ -335,6 +335,7 @@ def _confidence_band(confidence: Any) -> str:
 def _parsed_field_payload(field: dict[str, Any]) -> dict[str, Any]:
     """Return a UI-ready extracted field payload."""
     confidence = field.get("confidence")
+    source = json_loads(field.get("source_json"), {})
     return {
         "id": field.get("id"),
         "field_key": field.get("field_key"),
@@ -345,9 +346,10 @@ def _parsed_field_payload(field: dict[str, Any]) -> dict[str, Any]:
         "confidence": confidence,
         "confidence_label": field.get("confidence_label"),
         "confidence_band": _confidence_band(confidence),
+        "confidence_details": source.get("confidence_details", {}) if isinstance(source, dict) else {},
         "requires_review": bool(field.get("requires_review")),
         "review_status": field.get("review_status"),
-        "source": json_loads(field.get("source_json"), {}),
+        "source": source,
         "created_at": field.get("created_at"),
         "updated_at": field.get("updated_at"),
     }

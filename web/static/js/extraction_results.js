@@ -71,6 +71,20 @@
         return `<span class="badge ${classes[field.confidence_band] || "badge-ghost"} badge-sm">${escapeHtml(percent)}</span>`;
     }
 
+    function nestedConfidenceSummary(field) {
+        const nested = field.confidence_details && field.confidence_details.nested_confidences;
+        if (!nested || typeof nested !== "object" || !Object.keys(nested).length) {
+            return "";
+        }
+        const items = Object.entries(nested).slice(0, 4).map(([path, detail]) => {
+            const confidence = Number(detail && detail.confidence);
+            const percent = Number.isFinite(confidence) ? `${Math.round(confidence * 100)}%` : "N/A";
+            return `${path}: ${percent}`;
+        });
+        const suffix = Object.keys(nested).length > items.length ? " ..." : "";
+        return `<div class="text-xs text-base-content/50 mt-1">${escapeHtml(items.join(", ") + suffix)}</div>`;
+    }
+
     function renderPreview(payload) {
         const previewUrl = payload.document && payload.document.preview_url;
         if (!previewUrl) {
@@ -106,7 +120,7 @@
                     <div class="font-medium">${escapeHtml(field.field_alias || field.field_key)}</div>
                     <div class="text-xs text-base-content/50">${escapeHtml(field.field_key)}</div>
                 </td>
-                <td class="max-w-sm">${formatValue(field.extracted_value)}</td>
+                <td class="max-w-sm">${formatValue(field.extracted_value)}${nestedConfidenceSummary(field)}</td>
                 <td class="max-w-sm">${formatValue(field.final_value)}</td>
                 <td>${confidenceBadge(field)}</td>
                 <td>${statusBadge(field.review_status)}</td>

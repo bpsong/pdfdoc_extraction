@@ -1036,6 +1036,7 @@ pipeline:
   - `resume_policy`: currently supports `"next_task"`.
 - **Behavior:**
   - Evaluates persisted extracted fields, confidence values, missing-confidence conditions for mandatory schema fields, schema errors, split confidence, and business rule flags.
+  - For object, scalar-array, and object-array fields, the persisted field confidence uses the minimum numeric nested confidence returned by LlamaCloud Extract. For example, an invoice `items` field is gated by the lowest line-item cell confidence.
   - Marks fields requiring review and creates a review queue item in SQLite when review is required.
   - Sets document state to `review_required` and pauses the workflow.
   - Operators can claim the item, save draft corrections, preview diffs, and complete review from `/app/review/{review_item_id}`.
@@ -1193,6 +1194,13 @@ To use v2 features, update your `config.yaml` to:
    ```
 
 #### 4.9.3. Storage Behavior
+
+##### Confidence Persistence
+- Scalar fields persist the provider's numeric confidence when available.
+- Object, scalar-array, and object-array fields persist an aggregate confidence using the minimum nested numeric confidence.
+- Nested confidence details are stored under each field's existing `source_json.confidence_details` payload, including per-cell paths such as `0.itemName` or `0.quantity`.
+- No database migration is required; the existing `extracted_fields.confidence` and `source_json` columns are used.
+- This behavior applies to new extraction runs only. Existing completed extraction/review records are not rewritten automatically.
 
 ##### JSON Storage (v2)
 - Preserves the list-of-objects structure for table fields.

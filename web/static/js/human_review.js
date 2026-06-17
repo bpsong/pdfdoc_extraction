@@ -516,12 +516,13 @@
 
     function isHighlighted(pathParts) {
         const highlighted = state.metadata.highlight_fields || state.metadata.low_confidence_fields || [];
+        const highlightedPaths = state.metadata.low_confidence_paths || [];
         if (!highlighted.length) {
-            return false;
+            return highlightedPaths.includes(pathString(pathParts));
         }
         const fullPath = pathString(pathParts);
         const rootKey = String(pathParts[0]);
-        return highlighted.includes(fullPath) || highlighted.includes(rootKey);
+        return highlighted.includes(fullPath) || highlighted.includes(rootKey) || highlightedPaths.includes(fullPath);
     }
 
     function shouldShowSourceValue(pathParts, fieldInfo, currentValue, extractedValue) {
@@ -554,6 +555,36 @@
 
     function fieldForPath(pathParts) {
         return state.fieldsByKey.get(String(pathParts[0])) || null;
+    }
+
+    function confidenceInfoForPath(pathParts) {
+        const fieldInfo = fieldForPath(pathParts);
+        if (!fieldInfo) {
+            return null;
+        }
+        if (pathParts.length === 1) {
+            if ((fieldInfo.confidence === null || fieldInfo.confidence === undefined || fieldInfo.confidence === "")
+                && fieldInfo.confidence_details
+                && fieldInfo.confidence_details.confidence !== undefined) {
+                return {
+                    ...fieldInfo,
+                    confidence: fieldInfo.confidence_details.confidence,
+                    confidence_band: fieldInfo.confidence_details.confidence_band || fieldInfo.confidence_band,
+                };
+            }
+            return fieldInfo;
+        }
+        const nestedPath = pathParts.slice(1).join(".");
+        const nested = fieldInfo.confidence_details
+            && fieldInfo.confidence_details.nested_confidences
+            && fieldInfo.confidence_details.nested_confidences[nestedPath];
+        return nested || fieldInfo;
+    }
+
+    function appendConfidenceBadge(container, fieldInfo, className) {
+        const wrapper = createElement("span", className || "review-inline-confidence");
+        wrapper.innerHTML = confidenceBadge(fieldInfo);
+        container.appendChild(wrapper);
     }
 
     function fieldForSchemaPath(pathParts) {
@@ -772,6 +803,7 @@
 
     function renderScalarField(field, pathParts, container) {
         const fieldInfo = fieldForPath(pathParts);
+        const confidenceInfo = confidenceInfoForPath(pathParts);
         const value = getByPath(state.values, pathParts);
         const extracted = getByPath({ [pathParts[0]]: fieldInfo ? fieldInfo.extracted_value : undefined }, pathParts);
         const editable = canEditPath(pathParts);
@@ -802,7 +834,7 @@
         row.appendChild(sourceCell);
 
         const confidence = createElement("div", "review-confidence-cell");
-        confidence.innerHTML = confidenceBadge(fieldInfo);
+        confidence.innerHTML = confidenceBadge(confidenceInfo);
         row.appendChild(confidence);
 
         row.appendChild(renderScalarInput(field, pathParts, value, editable));
@@ -821,6 +853,7 @@
         const header = createElement("div", "review-nested-header");
         const title = createElement("div", "review-label-line");
         appendFieldLabelContent(title, field);
+        appendConfidenceBadge(title, confidenceInfoForPath(pathParts));
         header.appendChild(title);
         group.appendChild(header);
 
@@ -860,6 +893,7 @@
         const titleWrap = createElement("div", "");
         const title = createElement("div", "review-label-line");
         appendFieldLabelContent(title, field);
+        appendConfidenceBadge(title, confidenceInfoForPath(pathParts));
         titleWrap.appendChild(title);
         header.appendChild(titleWrap);
         const addButton = createElement("button", "btn btn-outline btn-xs", "Add");
@@ -879,6 +913,8 @@
         value.forEach((item, index) => {
             const row = createElement("div", "review-array-row");
             const itemField = { ...(field.item_schema || { type: "string" }), key: String(index), label: `${field.label || field.key} ${index + 1}` };
+            row.classList.toggle("highlight", isHighlighted([...pathParts, index]));
+            appendConfidenceBadge(row, confidenceInfoForPath([...pathParts, index]));
             row.appendChild(renderScalarInput(itemField, [...pathParts, index], item, canEditPath(pathParts)));
             const removeButton = createElement("button", "btn btn-ghost btn-xs", "Remove");
             removeButton.type = "button";
@@ -914,6 +950,7 @@
         const titleWrap = createElement("div", "");
         const title = createElement("div", "review-label-line");
         appendFieldLabelContent(title, field);
+        appendConfidenceBadge(title, confidenceInfoForPath(pathParts));
         titleWrap.appendChild(title);
         header.appendChild(titleWrap);
         const addButton = createElement("button", "btn btn-outline btn-xs", "Add Row");
@@ -954,6 +991,8 @@
                 itemFields.forEach((itemField) => {
                     const cell = createElement("td");
                     const itemPath = [...pathParts, index, itemField.key];
+                    cell.classList.toggle("highlight", isHighlighted(itemPath));
+                    appendConfidenceBadge(cell, confidenceInfoForPath(itemPath), "review-cell-confidence");
                     cell.appendChild(renderScalarInput(itemField, itemPath, item ? item[itemField.key] : "", canEditPath(pathParts) && !itemField.readonly));
                     row.appendChild(cell);
                 });

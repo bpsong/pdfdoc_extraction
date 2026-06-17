@@ -169,6 +169,7 @@ class ReviewGateTask(BaseTask):
             ):
                 high_confidence_fields.append(field_key)
         schema_hash = SchemaService(self.config_manager).schema_hash(str(self.schema_file)) if self.schema_file else None
+        low_confidence_paths = self._low_confidence_paths(fields, reasons)
         return {
             "schema_file": self.schema_file,
             "schema_version": schema_hash,
@@ -179,12 +180,45 @@ class ReviewGateTask(BaseTask):
             "editable_fields": editable_fields,
             "highlight_fields": highlight_fields,
             "low_confidence_fields": highlight_fields,
+            "low_confidence_paths": low_confidence_paths,
             "high_confidence_fields": sorted(high_confidence_fields),
             "reasons": reasons,
             "allow_operator_to_edit_high_confidence_fields": self.allow_edit_high_confidence,
             "resume_policy": self.resume_policy,
             "task_run_id": context.get("task_run_id"),
         }
+
+    @staticmethod
+    def _low_confidence_paths(fields: list[dict[str, Any]], reasons: list[dict[str, Any]]) -> list[str]:
+        """Return nested low-confidence paths for display diagnostics."""
+        low_reasons = {
+            str(reason.get("field_key")): float(reason.get("threshold", 0))
+            for reason in reasons
+            if reason.get("reason") == "low_confidence" and reason.get("field_key")
+        }
+        if not low_reasons:
+            return []
+        paths: list[str] = []
+        for field in fields:
+            field_key = str(field.get("field_key"))
+            if field_key not in low_reasons:
+                continue
+            source = json_loads(field.get("source_json"), {})
+            confidence_details = source.get("confidence_details") if isinstance(source, dict) else None
+            nested = confidence_details.get("nested_confidences") if isinstance(confidence_details, dict) else None
+            if not isinstance(nested, dict):
+                continue
+            threshold = low_reasons[field_key]
+            for nested_path, item in nested.items():
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    confidence = float(item.get("confidence"))
+                except (TypeError, ValueError):
+                    continue
+                if confidence < threshold:
+                    paths.append(f"{field_key}.{nested_path}")
+        return sorted(set(paths))
 
     @staticmethod
     def _fields_payload(fields: list[dict[str, Any]]) -> dict[str, Any]:

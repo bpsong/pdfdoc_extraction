@@ -159,6 +159,17 @@ fields:
                     "field_alias": "Line items",
                     "extracted_value": [{"sku": "ABC", "quantity": 2, "unit_price": 4.5}],
                     "confidence": 0.88,
+                    "source": {
+                        "confidence_details": {
+                            "aggregation": "minimum_nested_confidence",
+                            "confidence": 0.88,
+                            "nested_confidences": {
+                                "0.sku": {"confidence": 0.96, "confidence_band": "high"},
+                                "0.quantity": {"confidence": 0.88, "confidence_band": "medium"},
+                                "0.unit_price": {"confidence": 0.94, "confidence_band": "high"},
+                            },
+                        }
+                    },
                 },
             ],
         )
@@ -171,6 +182,7 @@ fields:
             metadata={
                 "schema_file": "invoice.yaml",
                 "highlight_fields": ["invoice_amount"],
+                "low_confidence_paths": ["line_items.0.quantity"],
                 "editable_fields": ["supplier", "invoice_amount", "approved", "reviewed_at", "address", "tags", "line_items"],
             },
         )
@@ -280,6 +292,8 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     assert page.locator('input[data-field-path="address.city"]').is_disabled()
     assert page.locator(".review-object-array-table").is_visible()
     assert page.locator(".review-object-array-table .review-field-info").first.get_attribute("data-tip")
+    assert page.locator(".review-object-array-table .review-cell-confidence .badge").filter(has_text="88%").count() == 1
+    assert page.locator('td.highlight input[data-field-path="line_items.0.quantity"]').count() == 1
     page.locator("#review-pdf-fit-page-button").click()
     assert page.locator("#review-pdf-fit-page-button").get_attribute("aria-pressed") == "true"
     assert page.evaluate("() => window.localStorage.getItem('docflow.review.pdfFitMode')") == "page"

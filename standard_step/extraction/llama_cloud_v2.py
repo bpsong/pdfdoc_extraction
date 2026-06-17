@@ -327,21 +327,26 @@ def metadata_candidates(metadata: Dict[str, Any], field_key: str, alias: str) ->
 
 
 def extract_numeric_confidence(metadata: Dict[str, Any], field_key: str, alias: str) -> float | None:
-    """Extract numeric confidence, preserving NULL when confidence is absent."""
+    """Extract numeric confidence, preserving NULL when confidence is absent.
+
+    For complex fields, LlamaCloud may return no top-level confidence while
+    still returning confidence for nested object or array children. In that
+    case the aggregate field confidence is the minimum nested confidence.
+    """
+    values: list[float] = []
     for candidate in metadata_candidates(metadata, field_key, alias):
-        raw_value = candidate
-        if isinstance(candidate, dict):
-            for key in ("confidence", "confidence_score", "score", "confidence_value"):
-                if key in candidate:
-                    raw_value = candidate[key]
-                    break
-        if isinstance(raw_value, (int, float)):
-            return float(raw_value)
-        if isinstance(raw_value, str):
-            try:
-                return float(raw_value)
-            except ValueError:
-                continue
+        direct = _direct_numeric_confidence(candidate)
+        if direct is not None:
+            values.append(direct)
+
+        nested = _nested_confidence_details(candidate)
+        values.extend(
+            float(item["confidence"])
+            for item in nested.values()
+            if isinstance(item, dict) and isinstance(item.get("confidence"), (int, float))
+        )
+    if values:
+        return min(values)
     return None
 
 
@@ -358,17 +363,152 @@ def extract_confidence_label(metadata: Dict[str, Any], field_key: str, alias: st
     return None
 
 
+def extract_confidence_details(metadata: Dict[str, Any], field_key: str, alias: str) -> Dict[str, Any]:
+    """Return structured confidence details for nested field display.
+
+    The persisted top-level ``confidence`` column remains the review-gate source
+    of truth. This detail payload is stored in ``source_json`` so the review UI
+    can display object/array confidence without a schema migration.
+    """
+    nested_confidences: dict[str, dict[str, Any]] = {}
+    aggregate_values: list[float] = []
+    for candidate in metadata_candidates(metadata, field_key, alias):
+        direct = _direct_numeric_confidence(candidate)
+        if direct is not None:
+            aggregate_values.append(direct)
+        nested_confidences.update(_nested_confidence_details(candidate))
+
+    aggregate_values.extend(
+        float(item["confidence"])
+        for item in nested_confidences.values()
+        if isinstance(item.get("confidence"), (int, float))
+    )
+    details: Dict[str, Any] = {
+        "aggregation": "minimum_nested_confidence",
+    }
+    if aggregate_values:
+        details["confidence"] = min(aggregate_values)
+        details["confidence_band"] = confidence_band(min(aggregate_values))
+    if nested_confidences:
+        details["nested_confidences"] = nested_confidences
+    return details
+
+
 def extract_field_source(metadata: Dict[str, Any], field_key: str, alias: str) -> Dict[str, Any]:
     """Extract field citation/source metadata when present."""
+    source: Dict[str, Any] = {}
     for candidate in metadata_candidates(metadata, field_key, alias):
         if isinstance(candidate, dict):
-            source = candidate.get("source") or candidate.get("citation") or candidate.get("citations")
-            if source is not None:
-                return {"provider_source": source}
-    return {}
+            provider_source = candidate.get("source") or candidate.get("citation") or candidate.get("citations")
+            if provider_source is not None:
+                source["provider_source"] = provider_source
+                break
+    confidence_details = extract_confidence_details(metadata, field_key, alias)
+    if confidence_details.get("nested_confidences"):
+        source["confidence_details"] = confidence_details
+    return source
+
+
+def confidence_band(confidence: Any) -> str:
+    """Map numeric confidence values to stable UI/review bands."""
+    if confidence is None:
+        return "missing"
+    try:
+        value = float(confidence)
+    except (TypeError, ValueError):
+        return "missing"
+    if value >= 0.9:
+        return "high"
+    if value >= 0.7:
+        return "medium"
+    return "low"
 
 
 def _extend_named_metadata(candidates: list[Any], container: Dict[str, Any], names: set[str]) -> None:
     for key in names:
         if key in container:
             candidates.append(container[key])
+
+
+def _direct_numeric_confidence(candidate: Any) -> float | None:
+    raw_value = candidate
+    if isinstance(candidate, dict):
+        for key in ("confidence", "confidence_score", "score", "confidence_value"):
+            if key in candidate:
+                raw_value = candidate[key]
+                break
+        else:
+            return None
+    if isinstance(raw_value, (int, float)):
+        return float(raw_value)
+    if isinstance(raw_value, str):
+        try:
+            return float(raw_value)
+        except ValueError:
+            return None
+    return None
+
+
+def _nested_confidence_details(value: Any, prefix: str = "") -> dict[str, dict[str, Any]]:
+    details: dict[str, dict[str, Any]] = {}
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            details.update(_nested_confidence_details(item, _join_path(prefix, str(index))))
+        return details
+
+    if not isinstance(value, dict):
+        return details
+
+    direct = _direct_numeric_confidence(value)
+    if direct is not None and prefix:
+        item: dict[str, Any] = {
+            "confidence": direct,
+            "confidence_band": confidence_band(direct),
+        }
+        label = _direct_confidence_label(value)
+        if label:
+            item["confidence_label"] = label
+        source = value.get("source") or value.get("citation") or value.get("citations")
+        if source is not None:
+            item["source"] = {"provider_source": source}
+        details[prefix] = item
+        return details
+
+    metadata_keys = {
+        "confidence",
+        "confidence_score",
+        "score",
+        "confidence_value",
+        "confidence_label",
+        "label",
+        "confidence_level",
+        "level",
+        "parsing_confidence",
+        "extraction_confidence",
+        "source",
+        "citation",
+        "citations",
+        "bounding_boxes",
+        "matching_text",
+        "page",
+        "page_dimensions",
+        "row_metadata",
+        "page_metadata",
+    }
+    for key, nested in value.items():
+        if key in metadata_keys:
+            continue
+        details.update(_nested_confidence_details(nested, _join_path(prefix, str(key))))
+    return details
+
+
+def _direct_confidence_label(candidate: dict[str, Any]) -> str | None:
+    for key in ("confidence_label", "label", "confidence_level", "level"):
+        value = candidate.get(key)
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _join_path(prefix: str, part: str) -> str:
+    return f"{prefix}.{part}" if prefix else part

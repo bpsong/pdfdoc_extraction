@@ -257,3 +257,74 @@ def test_extract_pdf_persists_confidence_for_review_gate(tmp_path, monkeypatch):
     assert fields["invoice_total"]["confidence_label"] == "low"
     assert json_loads(fields["invoice_total"]["final_value_json"]) == 12.5
     assert runner.call_args.kwargs["confidence_scores"] is True
+
+
+def test_extract_pdf_persists_nested_list_confidence_details(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    params = {
+        "api_key": "test-key",
+        "fields": {
+            "line_items": {"alias": "Line Items", "type": "List[Dict[str, Any]]"},
+        },
+    }
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {"tasks": {"extract_document_data": {"params": params}}},
+    )
+    initialize_database(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+        task_run = TaskRunRepository(conn).create_started(
+            batch_id=created["batch"]["id"],
+            document_id=created["document"]["id"],
+            task_key="extract_document_data",
+            task_index=0,
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
+        )
+
+    class Result:
+        data = {"Line Items": [{"sku": "ABC", "quantity": 2}]}
+        extraction_metadata = {
+            "field_metadata": {
+                "document_metadata": {
+                    "Line Items": [
+                        {
+                            "sku": {"confidence": 0.99},
+                            "quantity": {"confidence": 0.82},
+                        }
+                    ]
+                }
+            }
+        }
+        job_id = "job-v1-list"
+
+    runner = MagicMock(return_value=Result())
+    monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", runner)
+
+    task = ExtractPdfTask(config_manager=config, **params)
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "file_path": str(pdf_path),
+    }
+
+    task.on_start(context)
+    task.run(context)
+
+    with connect(config) as conn:
+        fields = {field["field_key"]: field for field in ExtractionRepository(conn).get_fields(created["document"]["id"])}
+
+    source = json_loads(fields["line_items"]["source_json"], {})
+    nested = source["confidence_details"]["nested_confidences"]
+    assert fields["line_items"]["confidence"] == 0.82
+    assert nested["0.sku"]["confidence"] == 0.99
+    assert nested["0.quantity"]["confidence"] == 0.82
