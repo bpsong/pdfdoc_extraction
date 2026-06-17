@@ -267,8 +267,9 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     page.locator("body.sidebar-collapsed").wait_for()
     assert page.locator('.nav-link[aria-label="Review Queue"]').get_attribute("title") == "Review Queue"
     assert page.locator('.nav-link[aria-label="Review Queue"]').get_attribute("data-nav-label") == "Review Queue"
-    assert page.locator("#review-pdf-fit-width-button").get_attribute("aria-pressed") == "true"
-    assert "zoom=page-width" in (page.locator(".review-pdf-frame").get_attribute("src") or "")
+    assert page.locator("#review-pdf-fit-width-button").count() == 0
+    assert page.locator("#review-pdf-fit-page-button").count() == 0
+    assert "zoom=" not in (page.locator(".review-pdf-frame").get_attribute("src") or "")
     page.locator("#review-claim-button").click()
     page.locator("#review-lock-summary").wait_for()
     assert page.locator("#review-claim-button").is_hidden()
@@ -294,11 +295,6 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     assert page.locator(".review-object-array-table .review-field-info").first.get_attribute("data-tip")
     assert page.locator(".review-object-array-table .review-cell-confidence .badge").filter(has_text="88%").count() == 1
     assert page.locator('td.highlight input[data-field-path="line_items.0.quantity"]').count() == 1
-    page.locator("#review-pdf-fit-page-button").click()
-    assert page.locator("#review-pdf-fit-page-button").get_attribute("aria-pressed") == "true"
-    assert page.evaluate("() => window.localStorage.getItem('docflow.review.pdfFitMode')") == "page"
-    assert "zoom=page-fit" in (page.locator(".review-pdf-frame").get_attribute("src") or "")
-    page.locator("#review-pdf-fit-width-button").click()
     _assert_nonblank_screenshot(page)
     _assert_no_horizontal_overflow(page)
 

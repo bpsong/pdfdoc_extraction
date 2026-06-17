@@ -15,7 +15,6 @@
         lock: null,
         sourceValueMode: "review",
         sourceValueReveals: new Set(),
-        pdfFitMode: "width",
     };
 
     const elements = {};
@@ -26,8 +25,6 @@
         elements.documentSubtitle = document.getElementById("review-document-subtitle");
         elements.pdfBody = document.getElementById("review-pdf-body");
         elements.pdfOpenLink = document.getElementById("review-pdf-open-link");
-        elements.pdfFitWidthButton = document.getElementById("review-pdf-fit-width-button");
-        elements.pdfFitPageButton = document.getElementById("review-pdf-fit-page-button");
         elements.itemBadge = document.getElementById("review-item-badge");
         elements.statusBadge = document.getElementById("review-status-badge");
         elements.reasonSummary = document.getElementById("review-reason-summary");
@@ -126,29 +123,6 @@
         renderEditor();
     }
 
-    function normalizePdfFitMode(mode) {
-        return ["width", "page"].includes(mode) ? mode : "width";
-    }
-
-    function initializePdfFitMode() {
-        state.pdfFitMode = normalizePdfFitMode(storageGet("docflow.review.pdfFitMode"));
-        updatePdfFitControls();
-    }
-
-    function updatePdfFitControls() {
-        [
-            [elements.pdfFitWidthButton, "width"],
-            [elements.pdfFitPageButton, "page"],
-        ].forEach(([button, mode]) => {
-            if (!button) {
-                return;
-            }
-            const active = state.pdfFitMode === mode;
-            button.classList.toggle("btn-active", active);
-            button.setAttribute("aria-pressed", active ? "true" : "false");
-        });
-    }
-
     function renderPdfPreview() {
         const documentPayload = state.document || {};
         const filename = documentPayload.filename || documentPayload.original_filename || "Document";
@@ -159,19 +133,11 @@
                 elements.pdfBody,
                 documentPayload.preview_url,
                 filename,
-                { fitMode: state.pdfFitMode },
             );
         } else {
             elements.pdfOpenLink.classList.add("hidden");
             window.DocFlowPdfViewer.renderIframeFallback(elements.pdfBody, null, filename);
         }
-        updatePdfFitControls();
-    }
-
-    function setPdfFitMode(mode) {
-        state.pdfFitMode = normalizePdfFitMode(mode);
-        storageSet("docflow.review.pdfFitMode", state.pdfFitMode);
-        renderPdfPreview();
     }
 
     function valueFromField(field, preferredKey) {
@@ -1172,12 +1138,6 @@
         if (elements.sourceModeSelect) {
             elements.sourceModeSelect.addEventListener("change", () => setSourceValueMode(elements.sourceModeSelect.value));
         }
-        if (elements.pdfFitWidthButton) {
-            elements.pdfFitWidthButton.addEventListener("click", () => setPdfFitMode("width"));
-        }
-        if (elements.pdfFitPageButton) {
-            elements.pdfFitPageButton.addEventListener("click", () => setPdfFitMode("page"));
-        }
     }
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -1188,7 +1148,6 @@
         state.reviewItemId = elements.workspace.dataset.reviewItemId || "";
         state.operator = elements.workspace.dataset.reviewOperator || "";
         initializeSourceValueMode();
-        initializePdfFitMode();
         if (!state.reviewItemId) {
             elements.fieldsContainer.innerHTML = '<div class="empty-panel text-error">Missing review item id</div>';
             return;

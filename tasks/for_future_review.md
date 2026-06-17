@@ -55,3 +55,21 @@ For future consideration:
 - Decide whether `ui.operator_sidebar` should become the source of truth for visible operator navigation.
 - If sidebar configuration is required, implement route validation and role-aware hiding so config changes cannot expose invalid or unauthorized links.
 - Remove unused UI config keys if they are not intended to become configurable behavior.
+
+## PDF Viewer Fit Controls Follow-Up
+
+The human review PDF viewer previously exposed `Fit width` and `Fit page` buttons while using the browser-native iframe PDF viewer.
+
+The implementation appended PDF.js-style URL fragments:
+
+- `#zoom=page-width`
+- `#zoom=page-fit`
+
+This is misleading for Chromium-based native PDF viewers. Chromium parses numeric `zoom` values and uses `view=FitH` for fit width and `view=Fit` for fit page. PDF.js supports `zoom=page-width` and `zoom=page-fit`, but the current viewer is not a PDF.js viewer.
+
+For future consideration:
+
+- Decide whether the review PDF pane should stay as a browser-native iframe fallback or be upgraded to PDF.js.
+- If staying with the native iframe viewer, reintroduce fit controls using `#view=FitH` and `#view=Fit`, then verify behavior in Chrome, Edge, and Firefox.
+- If moving to PDF.js, implement controlled fit modes with PDF.js scale values such as `page-width` and `page-fit`.
+- Add visual or browser-level tests that verify actual rendered page scale, not only the iframe URL fragment.
