@@ -81,6 +81,42 @@ custom_steps:
       class: CustomerValidationTask
 ```
 
+## Pipeline Cardinality Or Ordering Errors
+
+**Symptoms**
+```
+[ERROR] pipeline[2]: Workflow pipeline can include only one split task; found 2.
+[ERROR] pipeline[3]: Split task must be configured before the extract task.
+[ERROR] pipeline[0]: Review gate task must be configured after the extract task.
+[ERROR] pipeline: Pipeline must include at least one extraction task to produce metadata for downstream steps
+```
+
+**Fixes**
+- Keep only one active extraction task, one active split task, and one active review-gate task in `pipeline`.
+- It is acceptable to define alternate task entries under `tasks`, but only one task of each singleton type should be listed in the active `pipeline`.
+- Put split before extraction when split is used, for example:
+  ```yaml
+  pipeline:
+    - split_documents
+    - extract_document_data
+    - review_gate
+    - store_metadata_json
+  ```
+- Put review gate after extraction so extracted fields, confidence values, and schema checks are available.
+- Ensure at least one extraction task appears before downstream storage or rules tasks.
+
+## Duplicate Pipeline Task Type Warnings
+
+**Symptom**
+```
+[WARNING] pipeline[5]: Task type 'standard_step.storage.store_metadata_as_json_v2.StoreMetadataAsJsonV2' appears multiple times in the pipeline. This is allowed, but verify the duplicate is intentional.
+```
+
+**Fixes**
+- If repeated execution is intentional, leave the duplicate and document why the workflow needs two instances.
+- If it is accidental, remove the duplicate pipeline entry or consolidate the two task configurations.
+- For singleton types (extract, split, review gate), duplicates are blocking errors rather than warnings.
+
 ## Missing Extraction Credentials
 
 **Symptom**
@@ -180,6 +216,9 @@ custom_steps:
 **Symptom**
 ```
 [ERROR] tasks.split_documents.params.split_dir: Parameter 'split_dir' is required and must be a non-empty string
+[ERROR] tasks.split_documents.params.categories: Enabled LlamaCloudSplitTask requires categories or configuration_id.
+[ERROR] tasks.split_documents.params.allow_uncategorized: allow_uncategorized must be one of include, forbid, or omit.
+[WARNING] pipeline: Split task is the final pipeline step; fan-out children will have no downstream work.
 ```
 
 **Fixes**
@@ -194,6 +233,27 @@ custom_steps:
         split_dir: "data/app/split"
   ```
 - `split_dir` is auto-created by `ConfigManager` because the key ends in `_dir`.
+- When `enabled: true`, configure either `configuration_id` from LlamaCloud or a non-empty `categories` list.
+- Set `allow_uncategorized` to exactly one of `include`, `forbid`, or `omit`.
+- Use only `high`, `medium`, and `low` in `fail_on_confidence_levels`.
+- Set `fail_on_unknown_category` to a real boolean (`true` or `false`), not a quoted string.
+- If the split task is last in the pipeline, add downstream extraction/review/storage tasks or remove split if no fan-out processing is required.
+
+## Review Gate Configuration Errors
+
+**Symptoms**
+```
+[ERROR] tasks.review_gate.params.confidence_threshold: ReviewGateTask confidence_threshold must be between 0 and 1.
+[ERROR] tasks.review_gate.params.resume_policy: ReviewGateTask currently supports only resume_policy: next_task.
+[ERROR] tasks.review_gate.params.schema_file: Schema file could not be loaded: schemas/invoice.yaml
+```
+
+**Fixes**
+- Set `confidence_threshold` to a number from `0` through `1`, for example `0.95`.
+- Use `resume_policy: next_task` or omit the setting.
+- Use only `high`, `medium`, and `low` in `split_confidence_levels_requiring_review`.
+- Confirm `schema_file` points to a YAML, YML, or JSON schema under one of the configured schema directories.
+- Validate the schema itself if the finding path starts with `schemas.<schema name>`.
 
 ## Web Server Configuration Errors
 

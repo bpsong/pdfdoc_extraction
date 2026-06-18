@@ -57,10 +57,78 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 - Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
 - Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including csv_match clause bounds (1-5) and required column/from_context fields.
 - Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and housekeeping ordering rules.
+- UI/API validation adds active workflow business rules for split, review-gate, task approval, and schema references before administrators publish pipeline changes.
 - **New**: Enhanced schema validation for web server and watch folder configuration fields.
 - **New**: Import validation to verify task modules and classes are importable.
 - **New**: Comprehensive rules task validation for CSV file processing and field references.
 - **New**: Runtime file validation mode with `--check-files` flag for file system checks.
+
+## Current UI/API Business Rules
+
+The admin validation endpoints reuse the shared config-check validator and then apply additional workflow rules from `PipelineValidationService`. These are the active rules enforced when administrators validate or publish pipeline configuration through the UI/API.
+
+### Pipeline Shape And Ordering
+
+- The active `pipeline` must be a list of task identifiers and every entry must be a non-empty string.
+- The active `pipeline` must include at least one extraction task, because downstream metadata storage and rules depend on extracted data.
+- A configured task may appear more than once in `pipeline`, but this is reported as a warning because repeated execution is usually accidental.
+- The active `pipeline` can include only one extract task. Extraction tasks are detected from `standard_step.extraction.*`, `custom_step.extraction.*`, or extraction task classes such as `ExtractPdfTask` and `ExtractPdfV2Task`.
+- The active `pipeline` can include only one split task. Split tasks are detected from `.split.` modules or `LlamaCloudSplitTask`.
+- The active `pipeline` can include only one review-gate task. Review-gate tasks are detected from `standard_step.review.review_gate` or `ReviewGateTask`.
+- If a split task is present, it must run before extraction. The split task fans out source PDFs into child documents, and extraction should run on the resulting child/leaf documents.
+- If a review-gate task is present, it must run after extraction so confidence, extracted fields, and schema checks are available.
+- Multiple non-singleton task types using the same module/class pair are allowed, but reported as warnings so administrators can confirm the duplicate is intentional.
+
+### Token And Data Dependency Rules
+
+- Template tokens use `{token_name}` syntax in task parameter strings such as storage filenames.
+- Tokens must match known extraction field names or known workflow context tokens: `id`, `nanoid`, `filename`, `source`, `original_filename`, or `file_path`.
+- Storage and rules tasks that use extracted field tokens must run after an extraction task.
+- V2 metadata storage tasks warn when no earlier metadata-producing extraction task defines `fields`.
+- Storage filename tokens should reference scalar extraction fields. Tokens pointing at table fields are allowed but warned because filenames cannot reliably represent table payloads.
+- Any non-context task that references `{nanoid}` must run after a context initializer task such as `AssignNanoidTask`.
+
+### Task Approval Rules
+
+- Active pipeline task module/class pairs must be approved before they can be dynamically imported.
+- Built-in `standard_step` task pairs are approved by the application registry.
+- Custom task pairs are approved only when `custom_steps.enabled` is true and the exact module/class pair is listed under `custom_steps.registry`.
+- Custom task registry modules must use the `custom_step.` prefix.
+
+### Review Gate Rules
+
+- `ReviewGateTask.params` must be a mapping.
+- `confidence_threshold`, when provided, must be a number from 0 through 1.
+- `resume_policy`, when provided, currently supports only `next_task`.
+- `split_confidence_levels_requiring_review`, when provided, must be a list containing only `high`, `medium`, or `low`.
+- `schema_file`, when provided, must resolve to a configured schema file, and that schema must pass schema validation.
+
+### Split Rules
+
+- `LlamaCloudSplitTask.params` must be a mapping.
+- `split_dir` is required and must be a non-empty string.
+- When split is enabled, either `configuration_id` or `categories` must be configured.
+- When split is enabled, an `api_key` is required at runtime unless an adapter is injected for tests; validation reports this as a warning.
+- `allow_uncategorized` must be one of `include`, `forbid`, or `omit`.
+- `fail_on_confidence_levels`, when provided, must be a list containing only `high`, `medium`, or `low`.
+- `fail_on_unknown_category`, when provided, must be a boolean.
+- `allowed_categories`, when provided, must be a list of non-empty strings.
+- `categories`, when provided, must be a list of mappings with a `name`.
+- A split task as the final pipeline step is allowed but warned because fan-out children will have no downstream work.
+
+### Schema Rules Used By Review
+
+- Schema files must be YAML, YML, or JSON files under configured schema directories.
+- Schema `fields` must be a mapping.
+- Supported field types are `string`, `number`, `integer`, `float`, `boolean`, `date`, `datetime`, `enum`, `array`, and `object`.
+- Enum fields require `choices` or `enum`, and a configured default must be one of those choices.
+- Numeric schema settings such as `min_value`, `max_value`, and `step` must be numeric; `min_value` cannot exceed `max_value`; `step` must be greater than zero.
+- Object fields require `properties`.
+- Array fields require an `items` definition; scalar array items cannot define object `properties`, and only enum array items can define choices.
+
+### UI/API Scope Versus CLI Flags
+
+The UI/API validation path currently disables optional CLI-only checks for imports, runtime file validation, performance analysis, and security analysis. Use the CLI flags `--import-checks`, `--check-files`, `--performance-analysis`, and `--security-analysis` when you need those additional checks before deployment.
 
 ## Validated Configuration Fields
 

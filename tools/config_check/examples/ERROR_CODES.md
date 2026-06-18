@@ -25,6 +25,70 @@ This document provides a comprehensive reference of all validation error codes u
 | `task-import-class-not-found` | Error | Class not found in module | Verify class name exists in the specified module |
 | `task-import-not-callable` | Error | Specified attribute is not a callable class | Ensure attribute is a class, not a variable or function |
 
+## Pipeline Business Rule Error Codes
+
+### Pipeline Structure And Dependencies
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `tasks-not-mapping` | Error | `tasks` section is not a mapping | Define `tasks` as a mapping keyed by task id |
+| `pipeline-not-list` | Error | `pipeline` section is not a list | Define `pipeline` as a list of task identifiers |
+| `pipeline-entry-invalid` | Error | Pipeline entry is not a non-empty task id string | Replace the entry with a valid task id |
+| `pipeline-missing-task` | Error | Pipeline references a task id not defined under `tasks` | Add the task definition or remove the pipeline entry |
+| `pipeline-duplicate-task` | Warning | Same task id appears more than once in `pipeline` | Remove the duplicate unless repeated execution is intentional |
+| `pipeline-missing-extraction` | Error | Pipeline has no extraction task | Add an extraction task before downstream metadata work |
+| `pipeline-storage-before-extraction` | Error | Storage or rules task uses extracted tokens before extraction runs | Move extraction earlier or remove extracted-field tokens |
+| `pipeline-storage-metadata-missing` | Warning | V2 storage task expects extraction metadata but none is produced earlier | Move metadata-producing extraction earlier or define extraction `fields` |
+| `pipeline-nanoid-before-context` | Error | Task references `{nanoid}` before a context initializer task | Add/move `AssignNanoidTask` before the task using `{nanoid}` |
+| `pipeline-unknown-token` | Error | Template token does not match a known extraction field or context token | Add the extraction field or update the template |
+| `pipeline-storage-filename-non-scalar` | Warning | Storage filename token references a table/non-scalar field | Use a scalar extraction field in filenames |
+
+### Pipeline Cardinality And Ordering
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `pipeline-multiple-extract-tasks` | Error | More than one extract task appears in the active pipeline | Keep one active extraction task |
+| `pipeline-multiple-split-tasks` | Error | More than one split task appears in the active pipeline | Keep one active split task |
+| `pipeline-multiple-review-gate-tasks` | Error | More than one review-gate task appears in the active pipeline | Keep one active review-gate task |
+| `pipeline-split-after-extract` | Error | Split task is configured after extraction | Move split before extraction |
+| `pipeline-review-before-extract` | Error | Review gate is configured before extraction | Move review gate after extraction |
+| `pipeline-duplicate-task-type` | Warning | Same non-singleton module/class pair appears multiple times | Confirm the duplicate is intentional or remove it |
+
+### Task Approval
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `pipeline-task-not-approved` | Error | Active pipeline task uses an unapproved module/class pair | Use an approved built-in task or add an exact `custom_steps.registry` entry |
+| `custom-task-registry-not-mapping` | Error | `custom_steps.registry` is not a mapping | Define registry entries as a mapping keyed by approval name |
+| `custom-task-registry-entry-invalid` | Error | Custom registry entry is not a mapping | Define each entry with `module` and `class` |
+| `custom-task-registry-missing-module` | Error | Custom registry entry lacks `module` | Add a non-empty module name |
+| `custom-task-registry-missing-class` | Error | Custom registry entry lacks `class` | Add a non-empty class name |
+| `custom-task-registry-invalid-module` | Error | Custom registry module does not use `custom_step.` prefix | Move custom tasks under `custom_step.` or update the registry |
+
+## Review Gate Validation Error Codes
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `review-gate-params-not-mapping` | Error | `ReviewGateTask.params` is not a mapping | Define params as a YAML mapping |
+| `review-gate-invalid-confidence-threshold` | Error | Confidence threshold is outside 0 through 1 or not numeric | Set `confidence_threshold` to a number from 0 through 1 |
+| `review-gate-invalid-resume-policy` | Error | Unsupported resume policy | Use `resume_policy: next_task` or omit it |
+| `review-gate-invalid-split-confidence-levels` | Error | Split review confidence levels are invalid | Use a list containing only `high`, `medium`, or `low` |
+| `review-gate-schema-not-found` | Error | Referenced review schema cannot be loaded | Point `schema_file` at a configured schema file |
+| `schema-load-failed` | Error | Configured schema file could not be loaded | Fix the schema path or YAML/JSON syntax |
+| `schema-invalid` | Error | Schema file structure is invalid | Fix unsupported field types, enum choices, numeric constraints, object properties, or array items |
+
+## Split Task Validation Error Codes
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `split-params-not-mapping` | Error | `LlamaCloudSplitTask.params` is not a mapping | Define params as a YAML mapping |
+| `split-missing-split-dir` | Error | Split task lacks `params.split_dir` | Add a non-empty split output directory |
+| `split-missing-categories-or-configuration` | Error | Enabled split task lacks both categories and configuration id | Add `configuration_id` or `categories` |
+| `split-missing-runtime-api-key` | Warning | Enabled split task lacks runtime API key and no adapter is configured | Add `api_key` or ensure an adapter is injected by tests |
+| `split-invalid-allow-uncategorized` | Error | `allow_uncategorized` has an unsupported value | Use `include`, `forbid`, or `omit` |
+| `split-invalid-fail-on-confidence-levels` | Error | Invalid confidence level list | Use a list containing only `high`, `medium`, or `low` |
+| `split-invalid-fail-on-unknown-category` | Error | `fail_on_unknown_category` is not boolean | Set it to `true` or `false` |
+| `split-invalid-allowed-categories` | Error | `allowed_categories` is not a list of non-empty strings | Provide a valid string list |
+| `split-invalid-categories` | Error | `categories` is not a list of mappings with names | Provide category mappings with `name` |
+| `split-final-pipeline-step` | Warning | Split task is the final pipeline step | Add downstream child-processing tasks or remove split |
+
 ## Rules Task Validation Error Codes
 
 ### CSV File Validation
@@ -92,6 +156,39 @@ This document provides a comprehensive reference of all validation error codes u
 | Code | Severity | Description | Fix |
 |------|----------|-------------|-----|
 | `param-split-missing-split-dir` | Error | LlamaCloud split task requires `params.split_dir` | Add a non-empty split output directory under the split task params |
+| `param-split-not-mapping` | Error | Split task params are not a mapping | Define split params as a YAML mapping |
+| `param-split-invalid-fail-on-confidence-levels` | Error | Invalid confidence level list | Use a list containing only `high`, `medium`, or `low` |
+| `param-split-invalid-fail-on-unknown-category` | Error | `fail_on_unknown_category` is not boolean | Set it to `true` or `false` |
+| `param-split-invalid-allowed-categories` | Error | `allowed_categories` is not a list of non-empty strings | Provide a valid string list |
+
+### Extraction Task Parameters
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `param-extraction-not-mapping` | Error | Extraction task params are not a mapping | Define params as a YAML mapping |
+| `param-extraction-missing-api-key` | Error | Extraction task lacks `api_key` | Add a non-empty API key or deployment placeholder |
+| `param-extraction-invalid-configuration-id` | Error | `configuration_id` is present but empty or not a string | Use a non-empty configuration id or omit it |
+| `param-extraction-missing-fields` | Error | Extraction task lacks field definitions | Add a non-empty `fields` mapping |
+| `param-extraction-multiple-tables` | Error | More than one extraction field is marked `is_table: true` | Keep one table field or split extraction design |
+| `param-field-invalid` | Error | Field definition is not a mapping | Define field settings as a mapping |
+| `param-field-missing-alias` | Error | Field lacks a non-empty alias | Add a non-empty `alias` |
+| `param-field-invalid-type` | Error | Field type is unsupported | Use a supported type such as `str`, `float`, `Optional[str]`, or `List[Any]` |
+| `param-field-istable-bool` | Error | `is_table` is not boolean | Set `is_table` to `true` or `false` |
+| `param-field-missing-item-fields` | Error | Table field lacks `item_fields` | Add non-empty nested item fields |
+
+### Storage, Context, And Housekeeping Parameters
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `param-storage-missing-data-dir` | Error | Storage task lacks `data_dir` | Add a non-empty data directory |
+| `param-storage-missing-filename` | Error | Storage task lacks `filename` | Add a non-empty filename template |
+| `param-storage-unknown-storage-key` | Warning | Nested storage override contains unsupported key | Use only `data_dir` and `filename` in `storage` overrides |
+| `param-storage-storage-block-type` | Error | Nested storage override is not a mapping | Define `storage` as a mapping or remove it |
+| `param-localdrive-missing-files-dir` | Error | Local-drive storage lacks `files_dir` | Add a non-empty file output directory |
+| `param-localdrive-missing-filename` | Error | Local-drive storage lacks `filename` | Add a non-empty filename template |
+| `param-archiver-missing-archive-dir` | Error | Archive task lacks `archive_dir` | Add a non-empty archive directory |
+| `param-context-length-type` | Error | Context task `length` is not an integer | Set `length` to an integer |
+| `param-context-length-bounds` | Error | Context task `length` is outside bounds | Set `length` between 5 and 21 |
+| `param-housekeeping-not-mapping` | Error | Housekeeping params are not a mapping | Define params as a YAML mapping |
+| `param-housekeeping-processing-dir-invalid` | Error | Cleanup `processing_dir` is empty or not a string | Use a non-empty directory string |
 
 ## Error Severity Levels
 
