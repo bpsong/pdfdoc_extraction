@@ -37,6 +37,9 @@ MagicMock/
 test/data/
 test/files/
 
+# Generated output
+output/playwright/
+
 # Standard Python ignores
 __pycache__/
 *.py[cod]
@@ -99,6 +102,9 @@ venv.bak/
 
 # Kiro AI assistant files
 .kiro/
+
+# Playwright CLI local data
+.playwright-cli/
 
 # OS files
 .DS_Store
