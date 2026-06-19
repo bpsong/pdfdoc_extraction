@@ -366,3 +366,69 @@ def test_schema_editor_visual_renders_rich_schema_controls(page: Page, visual_ap
     page.set_viewport_size({"width": 390, "height": 900})
     page.locator("#schema-field-tree").wait_for()
     _assert_nonblank_screenshot(page)
+
+
+def test_operator_visual_login_hides_and_blocks_admin_surfaces(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Verify operator restrictions against the started application."""
+    page.goto(f"{visual_app['base_url']}/logout")
+    page.wait_for_url("**/login")
+    page.locator('select[name="username"]').select_option("operator")
+    page.locator('input[name="password"]').fill("OperatorPass1!")
+    page.locator('button[type="submit"]').click()
+    page.wait_for_url("**/app/upload")
+
+    assert page.locator('nav[aria-label="Admin navigation"]').count() == 0
+    assert page.locator('a[href^="/app/admin"]').count() == 0
+    assert page.get_by_text("Signed in as operator").count() == 1
+    _assert_nonblank_screenshot(page)
+
+    admin_pages = [
+        "/app/admin", "/app/admin/users", "/app/admin/pipeline", "/app/admin/tasks",
+        "/app/admin/review-gate", "/app/admin/split", "/app/admin/audit",
+        "/app/admin/dry-run", "/app/schemas", "/app/settings/validation",
+    ]
+    page_statuses = [
+        page.request.get(f"{visual_app['base_url']}{path}").status for path in admin_pages
+    ]
+    assert page_statuses == [403] * len(admin_pages)
+
+    admin_apis = [
+        "/api/admin/users", "/api/admin/summary", "/api/admin/settings",
+        "/api/admin/audit", "/api/admin/pipeline", "/api/admin/review-gate-rules",
+        "/api/admin/split-settings", "/api/admin/task-catalog",
+        "/api/admin/schemas/validation",
+    ]
+    api_statuses = [
+        page.request.get(f"{visual_app['base_url']}{path}").status for path in admin_apis
+    ]
+    assert api_statuses == [403] * len(admin_apis)
+
+    csrf_token = next(
+        cookie["value"] for cookie in page.context.cookies() if cookie["name"] == "csrf_token"
+    )
+    mutations = [
+        ("PUT", "/api/admin/users/operator/password"),
+        ("PUT", "/api/admin/settings"),
+        ("POST", "/api/admin/dry-run"),
+        ("PUT", "/api/admin/pipeline/draft"),
+        ("POST", "/api/admin/pipeline/diff"),
+        ("POST", "/api/admin/pipeline/validate"),
+        ("POST", "/api/admin/pipeline/publish"),
+        ("PUT", "/api/admin/review-gate-rules"),
+        ("PUT", "/api/admin/split-settings"),
+        ("POST", "/api/admin/split-settings/test-connection"),
+        ("POST", "/api/admin/schemas/validate-all"),
+    ]
+    mutation_statuses = [
+        page.request.fetch(
+            f"{visual_app['base_url']}{path}",
+            method=method,
+            headers={"X-CSRF-Token": csrf_token},
+            data={},
+        ).status
+        for method, path in mutations
+    ]
+    assert mutation_statuses == [403] * len(mutations)
+    _assert_no_horizontal_overflow(page)
