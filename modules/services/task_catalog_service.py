@@ -6,10 +6,10 @@ import ast
 import importlib
 import inspect
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.services.task_registry_service import ApprovedTaskRegistry
 
 
@@ -104,13 +104,15 @@ class TaskCatalogService:
                     is_task_class = False
                 if not is_task_class:
                     continue
-                entry = self._class_entry(module_name, task_class)
+                entry = self._class_entry(
+                    module_name, cast(type[BaseTask], task_class)
+                )
                 entries[entry["id"]] = entry
         return entries
 
     def _configured_entries(self) -> list[dict[str, Any]]:
         """Return normalized configured task definitions."""
-        config = self.config_manager.get_all() if hasattr(self.config_manager, "get_all") else {}
+        config = get_all_config(self.config_manager)
         tasks = config.get("tasks") if isinstance(config, dict) else {}
         pipeline = config.get("pipeline") if isinstance(config, dict) else []
         if not isinstance(tasks, dict):

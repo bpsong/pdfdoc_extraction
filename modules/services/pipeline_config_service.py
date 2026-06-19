@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.db.connection import json_loads
 from modules.db.repositories import ConfigVersionRepository
 from modules.services.audit_service import AuditService
@@ -239,7 +239,7 @@ class PipelineConfigService:
 
     def _active_config(self) -> dict[str, Any]:
         """Return a copy of the active config mapping."""
-        config = self.config_manager.get_all() if hasattr(self.config_manager, "get_all") else {}
+        config = get_all_config(self.config_manager)
         if not isinstance(config, dict):
             return {}
         return deepcopy(config)
@@ -247,9 +247,14 @@ class PipelineConfigService:
     def _config_from_model(self, model: dict[str, Any]) -> dict[str, Any]:
         """Merge a normalized draft model into the active config shape."""
         config = self._active_config()
-        tasks = deepcopy(config.get("tasks")) if isinstance(config.get("tasks"), dict) else {}
+        raw_tasks = config.get("tasks")
+        tasks: dict[str, Any] = deepcopy(raw_tasks) if isinstance(raw_tasks, dict) else {}
         pipeline: list[str] = []
-        for step in model["steps"]:
+        raw_steps = model.get("steps")
+        steps: list[Any] = raw_steps if isinstance(raw_steps, list) else []
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
             key = step["key"]
             tasks[key] = {
                 "module": step["module"],
@@ -266,8 +271,10 @@ class PipelineConfigService:
 
     def _model_from_config(self, config: dict[str, Any]) -> dict[str, Any]:
         """Convert config pipeline/tasks data into an ordered step model."""
-        tasks = config.get("tasks") if isinstance(config.get("tasks"), dict) else {}
-        pipeline = config.get("pipeline") if isinstance(config.get("pipeline"), list) else []
+        raw_tasks = config.get("tasks")
+        tasks: dict[str, Any] = raw_tasks if isinstance(raw_tasks, dict) else {}
+        raw_pipeline = config.get("pipeline")
+        pipeline: list[Any] = raw_pipeline if isinstance(raw_pipeline, list) else []
         steps: list[dict[str, Any]] = []
         for entry in pipeline:
             if not isinstance(entry, str):
@@ -344,7 +351,8 @@ class PipelineConfigService:
     @staticmethod
     def _summary(model: dict[str, Any]) -> dict[str, int]:
         """Return counts for the draft model."""
-        steps = model.get("steps") if isinstance(model.get("steps"), list) else []
+        raw_steps = model.get("steps")
+        steps: list[Any] = raw_steps if isinstance(raw_steps, list) else []
         return {
             "total_steps": len(steps),
             "enabled_steps": sum(1 for step in steps if isinstance(step, dict) and step.get("enabled", True)),
@@ -375,9 +383,9 @@ class PipelineConfigService:
     def _replace_in_memory_config(self, config: dict[str, Any]) -> None:
         """Keep the current config provider aligned after publish."""
         if hasattr(self.config_manager, "config"):
-            self.config_manager.config = deepcopy(config)
+            setattr(self.config_manager, "config", deepcopy(config))
         if hasattr(self.config_manager, "_values"):
-            self.config_manager._values = deepcopy(config)
+            setattr(self.config_manager, "_values", deepcopy(config))
 
     def _archive_stale_drafts(self, published_id: str) -> None:
         """Archive older draft rows after a publish."""

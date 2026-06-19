@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider
 from modules.db.connection import connect, transaction, utc_now
 
 
 SCHEMA_VERSION = 1
 
 
-def initialize_database(config_manager: ConfigManager) -> None:
+def initialize_database(config_manager: ConfigProvider) -> None:
     """Create the SQLite database and run idempotent schema migrations."""
     with connect(config_manager) as conn:
         schema_path = Path(__file__).with_name("schema.sql")

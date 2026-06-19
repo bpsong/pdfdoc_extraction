@@ -14,7 +14,7 @@ from typing import Dict, Any
 
 from prefect import flow
 from modules.workflow_loader import WorkflowLoader
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import BatchRepository, DocumentRepository, TaskRunRepository
 from modules.exceptions import TaskError
@@ -169,7 +169,8 @@ class WorkflowManager:
         task_key, task_config = self._task_at_index(start_task_index)
         if not task_key or not self._is_extract_task(task_key, task_config):
             return False
-        params = task_config.get("params") if isinstance(task_config.get("params"), dict) else {}
+        raw_params = task_config.get("params")
+        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
         try:
             preflight_extract_v2_access(
                 api_key=str(params.get("api_key") or ""),

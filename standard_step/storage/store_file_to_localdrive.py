@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 from modules.utils import sanitize_filename, generate_unique_filepath, preprocess_filename_value
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from datetime import datetime
@@ -86,7 +86,7 @@ class StoreFileToLocaldrive(BaseTask):
         self.filename = filename
 
         # Optional: access extraction fields configuration from global config
-        tasks_config = self.config_manager.get_all().get("tasks", {})
+        tasks_config = get_all_config(self.config_manager).get("tasks", {})
         extract_task_definition = tasks_config.get("extract_document_data", {})
         extraction_step_params = extract_task_definition.get("params", {})
         

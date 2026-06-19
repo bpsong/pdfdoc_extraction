@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 from nanoid import generate
 from modules.base_task import BaseTask, TaskError
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 
 
 class AssignNanoidTask(BaseTask):

@@ -86,6 +86,7 @@ def test_pipeline_config_service_saves_draft_and_builds_diff(tmp_path: Path) -> 
         assert validation["valid"] is True
 
         row = ConfigVersionRepository(service.conn).get_draft("pipeline", "default")
+        assert row is not None
         metadata = json_loads(row["metadata_json"])
         assert metadata["summary"]["disabled_steps"] == 1
     finally:

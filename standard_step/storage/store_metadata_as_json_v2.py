@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import (
@@ -82,7 +82,7 @@ class StoreMetadataAsJsonV2(BaseTask):
         self.filename_template: str = str(filename_template)
 
         # Locate extraction.fields config for aliasing and is_table flags.
-        tasks_config = self.config_manager.get_all().get("tasks", {})
+        tasks_config = get_all_config(self.config_manager).get("tasks", {})
         # Retain older fixture/task keys so existing configs still resolve aliases.
         extract_task_def = (
             tasks_config.get("extract_document_data")

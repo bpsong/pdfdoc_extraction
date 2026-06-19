@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.services.task_catalog_service import TaskCatalogService
 
 
@@ -85,7 +85,7 @@ class RuntimeSettingsService:
     def _active_config(self) -> dict[str, Any]:
         """Return a copy of the active configuration mapping."""
         if hasattr(self.config_manager, "get_all"):
-            config = self.config_manager.get_all()
+            config = get_all_config(self.config_manager)
         else:
             config = {}
         return deepcopy(config) if isinstance(config, dict) else {}

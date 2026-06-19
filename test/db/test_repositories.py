@@ -92,7 +92,9 @@ def test_repositories_cover_core_state_models(tmp_path):
             scope="field",
         )
         reviews.claim(review["id"], "operator")
-        assert reviews.get_lock(review["id"])["locked_by"] == "operator"
+        lock = reviews.get_lock(review["id"])
+        assert lock is not None
+        assert lock["locked_by"] == "operator"
         reviews.complete(review["id"], "operator")
 
         audit = audits.append(
@@ -120,5 +122,7 @@ def test_repositories_cover_core_state_models(tmp_path):
     assert audits.list_for_document(document["id"])[0]["id"] == audit["id"]
     assert settings.get("page_size") == 25
     assert published and published["status"] == "published"
-    assert versions.get_active("pipeline", "default")["id"] == draft["id"]
+    active_version = versions.get_active("pipeline", "default")
+    assert active_version is not None
+    assert active_version["id"] == draft["id"]
     assert recomputed and recomputed["total_documents"] == 2

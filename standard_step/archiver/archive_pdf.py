@@ -19,7 +19,7 @@ import shutil
 import logging
 from pathlib import Path
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import windows_long_path, sanitize_filename, generate_unique_filepath, retry_io

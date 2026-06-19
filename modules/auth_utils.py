@@ -19,7 +19,7 @@ from typing import Optional, Dict, Any, ClassVar
 import bcrypt
 from jose import JWTError, jwt
 
-from .config_manager import ConfigManager
+from .config_protocol import ConfigProvider as ConfigManager
 
 
 class AuthError(Exception):

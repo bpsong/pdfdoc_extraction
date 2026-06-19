@@ -9,7 +9,7 @@ from typing import Any
 from pypdf import PdfReader, PdfWriter
 
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError

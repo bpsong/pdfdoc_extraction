@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, cast
 import pandas as pd
 
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
 from modules.utils import normalize_field_path, resolve_field
 

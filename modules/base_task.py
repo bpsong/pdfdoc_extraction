@@ -10,7 +10,7 @@ initialize the shared context dictionary used across tasks.
 from abc import ABC, abstractmethod
 import logging
 from modules.exceptions import TaskError
-from modules.config_manager import ConfigManager  # Import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from typing import Optional  # Import Optional
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.services.pipeline_validation_service import (
     PipelineValidationService,
     validate_all_schemas,

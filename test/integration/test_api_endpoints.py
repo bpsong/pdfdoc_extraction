@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Callable
 from unittest.mock import patch, MagicMock
 
 import bcrypt
@@ -73,7 +74,11 @@ def mock_auth(monkeypatch):
     return FakeAuth
 
 
-def _sqlite_api_config(monkeypatch, tmp_path: Path, auth_cls: type[AuthUtils]) -> TempConfig:
+def _sqlite_api_config(
+    monkeypatch,
+    tmp_path: Path,
+    auth_cls: Callable[[], AuthUtils],
+) -> TempConfig:
     """Route API dependencies to a migrated temporary SQLite database."""
     config = TempConfig(tmp_path / "app.sqlite3", {})
     initialize_database(config)

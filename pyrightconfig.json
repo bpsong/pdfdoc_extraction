@@ -1,0 +1,23 @@
+{
+    "include": [
+        "main.py",
+        "modules",
+        "standard_step",
+        "test",
+        "tools",
+        "web"
+    ],
+    "exclude": [
+        "**/__pycache__",
+        ".venv",
+        "archive_folder",
+        "output",
+        "processing",
+        "pipeline_visual_editor_prototype",
+        "refactor UI prototype"
+    ],
+    "venvPath": ".",
+    "venv": ".venv",
+    "pythonVersion": "3.13",
+    "typeCheckingMode": "basic"
+}

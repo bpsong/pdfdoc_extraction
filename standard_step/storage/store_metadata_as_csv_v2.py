@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import windows_long_path, sanitize_filename, preprocess_filename_value
@@ -77,7 +77,7 @@ class StoreMetadataAsCsvV2(BaseTask):
                 self.extraction_fields = extraction_config.get("fields", {})
             else:
                 # Fallback: locate extraction.fields config from known extraction task keys.
-                tasks_config = self.config_manager.get_all().get("tasks", {})
+                tasks_config = get_all_config(self.config_manager).get("tasks", {})
                 extract_task_def = (
                     tasks_config.get("extract_document_data")
                     or tasks_config.get("extract_document")
@@ -226,20 +226,29 @@ class StoreMetadataAsCsvV2(BaseTask):
             # Build base filename using template and available scalar values from data
             # Template may contain placeholders like {nanoid}, {supplier_name}, etc.
             # Use context["data"] (a dict) for formatting.
-            filename_template = self.filename_template or "{id}"
+            raw_filename_template = self.filename_template
+            filename_template = (
+                raw_filename_template
+                if isinstance(raw_filename_template, str) and raw_filename_template
+                else "{id}"
+            )
             # Prepare format mapping with preprocessing and sanitization for consistency
             format_map: Dict[str, Any] = {}
             if isinstance(data, dict):
                 # Use the same preprocessing and sanitization as JSON storage for consistency.
                 format_map = {
-                    k: sanitize_filename(preprocess_filename_value(v)) if not isinstance(v, list) else sanitize_filename(",".join(map(preprocess_filename_value, v)))
+                    k: sanitize_filename(preprocess_filename_value(v))
+                    if not isinstance(v, list)
+                    else sanitize_filename(
+                        ",".join(map(preprocess_filename_value, v))
+                    )
                     for k, v in data.items()
                 }
             # Add the unique_id to format_map for fallback templates
             format_map["id"] = unique_id
             try:
                 base_filename = filename_template.format(**format_map)
-            except Exception:
+            except (KeyError, ValueError, IndexError):
                 # Graceful fallback: join some known keys or use unique id
                 base_filename = f"{unique_id}"
 

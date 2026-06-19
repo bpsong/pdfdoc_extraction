@@ -9,9 +9,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime
 import time
-from typing import Any
+from typing import Any, TypedDict
 
 from modules.exceptions import TaskError
+
+
+class _RequestScope(TypedDict, total=False):
+    """Optional organization and project routing for LlamaCloud requests."""
+
+    project_id: str
+    organization_id: str
 
 
 @dataclass(frozen=True)
@@ -114,9 +121,9 @@ class LlamaCloudSplitAdapter:
 
         return self._normalize_response(job)
 
-    def _request_scope(self) -> dict[str, str]:
+    def _request_scope(self) -> _RequestScope:
         """Return optional LlamaCloud organization/project scope."""
-        scope: dict[str, str] = {}
+        scope: _RequestScope = {}
         if self.project_id:
             scope["project_id"] = self.project_id
         if self.organization_id:
@@ -127,7 +134,7 @@ class LlamaCloudSplitAdapter:
         self,
         client: Any,
         created_job: Any,
-        scope: dict[str, str],
+        scope: _RequestScope,
     ) -> Any:
         """Poll a LlamaCloud Split job until it reaches a terminal state."""
         job = created_job

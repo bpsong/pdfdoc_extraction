@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
-from typing import Any
+from typing import Any, TypeGuard
 
 from modules.db.connection import json_loads
 from modules.db.repositories import BatchRepository, DocumentRepository, TaskRunRepository
@@ -39,7 +39,8 @@ def build_pipeline_snapshot(config_manager: Any, *, source: str = "active_config
         if not isinstance(task_key, str) or not task_key.strip():
             continue
         key = task_key.strip()
-        task_cfg = tasks.get(key) if isinstance(tasks.get(key), dict) else {}
+        raw_task_cfg = tasks.get(key)
+        task_cfg: dict[str, Any] = raw_task_cfg if isinstance(raw_task_cfg, dict) else {}
         module_name = str(task_cfg.get("module") or "")
         class_name = str(task_cfg.get("class") or "")
         label = str(task_cfg.get("label") or _label_for(class_name or key))
@@ -209,7 +210,7 @@ def _config_value(config_manager: Any, key: str, default: Any) -> Any:
     return default
 
 
-def _valid_snapshot(value: Any) -> bool:
+def _valid_snapshot(value: Any) -> TypeGuard[dict[str, Any]]:
     """Return True when a metadata value looks like a pipeline snapshot."""
     return (
         isinstance(value, dict)

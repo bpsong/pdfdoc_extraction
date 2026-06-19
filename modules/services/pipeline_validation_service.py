@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.services.schema_service import SchemaService
 from modules.services.task_registry_service import ApprovedTaskRegistry
 from tools.config_check.pipeline_validator import validate_pipeline
@@ -138,8 +138,10 @@ class PipelineValidationService:
 
     def _validate_pipeline_task_cardinality(self, config_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Validate required singleton task types and dependency ordering."""
-        pipeline = config_data.get("pipeline") if isinstance(config_data.get("pipeline"), list) else []
-        tasks = config_data.get("tasks") if isinstance(config_data.get("tasks"), dict) else {}
+        raw_pipeline = config_data.get("pipeline")
+        pipeline: list[Any] = raw_pipeline if isinstance(raw_pipeline, list) else []
+        raw_tasks = config_data.get("tasks")
+        tasks: dict[str, Any] = raw_tasks if isinstance(raw_tasks, dict) else {}
         occurrences: dict[str, list[dict[str, Any]]] = {
             "extract": [],
             "split": [],
@@ -242,7 +244,8 @@ class PipelineValidationService:
     def _validate_split(self, config_data: dict[str, Any]) -> list[dict[str, Any]]:
         """Validate split task parameters and fan-out/fan-in assumptions."""
         findings: list[dict[str, Any]] = []
-        pipeline = config_data.get("pipeline") if isinstance(config_data.get("pipeline"), list) else []
+        raw_pipeline = config_data.get("pipeline")
+        pipeline: list[Any] = raw_pipeline if isinstance(raw_pipeline, list) else []
         split_task_keys: list[str] = []
         for task_key, task_cfg in _iter_tasks(config_data):
             if task_cfg.get("class") != "LlamaCloudSplitTask":

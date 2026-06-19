@@ -17,7 +17,7 @@ from prefect import flow, task, get_run_logger
 from prefect.futures import PrefectFuture
 from prefect.cache_policies import NO_CACHE
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect
@@ -58,7 +58,7 @@ class WorkflowLoader:
     def _init(self, config_manager: ConfigManager):
         """Internal initializer for the singleton instance."""
         self.config_manager = config_manager
-        self.cfg = config_manager.get_all()
+        self.cfg = get_all_config(config_manager)
         self.task_defs = self.cfg.get("tasks", {})
         self.logger = logging.getLogger(__name__)
         self.shutdown_manager = ShutdownManager()

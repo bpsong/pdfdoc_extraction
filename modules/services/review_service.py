@@ -7,7 +7,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import json_loads
 from modules.db.repositories import AuditRepository, DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
 from modules.services.schema_service import SchemaService

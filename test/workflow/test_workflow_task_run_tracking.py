@@ -89,7 +89,9 @@ def test_workflow_loader_records_task_runs_and_stops_when_paused(tmp_path, monke
     )
     WorkflowLoader._instance = None
 
-    result = WorkflowLoader(config).load_workflow()(
+    workflow = WorkflowLoader(config).load_workflow()
+    assert workflow is not None
+    result = workflow(
         {
             "id": document["id"],
             "batch_id": batch["id"],
@@ -139,7 +141,9 @@ def test_workflow_loader_marks_task_run_failed_when_task_import_exits(tmp_path, 
     WorkflowLoader._instance = None
 
     with pytest.raises(SystemExit):
-        WorkflowLoader(config).load_workflow()(
+        workflow = WorkflowLoader(config).load_workflow()
+        assert workflow is not None
+        workflow(
             {
                 "id": document["id"],
                 "batch_id": batch["id"],

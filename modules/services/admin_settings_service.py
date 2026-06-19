@@ -9,7 +9,7 @@ from typing import Any
 
 import yaml
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.db.connection import json_loads
 from modules.db.repositories import (
     AppSettingsRepository,
@@ -276,7 +276,7 @@ class AdminSettingsService:
 
     def _active_config(self) -> dict[str, Any]:
         """Return a deep copy of the active config mapping."""
-        config = self.config_manager.get_all() if hasattr(self.config_manager, "get_all") else {}
+        config = get_all_config(self.config_manager)
         return deepcopy(config) if isinstance(config, dict) else {}
 
     @staticmethod
@@ -304,12 +304,14 @@ class AdminSettingsService:
     @staticmethod
     def _task_params(config: dict[str, Any], class_name: str) -> tuple[str | None, dict[str, Any], list[str]]:
         """Return the first task params and all task keys matching a class."""
-        tasks = config.get("tasks") if isinstance(config.get("tasks"), dict) else {}
+        raw_tasks = config.get("tasks")
+        tasks: dict[str, Any] = raw_tasks if isinstance(raw_tasks, dict) else {}
         matches: list[tuple[str, dict[str, Any]]] = []
         for task_key, task_config in tasks.items():
             if not isinstance(task_config, dict) or str(task_config.get("class") or "") != class_name:
                 continue
-            params = task_config.get("params") if isinstance(task_config.get("params"), dict) else {}
+            raw_params = task_config.get("params")
+            params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
             matches.append((str(task_key), deepcopy(params)))
         if not matches:
             return None, {}, []
@@ -317,7 +319,8 @@ class AdminSettingsService:
 
     def _review_gate_defaults(self, config: dict[str, Any]) -> dict[str, Any]:
         """Return review-gate defaults derived from runtime config."""
-        review = config.get("review") if isinstance(config.get("review"), dict) else {}
+        raw_review = config.get("review")
+        review: dict[str, Any] = raw_review if isinstance(raw_review, dict) else {}
         return {
             "confidence_threshold": 0.8,
             "per_document_type_thresholds": {},
@@ -456,7 +459,8 @@ class AdminSettingsService:
     @staticmethod
     def _update_task_params(config: dict[str, Any], class_name: str, params: dict[str, Any]) -> None:
         """Merge params into every configured task matching class_name."""
-        tasks = config.get("tasks") if isinstance(config.get("tasks"), dict) else {}
+        raw_tasks = config.get("tasks")
+        tasks: dict[str, Any] = raw_tasks if isinstance(raw_tasks, dict) else {}
         for task_config in tasks.values():
             if not isinstance(task_config, dict) or str(task_config.get("class") or "") != class_name:
                 continue
@@ -500,11 +504,11 @@ class AdminSettingsService:
     def _replace_in_memory_config(self, config: dict[str, Any]) -> None:
         """Keep test and runtime config objects aligned after saving."""
         if hasattr(self.config_manager, "config"):
-            self.config_manager.config = deepcopy(config)
+            setattr(self.config_manager, "config", deepcopy(config))
         if hasattr(self.config_manager, "_values"):
-            self.config_manager._values = deepcopy(config)
+            setattr(self.config_manager, "_values", deepcopy(config))
         if hasattr(self.config_manager, "values"):
-            self.config_manager.values = deepcopy(config)
+            setattr(self.config_manager, "values", deepcopy(config))
 
     def _split_adapter_status(self, settings: dict[str, Any], *, api_key_configured: bool) -> dict[str, Any]:
         """Build a non-invasive Split adapter status payload."""
@@ -722,10 +726,16 @@ class PipelineDryRunService:
         selected_model = model or (
             overview["draft"]["model"] if overview.get("draft") else overview["active"]["model"]
         )
+        if not isinstance(selected_model, dict):
+            raise PipelineConfigError("Dry-run pipeline model must be an object.")
         validation = pipeline_service.validate_draft(selected_model)
-        mock_results = payload.get("mock_results") if isinstance(payload.get("mock_results"), dict) else {}
+        raw_mock_results = payload.get("mock_results")
+        mock_results: dict[str, Any] = (
+            raw_mock_results if isinstance(raw_mock_results, dict) else {}
+        )
         sample = self._sample_payload(payload)
-        steps = selected_model.get("steps") if isinstance(selected_model.get("steps"), list) else []
+        raw_steps = selected_model.get("steps")
+        steps: list[Any] = raw_steps if isinstance(raw_steps, list) else []
         result = {
             "dry_run_id": f"dry-run-{len(steps)}-{len(mock_results)}",
             "mode": "draft" if overview.get("draft") and model is None else "submitted",
@@ -778,7 +788,8 @@ class PipelineDryRunService:
                     "filename": document.get("original_filename"),
                     "status": document.get("status"),
                 }
-        sample = payload.get("sample") if isinstance(payload.get("sample"), dict) else {}
+        raw_sample = payload.get("sample")
+        sample: dict[str, Any] = raw_sample if isinstance(raw_sample, dict) else {}
         filename = str(payload.get("sample_filename") or sample.get("filename") or "").strip()
         return {
             "source": "uploaded_sample" if filename else "none",
@@ -794,7 +805,8 @@ class PipelineDryRunService:
             decisions = []
         if not step:
             return {"status": "not_configured", "decisions": []}
-        params = step.get("params") if isinstance(step.get("params"), dict) else {}
+        raw_params = step.get("params")
+        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
         enabled = bool(step.get("enabled", True)) and bool(params.get("enabled", False))
         return {
             "status": "would_run" if enabled else "disabled",
@@ -811,8 +823,10 @@ class PipelineDryRunService:
             fields = []
         if not step:
             return {"status": "not_configured", "configured_fields": [], "mock_fields": fields}
-        params = step.get("params") if isinstance(step.get("params"), dict) else {}
-        configured_fields = params.get("fields") if isinstance(params.get("fields"), dict) else {}
+        raw_params = step.get("params")
+        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
+        raw_fields = params.get("fields")
+        configured_fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
         return {
             "status": "would_extract" if step.get("enabled", True) else "disabled",
             "task_key": step.get("key"),
@@ -827,7 +841,8 @@ class PipelineDryRunService:
         step = _first_step(steps, "ReviewGateTask")
         if not step:
             return {"status": "not_configured", "review_required": False, "reasons": []}
-        params = step.get("params") if isinstance(step.get("params"), dict) else {}
+        raw_params = step.get("params")
+        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
         threshold = float(params.get("confidence_threshold", 0.8))
         fields = mock_results.get("extraction_fields")
         fields = fields if isinstance(fields, list) else []

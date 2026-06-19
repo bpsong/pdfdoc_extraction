@@ -85,7 +85,9 @@ def test_review_pause_and_completion_resumes_from_next_task(tmp_path, monkeypatc
     )
     WorkflowLoader._instance = None
 
-    paused_context = WorkflowLoader(config).load_workflow()(
+    workflow = WorkflowLoader(config).load_workflow()
+    assert workflow is not None
+    paused_context = workflow(
         {
             "id": created["document"]["id"],
             "batch_id": created["batch"]["id"],

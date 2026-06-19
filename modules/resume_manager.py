@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository
 from modules.services.workflow_state_service import WorkflowStateService

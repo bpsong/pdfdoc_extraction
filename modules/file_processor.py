@@ -13,12 +13,11 @@ and workflow initiation based on configuration.
 
 import os
 import uuid
-from typing import Optional
+from typing import Any, Optional, Protocol
 import logging
 from pathlib import Path
 
-from modules.config_manager import ConfigManager
-from modules.workflow_manager import WorkflowManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.utils import windows_long_path, is_pdf_header
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
@@ -26,6 +25,22 @@ from modules.services.batch_service import BatchService
 from modules.services.processing_state_service import build_pipeline_snapshot
 
 logger = logging.getLogger(__name__)
+
+
+class WorkflowTrigger(Protocol):
+    """Trigger a workflow for an ingested file."""
+
+    def trigger_workflow_for_file(
+        self,
+        *,
+        file_path: str,
+        unique_id: str,
+        original_filename: str,
+        source: str,
+        batch_id: str | None = None,
+        document_id: str | None = None,
+    ) -> Any:
+        """Start processing for a file and its workflow context."""
 
 class FileProcessor:
     """Coordinates moving uploaded files into processing and starting workflows.
@@ -52,7 +67,12 @@ class FileProcessor:
        - Rate limiting: File operations are throttled to prevent system overload; consider batching for high-volume scenarios.
     """
 
-    def __init__(self, config_manager: ConfigManager, retry_operation_func, workflow_manager: WorkflowManager) -> None:
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        retry_operation_func: Any,
+        workflow_manager: WorkflowTrigger,
+    ) -> None:
         """Initialize the file processor and ensure required directories exist.
 
         Args:

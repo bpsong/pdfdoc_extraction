@@ -283,11 +283,13 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     assert page.locator("#review-source-mode-select").input_value() == "review"
     amount_row = page.locator('.review-field-row[data-field-path="invoice_amount"]')
     assert amount_row.locator(".review-extracted-value").is_visible()
-    assert amount_row.locator(".review-extracted-value").text_content().startswith("Source: ")
+    assert (amount_row.locator(".review-extracted-value").text_content() or "").startswith("Source: ")
     assert amount_row.locator(".review-field-info").get_attribute("data-tip") == "Review displays two decimals and increments by 0.01."
     assert page.locator("text=Review displays two decimals and increments by 0.01.").count() == 0
     assert page.locator('.review-field-row[data-field-path="reviewed_at"]').get_attribute("class")
-    assert "source-hidden" in page.locator('.review-field-row[data-field-path="reviewed_at"]').get_attribute("class")
+    assert "source-hidden" in (
+        page.locator('.review-field-row[data-field-path="reviewed_at"]').get_attribute("class") or ""
+    )
     assert page.locator('select[data-field-path="approved"]').input_value() == ""
     assert page.locator('input[data-field-path="reviewed_at"]').input_value() == "2026-06-12T09:30"
     assert page.locator('input[data-field-path="address.city"]').is_disabled()
@@ -321,12 +323,12 @@ def test_review_visual_source_toggle_and_sidebar_preference(page: Page, visual_a
         assert not source_values.nth(index).is_visible()
     amount_row = page.locator('.review-field-row[data-field-path="invoice_amount"]')
     assert amount_row.locator(".review-source-reveal").is_visible()
-    assert amount_row.locator(".review-source-reveal").text_content().strip() == ""
+    assert (amount_row.locator(".review-source-reveal").text_content() or "").strip() == ""
     assert amount_row.locator(".review-source-reveal").get_attribute("aria-label") == "Show source value for Invoice amount"
     assert page.locator('input[data-field-path="invoice_amount"]').is_enabled()
     amount_row.locator(".review-source-reveal").click()
     assert amount_row.locator(".review-extracted-value").is_visible()
-    assert amount_row.locator(".review-extracted-value").text_content().startswith("Source: ")
+    assert (amount_row.locator(".review-extracted-value").text_content() or "").startswith("Source: ")
 
     page.locator("#sidebar-collapse-toggle").click()
     assert not page.locator("body").evaluate("body => body.classList.contains('sidebar-collapsed')")

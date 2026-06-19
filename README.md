@@ -334,18 +334,19 @@ pdfdoc_extraction/
    ```powershell
    git clone <repository-url>
    cd pdfdoc_extraction
-   C:\Python313\python.exe -m pip install -r requirements.txt
+   C:\Python313\python.exe -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
    ```
 
 2. **Run tests**
    ```powershell
-   C:\Python313\python.exe -m pytest -v
+   .\.venv\Scripts\python.exe -m pytest -v
    ```
 
 3. **Development mode**
    ```powershell
    $env:USE_RELOAD="true"
-   C:\Python313\python.exe main.py
+   .\.venv\Scripts\python.exe main.py
    ```
 
 ### Code Structure Guidelines
@@ -362,19 +363,22 @@ pdfdoc_extraction/
 
 ```powershell
 # Run all tests
-C:\Python313\python.exe -m pytest -v
+.\.venv\Scripts\python.exe -m pytest -v
 
 # Run specific test file
-C:\Python313\python.exe -m pytest -v test/core/test_config_manager.py
+.\.venv\Scripts\python.exe -m pytest -v test/core/test_config_manager.py
 
 # Run with coverage
-C:\Python313\python.exe -m pytest -v --cov=modules
+.\.venv\Scripts\python.exe -m pytest -v --cov=modules
+
+# Run static type checking (uses .venv from pyrightconfig.json)
+pyright
 ```
 
 Current focused validation for the SQLite-only workflow-state cleanup:
 
 ```powershell
-C:\Python313\python.exe -m pytest -v test\integration\test_sqlite_only_workflow_state.py test\integration\test_batch_upload_api.py test\integration\test_reports_api.py test\integration\test_settings_api.py
+.\.venv\Scripts\python.exe -m pytest -v test\integration\test_sqlite_only_workflow_state.py test\integration\test_batch_upload_api.py test\integration\test_reports_api.py test\integration\test_settings_api.py
 ```
 
 The broader full-suite run remains part of the migration cleanup checklist.

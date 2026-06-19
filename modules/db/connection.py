@@ -9,7 +9,7 @@ from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider
 
 
 def utc_now() -> str:
@@ -32,7 +32,7 @@ def json_loads(value: str | None, default: Any = None) -> Any:
         return default
 
 
-def get_db_path(config_manager: ConfigManager) -> Path:
+def get_db_path(config_manager: ConfigProvider) -> Path:
     """Resolve the configured SQLite database path."""
     raw_path = config_manager.get("database.path", "data/app_state.sqlite3")
     path = Path(str(raw_path))
@@ -43,7 +43,7 @@ def get_db_path(config_manager: ConfigManager) -> Path:
     return path
 
 
-def connect(config_manager: ConfigManager) -> sqlite3.Connection:
+def connect(config_manager: ConfigProvider) -> sqlite3.Connection:
     """Open a SQLite connection with row access and FK enforcement enabled."""
     db_path = get_db_path(config_manager)
     db_path.parent.mkdir(parents=True, exist_ok=True)

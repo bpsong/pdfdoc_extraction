@@ -58,9 +58,10 @@ import sys
 import logging
 from pathlib import Path
 from copy import deepcopy
+from typing import Any
 
 
-DEFAULT_CONFIG: dict = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "database": {
         "path": "data/app_state.sqlite3",
         "run_migrations_on_startup": True,
@@ -91,7 +92,9 @@ DEFAULT_CONFIG: dict = {
 }
 
 
-def _merge_defaults(config: dict, defaults: dict) -> dict:
+def _merge_defaults(
+    config: dict[str, Any], defaults: dict[str, Any]
+) -> dict[str, Any]:
     """Return config with missing nested default keys filled in."""
     merged = deepcopy(defaults)
     for key, value in config.items():
@@ -163,9 +166,10 @@ class ConfigManager:
     pipeline:
       - extract_document_data
     """
-    _instance = None
+    _instance: "ConfigManager | None" = None
+    config: dict[str, Any]
 
-    def __new__(cls, config_path: Path):
+    def __new__(cls, config_path: Path) -> "ConfigManager":
         """Create or return the singleton instance.
 
         Args:
@@ -183,7 +187,7 @@ class ConfigManager:
             cls._instance.__init__(config_path)
         return cls._instance
 
-    def __init__(self, config_path: Path):
+    def __init__(self, config_path: Path) -> None:
         """Initialize the configuration manager on first construction only.
 
         Args:
@@ -204,7 +208,7 @@ class ConfigManager:
         self._initialized = True
         self._load_config()
 
-    def get(self, key_path, default=None):
+    def get(self, key: str, default: Any = None) -> Any:
         """Retrieve a value using dot-notation path.
 
         Args:
@@ -218,7 +222,7 @@ class ConfigManager:
         Notes:
             If an intermediate value is not a dict, the lookup stops and returns default.
         """
-        keys = key_path.split('.')
+        keys = key.split('.')
         value = self.config
         for key in keys:
             if isinstance(value, dict):
@@ -227,7 +231,7 @@ class ConfigManager:
                 return default
         return value
 
-    def get_all(self) -> dict:
+    def get_all(self) -> dict[str, Any]:
         """Return the entire configuration dictionary.
 
         Returns:
@@ -235,7 +239,7 @@ class ConfigManager:
         """
         return self.config
 
-    def _load_config(self):
+    def _load_config(self) -> None:
         """Load configuration from YAML and perform validation.
 
         Sequence:
@@ -279,7 +283,7 @@ class ConfigManager:
         # Validate dynamic pipeline parameters ending with _dir or _file
         self._validate_dynamic_paths()
 
-    def _validate_static_paths(self):
+    def _validate_static_paths(self) -> None:
         """Validate presence and existence of required static paths.
 
         Currently enforced:
@@ -298,7 +302,7 @@ class ConfigManager:
             self.logger.critical(f"Static path invalid: 'web.upload_dir' -> {upload_dir_path}")
             sys.exit(1)
 
-    def _validate_watch_folder(self):
+    def _validate_watch_folder(self) -> None:
         """Ensure watch_folder.dir exists and is a directory.
 
         Notes:
@@ -314,7 +318,7 @@ class ConfigManager:
             self.logger.critical(f"Static path invalid: 'watch_folder.dir' -> {watch_dir_path}")
             sys.exit(1)
 
-    def _precreate_required_directories(self):
+    def _precreate_required_directories(self) -> None:
         """Pre-create directories for any *_dir values across the configuration.
 
         Behavior:
@@ -356,7 +360,7 @@ class ConfigManager:
                 self.logger.critical(f"Could not create directory {d}: {e}")
                 sys.exit(1)
 
-    def _validate_dynamic_paths(self):
+    def _validate_dynamic_paths(self) -> None:
         """Recursively validate *_dir and *_file paths throughout the configuration.
 
         Rules:

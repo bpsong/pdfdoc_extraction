@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository
 from modules.exceptions import TaskError
@@ -137,7 +137,10 @@ class ReviewGateTask(BaseTask):
             reasons.append({"reason": "business_rule", "flag": flag})
 
         if self.schema_file:
-            payload = context.get("data") if isinstance(context.get("data"), dict) else self._fields_payload(fields)
+            raw_payload = context.get("data")
+            payload: dict[str, Any] = (
+                raw_payload if isinstance(raw_payload, dict) else self._fields_payload(fields)
+            )
             schema_errors = SchemaService(self.config_manager).validate_payload(payload, schema=schema)
             for error in schema_errors:
                 if not self.require_missing_required and "Required field" in error.get("message", ""):
@@ -213,7 +216,10 @@ class ReviewGateTask(BaseTask):
                 if not isinstance(item, dict):
                     continue
                 try:
-                    confidence = float(item.get("confidence"))
+                    raw_confidence = item.get("confidence")
+                    if raw_confidence is None:
+                        continue
+                    confidence = float(raw_confidence)
                 except (TypeError, ValueError):
                     continue
                 if confidence < threshold:

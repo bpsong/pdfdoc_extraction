@@ -139,6 +139,7 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
         parent_files = documents.list_files(created["document"]["id"])
         child_files = [documents.list_files(child["id"])[0] for child in children]
 
+    assert parent is not None
     assert parent["status"] == "split_completed"
     assert any(file_record["file_type"] == "source_original" for file_record in parent_files)
     assert [child["page_start"] for child in children] == [1, 3]

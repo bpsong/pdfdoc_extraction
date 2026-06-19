@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 
 
 SUPPORTED_FIELD_TYPES = {

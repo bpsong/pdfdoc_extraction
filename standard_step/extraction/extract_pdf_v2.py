@@ -32,7 +32,7 @@ except ImportError:
     def get_logger(name: str):
         return logging.getLogger(name)
 from modules.base_task import BaseTask
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError

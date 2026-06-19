@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, TextIO
 
-from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 
 
 BUILTIN_TASKS: dict[str, tuple[str, str]] = {
@@ -140,8 +140,10 @@ class ApprovedTaskRegistry:
         """Return blocking findings for unapproved active pipeline task pairs."""
         data = config_data if isinstance(config_data, dict) else self.config_data
         findings = self.validate_custom_registry(data)
-        pipeline = data.get("pipeline") if isinstance(data.get("pipeline"), list) else []
-        tasks = data.get("tasks") if isinstance(data.get("tasks"), dict) else {}
+        raw_pipeline = data.get("pipeline")
+        pipeline: list[Any] = raw_pipeline if isinstance(raw_pipeline, list) else []
+        raw_tasks = data.get("tasks")
+        tasks: dict[str, Any] = raw_tasks if isinstance(raw_tasks, dict) else {}
 
         for index, task_key in enumerate(pipeline):
             if not isinstance(task_key, str):
@@ -255,7 +257,7 @@ class ApprovedTaskRegistry:
 
     def _config_from_manager(self) -> dict[str, Any]:
         if self.config_manager is not None and hasattr(self.config_manager, "get_all"):
-            data = self.config_manager.get_all()
+            data = get_all_config(self.config_manager)
             if isinstance(data, dict):
                 return data
         return {}
@@ -297,7 +299,8 @@ def _startup_failure_message(findings: list[dict[str, Any]], *, wait_seconds: in
         "",
     ]
     for finding in findings:
-        details = finding.get("details") if isinstance(finding.get("details"), dict) else {}
+        raw_details = finding.get("details")
+        details: dict[str, Any] = raw_details if isinstance(raw_details, dict) else {}
         task_key = details.get("task_key", "unknown")
         module_name = details.get("module", "unknown")
         class_name = details.get("class", "unknown")

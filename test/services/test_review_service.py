@@ -51,6 +51,7 @@ def test_review_service_claim_draft_diff_complete_and_expired_lock(tmp_path):
     assert draft["metadata"]["draft"]["corrections"]["supplier"] == "Acme Pte Ltd"
     assert diff["change_count"] == 1
     assert result["status"] == "completed"
+    assert completed_review is not None
     assert completed_review["status"] == "completed"
     assert json_loads(fields[0]["final_value_json"]) == "Acme Pte Ltd"
 
