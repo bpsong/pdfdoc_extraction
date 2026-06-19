@@ -69,7 +69,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
   - Value: Medium
   - Status: Fixed for the stated partial scope
   - Needs decision: Allowed hostnames and production environment flag.
-  - Notes: Trusted hosts, production docs controls, and baseline headers are implemented. A strict CSP and self-hosting CDN assets remain a separate medium-effort improvement.
+  - Notes: Trusted hosts, production docs controls, baseline headers, strict CSP, and local Tailwind/DaisyUI assets are implemented.
 
 - H-03, minimal: Reject oversized requests before `request.body()`.
   - Effort: Easy to medium
@@ -280,17 +280,16 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
 
 - [x] M-03: Missing Trusted Host, Security Headers, and Production Docs Controls
-  - Status: Partial fix completed and verified
-  - Effort: Completed for stated partial scope
+  - Status: Fixed and verified
+  - Effort: Completed
   - Primary locations:
     - `web/server.py`
     - `web/templates/app_base.html`
     - `tools/config_check/schema.py`
-  - Fix summary: Added `TrustedHostMiddleware` with explicit production host validation, disabled OpenAPI documentation by default in production, and added baseline `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Permissions-Policy` headers.
-  - Remaining defense-in-depth: A strict Content Security Policy is not yet enabled because Tailwind and DaisyUI are loaded from CDNs. Self-hosting compiled CSS and removing runtime CDN dependencies should be handled as a separate CSP-enabling change.
+  - Fix summary: Added `TrustedHostMiddleware` with explicit production host validation, disabled OpenAPI documentation by default in production, added baseline security headers and a strict Content Security Policy, and replaced Tailwind/DaisyUI CDN dependencies with a locally compiled stylesheet.
   - Verification:
-    - `C:\Python313\python.exe -m pytest -q test\integration\test_new_ui_routes.py test\tools\config_check\test_schema_validation.py`
-    - Result: 53 passed, 33 warnings
+    - `C:\Python313\python.exe -m pytest -q test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py test\tools\config_check\test_schema_validation.py test\tools\config_check\test_integration.py`
+    - Result: 76 passed, 37 warnings
 
 - [x] M-04: FileResponse Serves Paths From Document Metadata Without a Base-Directory Check
   - Status: Fixed and verified
@@ -398,12 +397,10 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 If optimizing for lowest effort:
 
 1. H-04: Move secrets out of YAML and rotate exposed keys.
-2. Self-host frontend assets and add a strict Content Security Policy.
 
 If optimizing for risk reduction:
 
 1. H-04: Move secrets out of YAML and rotate exposed keys.
-2. Self-host frontend assets and add a strict Content Security Policy.
 
 ## Latest Verification
 

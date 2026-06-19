@@ -632,6 +632,8 @@ by a trusted reverse proxy. OpenAPI endpoints (`/docs`, `/redoc`, and
 `/openapi.json`) are disabled in production unless
 `production_docs_enabled` is explicitly enabled. The application also sends
 baseline anti-framing, MIME-sniffing, referrer, and browser-permission headers.
+Tailwind and DaisyUI are bundled locally; run `npm install` and
+`npm run build:css` after changing frontend utility classes or package versions.
 - Do not commit password hashes or secret-bearing config files to version control.
 - Rotate passwords and audit access regularly.
 

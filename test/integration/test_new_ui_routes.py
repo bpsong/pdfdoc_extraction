@@ -108,6 +108,14 @@ def test_security_headers_are_added(monkeypatch) -> None:
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
     assert "camera=()" in response.headers["permissions-policy"]
+    assert response.headers["content-security-policy"] == (
+        "default-src 'self'; base-uri 'self'; form-action 'self'; "
+        "frame-ancestors 'none'; frame-src 'self'; img-src 'self' data:; "
+        "object-src 'none'; script-src 'self'; style-src 'self'"
+    )
+    assert "cdn.tailwindcss.com" not in response.text
+    assert "cdn.jsdelivr.net" not in response.text
+    assert "/static/css/vendor.css" in response.text
 
 
 def test_unknown_host_is_rejected(monkeypatch) -> None:
