@@ -20,6 +20,7 @@ from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -52,6 +53,41 @@ def _cors_allowed_origins(config: ConfigManager) -> list[str]:
     return []
 
 
+def _is_production() -> bool:
+    """Return whether the process is running in a production environment."""
+
+    environment = (
+        os.getenv("APP_ENV")
+        or os.getenv("ENV")
+        or os.getenv("ENVIRONMENT")
+        or "development"
+    )
+    return environment.strip().lower() in {"prod", "production"}
+
+
+def _allowed_hosts(config: ConfigManager, production: bool) -> list[str]:
+    """Return configured Host-header values with development-safe defaults."""
+
+    value = config.get("web.allowed_hosts", [])
+    if isinstance(value, str):
+        hosts = [host.strip() for host in value.split(",") if host.strip()]
+    elif isinstance(value, list):
+        hosts = [str(host).strip() for host in value if str(host).strip()]
+    else:
+        hosts = []
+
+    if production:
+        if not hosts or "*" in hosts:
+            raise RuntimeError(
+                "web.allowed_hosts must contain explicit hostnames in production"
+            )
+        return hosts
+
+    defaults = ["localhost", "127.0.0.1", "[::1]", "testserver"]
+    configured_host = str(config.get("web.host", "")).strip()
+    return list(dict.fromkeys([*hosts, configured_host, *defaults]))
+
+
 def create_app() -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -71,8 +107,39 @@ def create_app() -> FastAPI:
         - API routes are composed via modules.api_router.build_router().
         - ShutdownManager is registered to handle application shutdown events.
     """
-    app = FastAPI(title="PDF Processing Web Interface", version="1.0.0")
     logger = logging.getLogger("web.server")
+    config, _, _, _, _ = get_dependencies()
+    production = _is_production()
+    docs_enabled = not production or bool(config.get("web.production_docs_enabled", False))
+    app = FastAPI(
+        title="PDF Processing Web Interface",
+        version="1.0.0",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=_allowed_hosts(config, production),
+    )
+
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next: Any) -> Any:
+        """Add baseline browser hardening headers to every response."""
+
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+        )
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; base-uri 'self'; form-action 'self'; "
+            "frame-ancestors 'none'; frame-src 'self'; img-src 'self' data:; "
+            "object-src 'none'; script-src 'self'; style-src 'self'"
+        )
+        return response
 
     # Static and Templates
     static_dir = Path("web/static")
@@ -95,7 +162,6 @@ def create_app() -> FastAPI:
         )
 
     try:
-        config, _, _, _, _ = get_dependencies()
         validate_startup_task_registry(config)
         allowed_origins = _cors_allowed_origins(config)
         if allowed_origins:

@@ -43,6 +43,14 @@ class WebConfig(BaseModel):
         default_factory=list,
         description="Explicit trusted browser origins allowed to call the API cross-origin",
     )
+    allowed_hosts: List[str] = Field(
+        default_factory=list,
+        description="Host header values accepted by the web application",
+    )
+    production_docs_enabled: bool = Field(
+        default=False,
+        description="Expose OpenAPI documentation in production",
+    )
 
     @field_validator("host")
     @classmethod
@@ -75,6 +83,22 @@ class WebConfig(BaseModel):
         if any(origin == "*" for origin in origins):
             raise ValueError("CORS allowed origins must not use wildcard '*'")
         return origins
+
+    @field_validator("allowed_hosts", mode="before")
+    @classmethod
+    def validate_allowed_hosts(cls, value: Any) -> List[str]:
+        """Validate and normalize accepted Host-header values."""
+        if value is None:
+            return []
+        if isinstance(value, str):
+            hosts = [host.strip() for host in value.split(",") if host.strip()]
+        elif isinstance(value, list):
+            hosts = [str(host).strip() for host in value if str(host).strip()]
+        else:
+            raise ValueError("Allowed hosts must be a list of hostnames")
+        if "*" in hosts:
+            raise ValueError("Allowed hosts must not use wildcard '*'")
+        return hosts
 
 
 class WatchFolderConfig(BaseModel):

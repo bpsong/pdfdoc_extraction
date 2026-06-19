@@ -20,10 +20,16 @@ class FakeConfig:
         *,
         admin_users: list[str] | None = None,
         cors_allowed_origins: list[str] | None = None,
+        allowed_hosts: list[str] | None = None,
+        production_docs_enabled: bool = False,
     ) -> None:
         self.values: dict[str, Any] = {
             "database": {"run_migrations_on_startup": False},
-            "web": {"cors_allowed_origins": cors_allowed_origins or []},
+            "web": {
+                "cors_allowed_origins": cors_allowed_origins or [],
+                "allowed_hosts": allowed_hosts or [],
+                "production_docs_enabled": production_docs_enabled,
+            },
             "ui": {
                 "app_name": "DocFlow AI",
                 "admin_enabled": True,
@@ -68,10 +74,14 @@ def build_client(
     username: str = "operator",
     admin_users: list[str] | None = None,
     cors_allowed_origins: list[str] | None = None,
+    allowed_hosts: list[str] | None = None,
+    production_docs_enabled: bool = False,
 ) -> TestClient:
     config = FakeConfig(
         admin_users=admin_users,
         cors_allowed_origins=cors_allowed_origins,
+        allowed_hosts=allowed_hosts,
+        production_docs_enabled=production_docs_enabled,
     )
     auth = FakeAuth(username)
 
@@ -87,6 +97,45 @@ def build_client(
 
 def authenticate(client: TestClient) -> None:
     client.cookies.set("access_token", TOKEN)
+
+
+def test_security_headers_are_added(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+
+    response = client.get("/login")
+
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["referrer-policy"] == "strict-origin-when-cross-origin"
+    assert "camera=()" in response.headers["permissions-policy"]
+
+
+def test_unknown_host_is_rejected(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+
+    response = client.get("/login", headers={"Host": "untrusted.example"})
+
+    assert response.status_code == 400
+
+
+def test_production_disables_api_docs(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    client = build_client(monkeypatch, allowed_hosts=["testserver"])
+
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+
+
+def test_production_requires_explicit_allowed_hosts(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+
+    try:
+        build_client(monkeypatch)
+    except RuntimeError as exc:
+        assert "web.allowed_hosts" in str(exc)
+    else:
+        raise AssertionError("Production app accepted an empty host allowlist")
 
 
 def test_app_routes_require_authentication(monkeypatch) -> None:

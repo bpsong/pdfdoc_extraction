@@ -613,6 +613,25 @@ Updated Security Notes (summary from existing section):
 - Always use strong, unique passwords.
 - Protect `config.yaml` and any backups containing password hashes by restricting NTFS permissions and avoiding public sharing.
 - Prefer environment variables or a dedicated secret store (Azure Key Vault, HashiCorp Vault, AWS Secrets Manager, Windows Credential Manager) for production secrets.
+
+### Production web hardening
+
+Set `APP_ENV=production` (or `ENV`/`ENVIRONMENT`) and configure every hostname
+that clients or a reverse proxy will send in the HTTP `Host` header:
+
+```yaml
+web:
+  allowed_hosts:
+    - app.example.com
+  production_docs_enabled: false
+```
+
+Production startup rejects an empty or wildcard host allowlist. Include the
+public application hostname and, only when applicable, the hostname forwarded
+by a trusted reverse proxy. OpenAPI endpoints (`/docs`, `/redoc`, and
+`/openapi.json`) are disabled in production unless
+`production_docs_enabled` is explicitly enabled. The application also sends
+baseline anti-framing, MIME-sniffing, referrer, and browser-permission headers.
 - Do not commit password hashes or secret-bearing config files to version control.
 - Rotate passwords and audit access regularly.
 

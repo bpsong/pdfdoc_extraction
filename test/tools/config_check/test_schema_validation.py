@@ -216,6 +216,34 @@ def test_wildcard_cors_allowed_origin_reports_error():
     )
 
 
+def test_allowed_hosts_and_production_docs_settings_are_validated():
+    """Test deployment-hardening web settings."""
+    config = _build_minimal_config()
+    config["web"]["allowed_hosts"] = ["app.example.com"]
+    config["web"]["production_docs_enabled"] = False
+
+    result = validate_config_against_schema(config)
+
+    assert result.errors == []
+    assert result.model is not None
+    assert result.model.web.allowed_hosts == ["app.example.com"]
+    assert result.model.web.production_docs_enabled is False
+
+
+def test_wildcard_allowed_host_reports_error():
+    """Test that host validation cannot be disabled with a wildcard."""
+    config = _build_minimal_config()
+    config["web"]["allowed_hosts"] = ["*"]
+
+    result = validate_config_against_schema(config)
+
+    assert result.model is None
+    assert any(
+        issue.path == "web.allowed_hosts" and "must not use wildcard" in issue.message
+        for issue in result.errors
+    )
+
+
 def test_web_host_defaults_to_localhost():
     """Test that web.host defaults to 127.0.0.1 when not specified."""
     config = _build_minimal_config()

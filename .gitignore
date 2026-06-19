@@ -39,6 +39,7 @@ test/files/
 
 # Generated output
 output/playwright/
+node_modules/
 
 # Standard Python ignores
 __pycache__/
