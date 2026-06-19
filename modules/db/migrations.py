@@ -8,7 +8,7 @@ from modules.config_protocol import ConfigProvider
 from modules.db.connection import connect, transaction, utc_now
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def initialize_database(config_manager: ConfigProvider) -> None:

@@ -5,6 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import bcrypt
+
+from modules.db.connection import connect
+from modules.db.repositories import UserRepository
+
 
 class TempConfig:
     """Small ConfigManager stand-in supporting dot-path lookups."""
@@ -25,3 +30,11 @@ class TempConfig:
 
     def get_all(self) -> dict[str, Any]:
         return self._values
+
+
+def initialize_test_users(config: TempConfig) -> None:
+    """Seed the fixed users for authenticated integration tests."""
+    admin_hash = bcrypt.hashpw(b"AdminPassword1!", bcrypt.gensalt()).decode()
+    operator_hash = bcrypt.hashpw(b"OperatorPass1!", bcrypt.gensalt()).decode()
+    with connect(config) as conn:
+        UserRepository(conn).initialize({"admin": admin_hash, "operator": operator_hash})

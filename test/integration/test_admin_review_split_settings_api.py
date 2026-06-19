@@ -11,7 +11,7 @@ import modules.api_router as api_router
 from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import AuditRepository, ConfigVersionRepository
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
 def _base_config(tmp_path: Path, *, split_api_key: str = "llx-secret") -> dict[str, Any]:
@@ -56,6 +56,7 @@ def _config(tmp_path: Path, *, split_api_key: str = "llx-secret") -> TempConfig:
     config = TempConfig(tmp_path / "app.sqlite3", _base_config(tmp_path, split_api_key=split_api_key))
     config._config_path.write_text(yaml.safe_dump(config.get_all(), sort_keys=False), encoding="utf-8")
     initialize_database(config)
+    initialize_test_users(config)
     return config
 
 

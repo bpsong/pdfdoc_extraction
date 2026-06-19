@@ -32,7 +32,7 @@ from modules.api_router import (
 )
 from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
-from modules.auth_utils import AuthUtils, AuthError, LoginRateLimitError
+from modules.auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from modules.db.migrations import initialize_database
 from modules.services.task_registry_service import validate_startup_task_registry
 
@@ -173,21 +173,10 @@ def create_app() -> FastAPI:
             return [str(item) for item in value if str(item)]
         return []
 
-    def _is_admin_user(username: str, config: Any) -> bool:
+    def _is_admin_user(username: str, config: Any, auth: Any) -> bool:
         """Return whether a username has admin access for app UI routes."""
 
-        if not bool(config.get("ui.admin_enabled", True)):
-            return False
-        if not bool(config.get("auth.roles_enabled", True)):
-            return True
-
-        admin_users = set(_as_string_list(config.get("auth.default_admin_users", [])))
-        admin_users.update(_as_string_list(config.get("ui.default_admin_users", [])))
-        if admin_users:
-            return username in admin_users
-
-        configured_username = config.get("authentication.username")
-        return bool(configured_username and username == str(configured_username))
+        return bool(config.get("ui.admin_enabled", True)) and auth.is_admin(username)
 
     async def render_app_page(
         request: Request,
@@ -202,8 +191,8 @@ def create_app() -> FastAPI:
         """Render an authenticated app page with role-aware shared context."""
 
         username = await get_current_active_user(request)
-        config, _, _, _, _ = get_dependencies()
-        is_admin = _is_admin_user(username, config)
+        config, auth, _, _, _ = get_dependencies()
+        is_admin = _is_admin_user(username, config, auth)
         if admin_required and not is_admin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -344,6 +333,14 @@ def create_app() -> FastAPI:
             logger.debug(f"Set cookie with token, expires in {auth.token_exp_minutes} minutes")
             return response
 
+        except AuthenticationSetupRequired:
+            response = templates.TemplateResponse(
+                "login.html",
+                {"request": request, "error": "User accounts require administrator setup.", "is_authenticated": False},
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+            response.headers["Cache-Control"] = "no-store"
+            return response
         except LoginRateLimitError:
             logger.warning(f"Login rate limited for user: {username}")
             response = templates.TemplateResponse(
@@ -591,6 +588,18 @@ def create_app() -> FastAPI:
             page_title="Admin",
             page_subtitle="Configuration health and governance overview.",
             active_nav="admin_home",
+            admin_required=True,
+        )
+
+    @app.get("/app/admin/users", response_class=HTMLResponse)
+    async def app_admin_users_page(request: Request):
+        """Serve fixed-user password management."""
+        return await render_app_page(
+            request,
+            "admin_users.html",
+            page_title="User Management",
+            page_subtitle="Change passwords for the admin and operator accounts.",
+            active_nav="users",
             admin_required=True,
         )
 

@@ -57,6 +57,10 @@ class FakeAuth:
             return self.username
         raise AuthError("Invalid token")
 
+    def is_admin(self, username: str) -> bool:
+        """Treat the configured admin identity as privileged."""
+        return username == "admin"
+
 
 def build_client(
     monkeypatch,
@@ -76,6 +80,7 @@ def build_client(
 
     monkeypatch.setattr(web_server, "get_dependencies", fake_get_dependencies)
     monkeypatch.setattr(api_router, "get_dependencies", fake_get_dependencies)
+    monkeypatch.setattr(api_router, "is_admin_user", lambda candidate, _config: candidate == "admin")
     app = web_server.create_app()
     return TestClient(app)
 
@@ -353,12 +358,16 @@ def test_admin_dashboard_audit_and_dry_run_pages_include_task_24_assets(monkeypa
     dashboard = client.get("/app/admin")
     audit = client.get("/app/admin/audit")
     dry_run = client.get("/app/admin/dry-run")
+    users = client.get("/app/admin/users")
 
     assert dashboard.status_code == 200
     assert 'id="admin-dashboard-workspace"' in dashboard.text
     assert "/static/js/admin.js" in dashboard.text
     assert audit.status_code == 200
     assert 'id="admin-audit-workspace"' in audit.text
+    assert users.status_code == 200
+    assert 'id="user-management"' in users.text
+    assert "/static/js/admin_users.js" in users.text
     assert "/static/js/admin_audit.js" in audit.text
     assert dry_run.status_code == 200
     assert 'id="pipeline-dry-run-workspace"' in dry_run.text

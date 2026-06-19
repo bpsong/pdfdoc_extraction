@@ -13,6 +13,7 @@ from modules.db.connection import json_dumps, json_loads, transaction, utc_now
 
 TERMINAL_STATUSES = {"completed", "Pipeline Completed Successfully", "review_completed"}
 FAILED_STATUSES = {"failed", "Workflow Trigger Failed", "Pipeline Completed with Errors"}
+FIXED_USERS = {"admin": "admin", "operator": "operator"}
 
 
 def _new_id() -> str:
@@ -23,6 +24,54 @@ def _new_id() -> str:
 def _row_to_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
     """Convert a SQLite row to a plain dictionary."""
     return dict(row) if row is not None else None
+
+
+class UserRepository:
+    """Persistence for the two fixed application users."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def get(self, username: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
+        )
+
+    def list(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT username, role, token_version, created_at, password_updated_at "
+            "FROM users ORDER BY CASE username WHEN 'admin' THEN 0 ELSE 1 END"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def initialize(self, password_hashes: dict[str, str], *, overwrite: bool = False) -> None:
+        if set(password_hashes) != set(FIXED_USERS):
+            raise ValueError("Exactly admin and operator credentials are required")
+        existing = int(self.conn.execute("SELECT COUNT(*) FROM users").fetchone()[0])
+        if existing and not overwrite:
+            raise ValueError("Users are already initialized")
+        now = utc_now()
+        with transaction(self.conn):
+            if overwrite:
+                self.conn.execute("DELETE FROM users")
+            for username, role in FIXED_USERS.items():
+                self.conn.execute(
+                    "INSERT INTO users(username, role, password_hash, token_version, created_at, password_updated_at) "
+                    "VALUES (?, ?, ?, 1, ?, ?)",
+                    (username, role, password_hashes[username], now, now),
+                )
+
+    def update_password(self, username: str, password_hash: str) -> None:
+        if username not in FIXED_USERS:
+            raise ValueError("Unknown fixed user")
+        with transaction(self.conn):
+            cursor = self.conn.execute(
+                "UPDATE users SET password_hash = ?, token_version = token_version + 1, "
+                "password_updated_at = ? WHERE username = ?",
+                (password_hash, utc_now(), username),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("User accounts are not initialized")
 
 
 class BatchRepository:

@@ -471,6 +471,24 @@ The housekeeping cleanup step is appended automatically by the WorkflowLoader an
 
 ### 4.4. Managing Web Interface Passwords
 
+> The YAML-based procedure below is retained only as historical guidance for older deployments. Current versions store both fixed accounts (`admin` and `operator`) in SQLite and do not read usernames or password hashes from runtime YAML.
+
+For a fresh installation, run:
+
+```powershell
+C:\Python313\python.exe tools\setup_users.py --config config.yaml
+```
+
+For an existing installation, import the legacy admin bcrypt hash and set a new operator password:
+
+```powershell
+C:\Python313\python.exe tools\setup_users.py --config config.yaml --legacy-config config.yaml
+```
+
+After setup succeeds, remove the legacy `authentication` block. Passwords must be 12–72 UTF-8 bytes and include uppercase, lowercase, numeric, and symbol characters. Administrators change either password at `/app/admin/users`; the current admin password is required, and the changed account's existing sessions are revoked. Use `--reset` only for deliberate recovery because it replaces both accounts.
+
+#### Legacy YAML procedure (superseded)
+
 The web interface uses a simple username/password authentication system. Passwords are stored securely as bcrypt hashes in the `config.yaml` file by default. The sections below show how to generate hashes and provide security recommendations for storing them safely.
 
 Generating bcrypt password hashes:
@@ -619,6 +637,7 @@ SQLite stores:
 - review queue items, claims, drafts, diffs, and completions
 - document artifact records in `document_files`
 - non-secret runtime settings, admin configuration versions, and audit events
+- fixed admin/operator identities, bcrypt password hashes, roles, and session-revocation versions
 
 Text status files are not required for configured workflow state.
 
@@ -641,7 +660,7 @@ PDF previews in the web app are served only when the registered file path resolv
 #### 4.5.4. Operator and Admin State Views
 
 - Operators use `/app/processing`, `/app/batches/{batch_id}`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`.
-- Administrators use `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
+- Administrators use `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
 - Legacy `/dashboard` and `/upload` HTML pages redirect to the unified app. `/api/files` and `/api/status/{file_id}` are compatibility APIs only.
 
 #### 4.5.5. Admin Workflow Details
@@ -649,6 +668,7 @@ PDF previews in the web app are served only when the registered file path resolv
 The `/app/admin/*` pages provide configuration and governance workflows for administrators:
 
 - `/app/admin`: configuration health, schema validation summary, pipeline summary, review-gate status, split status, and recent audit events.
+- `/app/admin/users`: change the admin or operator password after re-entering the current admin password.
 - `/app/admin/pipeline`: create or update a pipeline draft, review a diff against the active configuration, validate the draft, and publish it when validation has no blocking errors.
 - `/app/admin/tasks`: inspect available task classes and their configured module/class information.
 - `/app/admin/review-gate`: maintain review thresholds, field/document-type overrides, review scope, queue name, schema reference, and resume policy.
@@ -659,7 +679,7 @@ The `/app/admin/*` pages provide configuration and governance workflows for admi
 
 For schema-driven review UI field configuration, see `docs/review_schema_admin_guide.md`.
 
-Admin access is role-aware. When roles are enabled, users listed in `auth.default_admin_users` or `ui.default_admin_users` can access admin pages. If no admin list is configured, the configured `authentication.username` is treated as the administrator. Secret values are not exposed through runtime settings, and split settings updates do not save secret keys such as `api_key`; configure those secrets through `config.yaml` or your deployment secret-management process.
+Admin access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings, and split settings updates do not save secret keys such as `api_key`; configure those secrets through `config.yaml` or your deployment secret-management process.
 
 #### 4.5.6. Backup and Recovery
 
@@ -1450,7 +1470,7 @@ A: Use a plain text editor, preserve indentation, back up before changes, and re
 A: Right-click the folder, select Properties > Security tab, and ensure the system user has Modify or Write permissions.
 
 **Q: Why do I get "Invalid credentials" error when logging into the web interface?**
-A: Verify that the `authentication.username` and `authentication.password_hash` values in `config.yaml` match your intended login credentials. The username should be a plain text string, and the password_hash should be a valid bcrypt hash. If you've forgotten your password, regenerate the hash using the bcrypt command shown in section 4.4 and update the configuration.
+A: Confirm that user setup was run against the same `database.path` used by the application and select the correct fixed account on the login page. If setup has not run, use `tools/setup_users.py` as described in section 4.4.
 
 After repeated failed login attempts, the system may temporarily throttle additional attempts. Wait for the cooldown period or ask an administrator to review the `auth.login_*` settings if the lockout is unexpected.
 
@@ -1458,14 +1478,10 @@ After repeated failed login attempts, the system may temporarily throttle additi
 A: Authentication tokens are valid for 30 minutes by default. If sessions are expiring too quickly, ensure your system's clock is accurate, as token expiration is time-sensitive. Administrators can adjust the timeout with `web.token_exp_minutes` in `config.yaml`.
 
 **Q: How do I reset or change the web interface password?**
-A: Update the `authentication.password_hash` value in `config.yaml` with a new bcrypt hash. Generate the hash using the helper shown in section 4.4:
-```
-C:\Python313\python.exe tools\generate_password_hash.py --password "new_password"
-```
-Replace `new_password` with your desired password and update the configuration file.
+A: Sign in as `admin` and use `/app/admin/users`. For recovery when login is impossible, rerun `tools/setup_users.py --config config.yaml --reset`; this replaces both account passwords and revokes their prior sessions.
 
 **Q: How do I verify my authentication configuration is correct?**
-A: Ensure these values are properly set in `config.yaml`: `authentication.username` (plain text username), `authentication.password_hash` (bcrypt hash starting with $2b$), and `web.secret_key` (random string for token signing). Test the configuration by restarting the system and attempting to log in through the web interface.
+A: Ensure `web.secret_key` and `database.path` are correct, initialize both users with the setup CLI, and test both fixed accounts. Runtime YAML must not contain usernames or password hashes.
 
 **Q: Why is processing slow for large PDF files?**
 A: Files over 10MB may cause noticeable delays due to synchronous file I/O operations and external extraction processing. Files over 100MB may cause significant delays or memory pressure. The system processes workflow files sequentially, so one large file can delay later files. Monitor `/app/processing`, document task runs, and `app.log` during large file processing.

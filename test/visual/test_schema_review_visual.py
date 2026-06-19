@@ -8,10 +8,11 @@ from pathlib import Path
 
 import pytest
 import yaml
+import bcrypt
 
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
-from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository
+from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, UserRepository
 from modules.services.batch_service import BatchService
 from test.helpers_sqlite import TempConfig
 
@@ -41,7 +42,6 @@ def _write_config(tmp_path: Path, port: int, schema_dir: Path) -> Path:
         "auth": {"roles_enabled": True, "default_admin_users": ["admin"]},
         "web": {"host": "127.0.0.1", "port": port, "secret_key": "visual-test-secret", "upload_dir": str(tmp_path / "web_upload")},
         "watch_folder": {"dir": str(tmp_path / "watch"), "processing_dir": str(tmp_path / "processing")},
-        "authentication": {"username": "admin", "password_hash": PASSWORD_HASH},
         "logging": {"log_file": str(tmp_path / "app.log"), "log_level": "INFO"},
         "schema": {"directories": [str(schema_dir)]},
         "tasks": {},
@@ -132,6 +132,8 @@ fields:
     )
     config._config_path = config_path
     initialize_database(config)
+    with connect(config) as conn:
+        UserRepository(conn).initialize({"admin": PASSWORD_HASH, "operator": bcrypt.hashpw(b"OperatorPass1!", bcrypt.gensalt()).decode()})
     pdf_path = tmp_path / "web_upload" / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n% visual test")
 
@@ -240,7 +242,7 @@ def page(visual_app: dict[str, str]):
         errors: list[str] = []
         page.on("console", lambda message: errors.append(message.text) if message.type == "error" else None)
         page.goto(f"{visual_app['base_url']}/login")
-        page.locator('input[name="username"]').fill("admin")
+        page.locator('select[name="username"]').select_option("admin")
         page.locator('input[name="password"]').fill("password123")
         page.locator('button[type="submit"]').click()
         page.wait_for_url("**/app/upload")

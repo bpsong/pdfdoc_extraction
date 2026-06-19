@@ -109,9 +109,9 @@ graph TD
   - Services under `modules/services/` compose repositories into application use cases. Examples include batch upload, review queue operations, reports summaries, runtime settings, admin settings/versioning, audit event recording, and artifact registration.
 
 - Unified Web Interface
-  - **Authentication**: JWT-based single-user authentication with session management via [`modules/auth_utils.py`](modules/auth_utils.py:1)
+  - **Authentication**: SQLite-backed admin/operator authentication with JWT session management via [`modules/auth_utils.py`](modules/auth_utils.py:1)
   - **Operator UI**: `/app/upload`, `/app/processing`, `/app/batches/{batch_id}`, `/app/batches/{batch_id}/split-results`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`. Reports expose recent batch records with a modal task-run timeline for each batch.
-  - **Admin UI**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
+  - **Admin UI**: `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
   - **Primary APIs**: batch, document, extraction, review, reports, settings, admin settings, pipeline, review-gate, split, schema, and audit endpoints in [`modules/api_router.py`](modules/api_router.py:1).
   - **Legacy APIs**: `/api/files` and `/api/status/{file_id}` return SQLite-backed compatibility responses. New UI code should use the primary SQLite APIs.
 
@@ -370,12 +370,14 @@ items:  # Workflow field key, used in context["data"]
 
 ## Authentication and session management
 
-- **JWT-based authentication**: Single-user authentication system using JSON Web Tokens
-- **Password security**: Bcrypt password hashing with configurable salt rounds via [`tools/generate_password_hash.py`](tools/generate_password_hash.py:1)
+- **JWT-based authentication**: SQLite-backed `admin` and `operator` accounts using JSON Web Tokens
+- **Password security**: Bcrypt hashes are stored in the SQLite `users` table; no credentials are stored in runtime YAML
+- **Role authorization**: Database roles protect all admin UI and API routes, while operators retain non-administrative workflows
+- **Session revocation**: Per-user token versions invalidate existing sessions after a password change
 - **Session management**: Automatic session expiry with configurable timeout periods
 - **Login throttling**: In-memory failed-login rate limiting protects the local login endpoints; multi-worker deployments should use shared backing storage for consistent throttling.
 - **Security features**:
-  - Secure password storage in configuration files
+  - Secure password-hash storage in SQLite
   - Token-based API authentication for all protected endpoints
   - Automatic logout on session expiry
   - Protection against common web authentication vulnerabilities
@@ -404,7 +406,7 @@ items:  # Workflow field key, used in context["data"]
   - Input processing workflows: [`test/integration/test_input_processing.py`](test/integration/test_input_processing.py:1)
   - SQLite-only workflow state and artifact registration: [`test/integration/test_sqlite_only_workflow_state.py`](test/integration/test_sqlite_only_workflow_state.py:1)
 - Test utilities:
-  - Password hash generation: [`tools/generate_password_hash.py`](tools/generate_password_hash.py:1)
+  - Fixed-user setup and legacy migration: [`tools/setup_users.py`](tools/setup_users.py:1)
   - Mocking and test data management utilities
 - Load tests:
   - Simulate high file ingestion rates to validate queue and worker scaling

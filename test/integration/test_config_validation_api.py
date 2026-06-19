@@ -8,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
-from test.helpers_sqlite import TempConfig
+from modules.db.migrations import initialize_database
+from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
 BCRYPT_HASH = "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W"
@@ -59,6 +60,8 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
 
 
 def _client(monkeypatch, config: TempConfig, *, username: str = "operator") -> TestClient:
+    initialize_database(config)
+    initialize_test_users(config)
     app = FastAPI()
     app.include_router(api_router.build_router())
 

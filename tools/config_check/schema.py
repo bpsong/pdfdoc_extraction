@@ -77,22 +77,6 @@ class WebConfig(BaseModel):
         return origins
 
 
-class AuthenticationConfig(BaseModel):
-    """Authentication credentials for accessing the web interface."""
-
-    model_config = ConfigDict(extra="allow")
-
-    username: str = Field(
-        ..., min_length=1, description="Username used to authenticate web requests"
-    )
-    password_hash: str = Field(
-        ...,
-        min_length=1,
-        pattern=r"^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$",
-        description="BCrypt password hash protecting the authentication user",
-    )
-
-
 class WatchFolderConfig(BaseModel):
     """Configuration for the watch folder monitor."""
 
@@ -213,9 +197,6 @@ class ConfigModel(BaseModel):
     # Optional sections (schema remains open-ended for future expansion)
     logging: Optional[Dict[str, Any]] = Field(
         default=None, description="Optional logging configuration block"
-    )
-    authentication: AuthenticationConfig = Field(
-        ..., description="Authentication settings for the web interface"
     )
     database: Optional[Dict[str, Any]] = Field(
         default=None, description="SQLite database configuration"

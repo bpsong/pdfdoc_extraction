@@ -59,10 +59,6 @@ def _build_minimal_config() -> dict:
             "secret_key": "super-secret",
         },
         "watch_folder": {"dir": "./watch"},
-        "authentication": {
-            "username": "admin",
-            "password_hash": "$2b$12$eImiTXuWVxfM37uY4JANj.QlsWu1PErG3e1hYzWdG2ZHB5QoLGj7W",
-        },
         "tasks": {
             "step_one": {
                 "module": "sample.module",
@@ -92,16 +88,6 @@ def test_missing_required_section_reports_error():
 
     assert result.model is None
     assert any(issue.path == "watch_folder" for issue in result.errors)
-
-
-def test_missing_authentication_section_reports_error():
-    config = _build_minimal_config()
-    config.pop("authentication")
-
-    result = validate_config_against_schema(config)
-
-    assert result.model is None
-    assert any(issue.path == "authentication" for issue in result.errors)
 
 
 def test_pipeline_requires_string_entries():
@@ -164,18 +150,6 @@ def test_missing_secret_key_reports_error():
 
     assert result.model is None
     assert any(issue.path == "web.secret_key" for issue in result.errors)
-
-
-def test_invalid_password_hash_reports_error():
-    config = _build_minimal_config()
-    config["authentication"]["password_hash"] = "not-a-bcrypt"
-
-    result = validate_config_against_schema(config)
-
-    assert result.model is None
-    assert any(
-        issue.path == "authentication.password_hash" for issue in result.errors
-    )
 
 
 # Tests for new schema validation fields (web.host and web.port)

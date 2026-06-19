@@ -1,5 +1,7 @@
 # Security Best Practices Report
 
+> Historical review note: the later SQLite-backed user implementation removes usernames and password hashes from runtime YAML, adds fixed admin/operator roles, and revokes sessions through per-user token versions. Findings below describe the system at review time unless marked remediated.
+
 Date: 2026-06-06
 
 Scope: Static review of the Python/FastAPI PDF processing application after the recent refactor. I reviewed the web server, API routes, authentication utilities, workflow loading, extraction tasks, templates, static JavaScript, configuration handling, and dependency metadata. I did not make code changes.

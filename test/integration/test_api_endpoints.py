@@ -12,7 +12,7 @@ from web.server import create_app
 from modules.auth_utils import AuthUtils, AuthError
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
-from modules.db.repositories import DocumentRepository
+from modules.db.repositories import DocumentRepository, UserRepository
 from modules.services.batch_service import BatchService
 from test.helpers_sqlite import TempConfig
 
@@ -157,6 +157,9 @@ def test_api_login_rate_limit_returns_429(monkeypatch, tmp_path: Path):
             },
         },
     )
+    initialize_database(config)
+    with connect(config) as conn:
+        UserRepository(conn).initialize({"admin": password_hash, "operator": bcrypt.hashpw(b"OperatorPass1!", bcrypt.gensalt()).decode()})
     auth = AuthUtils(config)
     AuthUtils.reset_login_rate_limits()
     monkeypatch.setattr(api_router, "get_dependencies", lambda: (config, auth, None, None, None))
@@ -201,6 +204,9 @@ def test_browser_login_rate_limit_renders_429(monkeypatch, tmp_path: Path):
             },
         },
     )
+    initialize_database(config)
+    with connect(config) as conn:
+        UserRepository(conn).initialize({"admin": password_hash, "operator": bcrypt.hashpw(b"OperatorPass1!", bcrypt.gensalt()).decode()})
     auth = AuthUtils(config)
     AuthUtils.reset_login_rate_limits()
 

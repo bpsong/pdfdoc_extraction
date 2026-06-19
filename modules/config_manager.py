@@ -23,10 +23,6 @@ watch_folder:
   validate_pdf_header: true
   processing_dir: "processing"
 
-authentication:
-  username: "admin"
-  password_hash: "$2b$12$example_hash_for_secure_password"
-
 logging:
   log_file: "app.log"
   log_level: "INFO"
@@ -81,10 +77,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "admin_enabled": True,
         "operator_sidebar": ["upload", "review", "reports", "settings"],
     },
-    "auth": {
-        "roles_enabled": True,
-        "default_admin_users": [],
-    },
     "custom_steps": {
         "enabled": False,
         "registry": {},
@@ -136,10 +128,6 @@ class ConfigManager:
       dir: "watch_folder"
       validate_pdf_header: true
       processing_dir: "processing"
-
-    authentication:
-      username: "admin"
-      password_hash: "$2b$12$example_hash_for_secure_password"
 
     logging:
       log_file: "app.log"

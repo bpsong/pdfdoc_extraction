@@ -12,7 +12,7 @@ from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import AuditRepository, ReviewRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
 class _FakeAuth:
@@ -32,6 +32,7 @@ def _client(tmp_path: Path, monkeypatch, *, user: str = "admin") -> tuple[TestCl
         },
     )
     initialize_database(config)
+    initialize_test_users(config)
 
     def fake_get_dependencies():
         return config, _FakeAuth(), None, None, None

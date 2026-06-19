@@ -11,7 +11,7 @@ import modules.api_router as api_router
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.db.repositories import AuditRepository
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
 def _base_config(tmp_path: Path) -> dict[str, Any]:
@@ -64,6 +64,7 @@ def _config(tmp_path: Path) -> TempConfig:
     config = TempConfig(tmp_path / "app.sqlite3", _base_config(tmp_path))
     config._config_path.write_text(yaml.safe_dump(config.get_all(), sort_keys=False), encoding="utf-8")
     initialize_database(config)
+    initialize_test_users(config)
     return config
 
 

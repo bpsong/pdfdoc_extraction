@@ -131,10 +131,6 @@ watch_folder:
   validate_pdf_header: true
   processing_dir: "processing_folder_default"
 
-authentication:
-  username: "admin"
-  password_hash: "$2b$12$example_hash_for_secure_password"
-
 tasks:
   extract_document_data:
     module: standard_step.extraction.extract_pdf_v2
@@ -218,7 +214,21 @@ Text status files are not required for configured workflow state. `/api/files` a
 
 ### Web Interface
 
-1. **Login**: Access the app at `http://localhost:8000/app/upload`
+Before first login, initialize the two fixed SQLite users:
+
+```powershell
+C:\Python313\python.exe tools\setup_users.py --config config.yaml
+```
+
+For an upgrade from YAML credentials, preserve the existing admin hash while creating the operator account:
+
+```powershell
+C:\Python313\python.exe tools\setup_users.py --config config.yaml --legacy-config config.yaml
+```
+
+After a successful import, remove the legacy `authentication` block. Passwords must contain uppercase, lowercase, numeric, and symbol characters and be 12–72 UTF-8 bytes.
+
+1. **Login**: Access the app at `http://localhost:8000/app/upload` and select `admin` or `operator`
 2. **Upload PDFs**: Use `/app/upload` to submit one or more PDFs as a batch
 3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track splitting, extraction, review, and completion state
 4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
@@ -250,8 +260,11 @@ C:\Python313\python.exe main.py --no-web
 ### Authentication
 - `POST /login`: User authentication
 - `POST /logout`: Session termination
+- `GET /api/admin/users`: List fixed accounts (admin only)
+- `PUT /api/admin/users/{username}/password`: Change an account password (admin only)
 
 Repeated failed login attempts are temporarily throttled and may return HTTP `429 Too Many Requests`.
+The `admin` account has full access. The `operator` account cannot access administrative pages or APIs. Admins manage both passwords at `/app/admin/users`; changing a password revokes existing sessions for that account.
 
 ### File Operations
 - `POST /upload`: Legacy single-PDF upload endpoint; redirects to `/app/processing` after scheduling

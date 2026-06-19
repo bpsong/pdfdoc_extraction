@@ -1,4 +1,4 @@
-"""Authentication utilities for a single-user setup.
+"""SQLite-backed authentication utilities.
 
 This module provides:
   - Password verification using bcrypt directly (no passlib dependency for checking).
@@ -20,6 +20,8 @@ import bcrypt
 from jose import JWTError, jwt
 
 from .config_protocol import ConfigProvider as ConfigManager
+from .db.connection import connect
+from .db.repositories import UserRepository
 
 
 class AuthError(Exception):
@@ -29,9 +31,9 @@ class AuthError(Exception):
     configuration issues preventing secure operation.
 
     Troubleshooting:
-        - Common Issue: Invalid credentials during login. Resolution: Verify username and password against configuration values.
+        - Common Issue: Invalid credentials during login. Resolution: Verify the SQLite user setup and password.
         - Common Issue: Token signature mismatch. Resolution: Check that web.secret_key in config matches the key used to generate tokens.
-        - Common Issue: Missing configuration values. Resolution: Ensure authentication.username, authentication.password_hash, and web.secret_key are properly set in config.yaml.
+        - Common Issue: Missing configuration values. Resolution: Ensure web.secret_key is set and run the user setup CLI.
     """
     pass
 
@@ -40,6 +42,27 @@ class LoginRateLimitError(AuthError):
     """Raised when too many failed login attempts are made in a short window."""
 
     pass
+
+
+class AuthenticationSetupRequired(AuthError):
+    """Raised when the fixed user accounts have not been initialized."""
+
+
+class PasswordPolicyError(ValueError):
+    """Raised when a password does not meet the application policy."""
+
+
+def validate_password(password: str) -> None:
+    """Validate the password complexity and bcrypt byte-length limits."""
+    encoded = password.encode("utf-8")
+    if len(encoded) < 12 or len(encoded) > 72:
+        raise PasswordPolicyError("Password must be between 12 and 72 UTF-8 bytes")
+    checks = (any(c.isupper() for c in password), any(c.islower() for c in password),
+              any(c.isdigit() for c in password), any(not c.isalnum() for c in password))
+    if not all(checks):
+        raise PasswordPolicyError(
+            "Password must include uppercase, lowercase, numeric, and symbol characters"
+        )
 
 
 class AuthUtils:
@@ -61,8 +84,7 @@ class AuthUtils:
         - Only a single configured username is accepted.
 
     Troubleshooting:
-        - Common Issue: Configuration validation fails during initialization. Resolution: Verify all required config values (authentication.username, authentication.password_hash, web.secret_key) are present and properly formatted.
-        - Common Issue: Password verification consistently fails. Resolution: Ensure password_hash in config is a valid bcrypt hash generated with sufficient rounds (minimum 12 recommended).
+        - Common Issue: Accounts are unavailable. Resolution: Run tools/setup_users.py against the active configuration.
         - Common Issue: JWT algorithm mismatch. Resolution: Confirm web.jwt_algorithm in config matches the algorithm used when tokens were created.
     """
 
@@ -80,9 +102,7 @@ class AuthUtils:
         """
         self.logger = logging.getLogger("AuthUtils")
         
-        # Load values from config.yaml with safe type conversion
-        username_val = config.get("authentication.username")
-        password_hash_val = config.get("authentication.password_hash")
+        self.config = config
         secret_key_val = config.get("web.secret_key")
         algorithm_val = config.get("web.jwt_algorithm", "HS256") or "HS256"
         token_exp_val = config.get("web.token_exp_minutes", 30)
@@ -92,8 +112,6 @@ class AuthUtils:
         cooldown_seconds_val = config.get("auth.login_cooldown_seconds", 600)
         
         # Ensure string types
-        self.username = str(username_val) if username_val is not None else ""
-        self.password_hash = str(password_hash_val) if password_hash_val is not None else ""
         self.secret_key = str(secret_key_val) if secret_key_val is not None else ""
         self.algorithm = str(algorithm_val)
         
@@ -108,13 +126,9 @@ class AuthUtils:
         self.login_cooldown_seconds = self._positive_int(cooldown_seconds_val, 600)
             
         # Validate required configuration
-        if not self.username or not self.password_hash:
-            raise AuthError("authentication.username and authentication.password_hash must be set in config")
         if not self.secret_key:
             raise AuthError("web.secret_key must be set in config")
             
-        self.logger.info(f"Configured username: {self.username}")
-        self.logger.debug("Password hash configured")
         self.logger.debug(f"Using JWT algorithm: {self.algorithm}")
         self.logger.debug(f"Token expiration: {self.token_exp_minutes} minutes")
         self.logger.debug(
@@ -315,22 +329,27 @@ class AuthUtils:
                 the password verification fails.
 
         Troubleshooting:
-            - Common Issue: "Invalid credentials" for correct username/password. Resolution: Verify authentication.username and authentication.password_hash in config.yaml match expected values.
+            - Common Issue: "Invalid credentials" for correct username/password. Resolution: Verify the SQLite users were initialized for the active database.
             - Common Issue: Login succeeds but token validation fails immediately. Resolution: Ensure web.token_exp_minutes is set to a reasonable value (default 30 minutes).
             - Common Issue: Password hash format incompatibility. Resolution: Regenerate password hash using bcrypt with rounds=12 if using different bcrypt implementation.
         """
         self.logger.info(f"Login attempt for username: {username}")
         rate_limit_key = self._ensure_login_not_rate_limited(username, client_id)
         
-        # Verify username
-        if username != self.username:
+        with connect(self.config) as conn:
+            user = UserRepository(conn).get(username)
+        if user is None:
+            with connect(self.config) as conn:
+                initialized = bool(UserRepository(conn).list())
+            if not initialized:
+                raise AuthenticationSetupRequired("User accounts require setup")
             self.logger.warning(f"Login failed: User '{username}' not found")
             self._record_failed_login(rate_limit_key)
             raise AuthError("Invalid credentials")
             
         # Verify password
         self.logger.debug(f"Verifying password for user '{username}'")
-        is_valid_password = self.verify_password(password, self.password_hash)
+        is_valid_password = self.verify_password(password, str(user["password_hash"]))
         
         if not is_valid_password:
             self.logger.warning(f"Login failed: Invalid password for user '{username}'")
@@ -342,7 +361,7 @@ class AuthUtils:
         self._record_successful_login(rate_limit_key)
         access_token_expires = timedelta(minutes=self.token_exp_minutes)
         return self.create_access_token(
-            data={"sub": username},
+            data={"sub": username, "role": user["role"], "ver": user["token_version"]},
             expires_delta=access_token_expires
         )
 
@@ -360,7 +379,7 @@ class AuthUtils:
 
         Troubleshooting:
             - Common Issue: "Invalid token: missing subject" - Resolution: Ensure token was created with 'sub' claim containing the username.
-            - Common Issue: "Invalid token subject" - Resolution: Verify the token's subject matches the configured authentication.username in config.yaml.
+            - Common Issue: "Invalid token subject" - Resolution: Sign in again with an initialized SQLite user.
             - Common Issue: "Token validation error" - Resolution: Check token format and ensure it hasn't been tampered with or corrupted during transmission.
         """
         try:
@@ -371,9 +390,13 @@ class AuthUtils:
                 self.logger.warning("Token missing 'sub' claim")
                 raise AuthError("Invalid token: missing subject")
                 
-            if username != self.username:
+            with connect(self.config) as conn:
+                user = UserRepository(conn).get(str(username))
+            if user is None:
                 self.logger.warning(f"Token has invalid subject: {username}")
                 raise AuthError("Invalid token subject")
+            if payload.get("role") != user["role"] or payload.get("ver") != user["token_version"]:
+                raise AuthError("Token has been revoked")
                 
             return username
             
@@ -383,3 +406,13 @@ class AuthUtils:
         except Exception as e:
             self.logger.error(f"Unexpected error in get_current_user: {e}", exc_info=True)
             raise AuthError(f"Token validation error: {e}")
+
+    def get_user(self, username: str) -> dict[str, Any] | None:
+        """Return a user record for authorization checks."""
+        with connect(self.config) as conn:
+            return UserRepository(conn).get(username)
+
+    def is_admin(self, username: str) -> bool:
+        """Return whether the persisted user has the admin role."""
+        user = self.get_user(username)
+        return bool(user and user["role"] == "admin")

@@ -1,5 +1,7 @@
 # Security Remediation Checklist
 
+> Authentication update: current credentials and roles are stored in SQLite for the fixed `admin` and `operator` accounts. Older YAML-credential references below are retained as remediation history, not current operating instructions.
+
 Date: 2026-06-06
 
 Source report: `security_best_practices_report.md`

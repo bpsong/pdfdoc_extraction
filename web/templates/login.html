@@ -58,8 +58,11 @@
                     <form action="/auth/login" method="post" class="login-form">
                         <label class="form-control">
                             <span class="label-text">Username</span>
-                            <input id="username" name="username" class="input input-bordered w-full" type="text"
-                                required autocomplete="username" autofocus />
+                            <select id="username" name="username" class="select select-bordered w-full"
+                                required autocomplete="username" autofocus>
+                                <option value="admin">admin</option>
+                                <option value="operator">operator</option>
+                            </select>
                         </label>
                         <label class="form-control">
                             <span class="label-text">Password</span>

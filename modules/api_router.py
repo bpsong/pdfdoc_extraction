@@ -42,7 +42,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
-from .auth_utils import AuthUtils, AuthError, LoginRateLimitError
+from .auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from .config_manager import ConfigManager
 from .status_manager import StatusManager
 from .workflow_manager import WorkflowManager
@@ -50,7 +50,7 @@ from .file_processor import FileProcessor
 from . import utils as utils_mod
 from .db.connection import connect
 from .db.connection import json_loads
-from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
+from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository, UserRepository
 from .db.migrations import initialize_database
 from .services.admin_settings_service import (
     AdminAuditService,
@@ -70,6 +70,7 @@ from .services.review_service import ReviewService, ReviewServiceError
 from .services.runtime_settings_service import RuntimeSettingsService
 from .services.schema_service import SchemaService
 from .services.task_catalog_service import TaskCatalogService
+from .services.user_service import UserService, UserServiceError
 from .resume_manager import ResumeManager
 
 
@@ -279,16 +280,9 @@ def is_admin_user(username: str, config: Any) -> bool:
     """Return whether a user can access admin APIs."""
     if not bool(config.get("ui.admin_enabled", True)):
         return False
-    if not bool(config.get("auth.roles_enabled", True)):
-        return True
-
-    admin_users = set(_as_string_list(config.get("auth.default_admin_users", [])))
-    admin_users.update(_as_string_list(config.get("ui.default_admin_users", [])))
-    if admin_users:
-        return username in admin_users
-
-    configured_username = config.get("authentication.username")
-    return bool(configured_username and username == str(configured_username))
+    with connect(config) as conn:
+        record = UserRepository(conn).get(username)
+    return bool(record and record["role"] == "admin")
 
 
 def require_admin_user(user: str, config: Any) -> None:
@@ -779,6 +773,8 @@ def build_router() -> APIRouter:
             token = auth.login(username, password, client_id=_client_identifier(request))
             exp_minutes = auth.token_exp_minutes
             return TokenResponse(access_token=token, expires_in=exp_minutes * 60)
+        except AuthenticationSetupRequired as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
         except LoginRateLimitError:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -1028,6 +1024,37 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         return TaskCatalogService(config).catalog()
+
+    @router.get("/api/admin/users")
+    def get_admin_users(user: str = Depends(get_current_user)):
+        """Return the two fixed users without credential material."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return {"users": UserService(conn).list_users()}
+
+    @router.put("/api/admin/users/{target}/password")
+    async def change_admin_user_password(
+        target: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        """Allow an admin to change either fixed account password."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                changed = UserService(conn).change_password(
+                    actor=user,
+                    target=target,
+                    current_admin_password=str(payload.get("current_admin_password", "")),
+                    new_password=str(payload.get("new_password", "")),
+                    confirmation=str(payload.get("confirmation", "")),
+                )
+            return {"user": changed, "session_revoked": target == user}
+        except UserServiceError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     @router.get("/api/admin/summary")
     def get_admin_summary(user: str = Depends(get_current_user)):
