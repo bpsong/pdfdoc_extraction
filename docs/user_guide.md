@@ -70,7 +70,7 @@ Author: [Your Organization/Name]
 | 2.2     | 2025-08-01 | [Your Organization] | Added YAML configuration examples to all 4.7.x subsections for clarity      |
 | 2.3     | 2025-08-11 | [Your Organization] | Implemented and documented web interface for PDF upload and status monitoring|
 | 2.4     | 2025-08-20 | [Your Organization] | Added config-check administrator overview and cross-references to validation docs |
-| 2.5     | 2026-06-03 | [Your Organization] | Updated for unified `/app/*` operator/admin UI, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
+| 2.5     | 2026-06-03 | [Your Organization] | Updated for the unified operator and administrator interface, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
 | 2.6     | 2026-06-20 | [Your Organization] | Updated role guidance, UI-led operator procedures, account recovery, failure handling, split policy explanations, v2 task examples, upload limits, and recovery guidance |
 
 ---
@@ -122,7 +122,7 @@ Key features:
 - Centralized configuration and logging  
 - Watch-folder based ingestion and web interface for PDF upload
 - SQLite-backed workflow state for batches, documents, task runs, extraction results, review items, artifacts, settings, and audit history
-- Operator and administrator UI pages under `/app/*`
+- Role-based web interface for operators and administrators
 - Consistent alias-based output for CSV/JSON  
   *(Alias means a friendly name used for data fields in outputs, such as column headers.)*
 
@@ -140,11 +140,11 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
 - **SQLite State Services:** Record ingestion batches, documents, task runs, extracted fields, review queues, artifacts, settings, and audit events.
 - **Storage:** Writes extracted data to CSV/JSON and moves PDFs to their final destination.  
 - **Logging:** Centralized application log with rotation.  
-- **Web Interface:** Operator and administrator pages are available under `/app/*`; see sections 3.2 and 3.3 for user instructions.
+- **Web Interface:** Provides role-appropriate pages for operators and administrators; see sections 3.2 and 3.3 for user instructions.
 
 When document splitting is enabled, this guide uses two workflow terms:
 
-- **Fan-out:** one source PDF is divided into child PDFs. Each child runs the remaining configured processing steps independently.
+- **Fan-out:** one source PDF is divided into child PDFs. The system then processes each child separately, so one child may finish while another is still processing or waiting for review.
 - **Fan-in:** whenever a child reaches a new state, the application recalculates the overall status of the source document and its batch. Fan-in is automatic status aggregation; it is not a task that an operator starts.
 
 ### Data Flow Diagram
@@ -174,7 +174,7 @@ When document splitting is enabled, this guide uses two workflow terms:
       Split -->|Parent/Child State| SQLite
       ReviewQueue -->|Drafts, Diffs, Decisions| SQLite
       FanIn -->|Batch/Parent Status| SQLite
-      SQLite -->|Batches, Documents, Reviews| AppUI[Unified /app UI]
+      SQLite -->|Batches, Documents, Reviews| AppUI[Unified Web Interface]
 ```
 
 ### What happens to your document?
@@ -334,7 +334,9 @@ Administrators should use the unified schema editor to maintain review schemas. 
 
 #### Split Results
 
-When split processing is enabled, one uploaded PDF may create several child documents. From **Processing Overview**, open the batch and select its split results to see:
+When split processing is enabled, one uploaded PDF may create several child documents. The system processes each child separately after the split. One child may finish while another is still processing or waiting in **Review Queue**. Finishing the split does not mean that all child documents have finished; the original PDF is complete only after every child has reached a final status.
+
+To check progress, select **Processing Overview** from the left navigation menu, open the batch, and select its split results. This page shows:
 
 - source document status
 - child document IDs
@@ -483,7 +485,7 @@ web:
   cors_allowed_origins: []
 ```
 
-This disables cross-origin browser access by default while preserving the normal `/app/*` user experience. Only add values when a separate trusted frontend is hosted on another origin, such as a different domain, scheme, or port:
+This disables cross-origin browser access by default while preserving normal use of the built-in web interface. Only add values when a separate trusted frontend is hosted on another origin, such as a different domain, scheme, or port:
 
 ```yaml
 web:
@@ -1531,28 +1533,28 @@ A: The system validates the required LlamaCloud `api_key` before processing. If 
 
 Normal users should navigate with the left menu. The paths below are provided for administrators, support staff, bookmarks, and troubleshooting.
 
-| Interface area | Path | Access |
-|----------------|------|--------|
-| Upload & Process | `/app/upload` | Operator and administrator |
-| Processing Overview | `/app/processing` | Operator and administrator |
-| Batch details | `/app/batches/{batch_id}` | Operator and administrator |
-| Split results | `/app/batches/{batch_id}/split-results` | Operator and administrator |
-| Extraction results | `/app/documents/{document_id}/extraction` | Operator and administrator |
-| Review Queue | `/app/review` | Operator and administrator |
-| Review item | `/app/review/{review_item_id}` | Operator and administrator |
-| Failures | `/app/failures` | Operator and administrator |
-| Reports | `/app/reports` | Operator and administrator |
-| Settings | `/app/settings` | Operator and administrator |
-| Admin Home | `/app/admin` | Administrator only |
-| Users | `/app/admin/users` | Administrator only |
-| Schemas | `/app/schemas` | Administrator only |
-| Validation | `/app/settings/validation` | Administrator only |
-| Pipeline | `/app/admin/pipeline` | Administrator only |
-| Tasks | `/app/admin/tasks` | Administrator only |
-| Review Gate | `/app/admin/review-gate` | Administrator only |
-| Split Settings | `/app/admin/split` | Administrator only |
-| Audit | `/app/admin/audit` | Administrator only |
-| Review Simulator | `/app/admin/dry-run` | Administrator only |
+| Interface area | Path | Access | How to navigate to this area |
+|----------------|------|--------|------------------------------|
+| Upload & Process | `/app/upload` | Operator and administrator | Select **Upload & Process** from the left navigation menu. |
+| Processing Overview | `/app/processing` | Operator and administrator | Start an upload from **Upload & Process**; its processing page opens automatically. To view other processing activity, select **Reports**, then **Processing**. |
+| Batch details | `/app/batches/{batch_id}` | Operator and administrator | Select **Reports**, choose a batch under **Recent Batches**, then select **Processing** in the batch details window. |
+| Split results | `/app/batches/{batch_id}/split-results` | Operator and administrator | Open the batch's **Processing Overview**, then select **View Split Results**. |
+| Extraction results | `/app/documents/{document_id}/extraction` | Operator and administrator | Open **Processing Overview** and select **Extraction** beside the document. For a split PDF, open **Split Results** and select **Extraction** beside a child document. |
+| Review Queue | `/app/review` | Operator and administrator | Select **Review Queue** from the left navigation menu. |
+| Review item | `/app/review/{review_item_id}` | Operator and administrator | Select **Review Queue**, find the document, then select **Claim** or **View**. |
+| Failures | `/app/failures` | Operator and administrator | Select **Failures** from the left navigation menu. |
+| Reports | `/app/reports` | Operator and administrator | Select **Reports** from the left navigation menu. |
+| Settings | `/app/settings` | Operator and administrator | Select **Settings** from the left navigation menu. |
+| Admin Home | `/app/admin` | Administrator only | Sign in as the administrator, then select **Admin Home** from the left navigation menu. |
+| Users | `/app/admin/users` | Administrator only | Sign in as the administrator, then select **Users** from the left navigation menu. |
+| Schemas | `/app/schemas` | Administrator only | Sign in as the administrator, then select **Schemas** from the left navigation menu. |
+| Validation | `/app/settings/validation` | Administrator only | Sign in as the administrator, then select **Validation** from the left navigation menu. |
+| Pipeline | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, then select **Pipeline** from the left navigation menu. |
+| Tasks | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Tasks** from the left navigation menu. |
+| Review Gate | `/app/admin/review-gate` | Administrator only | Sign in as the administrator, then select **Review Gate** from the left navigation menu. |
+| Split Settings | `/app/admin/split` | Administrator only | Sign in as the administrator, then select **Split Settings** from the left navigation menu. |
+| Audit | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit** from the left navigation menu. |
+| Review Simulator | `/app/admin/dry-run` | Administrator only | Sign in as the administrator, then select **Review Simulator** from the left navigation menu. |
 
 The retired `/dashboard` and `/upload` pages redirect to the current application. The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface.
 
