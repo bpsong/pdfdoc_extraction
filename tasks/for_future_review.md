@@ -73,3 +73,17 @@ For future consideration:
 - If staying with the native iframe viewer, reintroduce fit controls using `#view=FitH` and `#view=Fit`, then verify behavior in Chrome, Edge, and Firefox.
 - If moving to PDF.js, implement controlled fit modes with PDF.js scale values such as `page-width` and `page-fit`.
 - Add visual or browser-level tests that verify actual rendered page scale, not only the iframe URL fragment.
+
+## Config Checker Schema-Key Follow-Up
+
+The config checker currently reports the top-level `schema` key as unknown even
+though the application uses `schema.directories` to constrain schema-file
+resolution. This produces a non-blocking warning for otherwise valid runtime
+configurations such as `config_split_invoice.yaml`.
+
+For future consideration:
+
+- Decide whether `schema.directories` is part of the supported configuration contract.
+- If supported, add the top-level `schema` section and `directories` field to the config-check schema.
+- Validate that each entry is a non-empty path and retain runtime containment checks in `SchemaService`.
+- Add config-check tests for valid directories, invalid value types, and unknown nested keys.

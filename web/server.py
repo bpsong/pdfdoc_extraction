@@ -128,16 +128,21 @@ def create_app() -> FastAPI:
         """Add baseline browser hardening headers to every response."""
 
         response = await call_next(request)
+        is_pdf = response.headers.get("content-type", "").lower().startswith(
+            "application/pdf"
+        )
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN" if is_pdf else "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
         )
+        frame_ancestors = "'self'" if is_pdf else "'none'"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; base-uri 'self'; form-action 'self'; "
-            "frame-ancestors 'none'; frame-src 'self'; img-src 'self' data:; "
-            "object-src 'none'; script-src 'self'; style-src 'self'"
+            f"frame-ancestors {frame_ancestors}; frame-src 'self'; "
+            "img-src 'self' data:; object-src 'none'; script-src 'self'; "
+            "style-src 'self'"
         )
         return response
 

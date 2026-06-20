@@ -6,7 +6,7 @@ test/third_party/test_config.yaml
 *.yaml
 
 # Log files
-app.log
+*.log
 
 # Runtime databases and local state
 *.sqlite

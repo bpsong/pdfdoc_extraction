@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import Response
 from fastapi.testclient import TestClient
 
 import web.server as web_server
@@ -116,6 +117,21 @@ def test_security_headers_are_added(monkeypatch) -> None:
     assert "cdn.tailwindcss.com" not in response.text
     assert "cdn.jsdelivr.net" not in response.text
     assert "/static/css/vendor.css" in response.text
+
+
+def test_pdf_security_headers_allow_same_origin_preview(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+    client.app.add_api_route(
+        "/test-preview.pdf",
+        lambda: Response(content=b"%PDF-1.4\n", media_type="application/pdf"),
+    )
+
+    response = client.get("/test-preview.pdf")
+
+    assert response.status_code == 200
+    assert response.headers["x-frame-options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in response.headers["content-security-policy"]
+    assert "frame-ancestors 'none'" not in response.headers["content-security-policy"]
 
 
 def test_unknown_host_is_rejected(monkeypatch) -> None:
