@@ -76,16 +76,25 @@ TASK_PARAMETERS: dict[str, set[str]] = {
     },
     "ArchivePdfTask": {"archive_dir"},
     "AssignNanoidTask": {"length"},
-    "CleanupTask": {"processing_dir"},
 }
+
+RUNTIME_MANAGED_TASKS = {"CleanupTask"}
 
 
 def test_every_builtin_task_has_a_palette_definition() -> None:
-    """Ensure all production built-ins can be added from the task palette."""
+    """Ensure every user-configurable built-in can be added from the palette."""
     source = EDITOR_SOURCE.read_text(encoding="utf-8")
 
     for class_name in TASK_PARAMETERS:
         assert f'class: "{class_name}"' in source, class_name
+
+
+def test_runtime_managed_tasks_are_not_exposed_in_the_palette() -> None:
+    """Keep automatic lifecycle tasks out of the user-authored pipeline UI."""
+    source = EDITOR_SOURCE.read_text(encoding="utf-8")
+
+    for class_name in RUNTIME_MANAGED_TASKS:
+        assert f'class: "{class_name}"' not in source, class_name
 
 
 def test_every_supported_parameter_has_editor_coverage() -> None:
@@ -111,4 +120,3 @@ def test_reference_comparison_preserves_three_state_behavior() -> None:
 
     for label in ("Auto-detect", "Text comparison", "Numeric comparison"):
         assert label in source
-

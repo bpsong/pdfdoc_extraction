@@ -20,8 +20,8 @@
 4. `04-extraction-controls.png` — Phase 4. Advanced provider settings are
    disclosed progressively. The initial multiline guidance treatment was too
    tall; it was replaced with a compact field before this screenshot.
-5. `05-cleanup-controls.png` — Phase 5. Cleanup is addable from the palette and
-   clearly warns that it removes a working file before asking for its directory.
+5. Phase 5 confirmed Cleanup is runtime-managed and therefore intentionally
+   absent from the task palette and ordered pipeline.
 6. Reference matching was exercised through the live DOM. Both existing clauses
    exposed Auto/Text/Numeric choices. The OS fallback twice focused an unrelated
    Chrome window, so those captures were rejected and removed.
@@ -32,7 +32,7 @@
   settings use disclosure sections.
 - Review threshold precedence is stated next to the controls.
 - Runtime split enablement is clearly separate from pipeline inclusion.
-- Destructive cleanup behavior is explained before configuration.
+- Runtime-managed cleanup does not add lifecycle complexity to the authored pipeline.
 - Native selects, inputs, checkboxes, and details elements preserve familiar
   keyboard behavior.
 
@@ -47,7 +47,7 @@
 
 ## Verification
 
-- Browser DOM checks covered Review, Split, Extraction, Cleanup, and Reference
+- Browser DOM checks covered Review, Split, Extraction, and Reference
   controls.
 - Computed layout checks reported no page-level horizontal overflow.
 - Frontend production build passed.

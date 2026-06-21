@@ -213,16 +213,6 @@ const taskTemplates = [
     },
   },
   {
-    key: "cleanup_task",
-    label: "Clean up processed file",
-    category: "Housekeeping",
-    icon: Trash2,
-    module: "standard_step.housekeeping.cleanup_task",
-    class: "CleanupTask",
-    on_error: "continue",
-    params: { processing_dir: "processing" },
-  },
-  {
     key: "archive_pdf",
     label: "Archive source",
     category: "Archive",
@@ -251,7 +241,6 @@ function taskKind(step) {
   if (moduleName.includes(".archiver.")) return "archive";
   if (moduleName.includes(".rules.")) return "rules";
   if (moduleName.includes(".context.")) return "context";
-  if (step?.class === "CleanupTask" || moduleName.includes(".housekeeping.")) return "housekeeping";
   return "task";
 }
 
@@ -268,7 +257,6 @@ function kindBadgeClass(kind) {
     archive: "badge-neutral",
     rules: "badge-secondary",
     context: "badge-accent",
-    housekeeping: "badge-ghost",
     task: "badge-ghost",
   }[kind];
 }
@@ -435,7 +423,6 @@ function validateSteps(steps, csvMetadata = {}) {
     if (kind === "storage") validateStorage(step, scalarTokenSet, findings);
     if (kind === "rules") validateRules(step, fields, csvMetadata[params.reference_file], findings);
     if (kind === "context") validateContext(step, findings);
-    if (kind === "housekeeping") validateHousekeeping(step, findings);
     if (kind === "split") validateSplit(step, findings);
     if (kind === "archive" && !params.archive_dir) {
       findings.push(finding("error", "archive-dir-empty", `tasks.${step.key}.params.archive_dir`, `${step.label} needs an archive directory.`));
@@ -548,13 +535,6 @@ function validateContext(step, findings) {
   const length = step.params.length;
   if (!Number.isInteger(length) || length < 5 || length > 21) {
     findings.push(finding("error", "context-length-range", `tasks.${step.key}.params.length`, "Nanoid length must be an integer from 5 to 21."));
-  }
-}
-
-function validateHousekeeping(step, findings) {
-  const value = step.params?.processing_dir;
-  if (value !== undefined && (typeof value !== "string" || !value.trim())) {
-    findings.push(finding("error", "housekeeping-processing-dir", `tasks.${step.key}.params.processing_dir`, "Processing directory must be non-empty text."));
   }
 }
 
@@ -1223,7 +1203,6 @@ function StepProperties({ step, index, steps, updateStep, updateParams, replaceP
         {kind === "archive" ? <ArchiveControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "rules" ? <RulesControls step={step} index={index} updateParams={updateParams} steps={steps} csvMetadata={csvMetadata} setCsvMetadata={setCsvMetadata} findings={findings} /> : null}
         {kind === "context" ? <ContextControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
-        {kind === "housekeeping" ? <HousekeepingControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "task" ? <div className="text-sm text-base-content/60">Use advanced params for this task.</div> : null}
       </div>
       <AdvancedParamsEditor step={step} index={index} replaceParams={replaceParams} />
@@ -1910,19 +1889,6 @@ function ContextControls({ step, index, updateParams, findings }) {
       <NumberControl label="Nanoid length" value={step.params.length ?? 12} min={5} max={21} step={1} onChange={(value) => updateParams(index, { length: value })} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.length`} />
     </>
-  );
-}
-
-function HousekeepingControls({ step, index, updateParams, findings }) {
-  return (
-    <div className="space-y-3">
-      <div className="flex gap-2 rounded-lg border border-warning/25 bg-warning/10 p-3 text-sm">
-        <AlertTriangle className="mt-0.5 shrink-0 text-warning" size={16} />
-        <p>This task removes the processed working file after downstream work is complete.</p>
-      </div>
-      <DirectoryControl label="Processing directory" value={step.params.processing_dir || "processing"} onChange={(value) => updateParams(index, { processing_dir: value })} startPath="processing" />
-      <InlineFindings findings={findings} path={`tasks.${step.key}.params.processing_dir`} />
-    </div>
   );
 }
 
