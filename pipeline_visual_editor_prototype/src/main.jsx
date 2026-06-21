@@ -97,10 +97,16 @@ const taskTemplates = [
     params: {
       enabled: true,
       api_key: "",
+      configuration_id: "",
+      project_id: "",
+      organization_id: "",
       allow_uncategorized: "forbid",
       split_dir: "processing/split",
       fail_on_confidence_levels: ["low"],
       fail_on_unknown_category: true,
+      allowed_categories: [],
+      poll_interval_seconds: 1,
+      timeout_seconds: 7200,
       categories: [{ name: "invoice", description: "A single invoice document." }],
     },
   },
@@ -116,8 +122,14 @@ const taskTemplates = [
       api_key: "",
       configuration_id: "",
       tier: "agentic",
+      parse_tier: "",
       extraction_target: "per_doc",
+      cite_sources: null,
       confidence_scores: true,
+      project_id: "",
+      organization_id: "",
+      poll_interval_seconds: 2,
+      timeout_seconds: 1800,
       fields: {},
     },
   },
@@ -187,13 +199,28 @@ const taskTemplates = [
     on_error: "stop",
     params: {
       confidence_threshold: 0.95,
+      per_document_type_thresholds: {},
+      field_threshold_overrides: {},
+      split_confidence_levels_requiring_review: [],
       require_review_when_missing_confidence: true,
       require_review_for_missing_required_fields: true,
+      always_review: false,
       schema_file: "schemas/invoice.yaml",
       queue_name: "default_review",
       review_scope: "low_confidence_fields",
+      allow_operator_to_edit_high_confidence_fields: true,
       resume_policy: "next_task",
     },
+  },
+  {
+    key: "cleanup_task",
+    label: "Clean up processed file",
+    category: "Housekeeping",
+    icon: Trash2,
+    module: "standard_step.housekeeping.cleanup_task",
+    class: "CleanupTask",
+    on_error: "continue",
+    params: { processing_dir: "processing" },
   },
   {
     key: "archive_pdf",
@@ -224,6 +251,7 @@ function taskKind(step) {
   if (moduleName.includes(".archiver.")) return "archive";
   if (moduleName.includes(".rules.")) return "rules";
   if (moduleName.includes(".context.")) return "context";
+  if (step?.class === "CleanupTask" || moduleName.includes(".housekeeping.")) return "housekeeping";
   return "task";
 }
 
@@ -240,6 +268,7 @@ function kindBadgeClass(kind) {
     archive: "badge-neutral",
     rules: "badge-secondary",
     context: "badge-accent",
+    housekeeping: "badge-ghost",
     task: "badge-ghost",
   }[kind];
 }
@@ -390,6 +419,7 @@ function validateSteps(steps, csvMetadata = {}) {
     keys.add(step.key);
     if (!step.module?.trim()) findings.push(finding("error", "task-module-empty", `tasks.${step.key}.module`, `${step.key} needs a module.`));
     if (!step.class?.trim()) findings.push(finding("error", "task-class-empty", `tasks.${step.key}.class`, `${step.key} needs a class.`));
+    if (!["stop", "continue"].includes(step.on_error)) findings.push(finding("error", "task-on-error-invalid", `tasks.${step.key}.on_error`, `${step.key} must stop or continue after an error.`));
     if (!isPlainObject(step.params)) findings.push(finding("error", "task-params-invalid", `tasks.${step.key}.params`, `${step.key} params must be an object.`));
   });
 
@@ -405,16 +435,12 @@ function validateSteps(steps, csvMetadata = {}) {
     if (kind === "storage") validateStorage(step, scalarTokenSet, findings);
     if (kind === "rules") validateRules(step, fields, csvMetadata[params.reference_file], findings);
     if (kind === "context") validateContext(step, findings);
+    if (kind === "housekeeping") validateHousekeeping(step, findings);
     if (kind === "split") validateSplit(step, findings);
     if (kind === "archive" && !params.archive_dir) {
       findings.push(finding("error", "archive-dir-empty", `tasks.${step.key}.params.archive_dir`, `${step.label} needs an archive directory.`));
     }
-    if (kind === "review") {
-      if (!params.schema_file) findings.push(finding("error", "review-schema-empty", `tasks.${step.key}.params.schema_file`, "Review gate needs a schema file."));
-      if (Number(params.confidence_threshold) < 0 || Number(params.confidence_threshold) > 1) {
-        findings.push(finding("error", "review-threshold-range", `tasks.${step.key}.params.confidence_threshold`, "Confidence threshold must be between 0 and 1."));
-      }
-    }
+    if (kind === "review") validateReview(step, findings);
   });
 
   if (!findings.some((item) => item.severity === "error")) {
@@ -424,7 +450,18 @@ function validateSteps(steps, csvMetadata = {}) {
 }
 
 function validateExtract(step, findings) {
-  const fields = isPlainObject(step.params.fields) ? step.params.fields : {};
+  const params = step.params || {};
+  const fields = isPlainObject(params.fields) ? params.fields : {};
+  if (typeof params.api_key !== "string" || !params.api_key.trim()) findings.push(finding("error", "extract-api-key-empty", `tasks.${step.key}.params.api_key`, "Extraction needs an API key."));
+  for (const key of ["configuration_id", "tier", "parse_tier", "extraction_target", "project_id", "organization_id"]) {
+    if (params[key] !== undefined && (typeof params[key] !== "string" || !params[key].trim())) findings.push(finding("error", `extract-${key}-type`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be non-empty text when provided.`));
+  }
+  for (const key of ["cite_sources", "confidence_scores"]) {
+    if (params[key] !== undefined && typeof params[key] !== "boolean") findings.push(finding("error", `extract-${key}-type`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be Yes or No.`));
+  }
+  for (const key of ["poll_interval_seconds", "timeout_seconds"]) {
+    if (params[key] !== undefined && (typeof params[key] !== "number" || params[key] <= 0)) findings.push(finding("error", `extract-${key}-range`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be a positive number.`));
+  }
   if (!Object.keys(fields).length) {
     findings.push(finding("error", "extract-fields-empty", `tasks.${step.key}.params.fields`, "Extraction task must define at least one field."));
   }
@@ -440,6 +477,7 @@ function validateExtract(step, findings) {
       return;
     }
     if (!field.alias?.trim()) findings.push(finding("error", "extract-field-alias-empty", `${path}.alias`, `Field '${fieldKey}' needs an alias.`));
+    if (field.description !== undefined && typeof field.description !== "string") findings.push(finding("error", "extract-field-description-type", `${path}.description`, `Field '${fieldKey}' guidance must be text.`));
     if (!isSupportedFieldType(field.type, { table: Boolean(field.is_table) })) findings.push(finding("error", "extract-field-type-invalid", `${path}.type`, `Field '${fieldKey}' must use a supported type.`));
     if (field.is_table) {
       if (unwrapOptionalType(field.type) !== TABLE_FIELD_TYPE) findings.push(finding("error", "extract-table-type", `${path}.type`, "Table fields must use the table row type."));
@@ -450,6 +488,7 @@ function validateExtract(step, findings) {
           if (!isPlainObject(itemField) || !isSupportedRowFieldType(itemField.type)) {
             findings.push(finding("error", "extract-item-field-type-invalid", `${path}.item_fields.${itemKey}.type`, `Column '${itemKey}' must use Text, Integer, Number, or Yes / No.`));
           }
+          if (isPlainObject(itemField) && itemField.description !== undefined && typeof itemField.description !== "string") findings.push(finding("error", "extract-item-description-type", `${path}.item_fields.${itemKey}.description`, `Column '${itemKey}' guidance must be text.`));
         });
       }
     }
@@ -459,11 +498,15 @@ function validateExtract(step, findings) {
 function validateStorage(step, scalarTokenSet, findings) {
   const params = step.params || {};
   const dirParam = step.class === "StoreFileToLocaldrive" ? "files_dir" : "data_dir";
-  if (!params[dirParam]) findings.push(finding("error", "storage-dir-empty", `tasks.${step.key}.params.${dirParam}`, `${step.label} needs an output directory.`));
-  if (!params.filename) {
+  const nestedStorage = step.class === "StoreMetadataAsCsv" && isPlainObject(params.storage) ? params.storage : null;
+  const directory = nestedStorage?.[dirParam] ?? params[dirParam];
+  const filename = nestedStorage?.filename ?? params.filename;
+  const basePath = nestedStorage ? `tasks.${step.key}.params.storage` : `tasks.${step.key}.params`;
+  if (!directory) findings.push(finding("error", "storage-dir-empty", `${basePath}.${dirParam}`, `${step.label} needs an output directory.`));
+  if (!filename) {
     findings.push(finding("error", "storage-filename-empty", `tasks.${step.key}.params.filename`, `${step.label} needs a filename template.`));
   }
-  extractTemplateTokens(params.filename).forEach((token) => {
+  extractTemplateTokens(filename).forEach((token) => {
     if (!scalarTokenSet.has(token)) {
       findings.push(finding("error", "storage-token-invalid", `tasks.${step.key}.params.filename`, `Filename token {${token}} is not a scalar extraction/context token.`));
     }
@@ -475,6 +518,9 @@ function validateRules(step, fields, csvInfo, findings) {
   const columns = csvInfo?.columns || [];
   if (!params.reference_file) findings.push(finding("error", "rules-reference-empty", `tasks.${step.key}.params.reference_file`, "Rules task needs a reference CSV file."));
   if (!params.update_field) findings.push(finding("error", "rules-update-field-empty", `tasks.${step.key}.params.update_field`, "Rules task needs an update field."));
+  if (params.write_value !== undefined && typeof params.write_value !== "string") findings.push(finding("error", "rules-write-value-type", `tasks.${step.key}.params.write_value`, "Write value must be text."));
+  if (params.backup !== undefined && typeof params.backup !== "boolean") findings.push(finding("error", "rules-backup-type", `tasks.${step.key}.params.backup`, "Backup must be Yes or No."));
+  if (params.task_slug !== undefined && (typeof params.task_slug !== "string" || !params.task_slug.trim())) findings.push(finding("error", "rules-task-slug-type", `tasks.${step.key}.params.task_slug`, "Task status key must be non-empty text."));
   if (columns.length && params.update_field && !columns.includes(params.update_field)) {
     findings.push(finding("error", "rules-update-field-missing", `tasks.${step.key}.params.update_field`, "Update field is not present in the selected CSV."));
   }
@@ -494,6 +540,7 @@ function validateRules(step, fields, csvInfo, findings) {
     if (clause.from_context && !contextTokens.has(clause.from_context)) {
       findings.push(finding("error", "rules-clause-context-invalid", `${path}.from_context`, `Context field '${clause.from_context}' is not available.`));
     }
+    if (clause.number !== undefined && typeof clause.number !== "boolean") findings.push(finding("error", "rules-clause-number-type", `${path}.number`, "Comparison type must be Auto, Text, or Numeric."));
   });
 }
 
@@ -504,15 +551,71 @@ function validateContext(step, findings) {
   }
 }
 
+function validateHousekeeping(step, findings) {
+  const value = step.params?.processing_dir;
+  if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+    findings.push(finding("error", "housekeeping-processing-dir", `tasks.${step.key}.params.processing_dir`, "Processing directory must be non-empty text."));
+  }
+}
+
 function validateSplit(step, findings) {
   const params = step.params || {};
   if (!params.split_dir) findings.push(finding("error", "split-dir-empty", `tasks.${step.key}.params.split_dir`, "Split task needs an output directory."));
+  if (params.enabled !== undefined && typeof params.enabled !== "boolean") findings.push(finding("error", "split-enabled-type", `tasks.${step.key}.params.enabled`, "Enable document splitting must be Yes or No."));
+  if (params.enabled && !params.api_key && !params.adapter) findings.push(finding("error", "split-api-key-empty", `tasks.${step.key}.params.api_key`, "Enabled splitting needs an API key."));
+  if (params.enabled && !params.configuration_id && (!Array.isArray(params.categories) || !params.categories.length)) findings.push(finding("error", "split-configuration-empty", `tasks.${step.key}.params.categories`, "Enabled splitting needs a configuration ID or at least one category."));
+  if (params.allow_uncategorized !== undefined && !["include", "forbid", "omit"].includes(params.allow_uncategorized)) findings.push(finding("error", "split-uncategorized-policy", `tasks.${step.key}.params.allow_uncategorized`, "Uncategorized policy must keep, stop, or skip pages."));
+  if (params.categories !== undefined && (!Array.isArray(params.categories) || params.categories.some((category) => !isPlainObject(category) || !String(category.name || "").trim()))) findings.push(finding("error", "split-categories-invalid", `tasks.${step.key}.params.categories`, "Every split category needs a name."));
+  if (params.allowed_categories !== undefined && (!Array.isArray(params.allowed_categories) || params.allowed_categories.some((category) => typeof category !== "string" || !category.trim()))) findings.push(finding("error", "split-allowed-categories-invalid", `tasks.${step.key}.params.allowed_categories`, "Allowed categories must be non-empty names."));
+  for (const key of ["configuration_id", "project_id", "organization_id"]) {
+    if (params[key] !== undefined && (typeof params[key] !== "string" || !params[key].trim())) findings.push(finding("error", `split-${key}-type`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be non-empty text when provided.`));
+  }
+  for (const key of ["poll_interval_seconds", "timeout_seconds"]) {
+    if (params[key] !== undefined && (typeof params[key] !== "number" || params[key] <= 0)) findings.push(finding("error", `split-${key}-range`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be a positive number.`));
+  }
   const levels = params.fail_on_confidence_levels;
   if (levels !== undefined) {
     const allowed = new Set(["high", "medium", "low"]);
     if (!Array.isArray(levels) || levels.some((level) => !allowed.has(level))) {
       findings.push(finding("error", "split-confidence-level-invalid", `tasks.${step.key}.params.fail_on_confidence_levels`, "Split confidence levels must be high, medium, or low."));
     }
+  }
+}
+
+function validateThresholdMap(value, path, label, findings) {
+  if (value === undefined) return;
+  if (!isPlainObject(value)) {
+    findings.push(finding("error", "review-threshold-map", path, `${label} must be a key-to-threshold mapping.`));
+    return;
+  }
+  Object.entries(value).forEach(([key, threshold]) => {
+    if (!key.trim()) findings.push(finding("error", "review-threshold-key", path, `${label} cannot contain an empty key.`));
+    if (typeof threshold !== "number" || threshold < 0 || threshold > 1) {
+      findings.push(finding("error", "review-threshold-range", `${path}.${key}`, `${label} values must be between 0 and 1.`));
+    }
+  });
+}
+
+function validateReview(step, findings) {
+  const params = step.params || {};
+  if (typeof params.confidence_threshold !== "number" || params.confidence_threshold < 0 || params.confidence_threshold > 1) {
+    findings.push(finding("error", "review-threshold-range", `tasks.${step.key}.params.confidence_threshold`, "Confidence threshold must be between 0 and 1."));
+  }
+  validateThresholdMap(params.per_document_type_thresholds, `tasks.${step.key}.params.per_document_type_thresholds`, "Document thresholds", findings);
+  validateThresholdMap(params.field_threshold_overrides, `tasks.${step.key}.params.field_threshold_overrides`, "Field thresholds", findings);
+  const levels = params.split_confidence_levels_requiring_review;
+  if (levels !== undefined && (!Array.isArray(levels) || levels.some((level) => !["high", "medium", "low"].includes(level)))) {
+    findings.push(finding("error", "review-split-confidence-level", `tasks.${step.key}.params.split_confidence_levels_requiring_review`, "Review confidence levels must be high, medium, or low."));
+  }
+  if (params.resume_policy !== undefined && params.resume_policy !== "next_task") {
+    findings.push(finding("error", "review-resume-policy", `tasks.${step.key}.params.resume_policy`, "Production currently supports only Continue to next task."));
+  }
+  if (params.review_scope !== undefined && !["document", "low_confidence_fields", "schema_errors", "split_result"].includes(params.review_scope)) findings.push(finding("error", "review-scope", `tasks.${step.key}.params.review_scope`, "Review scope is not supported by production."));
+  for (const key of ["require_review_when_missing_confidence", "require_review_for_missing_required_fields", "always_review", "allow_operator_to_edit_high_confidence_fields"]) {
+    if (params[key] !== undefined && typeof params[key] !== "boolean") findings.push(finding("error", `review-${key}-type`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be Yes or No.`));
+  }
+  for (const key of ["schema_file", "queue_name"]) {
+    if (params[key] !== undefined && params[key] !== null && typeof params[key] !== "string") findings.push(finding("error", `review-${key}-type`, `tasks.${step.key}.params.${key}`, `${key.replace(/_/g, " ")} must be text.`));
   }
 }
 
@@ -1115,11 +1218,12 @@ function StepProperties({ step, index, steps, updateStep, updateParams, replaceP
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Task-specific controls</div>
         {kind === "split" ? <SplitControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "extract" ? <ExtractControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
-        {kind === "storage" ? <StorageControls step={step} index={index} updateParams={updateParams} availableTokens={availableTokens} findings={findings} /> : null}
-        {kind === "review" ? <ReviewControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
+        {kind === "storage" ? <StorageControls step={step} index={index} updateParams={updateParams} availableTokens={availableTokens} findings={findings} pipelineFields={extractionFields(steps)} /> : null}
+        {kind === "review" ? <ReviewControls step={step} index={index} updateParams={updateParams} findings={findings} steps={steps} /> : null}
         {kind === "archive" ? <ArchiveControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "rules" ? <RulesControls step={step} index={index} updateParams={updateParams} steps={steps} csvMetadata={csvMetadata} setCsvMetadata={setCsvMetadata} findings={findings} /> : null}
         {kind === "context" ? <ContextControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
+        {kind === "housekeeping" ? <HousekeepingControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "task" ? <div className="text-sm text-base-content/60">Use advanced params for this task.</div> : null}
       </div>
       <AdvancedParamsEditor step={step} index={index} replaceParams={replaceParams} />
@@ -1147,7 +1251,7 @@ function StepProperties({ step, index, steps, updateStep, updateParams, replaceP
 
 function SplitControls({ step, index, updateParams, findings }) {
   const params = step.params || {};
-  const category = params.categories?.[0] || { name: "", description: "" };
+  const categories = Array.isArray(params.categories) ? params.categories : [];
   const levels = Array.isArray(params.fail_on_confidence_levels) ? params.fail_on_confidence_levels : [];
   const uncategorizedPolicy = params.allow_uncategorized || "include";
   const uncategorizedHints = {
@@ -1159,9 +1263,24 @@ function SplitControls({ step, index, updateParams, findings }) {
     const next = levels.includes(level) ? levels.filter((item) => item !== level) : [...levels, level];
     updateParams(index, { fail_on_confidence_levels: next });
   }
+  function updateCategory(categoryIndex, patch) {
+    updateParams(index, { categories: categories.map((category, currentIndex) => currentIndex === categoryIndex ? { ...category, ...patch } : category) });
+  }
+  function addCategory() {
+    updateParams(index, { categories: [...categories, { name: `category_${categories.length + 1}`, description: "" }] });
+  }
+  function removeCategory(categoryIndex) {
+    updateParams(index, { categories: categories.filter((_, currentIndex) => currentIndex !== categoryIndex) });
+  }
   return (
     <div className="space-y-3">
+      <BooleanSetting checked={params.enabled ?? false} label="Enable document splitting" hint="This runtime switch is separate from including the task in the pipeline." onChange={(value) => updateParams(index, { enabled: value })} />
       <SecretControl label="API key" value={params.api_key || ""} onChange={(value) => updateParams(index, { api_key: value })} />
+      <TextControl label="LlamaCloud configuration ID (optional)" value={params.configuration_id || ""} onChange={(value) => updateParams(index, { configuration_id: value || undefined })} mono />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TextControl label="Project ID (optional)" value={params.project_id || ""} onChange={(value) => updateParams(index, { project_id: value || undefined })} mono />
+        <TextControl label="Organization ID (optional)" value={params.organization_id || ""} onChange={(value) => updateParams(index, { organization_id: value || undefined })} mono />
+      </div>
       <SelectControl
         label="When pages cannot be categorized"
         value={uncategorizedPolicy}
@@ -1195,16 +1314,33 @@ function SplitControls({ step, index, updateParams, findings }) {
         </span>
       </label>
       <div className="rounded-lg border border-base-300 bg-base-100 p-3">
-        <div className="text-sm font-semibold">Document category</div>
-        <p className="mt-1 text-xs text-base-content/55">The splitter uses this definition to classify each page group.</p>
-        <div className="mt-3 space-y-3">
-          <TextControl label="Category name" value={category.name} onChange={(value) => updateParams(index, { categories: [{ ...category, name: value }] })} />
-          <TextAreaControl label="What belongs in this category?" value={category.description} onChange={(value) => updateParams(index, { categories: [{ ...category, description: value }] })} />
-          <div className="rounded-md bg-base-200 px-3 py-2" aria-live="polite">
-            <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Classification target</div>
-            <div className="mt-1 text-sm"><span className="font-semibold">{category.name || "Unnamed category"}</span>{category.description ? ` — ${category.description}` : " — Add a description to guide classification."}</div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold">Document categories</div>
+            <p className="mt-1 text-xs text-base-content/55">Define every document type the splitter should recognize.</p>
           </div>
+          <button className="btn btn-outline btn-xs" type="button" onClick={addCategory}><Plus size={13} /> Add category</button>
         </div>
+        <div className="mt-3 space-y-3">
+          {categories.map((category, categoryIndex) => (
+            <div className="rounded-md border border-base-300 p-3" key={categoryIndex}>
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Category {categoryIndex + 1}</span>
+                <button className="btn btn-ghost btn-square btn-xs text-error" type="button" title={`Remove category ${categoryIndex + 1}`} onClick={() => removeCategory(categoryIndex)}><Trash2 size={13} /></button>
+              </div>
+              <div className="space-y-3">
+                <TextControl label="Category name" value={category?.name || ""} onChange={(value) => updateCategory(categoryIndex, { name: value })} />
+                <TextAreaControl label="What belongs in this category?" value={category?.description || ""} onChange={(value) => updateCategory(categoryIndex, { description: value })} />
+              </div>
+            </div>
+          ))}
+          {!categories.length ? <div className="empty-panel">No inline categories. Provide a configuration ID or add a category.</div> : null}
+        </div>
+      </div>
+      <TextControl label="Allowed category names (optional)" hint="Comma-separated allow-list. Leave blank to use the category names above." value={Array.isArray(params.allowed_categories) ? params.allowed_categories.join(", ") : ""} onChange={(value) => updateParams(index, { allowed_categories: value.split(",").map((item) => item.trim()).filter(Boolean) })} />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <NumberControl label="Polling interval (seconds)" value={params.poll_interval_seconds ?? 1} min={0.1} step={0.1} onChange={(value) => updateParams(index, { poll_interval_seconds: value })} />
+        <NumberControl label="Timeout (seconds)" value={params.timeout_seconds ?? 7200} min={1} step={1} onChange={(value) => updateParams(index, { timeout_seconds: value })} />
       </div>
     </div>
   );
@@ -1255,9 +1391,26 @@ function ExtractControls({ step, index, updateParams, findings }) {
         <SelectControl label="Target" value={step.params.extraction_target || "per_doc"} onChange={(value) => updateParams(index, { extraction_target: value })} options={["per_doc", "per_page", "per_table_row"]} />
       </div>
       <label className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2">
-        <input type="checkbox" className="toggle toggle-sm" checked={Boolean(step.params.confidence_scores)} onChange={(event) => updateParams(index, { confidence_scores: event.target.checked })} />
+        <input type="checkbox" className="toggle toggle-sm" checked={step.params.confidence_scores ?? true} onChange={(event) => updateParams(index, { confidence_scores: event.target.checked })} />
         <span className="text-sm">Request confidence scores</span>
       </label>
+      <details className="rounded-lg border border-base-300 bg-base-100">
+        <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">Advanced extraction settings</summary>
+        <div className="space-y-3 border-t border-base-300 p-3">
+          <TextControl label="Parse tier (optional)" value={step.params.parse_tier || ""} onChange={(value) => updateParams(index, { parse_tier: value || undefined })} />
+          <SelectControl label="Source citations" hint="Use provider default unless this pipeline needs an explicit setting." value={step.params.cite_sources === true ? "true" : step.params.cite_sources === false ? "false" : "default"} onChange={(value) => updateParams(index, { cite_sources: value === "default" ? undefined : value === "true" })} options={[
+            { value: "default", label: "Use provider default" },
+            { value: "true", label: "Request citations" },
+            { value: "false", label: "Do not request citations" },
+          ]} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TextControl label="Project ID (optional)" value={step.params.project_id || ""} onChange={(value) => updateParams(index, { project_id: value || undefined })} mono />
+            <TextControl label="Organization ID (optional)" value={step.params.organization_id || ""} onChange={(value) => updateParams(index, { organization_id: value || undefined })} mono />
+            <NumberControl label="Polling interval (seconds)" value={step.params.poll_interval_seconds ?? 2} min={0.1} step={0.1} onChange={(value) => updateParams(index, { poll_interval_seconds: value })} />
+            <NumberControl label="Timeout (seconds)" value={step.params.timeout_seconds ?? 1800} min={1} step={1} onChange={(value) => updateParams(index, { timeout_seconds: value })} />
+          </div>
+        </div>
+      </details>
       {tableFieldKeys.length > 1 ? <div className="alert alert-error text-xs">Only one table field is supported. Disable table mode on extra fields.</div> : null}
       <div className="rounded-lg border border-base-300 bg-base-100">
         <div className="flex items-center justify-between border-b border-base-300 px-3 py-2">
@@ -1317,6 +1470,9 @@ function FieldEditor({ fieldKey, config, tableFieldKeys, renameField, updateFiel
         </button>
       </div>
       <InlineFindings findings={findings} pathPrefix={`tasks.${stepKey}.params.fields.${fieldKey}`} />
+      <div className="mt-3">
+        <TextControl label="Extraction guidance (optional)" value={config.description || ""} onChange={(value) => updateField(fieldKey, { description: value || undefined })} />
+      </div>
       {tableBlocked ? <div className="mt-2 text-xs text-base-content/55">Only one List of objects field can be configured.</div> : null}
       {isTable ? (
         <div className="row-schema-summary">
@@ -1410,6 +1566,7 @@ function RowSchemaField({ row, updateRow, updateItem, removeItem }) {
         <span className="sr-only">Required</span>
       </label>
       <button className="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label={`Remove ${itemKey || "empty"}`} onClick={() => removeItem(row.id)}><Trash2 size={15} /></button>
+      <input className="input input-bordered input-sm col-span-full min-w-0" aria-label={`Extraction guidance for ${itemKey || "empty"}`} placeholder="Extraction guidance (optional)" value={itemConfig.description || ""} onChange={(event) => updateItem(row.id, { description: event.target.value || undefined })} />
     </div>
   );
 }
@@ -1439,15 +1596,65 @@ function sampleValueForType(type) {
   return "INV-1001";
 }
 
-function StorageControls({ step, index, updateParams, availableTokens, findings }) {
+function ObjectJsonControl({ label, hint, value, onChange }) {
+  const [text, setText] = useState(() => JSON.stringify(value || {}, null, 2));
+  const [error, setError] = useState("");
+  useEffect(() => setText(JSON.stringify(value || {}, null, 2)), [value]);
+  function apply() {
+    try {
+      const parsed = JSON.parse(text);
+      if (!isPlainObject(parsed)) throw new Error("Value must be an object.");
+      onChange(parsed);
+      setError("");
+    } catch (parseError) {
+      setError(parseError.message || "Invalid JSON object.");
+    }
+  }
+  return (
+    <div>
+      <TextAreaControl label={label} value={text} onChange={setText} mono />
+      {hint ? <div className="mt-1 text-xs text-base-content/55">{hint}</div> : null}
+      {error ? <div className="mt-1 text-xs text-error">{error}</div> : null}
+      <button className="btn btn-outline btn-xs mt-2" type="button" onClick={apply}>Apply field override</button>
+    </div>
+  );
+}
+
+function StorageControls({ step, index, updateParams, availableTokens, findings, pipelineFields }) {
   const isPdf = step.class === "StoreFileToLocaldrive";
+  const isCsv = step.class === "StoreMetadataAsCsv";
   const dirParam = isPdf ? "files_dir" : "data_dir";
+  const nestedStorage = isCsv && isPlainObject(step.params.storage) ? step.params.storage : null;
+  const effectiveDir = nestedStorage?.data_dir ?? step.params[dirParam] ?? "";
+  const effectiveFilename = nestedStorage?.filename ?? step.params.filename ?? "";
+  const overrideFields = isCsv && isPlainObject(step.params.extraction?.fields) ? step.params.extraction.fields : null;
+  function updateStorageValue(key, value) {
+    if (nestedStorage) updateParams(index, { storage: { ...nestedStorage, [key]: value } });
+    else updateParams(index, { [key]: value });
+  }
+  function setNestedStorage(enabled) {
+    if (enabled) updateParams(index, { storage: { data_dir: effectiveDir, filename: effectiveFilename }, data_dir: undefined, filename: undefined });
+    else updateParams(index, { data_dir: effectiveDir, filename: effectiveFilename, storage: undefined });
+  }
+  function setExtractionOverride(enabled) {
+    updateParams(index, { extraction: enabled ? { fields: clone(pipelineFields) } : undefined });
+  }
   return (
     <div className="space-y-3">
-      <DirectoryControl label={isPdf ? "PDF output directory" : "Data output directory"} value={step.params[dirParam] || ""} onChange={(value) => updateParams(index, { [dirParam]: value })} />
+      {isCsv ? <BooleanSetting checked={Boolean(nestedStorage)} label="Use nested storage overrides" hint="Compatibility format: storage.data_dir and storage.filename." onChange={setNestedStorage} /> : null}
+      <DirectoryControl label={isPdf ? "PDF output directory" : "Data output directory"} value={effectiveDir} onChange={(value) => updateStorageValue(dirParam, value)} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.${dirParam}`} />
-      <FilenameBuilder value={step.params.filename || ""} onChange={(value) => updateParams(index, { filename: value })} tokens={availableTokens} />
+      <FilenameBuilder value={effectiveFilename} onChange={(value) => updateStorageValue("filename", value)} tokens={availableTokens} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.filename`} />
+      {isCsv ? (
+        <details className="rounded-lg border border-base-300 bg-base-100">
+          <summary className="cursor-pointer px-3 py-3 text-sm font-semibold">CSV extraction-field override</summary>
+          <div className="space-y-3 border-t border-base-300 p-3">
+            <BooleanSetting checked={Boolean(overrideFields)} label="Use task-specific field definitions" hint="Normally the CSV task reuses fields from Extract document data." onChange={setExtractionOverride} />
+            {overrideFields ? <ObjectJsonControl label="Field definitions" hint="Advanced compatibility setting for this storage task only." value={overrideFields} onChange={(fields) => updateParams(index, { extraction: { fields } })} /> : null}
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -1533,6 +1740,7 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
       <SelectControl label="Update field" value={params.update_field || ""} onChange={(value) => updateParams(index, { update_field: value })} options={["", ...columns]} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.update_field`} />
       <TextControl label="Write value" value={params.write_value || ""} onChange={(value) => updateParams(index, { write_value: value })} />
+      <TextControl label="Task status key (optional)" hint="Overrides the task slug written to status metadata." value={params.task_slug || ""} onChange={(value) => updateParams(index, { task_slug: value || undefined })} mono />
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3" aria-live="polite">
         <div className="text-xs font-semibold uppercase tracking-wide text-primary">Rule outcome</div>
         <p className="mt-1 text-sm">
@@ -1564,10 +1772,13 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
                   <Trash2 size={14} />
                 </button>
               </div>
-              <label className="mt-2 flex items-center gap-2 text-sm">
-                <input className="checkbox checkbox-sm" type="checkbox" checked={Boolean(clause.number)} onChange={(event) => updateClause(clauseIndex, { number: event.target.checked })} />
-                Numeric comparison
-              </label>
+              <div className="mt-2 max-w-xs">
+                <SelectControl label="Comparison type" value={clause.number === true ? "number" : clause.number === false ? "text" : "auto"} onChange={(value) => updateClause(clauseIndex, { number: value === "auto" ? undefined : value === "number" })} options={[
+                  { value: "auto", label: "Auto-detect" },
+                  { value: "text", label: "Text comparison" },
+                  { value: "number", label: "Numeric comparison" },
+                ]} />
+              </div>
               <InlineFindings findings={findings} pathPrefix={`tasks.${step.key}.params.csv_match.clauses[${clauseIndex}]`} />
             </div>
           ))}
@@ -1577,27 +1788,105 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
   );
 }
 
-function ReviewControls({ step, index, updateParams, findings }) {
+function ThresholdMapEditor({ label, hint, value, onChange, keyOptions = [] }) {
+  const entries = Object.entries(isPlainObject(value) ? value : {});
+  function updateEntry(entryIndex, nextKey, nextThreshold) {
+    const nextEntries = entries.map(([key, threshold], index) => index === entryIndex ? [nextKey, nextThreshold] : [key, threshold]);
+    onChange(Object.fromEntries(nextEntries.filter(([key]) => key.trim())));
+  }
+  function removeEntry(entryIndex) {
+    onChange(Object.fromEntries(entries.filter((_, index) => index !== entryIndex)));
+  }
+  function addEntry() {
+    const base = keyOptions.find((option) => !Object.prototype.hasOwnProperty.call(value || {}, option)) || "new_key";
+    let key = base;
+    let suffix = 2;
+    while (Object.prototype.hasOwnProperty.call(value || {}, key)) {
+      key = `${base}_${suffix}`;
+      suffix += 1;
+    }
+    onChange({ ...(isPlainObject(value) ? value : {}), [key]: 0.8 });
+  }
+  return (
+    <div className="rounded-lg border border-base-300 bg-base-100 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold">{label}</div>
+          <p className="mt-1 text-xs text-base-content/55">{hint}</p>
+        </div>
+        <button className="btn btn-outline btn-xs" type="button" onClick={addEntry}><Plus size={13} /> Add</button>
+      </div>
+      <div className="mt-3 space-y-2">
+        {entries.map(([key, threshold], entryIndex) => (
+          <div className="grid grid-cols-[minmax(0,1fr)_7rem_auto] gap-2" key={entryIndex}>
+            {keyOptions.length ? (
+              <SelectControl label="Field" value={key} onChange={(nextKey) => updateEntry(entryIndex, nextKey, threshold)} options={[...new Set([key, ...keyOptions])]} />
+            ) : (
+              <TextControl label="Document type" value={key} onChange={(nextKey) => updateEntry(entryIndex, nextKey, threshold)} mono />
+            )}
+            <NumberControl label="Threshold" value={threshold} min={0} max={1} step={0.01} onChange={(nextThreshold) => updateEntry(entryIndex, key, nextThreshold)} />
+            <button className="btn btn-ghost btn-square btn-sm self-end text-error" type="button" title={`Remove ${key}`} onClick={() => removeEntry(entryIndex)}><Trash2 size={14} /></button>
+          </div>
+        ))}
+        {!entries.length ? <div className="empty-panel py-3">No overrides. The default threshold applies.</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function BooleanSetting({ checked, label, hint, onChange }) {
+  return (
+    <label className="flex items-start gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-3">
+      <input type="checkbox" className="toggle toggle-sm" checked={checked} onChange={(event) => onChange(event.target.checked)} />
+      <span>
+        <span className="block text-sm font-medium">{label}</span>
+        {hint ? <span className="mt-1 block text-xs text-base-content/55">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}
+
+function ReviewControls({ step, index, updateParams, findings, steps }) {
+  const params = step.params || {};
+  const levels = Array.isArray(params.split_confidence_levels_requiring_review) ? params.split_confidence_levels_requiring_review : [];
+  const fieldKeys = Object.keys(extractionFields(steps));
+  function toggleSplitLevel(level) {
+    updateParams(index, { split_confidence_levels_requiring_review: levels.includes(level) ? levels.filter((item) => item !== level) : [...levels, level] });
+  }
   return (
     <div className="space-y-3">
-      <ConfidenceControl value={step.params.confidence_threshold ?? 0.8} onChange={(value) => updateParams(index, { confidence_threshold: value })} />
-      <FileControl label="Schema file" value={step.params.schema_file || ""} extensions=".yaml,.yml" onChange={(value) => updateParams(index, { schema_file: value })} startPath="schemas" />
+      <div className="rounded-lg border border-info/20 bg-info/10 p-3 text-sm">
+        Threshold priority is field override, then document type, then the default threshold.
+      </div>
+      <ConfidenceControl value={params.confidence_threshold ?? 0.8} onChange={(value) => updateParams(index, { confidence_threshold: value })} />
+      <ThresholdMapEditor label="Field threshold overrides" hint="Set a stricter or more permissive score for individual extraction fields." value={params.field_threshold_overrides} keyOptions={fieldKeys} onChange={(value) => updateParams(index, { field_threshold_overrides: value })} />
+      <ThresholdMapEditor label="Document-type thresholds" hint="Applied when a field has no field-specific override." value={params.per_document_type_thresholds} onChange={(value) => updateParams(index, { per_document_type_thresholds: value })} />
+      <div className="rounded-lg border border-base-300 bg-base-100 p-3">
+        <div className="text-sm font-semibold">Review split confidence levels</div>
+        <p className="mt-1 text-xs text-base-content/55">Pause when the upstream split result reports a selected level.</p>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          {["high", "medium", "low"].map((level) => (
+            <label className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${levels.includes(level) ? "border-primary bg-primary/5" : "border-base-300"}`} key={level}>
+              <input className="checkbox checkbox-sm" type="checkbox" checked={levels.includes(level)} onChange={() => toggleSplitLevel(level)} />
+              <span className="capitalize">{level}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <FileControl label="Schema file (optional)" value={params.schema_file || ""} extensions=".yaml,.yml" onChange={(value) => updateParams(index, { schema_file: value || undefined })} startPath="schemas" />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.schema_file`} />
-      <TextControl label="Queue" value={step.params.queue_name || ""} onChange={(value) => updateParams(index, { queue_name: value })} />
-      <SelectControl label="Review scope" hint="Choose which results are sent to a reviewer." value={step.params.review_scope || "low_confidence_fields"} onChange={(value) => updateParams(index, { review_scope: value })} options={[
+      <TextControl label="Queue" value={params.queue_name || "default_review"} onChange={(value) => updateParams(index, { queue_name: value })} />
+      <SelectControl label="Review scope" hint="Choose which results are sent to a reviewer." value={params.review_scope || "low_confidence_fields"} onChange={(value) => updateParams(index, { review_scope: value })} options={[
         { value: "document", label: "Entire document" },
         { value: "low_confidence_fields", label: "Low-confidence fields only" },
         { value: "schema_errors", label: "Schema errors only" },
         { value: "split_result", label: "Document split result" },
       ]} />
-      <SelectControl label="After review" hint="Choose where processing resumes after approval." value={step.params.resume_policy || "next_task"} onChange={(value) => updateParams(index, { resume_policy: value })} options={[
-        { value: "next_task", label: "Continue to next task" },
-        { value: "restart_pipeline", label: "Restart pipeline" },
-      ]} />
-      <label className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2">
-        <input type="checkbox" className="toggle toggle-sm" checked={Boolean(step.params.require_review_when_missing_confidence)} onChange={(event) => updateParams(index, { require_review_when_missing_confidence: event.target.checked })} />
-        <span className="text-sm">Review when confidence is missing</span>
-      </label>
+      <SelectControl label="After review" hint="Production resumes at the next task after approval." value="next_task" onChange={() => {}} options={[{ value: "next_task", label: "Continue to next task" }]} />
+      <BooleanSetting checked={params.require_review_when_missing_confidence ?? true} label="Review when confidence is missing" onChange={(value) => updateParams(index, { require_review_when_missing_confidence: value })} />
+      <BooleanSetting checked={params.require_review_for_missing_required_fields ?? true} label="Review missing required fields" hint="Schema-required fields trigger review when absent." onChange={(value) => updateParams(index, { require_review_for_missing_required_fields: value })} />
+      <BooleanSetting checked={params.always_review ?? false} label="Always require review" hint="Pause every document regardless of confidence and schema results." onChange={(value) => updateParams(index, { always_review: value })} />
+      <BooleanSetting checked={params.allow_operator_to_edit_high_confidence_fields ?? true} label="Allow editing high-confidence fields" hint="Reviewers may correct fields that did not trigger the gate." onChange={(value) => updateParams(index, { allow_operator_to_edit_high_confidence_fields: value })} />
     </div>
   );
 }
@@ -1621,6 +1910,19 @@ function ContextControls({ step, index, updateParams, findings }) {
       <NumberControl label="Nanoid length" value={step.params.length ?? 12} min={5} max={21} step={1} onChange={(value) => updateParams(index, { length: value })} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.length`} />
     </>
+  );
+}
+
+function HousekeepingControls({ step, index, updateParams, findings }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 rounded-lg border border-warning/25 bg-warning/10 p-3 text-sm">
+        <AlertTriangle className="mt-0.5 shrink-0 text-warning" size={16} />
+        <p>This task removes the processed working file after downstream work is complete.</p>
+      </div>
+      <DirectoryControl label="Processing directory" value={step.params.processing_dir || "processing"} onChange={(value) => updateParams(index, { processing_dir: value })} startPath="processing" />
+      <InlineFindings findings={findings} path={`tasks.${step.key}.params.processing_dir`} />
+    </div>
   );
 }
 
@@ -1908,11 +2210,12 @@ function RunSimulation({ steps, close }) {
   );
 }
 
-function TextControl({ label, value, onChange, mono }) {
+function TextControl({ label, value, onChange, mono, hint }) {
   return (
     <label className="form-control">
       <span className="label-text mb-1 text-xs">{label}</span>
       <input className={`input input-bordered input-sm ${mono ? "font-mono" : ""}`} value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
+      {hint ? <span className="mt-1 block text-xs text-base-content/55">{hint}</span> : null}
     </label>
   );
 }
@@ -1933,11 +2236,11 @@ function SecretControl({ label, value, onChange }) {
   );
 }
 
-function TextAreaControl({ label, value, onChange }) {
+function TextAreaControl({ label, value, onChange, mono }) {
   return (
     <label className="form-control block">
       <span className="label-text mb-1 text-xs">{label}</span>
-      <textarea className="textarea textarea-bordered min-h-24 text-sm" value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
+      <textarea className={`textarea textarea-bordered min-h-24 text-sm ${mono ? "font-mono" : ""}`} value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
