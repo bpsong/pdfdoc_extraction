@@ -3,11 +3,11 @@ from modules.db.migrations import initialize_database
 from modules.db.repositories import ExtractionRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
 from standard_step.extraction.llama_cloud_v2 import extract_confidence_details, extract_numeric_confidence, _to_plain_dict
-from standard_step.extraction.extract_pdf_v2 import ExtractPdfV2Task
+from standard_step.extraction.extract_pdf import ExtractPdfTask
 from test.helpers_sqlite import TempConfig
 
 
-def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_path, monkeypatch):
+def test_extract_pdf_persists_result_and_fields_with_nullable_confidence(tmp_path, monkeypatch):
     pdf_path = tmp_path / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")
     params = {
@@ -34,8 +34,8 @@ def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_
             document_id=created["document"]["id"],
             task_key="extract_document_data",
             task_index=0,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
 
     class Result:
@@ -50,7 +50,7 @@ def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_
         }
         job_id = "job-123"
 
-    task = ExtractPdfV2Task(config_manager=config, **params)
+    task = ExtractPdfTask(config_manager=config, **params)
     monkeypatch.setattr(task, "_extract_with_retry", lambda path: Result())
     context = {
         "id": created["document"]["id"],
@@ -78,7 +78,7 @@ def test_extract_pdf_v2_persists_result_and_fields_with_nullable_confidence(tmp_
     assert json_loads(fields["invoice_total"]["final_value_json"]) == 12.5
 
 
-def test_extract_pdf_v2_persists_table_confidence_details(tmp_path, monkeypatch):
+def test_extract_pdf_persists_table_confidence_details(tmp_path, monkeypatch):
     pdf_path = tmp_path / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")
     params = {
@@ -112,8 +112,8 @@ def test_extract_pdf_v2_persists_table_confidence_details(tmp_path, monkeypatch)
             document_id=created["document"]["id"],
             task_key="extract_document_data",
             task_index=0,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
 
     class Result:
@@ -132,7 +132,7 @@ def test_extract_pdf_v2_persists_table_confidence_details(tmp_path, monkeypatch)
         }
         job_id = "job-table"
 
-    task = ExtractPdfV2Task(config_manager=config, **params)
+    task = ExtractPdfTask(config_manager=config, **params)
     monkeypatch.setattr(task, "_extract_with_retry", lambda path: Result())
     context = {
         "id": created["document"]["id"],

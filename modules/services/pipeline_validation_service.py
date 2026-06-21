@@ -457,7 +457,7 @@ def _pipeline_task_type(task_cfg: dict[str, Any]) -> str:
     """Classify singleton pipeline task types used by workflow validation."""
     module_name = str(task_cfg.get("module") or "")
     class_name = str(task_cfg.get("class") or "")
-    if ".extraction." in module_name or class_name in {"ExtractPdfTask", "ExtractPdfV2Task"}:
+    if ".extraction." in module_name or class_name == "ExtractPdfTask":
         return "extract"
     if ".split." in module_name or class_name == "LlamaCloudSplitTask":
         return "split"

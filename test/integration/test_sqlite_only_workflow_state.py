@@ -47,8 +47,8 @@ def _config(tmp_path: Path) -> TempConfig:
             },
             "tasks": {
                 "extract_document_data": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {
                         "api_key": "test-api-key",
                         "fields": {
@@ -82,13 +82,13 @@ def _config(tmp_path: Path) -> TempConfig:
                     },
                 },
                 "store_json": {
-                    "module": "standard_step.storage.store_metadata_as_json_v2",
-                    "class": "StoreMetadataAsJsonV2",
+                    "module": "standard_step.storage.store_metadata_as_json",
+                    "class": "StoreMetadataAsJson",
                     "params": {"data_dir": str(exports_dir), "filename": "{supplier}"},
                 },
                 "store_csv": {
-                    "module": "standard_step.storage.store_metadata_as_csv_v2",
-                    "class": "StoreMetadataAsCsvV2",
+                    "module": "standard_step.storage.store_metadata_as_csv",
+                    "class": "StoreMetadataAsCsv",
                     "params": {"data_dir": str(exports_dir), "filename": "{supplier}"},
                 },
                 "store_file": {
@@ -140,7 +140,7 @@ def test_configured_workflow_uses_sqlite_state_without_status_text_files(
             extraction_metadata={},
         )
 
-    monkeypatch.setattr("standard_step.extraction.extract_pdf_v2.run_extract_v2_job", fake_extract)
+    monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", fake_extract)
 
     assert WorkflowManager(config).trigger_workflow_for_file(
         file_path=str(source_pdf),

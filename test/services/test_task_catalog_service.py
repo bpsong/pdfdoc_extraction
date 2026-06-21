@@ -23,8 +23,8 @@ def test_task_catalog_discovers_standard_tasks_and_configured_metadata(tmp_path:
                     "on_error": "stop",
                 },
                 "extract_document_data": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {"api_key": "llx-secret", "fields": {"supplier": {"type": "str"}}},
                     "on_error": "stop",
                 },
@@ -35,8 +35,8 @@ def test_task_catalog_discovers_standard_tasks_and_configured_metadata(tmp_path:
                     "on_error": "stop",
                 },
                 "store_json": {
-                    "module": "standard_step.storage.store_metadata_as_json_v2",
-                    "class": "StoreMetadataAsJsonV2",
+                    "module": "standard_step.storage.store_metadata_as_json",
+                    "class": "StoreMetadataAsJson",
                     "params": {"data_dir": "data", "filename": "{supplier}"},
                     "on_error": "continue",
                 },
@@ -47,7 +47,7 @@ def test_task_catalog_discovers_standard_tasks_and_configured_metadata(tmp_path:
     catalog = TaskCatalogService(config).catalog()
     tasks = {task["id"]: task for task in catalog["tasks"]}
 
-    extract = tasks["standard_step.extraction.extract_pdf_v2.ExtractPdfV2Task"]
+    extract = tasks["standard_step.extraction.extract_pdf.ExtractPdfTask"]
     split = tasks["standard_step.split.llamacloud_split.LlamaCloudSplitTask"]
     review = tasks["standard_step.review.review_gate.ReviewGateTask"]
 

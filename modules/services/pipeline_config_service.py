@@ -409,7 +409,7 @@ def _slugify(value: str) -> str:
 def _key_from_class(class_name: str) -> str:
     """Generate a task key from a class name."""
     name = class_name
-    for suffix in ("Task", "V2"):
+    for suffix in ("Task",):
         if name.endswith(suffix):
             name = name[: -len(suffix)]
     return _slugify(re.sub(r"(?<!^)(?=[A-Z])", "_", name))

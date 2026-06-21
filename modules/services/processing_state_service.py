@@ -223,7 +223,7 @@ def _valid_snapshot(value: Any) -> TypeGuard[dict[str, Any]]:
 def _label_for(value: str) -> str:
     """Build a readable label from a class or task key."""
     text = value or "Task"
-    for suffix in ("Task", "V2"):
+    for suffix in ("Task",):
         if text.endswith(suffix):
             text = text[: -len(suffix)]
     chars = []

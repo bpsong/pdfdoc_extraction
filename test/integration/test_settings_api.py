@@ -45,8 +45,8 @@ def _config(tmp_path: Path) -> TempConfig:
                     },
                 },
                 "extract": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {
                         "api_key": "extract-secret",
                         "headers": {"Authorization": "Bearer extract-token"},

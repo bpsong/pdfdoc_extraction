@@ -43,8 +43,8 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                 },
             },
             "extract": {
-                "module": "standard_step.extraction.extract_pdf_v2",
-                "class": "ExtractPdfV2Task",
+                "module": "standard_step.extraction.extract_pdf",
+                "class": "ExtractPdfTask",
                 "params": {"fields": {"supplier": {"alias": "Supplier", "type": "str"}}},
             },
             "review": {
@@ -53,8 +53,8 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                 "params": {"confidence_threshold": 0.9},
             },
             "store_json": {
-                "module": "standard_step.storage.store_metadata_as_json_v2",
-                "class": "StoreMetadataAsJsonV2",
+                "module": "standard_step.storage.store_metadata_as_json",
+                "class": "StoreMetadataAsJson",
                 "params": {"data_dir": str(export_dir), "filename": "{supplier}"},
             },
         },

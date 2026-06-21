@@ -1069,7 +1069,7 @@ def _is_extraction_step(step: dict[str, Any]) -> bool:
     """Return whether a pipeline step represents extraction."""
     module_name = str(step.get("module") or "")
     class_name = str(step.get("class") or "")
-    return ".extraction." in module_name or class_name in {"ExtractPdfTask", "ExtractPdfV2Task"}
+    return ".extraction." in module_name or class_name == "ExtractPdfTask"
 
 
 def _is_export_step(step: dict[str, Any]) -> bool:

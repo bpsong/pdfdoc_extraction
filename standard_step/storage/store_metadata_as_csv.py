@@ -1,247 +1,460 @@
-"""Persist extracted metadata as a CSV file with alias-aware headers.
+"""
+Write extracted metadata to CSV with row-per-item expansion for table fields.
 
-This module provides StoreMetadataAsCsv, a pipeline task that writes extracted
-data ('context.data') to a CSV file in a configured directory. It supports both
-a single dict and a list of dicts. Column headers prefer configured aliases
-(from the extraction fields config) when available. The output filename is
-formatted from a template and made unique if needed.
+This implements the canonical CSV storage task with array-of-objects support.
+It supports:
+- Backwards-compatible scalar-only behavior (single-row CSV).
+- Table-field expansion: when a field is marked is_table: true in extraction
+  configuration, it will create one CSV row per item in that table, repeating
+  top-level scalar fields and prefixing item columns with 'item_'.
+- Aliases from extraction config are used for CSV headers where available.
 
-Notes:
-    - Reads 'data_dir' and 'filename' from task params (required).
-    - Registers the generated CSV as an ``export_csv`` document artifact when
-      SQLite document context is available.
-    - Performs filesystem writes and guarantees a unique output path.
+Behavior:
+- Reads configuration (data_dir, filename template) from ConfigManager.
+- Registers the generated CSV as an ``export_csv`` document artifact when
+  SQLite document context is available.
+- Cleans strings for CSV (newlines -> spaces).
+- Ensures unique filenames by appending _1, _2, ... if necessary.
 """
 
+from __future__ import annotations
+
 import csv
+import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional, List
-from modules.utils import sanitize_filename, generate_unique_filepath, preprocess_filename_value
+from typing import Any, Dict, List, Optional
+
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
-import logging
-from modules.utils import windows_long_path
+from modules.utils import windows_long_path, sanitize_filename, preprocess_filename_value
+
+TASK_SLUG = "store_metadata_csv"
 
 
 class StoreMetadataAsCsv(BaseTask):
-    """Task that writes extracted metadata to a CSV file.
+    """
+    Task to store extraction metadata as CSV.
 
-    Responsibilities:
-        - Validate required parameters and resolve output directory.
-        - Normalize extracted data (dict or list of dicts) for CSV writing.
-        - Prefer alias names for headers when available in extraction config.
-        - Generate a unique filename from a template and write the CSV.
-
-    Integration:
-        Uses BaseTask params for configuration. Expects extracted data in
-        context['data'].
-
-    Args:
-        config_manager (ConfigManager): Project configuration manager.
-        **params: Must include 'data_dir' (str) and 'filename' (str).
-
-    Notes:
-        - Side effects: Filesystem write and SQLite artifact registration.
-        - Errors are reported as TaskError and logged.
-
-    Performance Considerations:
-        - CSV writing operations may involve significant I/O overhead for large datasets (>1000 rows).
-        - Rate limiting: File write operations are throttled; consider batch processing for high-volume data exports.
+    Expects context["data"] to be a dict keyed by workflow field names. Table
+    fields (arrays of objects) are expanded when the extraction configuration
+    marks them with is_table: true.
     """
 
-    def __init__(self, config_manager: ConfigManager, **params):
-        """Initialize the task and capture required parameters.
+    def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
+        """
+        Initialize task and read configuration.
 
         Args:
-            config_manager (ConfigManager): The configuration manager instance.
-            **params: Must include 'data_dir' and 'filename'.
-
-        Raises:
-            TaskError: If required parameters are missing.
+            config_manager: ConfigManager singleton instance.
+            **params: Task parameters provided by workflow loader.
         """
         super().__init__(config_manager=config_manager, **params)
-        self.logger = logging.getLogger(__name__)  # Initialize logger
-        
-        self.data_dir: Optional[Path] = None
-        self.filename_template: Optional[str] = None
-        self.extraction_fields_config: Optional[Dict[str, Any]] = None
+        logging.getLogger(__name__)  # ensure logging config has been applied
+        self.logger = logging.getLogger(__name__)
+        # load storage-specific params from the central config or params
+        storage_cfg = self.params.get("storage", {}) or {}
+        # support top-level params compat
+        self.data_dir_template = storage_cfg.get("data_dir") or self.params.get("data_dir")
+        self.filename_template = storage_cfg.get("filename") or self.params.get("filename")
 
-        # Extract parameters from self.params
-        data_dir_str = self.params.get('data_dir')
-        filename = self.params.get('filename')
+        # If not found in params, try to get from config_manager (try both direct keys and nested paths)
+        if not self.data_dir_template:
+            self.data_dir_template = self.config_manager.get("data_dir")
+        if not self.filename_template:
+            self.filename_template = self.config_manager.get("filename")
 
-        if not data_dir_str:
-            raise TaskError("Missing 'data_dir' parameter in configuration for StoreMetadataAsCsv task.")
-        if not filename:
-            raise TaskError("Missing 'filename' parameter in configuration for StoreMetadataAsCsv task.")
+        # Extraction fields config, if present: mapping of workflow field key -> config.
+        self.extraction_fields = self.params.get("extraction", {}).get("fields", {}) or {}
 
-        
-        self.data_dir = Path(windows_long_path(data_dir_str))
-        self.filename_template = filename
+        # If not found in params, try to get from config_manager
+        if not self.extraction_fields:
+            # Try direct extraction config first
+            extraction_config = self.config_manager.get("extraction")
+            if extraction_config and isinstance(extraction_config, dict):
+                self.extraction_fields = extraction_config.get("fields", {})
+            else:
+                # Fallback: locate extraction.fields config from known extraction task keys.
+                tasks_config = get_all_config(self.config_manager).get("tasks", {})
+                extract_task_def = (
+                    tasks_config.get("extract_document_data")
+                    or tasks_config.get("extract_document")
+                    or {}
+                )
+                extraction_params = extract_task_def.get("params", {}) if isinstance(extract_task_def, dict) else {}
+                self.extraction_fields = extraction_params.get("fields", {})
 
-        # Optional: look up extraction fields configuration for aliasing
-        tasks_config = get_all_config(self.config_manager).get("tasks", {})
-        extract_task_definition = tasks_config.get("extract_document_data", {})
-        extraction_step_params = extract_task_definition.get("params", {})
-        
-        if "fields" in extraction_step_params:
-            self.extraction_fields_config = extraction_step_params["fields"]
-        
-        if not self.extraction_fields_config:
-            self.logger.warning("Could not find 'extraction.fields' configuration. CSV headers might not use aliases.")
+        # task slug used in status updates
+        self.task_slug = self.params.get("task_slug", TASK_SLUG)
+
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
 
     def on_start(self, context: Dict[str, Any]) -> None:
-        """Lifecycle hook executed when the task starts.
+        """Log that the task has started."""
+        unique_id = str(context.get("id", "unknown"))
+        self.logger.info("Starting StoreMetadataAsCsv for id=%s", unique_id)
 
-        Initializes context.
-
-        Args:
-            context (Dict[str, Any]): The pipeline context.
+    def validate_required_fields(self, context: Dict[str, Any]) -> None:
         """
-        self.initialize_context(context)
-
-    def validate_required_fields(self, context: Dict[str, Any]):
-        """Validate required parameters.
-
-        Args:
-            context (Dict[str, Any]): Unused; present for interface parity.
+        Validate that required configuration and context are available.
 
         Raises:
-            TaskError: If data_dir or filename_template are not set.
+            TaskError: if required fields are missing.
         """
-        if not self.data_dir:
-            raise TaskError("StoreMetadataAsCsv task missing required field: 'data_dir'")
+        self.logger.debug(f"Validating fields: data_dir={self.data_dir_template}, filename={self.filename_template}, has_data={'data' in context}")
+        if not self.data_dir_template:
+            raise TaskError("Missing 'data_dir' parameter in configuration for StoreMetadataAsCsv task.")
         if not self.filename_template:
-            raise TaskError("StoreMetadataAsCsv task missing required field: 'filename_template'")
-        # No need to validate extraction_fields_config as it's optional for basic functionality
+            raise TaskError("Missing 'filename' parameter in configuration for StoreMetadataAsCsv task.")
+        if "data" not in context:
+            self.logger.debug("Validation failed: 'data' not in context")
+            raise TaskError("Missing 'data' in context for StoreMetadataAsCsv task.")
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Write extracted metadata to a CSV file in the configured directory.
-
-        Supports context['data'] as a single dict or a list of dicts. Values are
-        cleaned for CSV output (strings have newlines removed; lists are joined).
-
-        Args:
-            context (Dict[str, Any]): Pipeline context containing:
-                - id (str): Unique identifier for status logging.
-                - data (dict or list[dict]): Extracted metadata to persist.
+    def _detect_table_field(self, context: Dict[str, Any]) -> Optional[str]:
+        """
+        Detect the table field key from extraction_fields config.
 
         Returns:
-            Dict[str, Any]: The unmodified context.
-
-        Raises:
-            TaskError: If extracted data is missing/unsupported or writing fails.
-
-        Notes:
-            - Side effects: Filesystem write and SQLite artifact registration.
-
-        Performance Considerations:
-            - This method performs synchronous CSV file I/O, which may block for large datasets (>1000 records).
-            - Rate limiting: File operations are throttled to prevent system overload; use streaming for high-volume exports.
+            Field key in context["data"] marked as is_table: true, or None if none found.
         """
-        extracted_data = context.get("data")  # Use "data" as per PRD
-        unique_id = context.get("id")
+        # extraction_fields is expected to map workflow field keys to metadata dicts.
+        for field_key, cfg in self.extraction_fields.items():
+            try:
+                if isinstance(cfg, dict) and cfg.get("is_table"):
+                    # Retain optional override support for older configs while preferring the field key.
+                    table_key = cfg.get("normalized_name") or cfg.get("name") or field_key
+                    return table_key
+            except Exception:
+                continue
+        # Fallback: inspect context data for list-of-dicts fields
+        data = context.get("data", {})
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, list) and v and all(isinstance(it, dict) for it in v):
+                    return k
+        return None
 
-        if not extracted_data:
-            self.logger.warning(f"No extracted data found for {unique_id}. Skipping CSV storage.")
-            return context
+    def _generate_unique_filepath(self, data_dir: Path, base_name: str, ext: str = ".csv") -> Path:
+        """
+        Generate a unique filepath in data_dir by appending numeric suffixes.
 
-        self.validate_required_fields(context)  # Call validation here
+        Args:
+            data_dir: target directory Path
+            base_name: filename without extension
+            ext: file extension (including dot)
 
-        # Ensure filename_template and data_dir are not None after validation
-        if self.filename_template is None:
-            raise TaskError("Filename template is not set after validation.")
-        if self.data_dir is None:
-            raise TaskError("Data directory is not set after validation.")
+        Returns:
+            Path to a non-existing file (unique).
+        """
+        attempt = 0
+        candidate = data_dir / f"{base_name}{ext}"
+        while candidate.exists():
+            attempt += 1
+            candidate = data_dir / f"{base_name}_{attempt}{ext}"
+        return candidate
 
-        # Determine data_list and data_for_filename_formatting
-        data_list: List[Dict[str, Any]] = []
-        data_for_filename_formatting: Dict[str, Any] = {}
+    @staticmethod
+    def _clean_value(val: Any) -> str:
+        """
+        Convert a value to a CSV-safe string: replace newlines with spaces.
 
-        if isinstance(extracted_data, dict):
-            data_list = [extracted_data]
-            data_for_filename_formatting = extracted_data
-        elif isinstance(extracted_data, list) and all(isinstance(item, dict) for item in extracted_data):
-            data_list = extracted_data
-            if extracted_data:
-                data_for_filename_formatting = extracted_data[0]  # Use first item for filename
-            else:
-                self.logger.warning(f"Extracted data is an empty list for {unique_id}. Skipping CSV storage.")
-                return context
-        else:
-            raise TaskError("Extracted data is not in a supported format (dict or list of dicts) for CSV storage.")
-
-        # Prepare processed_data and fieldnames
-        processed_data = []
-        # Determine all unique fieldnames from the processed data, prioritizing aliases
-        unique_fieldnames = set()
-        for item in data_list:
-            for key, value in item.items():
-                alias = key
-                if self.extraction_fields_config and key in self.extraction_fields_config:
-                    alias = self.extraction_fields_config[key].get("alias", key)
-                unique_fieldnames.add(alias)
-        
-        fieldnames = list(unique_fieldnames)
-        fieldnames.sort()  # Sort for consistent CSV output
-
-        for item in data_list:
-            processed_item = {}
-            for key, value in item.items():
-                # Get alias if available, otherwise use original key
-                alias = key
-                if self.extraction_fields_config and key in self.extraction_fields_config:
-                    alias = self.extraction_fields_config[key].get("alias", key)
-                
-                # Clean string values (replace newlines with spaces)
-                if isinstance(value, str):
-                    processed_item[alias] = value.replace('\\n', ' ').replace('\\r', '')
-                # Join list values with commas
-                elif isinstance(value, list):
-                    processed_item[alias] = ", ".join(map(str, value))
+        Lists become comma-separated strings.
+        """
+        if val is None:
+            return ""
+        if isinstance(val, list):
+            # join list elements with comma, flatten nested primitives
+            cleaned = []
+            for it in val:
+                if it is None:
+                    continue
+                if isinstance(it, (dict, list)):
+                    cleaned.append(str(it))
                 else:
-                    processed_item[alias] = value
-            processed_data.append(processed_item)
+                    cleaned.append(str(it))
+            return ",".join(cleaned)
+        if isinstance(val, dict):
+            return str(val)
+        s = str(val)
+        # Replace Windows line endings first, then individual line ending characters
+        s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+        return s
 
-        # Generate filename from template and extracted data
+    def _map_alias(self, field_key: str, is_item: bool = False) -> str:
+        """
+        Return alias for a field key from extraction_fields if available.
+        For item-level fields, the alias will be prefixed with 'item_' by the caller.
+        """
+        cfg = self.extraction_fields.get(field_key, {}) or {}
+        alias = cfg.get("alias") or cfg.get("name") or field_key
+        return alias
+
+    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute the CSV storage task.
+
+        Returns:
+            context (possibly updated with output_path or error information).
+        """
         try:
-            # Format the filename using data_for_filename_formatting. Ensure all values are strings for formatting.
-            # Also, sanitize each part of the filename.
-            formatted_filename_parts = {
-                k: sanitize_filename(preprocess_filename_value(v)) if not isinstance(v, list) else sanitize_filename(",".join(map(preprocess_filename_value, v)))
-                for k, v in data_for_filename_formatting.items()
-            }
-            base_filename = self.filename_template.format(**formatted_filename_parts)
-        except KeyError as e:
-            raise TaskError(f"Filename template '{self.filename_template}' contains missing key from extracted data: {e}")
-        except Exception as e:
-            raise TaskError(f"Failed to format filename using template '{self.filename_template}': {e}")
+            self.validate_required_fields(context)
+            unique_id = str(context.get("id", "unknown"))
+            data = context.get("data", {})
+            self.logger.debug(f"Starting CSV task for {unique_id}, data keys: {list(data.keys()) if data else 'None'}")
+            if data is None:
+                self.logger.warning("No extracted data found for %s. Skipping CSV storage.", unique_id)
+                return context
 
-        # Ensure .csv extension
-        if not base_filename.lower().endswith(".csv"):
-            base_filename += ".csv"
-        
-        # Generate unique filepath
-        output_path = generate_unique_filepath(self.data_dir, os.path.splitext(base_filename)[0], ".csv")
+            if data is not None and not isinstance(data, dict):
+                raise TaskError("Extracted data must be a dict for CSV storage (v2).")
 
-        try:
-            with open(output_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writeheader()
-                writer.writerows(processed_data)
-            self.logger.info(f"Metadata for {unique_id} stored as CSV at {output_path}")
+            if isinstance(data, dict) and not data:  # Empty dict
+                self.logger.warning(f"Empty data dict found for {unique_id}. Creating minimal CSV file.")
+                # Handle empty dict case by creating a minimal row
+                data = {"_message": "No data extracted"}
+
+            # Resolve data_dir and filename template via ConfigManager
+            data_dir_str = self.data_dir_template
+
+            data_dir = Path(windows_long_path(str(data_dir_str)))
+            data_dir.mkdir(parents=True, exist_ok=True)
+
+            # Build base filename using template and available scalar values from data
+            # Template may contain placeholders like {nanoid}, {supplier_name}, etc.
+            # Use context["data"] (a dict) for formatting.
+            raw_filename_template = self.filename_template
+            filename_template = (
+                raw_filename_template
+                if isinstance(raw_filename_template, str) and raw_filename_template
+                else "{id}"
+            )
+            # Prepare format mapping with preprocessing and sanitization for consistency
+            format_map: Dict[str, Any] = {}
+            if isinstance(data, dict):
+                # Use the same preprocessing and sanitization as JSON storage for consistency.
+                format_map = {
+                    k: sanitize_filename(preprocess_filename_value(v))
+                    if not isinstance(v, list)
+                    else sanitize_filename(
+                        ",".join(map(preprocess_filename_value, v))
+                    )
+                    for k, v in data.items()
+                }
+            # Add the unique_id to format_map for fallback templates
+            format_map["id"] = unique_id
+            try:
+                base_filename = filename_template.format(**format_map)
+            except (KeyError, ValueError, IndexError):
+                # Graceful fallback: join some known keys or use unique id
+                base_filename = f"{unique_id}"
+
+            # sanitize base_filename for filesystem (remove path separators)
+            base_filename = base_filename.replace(os.sep, "_").replace("/", "_").strip()
+            if not base_filename:
+                base_filename = unique_id
+
+            # Detect table field (if any)
+            table_field = self._detect_table_field(context)
+            # Build rows and headers
+            rows: List[Dict[str, Any]] = []
+            headers: List[str] = []
+
+            # Validate table field structure
+            table_items = None
+            if table_field:
+                table_value = data.get(table_field)
+                if not isinstance(table_value, list):
+                    self.logger.warning(f"Table field '{table_field}' is not a list: {type(table_value)}. Treating as scalar.")
+                    table_field = None
+                else:
+                    # Validate and convert all items to dicts
+                    validated_items = []
+                    for i, item in enumerate(table_value):
+                        if isinstance(item, dict):
+                            validated_items.append(item)
+                        elif item is not None:
+                            self.logger.warning(f"Non-dict item at index {i} in table field '{table_field}': {item}. Converting to string.")
+                            validated_items.append({"value": str(item)})
+                        else:
+                            # Handle None items
+                            validated_items.append({"_null": True})
+                    table_items = validated_items
+
+            # If no table field or table is empty, write one scalar row.
+            if not table_field or not table_items:
+                # Single row representing scalar fields. Lists become joined strings.
+                row: Dict[str, Any] = {}
+                # Use extraction_fields order where possible, then include any remaining data fields.
+                processed_fields = set()
+
+                # First, process fields defined in extraction_fields
+                if self.extraction_fields:
+                    for field_key, cfg in self.extraction_fields.items():
+                        # skip fields that are marked as table in v2 (they might be lists of objects)
+                        if isinstance(cfg, dict) and cfg.get("is_table"):
+                            continue
+                        alias = cfg.get("alias") if isinstance(cfg, dict) else None
+                        alias = alias or cfg.get("name") if isinstance(cfg, dict) else alias
+                        header = alias or field_key
+                        value = data.get(field_key)
+                        row[header] = self._clean_value(value)
+                        processed_fields.add(field_key)
+
+                # Then add any remaining fields from data that weren't in extraction_fields
+                for k, v in data.items():
+                    if k in processed_fields:
+                        continue
+                    if isinstance(v, list) and v and all(isinstance(it, dict) for it in v):
+                        # skip table-like fields in this mode
+                        continue
+                    row[k] = self._clean_value(v)
+                rows.append(row)
+                # headers in deterministic order
+                headers = list(rows[0].keys()) if rows else []
+            else:
+                # Table field present and non-empty -> expand rows per item
+                # table_items is already validated above
+                # scalar top-level fields are those not equal to table_field and not lists-of-dicts
+                scalar_fields: List[str] = []
+                if isinstance(data, dict):
+                    for k, v in data.items():
+                        if k == table_field:
+                            continue
+                        # treat list-of-primitives as scalar to be repeated
+                        if isinstance(v, list) and v and all(not isinstance(it, dict) for it in v):
+                            scalar_fields.append(k)
+                        elif isinstance(v, dict):
+                            # nested dict as scalar: stringify and repeat
+                            scalar_fields.append(k)
+                        elif isinstance(v, list) and not v:
+                            # empty list -> include
+                            scalar_fields.append(k)
+                        else:
+                            scalar_fields.append(k)
+
+                # item fields: union of keys in all items (preserve order from first item)
+                item_fields_ordered: List[str] = []
+                if table_items:
+                    first_item = table_items[0]
+                    if isinstance(first_item, dict):
+                        for k in first_item.keys():
+                            item_fields_ordered.append(k)
+                    else:
+                        # Handle non-dict first item (shouldn't happen after validation, but being safe)
+                        self.logger.warning(f"First table item is not a dict: {type(first_item)}. Using 'value' as field name.")
+                        item_fields_ordered.append("value")
+
+                    # ensure we include any other keys that appear later
+                    for it in table_items[1:]:
+                        if isinstance(it, dict):
+                            for k in it.keys():
+                                if k not in item_fields_ordered:
+                                    item_fields_ordered.append(k)
+                        else:
+                            # Handle non-dict items
+                            if "value" not in item_fields_ordered:
+                                item_fields_ordered.append("value")
+
+                # Build headers: scalar aliases first, then item aliases prefixed with item_
+                headers = []
+                scalar_aliases: Dict[str, str] = {}
+                for sf in scalar_fields:
+                    # get alias from extraction_fields if present
+                    alias = None
+                    cfg = self.extraction_fields.get(sf, {}) or {}
+                    alias = cfg.get("alias") if isinstance(cfg, dict) else None
+                    alias = alias or cfg.get("name") if isinstance(cfg, dict) else alias
+                    header = alias or sf
+                    scalar_aliases[sf] = header
+                    headers.append(header)
+
+                item_aliases: Dict[str, str] = {}
+                for itf in item_fields_ordered:
+                    # item-level config may be nested under the table field config
+                    # e.g. extraction_fields may contain an entry for the table with subfields
+                    alias = None
+                    # check top-level fields mapping first
+                    cfg_top = self.extraction_fields.get(itf, {}) or {}
+                    if isinstance(cfg_top, dict):
+                        alias = cfg_top.get("alias") or cfg_top.get("name")
+                    # check table-specific subfield mapping if available
+                    table_cfg = self.extraction_fields.get(table_field, {}) or {}
+                    if isinstance(table_cfg, dict):
+                        # Prefer item_fields over fields for the schema used in tests
+                        subfields = table_cfg.get("item_fields") or table_cfg.get("fields") or {}
+                        if isinstance(subfields, dict):
+                            sf_cfg = subfields.get(itf, {}) or {}
+                            if isinstance(sf_cfg, dict):
+                                alias = alias or sf_cfg.get("alias") or sf_cfg.get("name")
+                    header = (alias or itf)
+                    prefixed = f"item_{header}"
+                    item_aliases[itf] = prefixed
+                    headers.append(prefixed)
+
+                # Build rows by combining scalar fields and each item
+                for item in table_items:
+                    row: Dict[str, Any] = {}
+                    for sf in scalar_fields:
+                        header = scalar_aliases.get(sf, sf)
+                        row[header] = self._clean_value(data.get(sf))
+                    for itf in item_fields_ordered:
+                        prefixed_header = item_aliases.get(itf, f"item_{itf}")
+                        row[prefixed_header] = self._clean_value(item.get(itf))
+                    rows.append(row)
+
+            # Ensure headers include any keys present in rows (in case of missing extraction_fields)
+            if rows and not headers:
+                headers = list(rows[0].keys())
+            # unify header ordering across all rows: ensure every row has all headers
+            for r in rows:
+                for h in headers:
+                    if h not in r:
+                        r[h] = ""
+
+            # Create unique file path
+            output_path = self._generate_unique_filepath(data_dir, base_filename, ".csv")
+            output_path = Path(windows_long_path(str(output_path)))
+
+            # Write CSV
+            try:
+                with open(output_path, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.DictWriter(fh, fieldnames=headers)
+                    writer.writeheader()
+                    writer.writerows(rows)
+            except Exception as e:
+                # capture error, but follow Railway pattern: return context with error info
+                context["error"] = str(e)
+                context["error_step"] = "StoreMetadataAsCsv"
+                self.logger.exception("Failed writing CSV for %s", unique_id)
+                return context
+
+            # Success updates
+            self.logger.info("Metadata for %s stored as CSV at %s", unique_id, output_path)
+
+            # Attach output path to context
             context["output_path"] = str(output_path)
+            context["rows_written"] = len(rows)
             register_document_artifact(
                 self.config_manager,
                 context,
                 file_type="export_csv",
                 file_path=output_path,
-                metadata={"task_slug": "store_metadata_csv", "rows": len(processed_data)},
+                metadata={"task_slug": self.task_slug, "rows": len(rows)},
             )
-        except Exception as e:
-            raise TaskError(f"Failed to store metadata as CSV for {unique_id}: {e}")
+            return context
 
-        return context
+        except TaskError as e:
+            # Known validation/task errors - ensure context populated and returned
+            context["error"] = str(e)
+            if "error_step" not in context:
+                context["error_step"] = "StoreMetadataAsCsv"
+            return context
+        except Exception as e:
+            # Unexpected exceptions: capture and return context
+            context["error"] = str(e)
+            context["error_step"] = "StoreMetadataAsCsv"
+            self.logger.exception("Unhandled exception in StoreMetadataAsCsv")
+            return context

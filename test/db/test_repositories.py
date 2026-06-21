@@ -57,8 +57,8 @@ def test_repositories_cover_core_state_models(tmp_path):
             document_id=document["id"],
             task_key="extract",
             task_index=0,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
             input_data={"id": document["id"]},
         )
         task_runs.mark_completed(task_run["id"], {"ok": True})

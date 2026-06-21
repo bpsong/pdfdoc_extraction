@@ -42,8 +42,8 @@ custom_steps:
   registry: {}
 tasks:
   extract_document_data:
-    module: standard_step.extraction.extract_pdf_v2
-    class: ExtractPdfV2Task
+    module: standard_step.extraction.extract_pdf
+    class: ExtractPdfTask
     params:
       api_key: llx-WJbMPY1riM0GCHxAer5f8nePPQKw7FFG9o3xmiuBhQ333HGs
       configuration_id: cfg-omfypilvbm9v260sf0xnmqy3p5wt
@@ -99,15 +99,15 @@ tasks:
       resume_policy: next_task
     on_error: stop
   store_metadata_csv:
-    module: standard_step.storage.store_metadata_as_csv_v2
-    class: StoreMetadataAsCsvV2
+    module: standard_step.storage.store_metadata_as_csv
+    class: StoreMetadataAsCsv
     params:
       data_dir: data
       filename: '{supplier_name}_{client_name}'
     on_error: continue
   store_metadata_json:
-    module: standard_step.storage.store_metadata_as_json_v2
-    class: StoreMetadataAsJsonV2
+    module: standard_step.storage.store_metadata_as_json
+    class: StoreMetadataAsJson
     params:
       data_dir: data
       filename: '{supplier_name}_{invoice_amount}_{policy_number}'

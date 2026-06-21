@@ -7,11 +7,11 @@ from modules.config_manager import ConfigManager
 
 import pytest
 
-from standard_step.storage.store_metadata_as_json_v2 import StoreMetadataAsJsonV2
+from standard_step.storage.store_metadata_as_json import StoreMetadataAsJson
 from modules.exceptions import TaskError
 
 # Helper clickable reference to the file created by these tests for reviewers:
-# [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1)
+# Canonical JSON metadata storage tests.
 
 
 class DummyConfigManager:
@@ -48,7 +48,7 @@ def basic_fields_config():
 def config_manager(basic_fields_config):
     # Put the extract task configuration where the store task expects it
     tasks_conf = {
-        "extract_document_data_v2": {
+        "extract_document_data": {
             "params": {"fields": basic_fields_config}
         }
     }
@@ -69,7 +69,7 @@ def read_json_file(path: Path) -> Dict[str, Any]:
 def test_write_scalar_only_json(temp_dir, config_manager, patch_status_manager):
     """Scalar-only data should be written as JSON and preserve aliases."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     context = {"id": "abc-1", "data": {"supplier_name": "ACME Corp", "invoice_no": "INV-001"}}
 
@@ -92,7 +92,7 @@ def test_write_scalar_only_json(temp_dir, config_manager, patch_status_manager):
 def test_write_with_table_preserves_list_of_objects(temp_dir, config_manager, patch_status_manager):
     """When a field is configured as is_table, the list-of-objects must be preserved."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     items = [{"description": "Item1", "quantity": "2"}, {"description": "Item2", "quantity": "5"}]
     context = {"id": "abc-2", "data": {"supplier_name": "Beta Ltd", "items": items, "note": "sample"}}
@@ -117,7 +117,7 @@ def test_filename_generation_and_uniqueness(temp_dir, config_manager, patch_stat
     """Filename template should be formatted and uniqueness handled by appending suffixes."""
     # filename template pulls supplier_name into filename
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     context1 = {"id": "u1", "data": {"supplier_name": "Gamma Co"}}
     result1 = task.run(context1)
@@ -139,7 +139,7 @@ def test_filename_generation_and_uniqueness(temp_dir, config_manager, patch_stat
 def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch, patch_status_manager):
     """If writing fails, context must include error and error_step and status updated to failed."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     # Prepare normal context
     context = {"id": "err-1", "data": {"supplier_name": "Failing Co", "items": []}}
@@ -155,14 +155,14 @@ def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch, 
     # On failure the task returns context with error info
     assert "error" in result
     assert "error_step" in result
-    assert result["error_step"] == "StoreMetadataAsJsonV2"
+    assert result["error_step"] == "StoreMetadataAsJson"
     assert "disk full" in result["error"]
 
 
 def test_validation_missing_data_returns_context(temp_dir, config_manager, patch_status_manager):
     """If context lacks 'data', the task should skip writing and return context unchanged."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     context = {"id": "no-data"}  # no 'data' key
 
@@ -176,7 +176,7 @@ def test_validation_missing_data_returns_context(temp_dir, config_manager, patch
 def test_empty_data_dict_creates_minimal_json(temp_dir, config_manager, patch_status_manager):
     """Empty data dict should create a minimal JSON file with warning."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     context = {"id": "empty-data", "data": {}}
 
@@ -194,7 +194,7 @@ def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager, pa
     """Non-dict items in table should be converted to string representation."""
     # Update config to include a table field
     config_with_table = {
-        "extract_document_data_v2": {
+        "extract_document_data": {
             "params": {"fields": {
                 "supplier_name": {"alias": "supplier_name"},
                 "items": {"alias": "items", "is_table": True}
@@ -204,7 +204,7 @@ def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager, pa
     config_manager_with_table = DummyConfigManager(config_with_table)
 
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager_with_table), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager_with_table), **params)
 
     # Include non-dict items in the table
     context = {
@@ -244,7 +244,7 @@ def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager, pa
 def test_special_characters_in_data_handled_safely(temp_dir, config_manager, patch_status_manager):
     """Special characters and newlines in data should be preserved in JSON."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     # Data with special characters and newlines
     context = {
@@ -271,7 +271,7 @@ def test_special_characters_in_data_handled_safely(temp_dir, config_manager, pat
 def test_large_data_handling(temp_dir, config_manager, patch_status_manager):
     """Large datasets should be handled without issues."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJsonV2(cast(ConfigManager, config_manager), **params)
+    task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     # Create large dataset
     large_items = [{"id": i, "description": f"Item {i}", "value": i * 1.5} for i in range(1000)]

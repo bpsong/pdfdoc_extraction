@@ -83,9 +83,9 @@ MODULE_PREFIX_CLASSIFICATION = {
     "custom_step.split.": "split",
 }
 
-V2_STORAGE_SUFFIXES: Set[str] = {
-    "store_metadata_as_json_v2",
-    "store_metadata_as_csv_v2",
+TABLE_STORAGE_SUFFIXES: Set[str] = {
+    "store_metadata_as_json",
+    "store_metadata_as_csv",
 }
 
 
@@ -266,7 +266,7 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
 
         if (
             classification == "storage"
-            and _is_v2_storage_module(module_name)
+            and _is_table_storage_module(module_name)
             and not metadata_ready
         ):
             warnings.append(
@@ -419,10 +419,10 @@ def _is_table_field(spec: Any) -> bool:
     return isinstance(spec, dict) and spec.get("is_table") is True
 
 
-def _is_v2_storage_module(module_name: Optional[str]) -> bool:
+def _is_table_storage_module(module_name: Optional[str]) -> bool:
     if not isinstance(module_name, str):
         return False
-    return module_name.split('.')[-1] in V2_STORAGE_SUFFIXES
+    return module_name.split('.')[-1] in TABLE_STORAGE_SUFFIXES
 
 
 def _iter_string_values(node: Any, base_path: str) -> Iterable[Tuple[str, str]]:

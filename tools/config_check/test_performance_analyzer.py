@@ -109,7 +109,7 @@ class TestPerformanceAnalyzer(unittest.TestCase):
             "pipeline": ["extract_1", "extract_2", "extract_3", "store_data"],
             "tasks": {
                 "extract_1": {"module": "standard_step.extraction.extract_pdf", "params": {}},
-                "extract_2": {"module": "standard_step.extraction.extract_pdf_v2", "params": {}},
+                "extract_2": {"module": "standard_step.extraction.extract_pdf", "params": {}},
                 "extract_3": {"module": "standard_step.extraction.extract_document", "params": {}},
                 "store_data": {"module": "standard_step.storage.store_json", "params": {}}
             }

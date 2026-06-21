@@ -49,8 +49,8 @@ def _seed_failed_document(config: TempConfig, tmp_path: Path, *, error: str = "b
             document_id=created["document"]["id"],
             task_key="extract",
             task_index=1,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
             input_data={"api_key": "llx-secret"},
         )
         TaskRunRepository(conn).mark_failed(

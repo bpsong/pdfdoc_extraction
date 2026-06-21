@@ -16,7 +16,6 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
     "archive_pdf": ("standard_step.archiver.archive_pdf", "ArchivePdfTask"),
     "assign_nanoid": ("standard_step.context.assign_nanoid", "AssignNanoidTask"),
     "extract_pdf": ("standard_step.extraction.extract_pdf", "ExtractPdfTask"),
-    "extract_pdf_v2": ("standard_step.extraction.extract_pdf_v2", "ExtractPdfV2Task"),
     "cleanup_task": ("standard_step.housekeeping.cleanup_task", "CleanupTask"),
     "review_gate": ("standard_step.review.review_gate", "ReviewGateTask"),
     "update_reference": ("standard_step.rules.update_reference", "UpdateReferenceTask"),
@@ -29,17 +28,9 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
         "standard_step.storage.store_metadata_as_csv",
         "StoreMetadataAsCsv",
     ),
-    "store_metadata_as_csv_v2": (
-        "standard_step.storage.store_metadata_as_csv_v2",
-        "StoreMetadataAsCsvV2",
-    ),
     "store_metadata_as_json": (
         "standard_step.storage.store_metadata_as_json",
         "StoreMetadataAsJson",
-    ),
-    "store_metadata_as_json_v2": (
-        "standard_step.storage.store_metadata_as_json_v2",
-        "StoreMetadataAsJsonV2",
     ),
 }
 

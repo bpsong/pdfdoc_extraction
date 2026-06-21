@@ -72,7 +72,7 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - The active `pipeline` must be a list of task identifiers and every entry must be a non-empty string.
 - The active `pipeline` must include at least one extraction task, because downstream metadata storage and rules depend on extracted data.
 - A configured task may appear more than once in `pipeline`, but this is reported as a warning because repeated execution is usually accidental.
-- The active `pipeline` can include only one extract task. Extraction tasks are detected from `standard_step.extraction.*`, `custom_step.extraction.*`, or extraction task classes such as `ExtractPdfTask` and `ExtractPdfV2Task`.
+- The active `pipeline` can include only one extract task. Extraction tasks are detected from `standard_step.extraction.*`, `custom_step.extraction.*`, or the `ExtractPdfTask` class.
 - The active `pipeline` can include only one split task. Split tasks are detected from `.split.` modules or `LlamaCloudSplitTask`.
 - The active `pipeline` can include only one review-gate task. Review-gate tasks are detected from `standard_step.review.review_gate` or `ReviewGateTask`.
 - If a split task is present, it must run before extraction. The split task fans out source PDFs into child documents, and extraction should run on the resulting child/leaf documents.
@@ -84,7 +84,7 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - Template tokens use `{token_name}` syntax in task parameter strings such as storage filenames.
 - Tokens must match known extraction field names or known workflow context tokens: `id`, `nanoid`, `filename`, `source`, `original_filename`, or `file_path`.
 - Storage and rules tasks that use extracted field tokens must run after an extraction task.
-- V2 metadata storage tasks warn when no earlier metadata-producing extraction task defines `fields`.
+- Metadata storage tasks warn when no earlier metadata-producing extraction task defines `fields`.
 - Storage filename tokens should reference scalar extraction fields. Tokens pointing at table fields are allowed but warned because filenames cannot reliably represent table payloads.
 - Any non-context task that references `{nanoid}` must run after a context initializer task such as `AssignNanoidTask`.
 

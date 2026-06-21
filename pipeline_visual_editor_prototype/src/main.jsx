@@ -109,8 +109,8 @@ const taskTemplates = [
     label: "Extract document data",
     category: "Extraction",
     icon: Wand2,
-    module: "standard_step.extraction.extract_pdf_v2",
-    class: "ExtractPdfV2Task",
+    module: "standard_step.extraction.extract_pdf",
+    class: "ExtractPdfTask",
     on_error: "stop",
     params: {
       api_key: "",
@@ -136,8 +136,8 @@ const taskTemplates = [
     label: "Store CSV metadata",
     category: "Storage",
     icon: FileText,
-    module: "standard_step.storage.store_metadata_as_csv_v2",
-    class: "StoreMetadataAsCsvV2",
+    module: "standard_step.storage.store_metadata_as_csv",
+    class: "StoreMetadataAsCsv",
     on_error: "continue",
     params: { data_dir: "data", filename: "{id}" },
   },
@@ -146,8 +146,8 @@ const taskTemplates = [
     label: "Store JSON metadata",
     category: "Storage",
     icon: FileJson,
-    module: "standard_step.storage.store_metadata_as_json_v2",
-    class: "StoreMetadataAsJsonV2",
+    module: "standard_step.storage.store_metadata_as_json",
+    class: "StoreMetadataAsJson",
     on_error: "continue",
     params: { data_dir: "data", filename: "{id}" },
   },
@@ -218,7 +218,7 @@ function isPlainObject(value) {
 function taskKind(step) {
   const moduleName = step?.module || "";
   if (step?.class === "LlamaCloudSplitTask" || moduleName.includes(".split.")) return "split";
-  if (step?.class === "ExtractPdfV2Task" || moduleName.includes(".extraction.")) return "extract";
+  if (step?.class === "ExtractPdfTask" || moduleName.includes(".extraction.")) return "extract";
   if (step?.class === "ReviewGateTask" || moduleName.includes(".review.")) return "review";
   if (moduleName.includes(".storage.")) return "storage";
   if (moduleName.includes(".archiver.")) return "archive";

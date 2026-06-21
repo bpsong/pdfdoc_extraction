@@ -321,12 +321,12 @@ Saved LlamaCloud configurations may return either workflow field keys or aliases
 
 ### Storage Semantics
 
-#### JSON Storage (v2)
+#### JSON Storage
 - Preserves list-of-dicts structure for table fields.
 - Writes configured fields under their aliases when aliases are present; otherwise it preserves workflow field keys.
 - Maintains backward compatibility with scalar-only data.
 
-#### CSV Storage (v2)
+#### CSV Storage
 - **Row-per-item mode**: Emits N rows for N line items, repeating scalar fields in each row.
 - **Column naming**: Scalar and item-level CSV headers use configured aliases. Item-level columns are prefixed with `item_` (e.g., `item_description`, `item_quantity`).
 - **Fallback behavior**: If no table field is configured or the list is empty, falls back to v1 single-row format with scalar fields.
@@ -360,9 +360,9 @@ items:  # Workflow field key, used in context["data"]
 
 ### Migration Path
 
-- v2 modules are created as parallel implementations (e.g., `extract_pdf_v2.py`, `store_metadata_as_json_v2.py`).
-- Configuration-driven: Enable v2 by updating module paths in `config.yaml` and adding `is_table: true` to relevant fields.
-- Backward compatibility: v1 tasks remain available and functional for existing configurations.
+- Array-of-objects support is provided by the canonical extraction and metadata storage modules.
+- Configuration-driven: add `is_table: true` and `item_fields` to the relevant extraction field.
+- The former parallel legacy/V2 task registrations have been removed; configurations use the canonical module and class names.
 - SDK contract: runtime extraction uses `llama-cloud>=2.1` and `from llama_cloud import LlamaCloud`; new code should not import `llama_cloud_services.LlamaExtract`.
 - Saved cloud configurations use `configuration_id`. If `configuration_id` is absent, extraction builds an inline Extract v2 configuration from workflow `fields`.
 - Saved LlamaCloud configurations may return workflow field keys or aliases. Extraction normalizes both forms to workflow field keys before downstream tasks run.
@@ -396,8 +396,8 @@ items:  # Workflow field key, used in context["data"]
   - Core components: [`test/core/test_config_manager.py`](test/core/test_config_manager.py:1), [`test/core/test_core_components.py`](test/core/test_core_components.py:1), and legacy status compatibility coverage in [`test/core/test_status_manager.py`](test/core/test_status_manager.py:1)
   - Standard steps: [`test/standard_step/rules/test_rules.py`](test/standard_step/rules/test_rules.py:1), [`test/standard_step/housekeeping/test_cleanup_task.py`](test/standard_step/housekeeping/test_cleanup_task.py:1), [`test/standard_step/test_standard_steps.py`](test/standard_step/test_standard_steps.py:1)
   - Workflow components: [`test/workflow/test_workflow_loader.py`](test/workflow/test_workflow_loader.py:1), [`test/workflow/test_workflow_manager.py`](test/workflow/test_workflow_manager.py:1)
-  - Extraction logic: [`test/extraction/test_extraction.py`](test/extraction/test_extraction.py:1), [`test/extraction/test_extraction_v2.py`](test/extraction/test_extraction_v2.py:1)
-  - Storage operations: [`test/storage/test_storage.py`](test/storage/test_storage.py:1), [`test/storage/test_storage_v2_csv.py`](test/storage/test_storage_v2_csv.py:1), [`test/storage/test_storage_v2_json.py`](test/storage/test_storage_v2_json.py:1)
+  - Extraction logic: [`test/extraction/test_extraction.py`](test/extraction/test_extraction.py:1), [`test/extraction/test_extraction_sqlite_persistence.py`](test/extraction/test_extraction_sqlite_persistence.py:1)
+  - Storage operations: [`test/storage/test_storage_csv.py`](test/storage/test_storage_csv.py:1), [`test/storage/test_storage_json.py`](test/storage/test_storage_json.py:1)
   - Tools and validation: config checker suite under [`test/tools/config_check/`](test/tools/config_check/).
   - Utilities: [`test/utils/test_utilities.py`](test/utils/test_utilities.py:1)
   - Third-party integrations: [`test/third_party/llamacloud_connection_test.py`](test/third_party/llamacloud_connection_test.py:1)

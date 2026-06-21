@@ -109,7 +109,7 @@ custom_steps:
 
 **Symptom**
 ```
-[WARNING] pipeline[5]: Task type 'standard_step.storage.store_metadata_as_json_v2.StoreMetadataAsJsonV2' appears multiple times in the pipeline. This is allowed, but verify the duplicate is intentional.
+[WARNING] pipeline[5]: Task type 'standard_step.storage.store_metadata_as_json.StoreMetadataAsJson' appears multiple times in the pipeline. This is allowed, but verify the duplicate is intentional.
 ```
 
 **Fixes**
@@ -135,12 +135,12 @@ custom_steps:
 
 **Symptom**
 ```
-[WARNING] tasks.extract_metadata.params.fields: Multiple extraction fields are marked is_table: true; v2 storage tasks currently support only a single table payload.
+[WARNING] tasks.extract_metadata.params.fields: Multiple extraction fields are marked is_table: true; metadata storage tasks currently support only a single table payload.
 ```
 
 **Fixes**
 - Keep only one field with `is_table: true` in the task, or split additional tables into separate extraction tasks.
-- Cross-check downstream storage tasks; most v2 writers expect a single table payload and will ignore extra tables even if validation succeeds.
+- Cross-check downstream storage tasks; the metadata writers expect a single table payload and will ignore extra tables even if validation succeeds.
 
 ## Local Drive Storage Requirements
 
@@ -469,14 +469,14 @@ custom_steps:
 **Symptoms**
 ```
 [ERROR] pipeline[1]: Storage task 'store_json' uses extracted data tokens but no extraction task runs earlier.
-[WARNING] pipeline[2]: Storage task 'store_json_v2' expects extraction metadata but no metadata-producing extraction task runs earlier.
+[WARNING] pipeline[2]: Storage task 'store_json' expects extraction metadata but no metadata-producing extraction task runs earlier.
 [WARNING] tasks.store_json.params.filename: Filename token '{line_items}' in storage task 'store_json' references non-scalar extraction field 'line_items'. Use a scalar field or update the template.
 [ERROR] tasks.store_json.params.filename: Unknown template token 'supplier_code'. Add an extraction field or update the template.
 ```
 
 **Fixes**
 - Ensure at least one extraction task runs before any storage or archive steps, so tokens resolve correctly.
-- Schedule a metadata-producing extraction task, such as `extract_document_data`, ahead of v2 storage tasks that expect extraction field metadata.
+- Schedule a metadata-producing extraction task, such as `extract_document_data`, ahead of metadata storage tasks that expect extraction field metadata.
 - Insert a context initializer task (for example `standard_step.context.generate_ids`) before referencing `{nanoid}` or other context-scoped tokens.
 - Expose table columns that need to appear in filenames as scalar extraction fields, or adjust the filename template to avoid table tokens.
 - Create the missing extraction field (preferably scalar) or remove the unknown placeholder if the value is not needed.

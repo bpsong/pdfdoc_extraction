@@ -180,8 +180,8 @@ def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, mo
                     "on_error": "stop",
                 },
                 "extract_document_data": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {
                         "api_key": "llx-bad",
                         "configuration_id": "cfg-missing",

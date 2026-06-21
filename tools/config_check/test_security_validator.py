@@ -108,7 +108,7 @@ class TestSecurityValidator(unittest.TestCase):
         config = {
             "tasks": {
                 "store_data": {
-                    "module": "standard_step.storage.store_json_v2",
+                    "module": "standard_step.storage.store_metadata_as_json",
                     "params": {
                         "storage": {
                             "data_dir": "../../../var/log",

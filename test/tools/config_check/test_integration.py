@@ -65,13 +65,13 @@ def test_validator_emits_yaml_error_for_malformed_file(
 
 
 
-def test_validator_allows_v2_storage_with_metadata(config_factory, validator: ConfigValidator) -> None:
+def test_validator_allows_metadata_storage_with_metadata(config_factory, validator: ConfigValidator) -> None:
     config = config_factory.with_overrides(
         {
             "tasks": {
-                "store_json_v2": {
-                    "module": "standard_step.storage.store_metadata_as_json_v2",
-                    "class": "StoreMetadataAsJsonV2",
+                "store_json": {
+                    "module": "standard_step.storage.store_metadata_as_json",
+                    "class": "StoreMetadataAsJson",
                     "params": {
                         "data_dir": str(config_factory.paths.data_dir),
                         "filename": "{id}.json",
@@ -80,26 +80,26 @@ def test_validator_allows_v2_storage_with_metadata(config_factory, validator: Co
             },
             "pipeline": [
                 "extract_metadata",
-                "store_json_v2",
+                "store_json",
                 "archive_pdf",
             ],
         }
     )
 
-    config_path = config_factory.write(name="v2_ok.yaml", config=config)
+    config_path = config_factory.write(name="metadata_ok.yaml", config=config)
 
     result = validator.validate(config_path)
 
     assert all(message.code != "pipeline-storage-metadata-missing" for message in result.warnings)
 
 
-def test_validator_warns_when_v2_storage_precedes_metadata(config_factory, validator: ConfigValidator) -> None:
+def test_validator_warns_when_metadata_storage_precedes_metadata(config_factory, validator: ConfigValidator) -> None:
     config = config_factory.with_overrides(
         {
             "tasks": {
-                "store_json_v2": {
-                    "module": "standard_step.storage.store_metadata_as_json_v2",
-                    "class": "StoreMetadataAsJsonV2",
+                "store_json": {
+                    "module": "standard_step.storage.store_metadata_as_json",
+                    "class": "StoreMetadataAsJson",
                     "params": {
                         "data_dir": str(config_factory.paths.data_dir),
                         "filename": "{id}.json",
@@ -107,14 +107,14 @@ def test_validator_warns_when_v2_storage_precedes_metadata(config_factory, valid
                 }
             },
             "pipeline": [
-                "store_json_v2",
+                "store_json",
                 "extract_metadata",
                 "archive_pdf",
             ],
         }
     )
 
-    config_path = config_factory.write(name="v2_warn.yaml", config=config)
+    config_path = config_factory.write(name="metadata_warn.yaml", config=config)
 
     result = validator.validate(config_path)
 

@@ -12,7 +12,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - **Llama Cloud Integration**: Advanced AI service for intelligent document understanding
 - **Structured Data Extraction**: Converts PDF content into structured JSON/CSV format
 - **Multi-format Support**: Handles invoices, receipts, forms, and various document types
-- **v2 Array-of-Objects Support**: Extract line items and tabular data from complex documents
+- **Array-of-Objects Support**: Extract line items and tabular data from complex documents
 
 ### Multiple Input Methods
 - **Watch Folder Monitoring**: Automated processing of dropped PDF files
@@ -30,7 +30,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Flexible Data Storage
 - **CSV Export**: Structured data in spreadsheet format
 - **JSON Export**: Hierarchical data preservation
-- **v2 Enhanced Storage**: Row-per-item expansion for tabular data
+- **Table-Aware Storage**: Row-per-item expansion for tabular data
 - **Local File Management**: Organized storage with metadata tracking
 - **Artifact Registry**: Source originals, split working files, archives, PDFs, CSVs, and JSON exports are registered as durable document files
 
@@ -133,8 +133,8 @@ watch_folder:
 
 tasks:
   extract_document_data:
-    module: standard_step.extraction.extract_pdf_v2
-    class: ExtractPdfV2Task
+    module: standard_step.extraction.extract_pdf
+    class: ExtractPdfTask
     params:
       api_key: "your_llama_cloud_api_key"
       # Optional: use a saved Extract v2 configuration from the LlamaCloud UI.
@@ -311,13 +311,10 @@ pdfdoc_extraction/
 │   └── workflow_manager.py     # Workflow orchestration
 ├── 📁 standard_step/           # Processing pipeline steps
 │   ├── extraction/             # Data extraction tasks
-│   │   ├── extract_pdf.py      # Basic extraction
-│   │   └── extract_pdf_v2.py   # Enhanced extraction with arrays
+│   │   └── extract_pdf.py      # Extraction with array-of-objects support
 │   ├── storage/                # Data storage tasks
 │   │   ├── store_metadata_as_csv.py
-│   │   ├── store_metadata_as_json.py
-│   │   ├── store_metadata_as_csv_v2.py
-│   │   └── store_metadata_as_json_v2.py
+│   │   └── store_metadata_as_json.py
 │   ├── rules/                  # Business rule tasks
 │   ├── archiver/               # File archiving tasks
 │   ├── context/                # Context management tasks

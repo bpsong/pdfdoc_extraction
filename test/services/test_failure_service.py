@@ -22,8 +22,8 @@ def _create_failed_document(tmp_path, *, error="boom"):
             document_id=created["document"]["id"],
             task_key="extract_document_data",
             task_index=1,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
             input_data={"api_key": "llx-secret-token"},
         )
         TaskRunRepository(conn).mark_failed(
@@ -148,8 +148,8 @@ def test_failure_service_groups_repeated_split_child_extract_failures(tmp_path):
                 document_id=child["id"],
                 task_key="extract_document_data",
                 task_index=1,
-                module_name="standard_step.extraction.extract_pdf_v2",
-                class_name="ExtractPdfV2Task",
+                module_name="standard_step.extraction.extract_pdf",
+                class_name="ExtractPdfTask",
             )
             TaskRunRepository(conn).mark_failed(
                 run["id"],

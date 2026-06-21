@@ -52,7 +52,7 @@
     function stepType(step) {
         const moduleName = String(step.module || "");
         const className = String(step.class || "");
-        if (moduleName.includes(".extraction.") || ["ExtractPdfTask", "ExtractPdfV2Task"].includes(className)) {
+        if (moduleName.includes(".extraction.") || className === "ExtractPdfTask") {
             return "extract";
         }
         if (moduleName.includes(".split.") || className === "LlamaCloudSplitTask") {
@@ -346,7 +346,6 @@
     function keyFromClass(className) {
         return String(className || "task")
             .replace(/Task$/, "")
-            .replace(/V2$/, "")
             .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
             .toLowerCase();
     }

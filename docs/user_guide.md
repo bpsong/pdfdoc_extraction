@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 2.6
-Release Date: 2026-06-20
+Version: 2.7
+Release Date: 2026-06-21
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 2.6
-Release Date: 2026-06-20
+Version: 2.7
+Release Date: 2026-06-21
 Author: [Your Organization/Name]
 
 ---
@@ -38,8 +38,8 @@ Author: [Your Organization/Name]
   - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
        - [4.8.1. extraction](#481-extraction)
        - [4.8.2. split.llamacloud_split](#482-splitllamacloud_split)
-       - [4.8.3. storage.store_metadata_as_csv_v2](#483-storagestore_metadata_as_csv_v2)
-       - [4.8.4. storage.store_metadata_as_json_v2](#484-storagestore_metadata_as_json_v2)
+       - [4.8.3. storage.store_metadata_as_csv](#483-storagestore_metadata_as_csv)
+       - [4.8.4. storage.store_metadata_as_json](#484-storagestore_metadata_as_json)
        - [4.8.5. storage.store_file_to_localdrive](#485-storagestore_file_to_localdrive)
        - [4.8.6. archiver.archive_pdf](#486-archiverarchive_pdf)
        - [4.8.7. rules.update_reference](#487-rulesupdate_reference)
@@ -72,6 +72,7 @@ Author: [Your Organization/Name]
 | 2.4     | 2025-08-20 | [Your Organization] | Added config-check administrator overview and cross-references to validation docs |
 | 2.5     | 2026-06-03 | [Your Organization] | Updated for the unified operator and administrator interface, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
 | 2.6     | 2026-06-20 | [Your Organization] | Updated role guidance, UI-led operator procedures, account recovery, failure handling, split policy explanations, v2 task examples, upload limits, and recovery guidance |
+| 2.7     | 2026-06-21 | [Your Organization] | Consolidated extraction and metadata storage under canonical module and class names while retaining Extract v2 array-of-objects behavior |
 
 ---
 
@@ -507,7 +508,7 @@ Example task categories include:
 - `split.llamacloud_split`: Optionally split bundled PDFs into child documents before extraction.
 - `review.review_gate`: Pause documents for operator review based on confidence, schema, or policy rules.
 - `rules.update_reference`: Update reference CSV files.
-- `storage.store_metadata_as_csv_v2` / `storage.store_metadata_as_json_v2`: Persist extracted information.
+- `storage.store_metadata_as_csv` / `storage.store_metadata_as_json`: Persist extracted information.
 - `storage.store_file_to_localdrive`: Persist the processed PDF.
 - `archiver.archive_pdf`: Archive the original input PDF.
 
@@ -718,7 +719,7 @@ Standard steps are predefined operations configured in workflows. Below are the 
 
 #### 4.8.1. extraction
 
-- **Current module/class:** `standard_step.extraction.extract_pdf_v2` / `ExtractPdfV2Task`
+- **Current module/class:** `standard_step.extraction.extract_pdf` / `ExtractPdfTask`
 - **Purpose:** Extracts structured data and confidence information from PDF documents through LlamaCloud Extract v2.
 - **params:**
   - `provider`: string, currently LlamaCloud Extract v2 through the `llama-cloud` SDK.
@@ -752,8 +753,8 @@ Standard steps are predefined operations configured in workflows. Below are the 
 ```yaml
 tasks:
   extract_document_data:
-    module: standard_step.extraction.extract_pdf_v2
-    class: ExtractPdfV2Task
+    module: standard_step.extraction.extract_pdf
+    class: ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
       configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
@@ -775,7 +776,7 @@ pipeline:
   - extract_document_data
 ```
 
-`standard_step.extraction.extract_pdf.ExtractPdfTask` is retained for compatibility with older configurations. Use `ExtractPdfV2Task` for new or updated pipelines.
+`standard_step.extraction.extract_pdf.ExtractPdfTask` is the only registered PDF extraction task.
 
 #### 4.8.2. split.llamacloud_split
 
@@ -864,9 +865,9 @@ After fan-out, each child document is a **leaf document** because it is processe
 - **Completed with errors** (`completed_with_errors`): all children finished, with a mixture of successful and failed children.
 - **Failed** (`failed`): every child failed.
 
-#### 4.8.3. storage.store_metadata_as_csv_v2
+#### 4.8.3. storage.store_metadata_as_csv
 
-- **Current module/class:** `standard_step.storage.store_metadata_as_csv_v2` / `StoreMetadataAsCsvV2`
+- **Current module/class:** `standard_step.storage.store_metadata_as_csv` / `StoreMetadataAsCsv`
 - **Purpose:** Stores extracted metadata as CSV and expands a configured table field into one row per item.
 - **params:**
   - `data_dir`: string (required). Destination folder for CSV.
@@ -882,8 +883,8 @@ After fan-out, each child document is a **leaf document** because it is processe
 ```yaml
 tasks:
   store_metadata_csv:
-    module: standard_step.storage.store_metadata_as_csv_v2
-    class: StoreMetadataAsCsvV2
+    module: standard_step.storage.store_metadata_as_csv
+    class: StoreMetadataAsCsv
     params:
       data_dir: "data"
       filename: "{supplier_name}_{invoice_amount}_{policy_number}"
@@ -893,9 +894,9 @@ pipeline:
   - store_metadata_csv
 ```
 
-#### 4.8.4. storage.store_metadata_as_json_v2
+#### 4.8.4. storage.store_metadata_as_json
 
-- **Current module/class:** `standard_step.storage.store_metadata_as_json_v2` / `StoreMetadataAsJsonV2`
+- **Current module/class:** `standard_step.storage.store_metadata_as_json` / `StoreMetadataAsJson`
 - **Purpose:** Stores extracted metadata as JSON while preserving arrays of objects such as invoice line items.
 - **params:**
   - `data_dir`: string (required). Destination folder for JSON.
@@ -910,8 +911,8 @@ pipeline:
 ```yaml
 tasks:
   store_metadata_json:
-    module: standard_step.storage.store_metadata_as_json_v2
-    class: StoreMetadataAsJsonV2
+    module: standard_step.storage.store_metadata_as_json
+    class: StoreMetadataAsJson
     params:
       data_dir: "data"
       filename: "{supplier_name}_{invoice_amount}_{policy_number}"
@@ -921,7 +922,7 @@ pipeline:
   - store_metadata_json
 ```
 
-The non-v2 CSV and JSON storage classes remain available for older scalar-only configurations. Use the v2 classes for new or updated pipelines.
+These canonical CSV and JSON classes support both scalar fields and one configured array-of-objects table field.
 
 #### 4.8.5. storage.store_file_to_localdrive
 
@@ -1063,8 +1064,8 @@ For schema-driven review field types, validation behavior, and LlamaCloud date-f
 ```yaml
 tasks:
   extract_document_data:
-    module: standard_step.extraction.extract_pdf_v2
-    class: ExtractPdfV2Task
+    module: standard_step.extraction.extract_pdf
+    class: ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
       fields:
@@ -1086,8 +1087,8 @@ tasks:
     on_error: stop
 
   store_metadata_json:
-    module: standard_step.storage.store_metadata_as_json_v2
-    class: StoreMetadataAsJsonV2
+    module: standard_step.storage.store_metadata_as_json
+    class: StoreMetadataAsJson
     params:
       data_dir: "data"
       filename: "{supplier_name}_{invoice_amount}"
@@ -1163,21 +1164,21 @@ pipeline:
 
 ### 4.9. LlamaCloud Extract v2 Array-of-Objects Support
 
-The v2 extraction and storage system handles LlamaCloud Extract v2 responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
+The canonical extraction and storage tasks handle LlamaCloud Extract v2 responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
 
 #### 4.9.1. Overview
 
-The v2 system allows extraction of structured data where certain fields return lists of sub-objects. For example, an invoice might have an "Items" field containing multiple line items with descriptions, quantities, and prices.
+The canonical tasks allow extraction of structured data where certain fields return lists of sub-objects. For example, an invoice might have an "Items" field containing multiple line items with descriptions, quantities, and prices.
 
 #### 4.9.2. Configuration
 
-To use v2 features, update your `config.yaml` to:
+To configure array-of-objects extraction, update your `config.yaml` to:
 
-1. Use the v2 extraction task:
+1. Use the canonical extraction task:
    ```yaml
    extract_document_data:
-     module: standard_step.extraction.extract_pdf_v2
-     class: ExtractPdfV2Task
+     module: standard_step.extraction.extract_pdf
+     class: ExtractPdfTask
      params:
        api_key: "llx-REDACTED"
        configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
@@ -1215,12 +1216,12 @@ To use v2 features, update your `config.yaml` to:
 - No database migration is required; the existing `extracted_fields.confidence` and `source_json` columns are used.
 - This behavior applies to new extraction runs only. Existing completed extraction/review records are not rewritten automatically.
 
-##### JSON Storage (v2)
+##### JSON Storage
 - Preserves the list-of-objects structure for table fields.
 - Configured fields are written under their aliases when aliases are present; otherwise workflow field keys are preserved.
 - Maintains backward compatibility with scalar-only data.
 
-##### CSV Storage (v2)
+##### CSV Storage
 - **Row-per-item mode**: Creates one CSV row for each item in the array, repeating invoice-level fields.
 - **Column naming**: Scalar and item columns use configured aliases. Item columns are prefixed with `item_` (e.g., `item_description`, `item_quantity`).
 - **Fallback**: If no table field is configured or the list is empty, falls back to single-row format.
@@ -1233,25 +1234,25 @@ To use v2 features, update your `config.yaml` to:
 
 #### 4.9.4. Migration Guide
 
-To migrate from v1 to v2:
+To use the canonical array-of-objects tasks:
 
-1. Update extraction task to use v2 module:
+1. Configure the canonical extraction task:
    ```yaml
-   module: standard_step.extraction.extract_pdf_v2
-   class: ExtractPdfV2Task
+   module: standard_step.extraction.extract_pdf
+   class: ExtractPdfTask
    ```
 
 2. Add `is_table: true` to array fields in your extraction configuration.
 
-3. Optionally update storage tasks to use v2 modules:
+3. Configure the canonical storage tasks:
    ```yaml
-   # JSON v2
-   module: standard_step.storage.store_metadata_as_json_v2
-   class: StoreMetadataAsJsonV2
+   # JSON
+   module: standard_step.storage.store_metadata_as_json
+   class: StoreMetadataAsJson
 
-   # CSV v2
-   module: standard_step.storage.store_metadata_as_csv_v2
-   class: StoreMetadataAsCsvV2
+   # CSV
+   module: standard_step.storage.store_metadata_as_csv
+   class: StoreMetadataAsCsv
    ```
 
 4. After the LlamaCloud UI configuration is ready, test with a small set of documents before full deployment.
@@ -1274,7 +1275,7 @@ To migrate from v1 to v2:
 
 ### 4.10. Example Workflows
 
-**Example pipeline using the current v2 extraction and storage tasks:**
+**Example pipeline using the canonical extraction and storage tasks:**
 
 ```yaml
 # Top-level configuration keys (abbreviated for example)
@@ -1297,8 +1298,8 @@ logging:
 # Tasks registry: name -> module/class/params
 tasks:
   extract_document_data:
-    module: standard_step.extraction.extract_pdf_v2
-    class: ExtractPdfV2Task
+    module: standard_step.extraction.extract_pdf
+    class: ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
       configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
@@ -1343,16 +1344,16 @@ tasks:
     on_error: stop
 
   store_metadata_csv:
-    module: standard_step.storage.store_metadata_as_csv_v2
-    class: StoreMetadataAsCsvV2
+    module: standard_step.storage.store_metadata_as_csv
+    class: StoreMetadataAsCsv
     params:
       data_dir: "data"
       filename: "{supplier_name}_{invoice_amount}_{policy_number}"
     on_error: continue
 
   store_metadata_json:
-    module: standard_step.storage.store_metadata_as_json_v2
-    class: StoreMetadataAsJsonV2
+    module: standard_step.storage.store_metadata_as_json
+    class: StoreMetadataAsJson
     params:
       data_dir: "data"
       filename: "{supplier_name}_{invoice_amount}_{policy_number}"

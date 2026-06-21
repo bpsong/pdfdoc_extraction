@@ -390,7 +390,7 @@ def _validate_extraction_params(
             ParameterIssue(
                 path=f"{params_path}.fields",
                 message=(
-                    "Multiple extraction fields are marked is_table: true; ExtractPdfV2Task "
+                    "Multiple extraction fields are marked is_table: true; ExtractPdfTask "
                     "supports only a single table payload."
                 ),
                 code="param-extraction-multiple-tables",

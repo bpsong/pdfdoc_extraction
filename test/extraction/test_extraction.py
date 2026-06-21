@@ -1,330 +1,725 @@
-import os
-from pathlib import Path
-import pytest
-from unittest.mock import MagicMock
-from modules.config_manager import ConfigManager
-from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
-from modules.db.repositories import ExtractionRepository, TaskRunRepository
-from modules.exceptions import TaskError
-from modules.services.batch_service import BatchService
-from standard_step.extraction.extract_pdf import ExtractPdfTask
-from test.helpers_sqlite import TempConfig
-from typing import List, Optional
 
+import os
+import pytest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+from modules.config_manager import ConfigManager
+from modules.exceptions import TaskError
+from standard_step.extraction.extract_pdf import ExtractPdfTask
+from typing import Dict, Any, List
+
+# Test configuration
 TEST_DIR = Path(__file__).parent
-CONFIG_PATH = Path("test/data/extraction_config.yaml")
-SAMPLE_PDF_SOURCE = Path("test/data/sample_invoice.pdf")
+SAMPLE_PDF_SOURCE = TEST_DIR / "test_extraction.py"  # Use existing test file as mock PDF
 
 class TestExtractPdfTask:
+    """Comprehensive test suite for ExtractPdfTask."""
 
     @pytest.fixture(autouse=True)
-    def setup_and_teardown(self):
+    def setup_and_teardown(self, monkeypatch):
+        """Set up test fixtures and clean up after each test."""
+        # Reset ConfigManager singleton
         ConfigManager._instance = None
-        self.config_manager = MagicMock()
-        self.config_manager.get_all.return_value = {
-            "tasks": {
-                "extract_document_data": {
-                    "params": {
-                        "fields": {
-                            "field1": {"type": "str", "alias": "field1"},
-                            "serial_numbers": {"type": "List[str]", "alias": "serial_numbers"},
+
+        # Create sample config dict matching the expected structure in config.yaml
+        sample_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'purchase_order_number': {'alias': 'Purchase Order number', 'type': 'str'},
+                            'invoice_amount': {'alias': 'Invoice Amount', 'type': 'float'},
+                            'project_number': {'alias': 'Project number', 'type': 'str'},
+                            'items': {
+                                'alias': 'Items',
+                                'type': 'List[Any]',
+                                'is_table': True,
+                                'item_fields': {
+                                    'description': {'alias': 'Description', 'type': 'str'},
+                                    'quantity': {'alias': 'Quantity', 'type': 'str'}
+                                }
+                            }
                         }
                     }
                 }
             }
         }
+
+        # Mock ConfigManager to return our sample config
+        def mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = sample_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
+
+        self.config_manager = MagicMock()
+        self.config_manager.get.side_effect = mock_get
+
         yield
 
-    def test_extract_pdf_updates_context(self, monkeypatch):
-        context = {"id": "test_id_status", "file_path": str(SAMPLE_PDF_SOURCE)}
-
+    def test_successful_extraction_with_table(self, monkeypatch):
+        """Test successful extraction with both scalar fields and table data."""
+        # Sample LlamaCloud response as specified in requirements
         sample_response = MagicMock()
         sample_response.data = {
-            "field1": "value1",
-            "serial_numbers": ["123", None, "456"]
+            "Supplier name": "ALLIGATOR SINGAPORE PTE LTD",
+            "Purchase Order number": "1781054",
+            "Invoice Amount": 44.62,
+            "Project number": "S268588",
+            "Items": [
+                {"Description": "ELECTRODE G-300 3.2MM 5KG FOR MILD STEEL TYPE #6013, 3.2MM X 350MM (5KGS./PKT)", "Quantity": "4.0 PKT"},
+                {"Description": "QUICK COUPLER SOCKET F/FUELGAS 5/16 AUTO REV. FLOW COUPLING AS-2 & AP-2 STEEL 3/8\"", "Quantity": "2.0 PCS"},
+                {"Description": "3% DISCOUNT", "Quantity": "1.0 TIM"}
+            ]
         }
-        sample_response.extraction_metadata = {}
-        monkeypatch.setattr(
-            "standard_step.extraction.extract_pdf.run_extract_v2_job",
-            MagicMock(return_value=sample_response),
-        )
-
-        task = ExtractPdfTask(
-            config_manager=self.config_manager,
-            api_key="dummy",
-            fields={
-                "field1": {"type": "str", "alias": "field1"},
-                "serial_numbers": {"type": "List[str]", "alias": "serial_numbers"}
-            }
-        )
-        
-        task.on_start(context)
-        result = task.run(context)
-
-        assert result["data"]["field1"] == "value1"
-        assert result["data"]["serial_numbers"] == ["123", "456"]
-        assert result["metadata"]["extraction_status"] == "success"
-
-    def test_extract_pdf(self, monkeypatch, setup_and_teardown):
-        sample_response = MagicMock()
-        sample_response.data = {
-            "supplier_name": "Test Supplier",
-            "client_name": "Test Client",
-            "client_address": "123 Test St",
-            "invoice_amount": 100.50,
-            "insurance_start_date": "2023-01-01",
-            "insurance_end_date": "2024-01-01",
-            "policy_number": "POL123",
-            "serial_numbers": ["SN123", None, "SN456"],
-            "invoice_type": "Invoice",
+        sample_response.extraction_metadata = {
+            "run_id": "3c13c955-34e8-4c36-b498-42a55bbc1db3",
+            "extraction_configuration_id": "test_configuration_id",
+            "usage": {"total_tokens": 150, "input_tokens": 100, "output_tokens": 50}
         }
-        sample_response.extraction_metadata = {}
-        monkeypatch.setattr(
-            "standard_step.extraction.extract_pdf.run_extract_v2_job",
-            MagicMock(return_value=sample_response),
-        )
 
-        unique_id = "test_invoice_id"
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        # Test context
         context = {
-            "id": unique_id,
+            "id": "test-uuid",
             "file_path": str(SAMPLE_PDF_SOURCE),
+            "original_filename": "test.pdf",
+            "source": "test_source"
         }
 
-        task = ExtractPdfTask(
-            config_manager=self.config_manager,
-            api_key="dummy_api_key",
-            fields={
-                "supplier_name": {"type": "str", "alias": "supplier_name"},
-                "client_name": {"type": "str", "alias": "client_name"},
-                "client_address": {"type": "str", "alias": "client_address"},
-                "invoice_amount": {"type": "float", "alias": "invoice_amount"},
-                "insurance_start_date": {"type": "str", "alias": "insurance_start_date"},
-                "insurance_end_date": {"type": "str", "alias": "insurance_end_date"},
-                "policy_number": {"type": "str", "alias": "policy_number"},
-                "serial_numbers": {"type": "Optional[List[str]]", "alias": "serial_numbers"},
-                "invoice_type": {"type": "str", "alias": "invoice_type"},
-            }
-        )
-        
-        task.on_start(context)
-        try:
-            result_context = task.run(context)
-        except Exception as e:
-            pytest.fail(f"ExtractPdfTask.run raised an exception: {e}")
+        # Create and run task
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)  # Call on_start first like in V1 tests
+        result_context = task.run(context)
 
-        assert "data" in result_context, "'data' key missing in result context"
+        # Assertions
+        assert "data" in result_context
+        data = result_context["data"]
+
+        # Test scalar fields normalization
+        assert data["supplier_name"] == "ALLIGATOR SINGAPORE PTE LTD"
+        assert data["purchase_order_number"] == "1781054"
+        assert data["invoice_amount"] == 44.62  # float conversion
+        assert isinstance(data["invoice_amount"], float)
+        assert data["project_number"] == "S268588"
+
+        # Test table field processing
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) == 3
+
+        # Test first item
+        first_item = data["items"][0]
+        assert first_item["description"] == "ELECTRODE G-300 3.2MM 5KG FOR MILD STEEL TYPE #6013, 3.2MM X 350MM (5KGS./PKT)"
+        assert first_item["quantity"] == "4.0 PKT"
+
+        # Test second item
+        second_item = data["items"][1]
+        assert 'QUICK COUPLER' in second_item["description"]
+        assert second_item["quantity"] == "2.0 PCS"
+
+        # Test metadata preservation
+        assert "metadata" in result_context
+        assert result_context["metadata"]["extraction_configuration_id"] == "test_configuration_id"
+        assert result_context["metadata"]["extraction_metadata"] == sample_response.extraction_metadata
+
+        # Test no error in context
+        assert result_context.get("error") is None
+
+    def test_scalar_fields_only(self, monkeypatch):
+        """Test extraction with only scalar fields, no table fields."""
+        # Config without table field
+        sample_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'invoice_amount': {'alias': 'Invoice Amount', 'type': 'float'},
+                            'project_number': {'alias': 'Project number', 'type': 'str'}
+                        }
+                    }
+                }
+            }
+        }
+
+        def mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = sample_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
+
+        self.config_manager.get.side_effect = mock_get
+
+        # Mock response with only scalars
+        sample_response = MagicMock()
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Invoice Amount": 100.50,
+            "Project number": "TEST123"
+        }
+        sample_response.extraction_metadata = {"test": "metadata"}
+
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
+
+        # Assertions
+        data = result_context["data"]
+        assert "supplier_name" in data
+        assert "invoice_amount" in data
+        assert "project_number" in data
+        assert "items" not in data  # No table field
+
+        assert data["supplier_name"] == "Test Supplier"
+        assert data["invoice_amount"] == 100.50
+        assert isinstance(data["invoice_amount"], float)
+
+        # Metadata preserved
+        assert "metadata" in result_context
+        assert result_context["metadata"]["extraction_metadata"] == {"test": "metadata"}
+
+    def test_table_field_missing_in_response(self, monkeypatch):
+        """Test graceful handling when table field is missing from response."""
+        # Mock response without "Items" in data
+        sample_response = MagicMock()
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Invoice Amount": 50.0
+            # Missing "Items" field
+        }
+        sample_response.extraction_metadata = {"test": "metadata"}
+
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
+
+        # Assertions
+        data = result_context["data"]
+
+        # Scalar fields processed normally
+        assert data["supplier_name"] == "Test Supplier"
+        assert data["invoice_amount"] == 50.0
+
+        # Table field should be empty list or None, handled gracefully
+        assert data["items"] == []  # Empty list since table data not found
+
+        # No errors should be raised
+        assert result_context.get("error") is None
+
+    def test_invalid_pdf_path(self, monkeypatch):
+        """Test error handling for invalid PDF file path."""
+        # Mock the LlamaCloud runner to avoid actual API calls
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock())
+
+        context = {
+            "id": "test-uuid",
+            "file_path": ""  # Empty file path should trigger validation error
+        }
+
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+
+        with pytest.raises(TaskError) as exc_info:
+            task.run(context)
+
+        # Verify the error message
+        assert "File path not provided" in str(exc_info.value)
+
+        assert context["error"] == "TaskError: File path not provided in context"
+        assert context["error_step"] == "ExtractPdfTask"
+
+    def test_api_failure(self, monkeypatch):
+        """Test error handling when LlamaCloud API fails."""
+        # Mock API to raise exception
+        monkeypatch.setattr(
+            "standard_step.extraction.extract_pdf.run_extract_v2_job",
+            MagicMock(side_effect=Exception("API connection failed")),
+        )
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+
+        with pytest.raises(TaskError) as exc_info:
+            task.run(context)
+
+        # Test error registered in context
+        assert "error" in context
+        assert "API connection failed" in str(context["error"])
+
+        assert context["error_step"] == "ExtractPdfTask"
+
+    def test_type_conversion(self, monkeypatch):
+        """Test type conversion for different field types."""
+        # Mock response with various data types
+        sample_response = MagicMock()
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Invoice Amount": "123.45",  # String that should convert to float
+            "Project number": "123",     # String that could convert to int but stays str
+            "Items": []  # Empty table
+        }
+        sample_response.extraction_metadata = {}
+
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
 
         data = result_context["data"]
 
-        expected_fields = {
-            "supplier_name": str,
-            "client_name": str,
-            "client_address": str,
-            "invoice_amount": (float, int),
-            "insurance_start_date": str,
-            "insurance_end_date": str,
-            "policy_number": str,
-            "serial_numbers": list,
-            "invoice_type": str,
-        }
+        # Test string conversion
+        assert data["supplier_name"] == "Test Supplier"
+        assert isinstance(data["supplier_name"], str)
 
-        for field, expected_type in expected_fields.items():
-            assert field in data, f"Field '{field}' missing in extracted data"
-            value = data[field]
-            if field == "serial_numbers":
-                assert isinstance(value, list) and all(isinstance(i, str) for i in value), \
-                    f"Field '{field}' should be list of strings after filtering None"
-                assert None not in value, "None values should be filtered from serial_numbers"
-            else:
-                assert isinstance(value, expected_type), \
-                    f"Field '{field}' expected type {expected_type} but got {type(value)}"
+        # Test float conversion from string
+        assert data["invoice_amount"] == 123.45
+        assert isinstance(data["invoice_amount"], float)
 
-        assert "metadata" in result_context
-        assert result_context["metadata"]["extraction_configuration_id"] is None
-        assert result_context["metadata"]["extraction_status"] == "success"
+        # Test string remains string
+        assert data["project_number"] == "123"
+        assert isinstance(data["project_number"], str)
 
-    def test_extract_pdf_rejects_malicious_field_type_without_executing(
-        self,
-        monkeypatch,
-        tmp_path,
-    ):
-        marker_path = tmp_path / "eval_executed.txt"
-        malicious_type = (
-            "__import__('pathlib').Path("
-            f"{str(marker_path)!r}"
-            ").write_text('owned') or str"
-        )
+    def test_string_cleaning(self, monkeypatch):
+        """Test string cleaning in table item descriptions."""
+        # Mock response with newlines in descriptions that should be cleaned
         sample_response = MagicMock()
-        sample_response.data = {"field1": "value1"}
-        sample_response.extraction_metadata = {}
-        monkeypatch.setattr(
-            "standard_step.extraction.extract_pdf.run_extract_v2_job",
-            MagicMock(return_value=sample_response),
-        )
-
-        task = ExtractPdfTask(
-            config_manager=self.config_manager,
-            api_key="dummy_api_key",
-            fields={
-                "field1": {
-                    "type": malicious_type,
-                    "alias": "field1",
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Items": [
+                {
+                    "Description": "Line 1\nLine 2\nLine 3",  # Newlines should be replaced with spaces
+                    "Quantity": "1.0 PCS"
                 },
-            },
-        )
-        context = {
-            "id": "malicious_type_test",
-            "file_path": str(SAMPLE_PDF_SOURCE),
+                {
+                    "Description": "Normal description",  # No newlines
+                    "Quantity": "2.0 PCS"
+                }
+            ]
         }
+        sample_response.extraction_metadata = {}
 
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
         task.on_start(context)
-        with pytest.raises(TaskError, match="Unsupported field type"):
-            task.run(context)
+        result_context = task.run(context)
 
-        assert not marker_path.exists()
+        data = result_context["data"]
+        items = data["items"]
 
+        # Test newline replacement with spaces
+        assert items[0]["description"] == "Line 1 Line 2 Line 3"
 
-def test_extract_pdf_persists_confidence_for_review_gate(tmp_path, monkeypatch):
-    pdf_path = tmp_path / "invoice.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4")
-    params = {
-        "api_key": "test-key",
-        "fields": {
-            "supplier": {"alias": "Supplier", "type": "str"},
-            "invoice_total": {"alias": "Total", "type": "float"},
-        },
-    }
-    config = TempConfig(
-        tmp_path / "app.sqlite3",
-        {"tasks": {"extract_document_data": {"params": params}}},
-    )
-    initialize_database(config)
+        # Test normal description unchanged
+        assert items[1]["description"] == "Normal description"
 
-    with connect(config) as conn:
-        created = BatchService(conn).create_ingestion_batch(
-            source="web",
-            file_path=str(pdf_path),
-            original_filename="invoice.pdf",
-        )
-        task_run = TaskRunRepository(conn).create_started(
-            batch_id=created["batch"]["id"],
-            document_id=created["document"]["id"],
-            task_key="extract_document_data",
-            task_index=0,
-            module_name="standard_step.extraction.extract_pdf",
-            class_name="ExtractPdfTask",
-        )
-
-    class Result:
-        data = {"Supplier": "Acme", "Total": "12.50"}
-        extraction_metadata = {
-            "field_metadata": {
-                "document_metadata": {
-                    "Supplier": {"confidence_score": 0.94, "confidence_label": "high"},
-                    "Total": {"confidence_score": 0.61, "confidence_label": "low"},
-                }
-            }
-        }
-        job_id = "job-v1"
-
-    runner = MagicMock(return_value=Result())
-    monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", runner)
-
-    task = ExtractPdfTask(config_manager=config, **params)
-    context = {
-        "id": created["document"]["id"],
-        "batch_id": created["batch"]["id"],
-        "document_id": created["document"]["id"],
-        "task_run_id": task_run["id"],
-        "file_path": str(pdf_path),
-    }
-
-    task.on_start(context)
-    result_context = task.run(context)
-
-    with connect(config) as conn:
-        repository = ExtractionRepository(conn)
-        result = repository.get_latest_result(created["document"]["id"])
-        fields = {field["field_key"]: field for field in repository.get_fields(created["document"]["id"])}
-
-    assert result and result["provider_job_id"] == "job-v1"
-    assert result_context["extraction_result_id"] == result["id"]
-    assert json_loads(fields["supplier"]["final_value_json"]) == "Acme"
-    assert fields["supplier"]["confidence"] == 0.94
-    assert fields["supplier"]["confidence_label"] == "high"
-    assert fields["invoice_total"]["confidence"] == 0.61
-    assert fields["invoice_total"]["confidence_label"] == "low"
-    assert json_loads(fields["invoice_total"]["final_value_json"]) == 12.5
-    assert runner.call_args.kwargs["confidence_scores"] is True
-
-
-def test_extract_pdf_persists_nested_list_confidence_details(tmp_path, monkeypatch):
-    pdf_path = tmp_path / "invoice.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4")
-    params = {
-        "api_key": "test-key",
-        "fields": {
-            "line_items": {"alias": "Line Items", "type": "List[Dict[str, Any]]"},
-        },
-    }
-    config = TempConfig(
-        tmp_path / "app.sqlite3",
-        {"tasks": {"extract_document_data": {"params": params}}},
-    )
-    initialize_database(config)
-
-    with connect(config) as conn:
-        created = BatchService(conn).create_ingestion_batch(
-            source="web",
-            file_path=str(pdf_path),
-            original_filename="invoice.pdf",
-        )
-        task_run = TaskRunRepository(conn).create_started(
-            batch_id=created["batch"]["id"],
-            document_id=created["document"]["id"],
-            task_key="extract_document_data",
-            task_index=0,
-            module_name="standard_step.extraction.extract_pdf",
-            class_name="ExtractPdfTask",
-        )
-
-    class Result:
-        data = {"Line Items": [{"sku": "ABC", "quantity": 2}]}
-        extraction_metadata = {
-            "field_metadata": {
-                "document_metadata": {
-                    "Line Items": [
-                        {
-                            "sku": {"confidence": 0.99},
-                            "quantity": {"confidence": 0.82},
+    def test_single_table_limitation(self, monkeypatch):
+        """Test handling when multiple table fields are configured."""
+        # Config with two table fields (should raise error)
+        sample_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'items': {
+                                'alias': 'Items',
+                                'type': 'List[Any]',
+                                'is_table': True,
+                                'item_fields': {}
+                            },
+                            'products': {  # Second table field
+                                'alias': 'Products',
+                                'type': 'List[Any]',
+                                'is_table': True,
+                                'item_fields': {}
+                            }
                         }
-                    ]
+                    }
                 }
             }
         }
-        job_id = "job-v1-list"
 
-    runner = MagicMock(return_value=Result())
-    monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", runner)
+        def mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = sample_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
 
-    task = ExtractPdfTask(config_manager=config, **params)
-    context = {
-        "id": created["document"]["id"],
-        "batch_id": created["batch"]["id"],
-        "document_id": created["document"]["id"],
-        "task_run_id": task_run["id"],
-        "file_path": str(pdf_path),
-    }
+        self.config_manager.get.side_effect = mock_get
 
-    task.on_start(context)
-    task.run(context)
+        # Mock successful API response
+        sample_response = MagicMock()
+        sample_response.data = {"Supplier name": "Test"}
+        sample_response.extraction_metadata = {}
 
-    with connect(config) as conn:
-        fields = {field["field_key"]: field for field in ExtractionRepository(conn).get_fields(created["document"]["id"])}
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
 
-    source = json_loads(fields["line_items"]["source_json"], {})
-    nested = source["confidence_details"]["nested_confidences"]
-    assert fields["line_items"]["confidence"] == 0.82
-    assert nested["0.sku"]["confidence"] == 0.99
-    assert nested["0.quantity"]["confidence"] == 0.82
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+
+        # Should raise TaskError due to multiple table fields during on_start
+        with pytest.raises(TaskError) as exc_info:
+            task.on_start(context)
+
+        assert "Multiple table fields configured" in str(exc_info.value)
+
+    def test_table_field_type_conversion(self, monkeypatch):
+        """Test type conversion for different field types in table items."""
+        # Mock response with mixed data types in table items
+        sample_response = MagicMock()
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Items": [
+                {
+                    "Description": "Test item 1",
+                    "Quantity": "5",  # String that should convert to int
+                    "Price": "10.50"  # String that should convert to float
+                },
+                {
+                    "Description": "Test item 2",
+                    "Quantity": "3",  # Another string to int conversion
+                    "Price": "15.75"  # Another string to float conversion
+                }
+            ]
+        }
+        sample_response.extraction_metadata = {}
+
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        # Use custom config with int and float types for this test
+        custom_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'items': {
+                                'alias': 'Items',
+                                'type': 'List[Any]',
+                                'is_table': True,
+                                'item_fields': {
+                                    'description': {'alias': 'Description', 'type': 'str'},
+                                    'quantity': {'alias': 'Quantity', 'type': 'int'},
+                                    'price': {'alias': 'Price', 'type': 'float'}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        def custom_mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = custom_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
+
+        self.config_manager.get.side_effect = custom_mock_get
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
+
+        data = result_context["data"]
+        items = data["items"]
+
+        # Test type conversion in table items
+        assert len(items) == 2
+
+        # First item - test int and float conversion from strings
+        assert items[0]["description"] == "Test item 1"
+        assert items[0]["quantity"] == 5  # Should be int
+        assert isinstance(items[0]["quantity"], int)
+        assert items[0]["price"] == 10.50  # Should be float
+        assert isinstance(items[0]["price"], float)
+
+        # Wait, I need to check what the current config has for item_fields
+        # Looking at the default config, it only has description and quantity as str
+        # Let me modify the test to add price field to the config first
+
+        # Actually, let me add a custom config for this test with price field as float
+        sample_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'items': {
+                                'alias': 'Items',
+                                'type': 'List[Any]',
+                                'is_table': True,
+                                'item_fields': {
+                                    'description': {'alias': 'Description', 'type': 'str'},
+                                    'quantity': {'alias': 'Quantity', 'type': 'int'},
+                                    'price': {'alias': 'Price', 'type': 'float'}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        def mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = sample_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
+
+        self.config_manager.get.side_effect = mock_get
+
+        # Re-run with updated config
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
+
+        data = result_context["data"]
+        items = data["items"]
+
+        # Test type conversion in table items with custom config
+        assert len(items) == 2
+
+        # First item - test int and float conversion from strings
+        assert items[0]["description"] == "Test item 1"
+        assert items[0]["quantity"] == 5  # Should be int
+        assert isinstance(items[0]["quantity"], int)
+        assert items[0]["price"] == 10.50  # Should be float
+        assert isinstance(items[0]["price"], float)
+
+        # Second item
+        assert items[1]["description"] == "Test item 2"
+        assert items[1]["quantity"] == 3  # Should be int
+        assert isinstance(items[1]["quantity"], int)
+        assert items[1]["price"] == 15.75  # Should be float
+        assert isinstance(items[1]["price"], float)
+
+    def test_bool_coercion(self, monkeypatch):
+        """Test bool coercion with loose parsing used by scalar extraction."""
+        # Mock response with various string values for boolean coercion
+        sample_response = MagicMock()
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Is Active": "false",      # Should become False
+            "Has Discount": "0",       # Should become False
+            "Is Valid": "true",        # Should become True
+            "Status": "1",             # Should become True
+            "Enabled": "no",           # Should become False
+            "Flag": "off",             # Should become False
+            "Toggle": "on",            # Should become True (bool("on") = True)
+            "Valid": "yes",            # Should become True (bool("yes") = True)
+            "Boolean Field": True      # Non-string should work normally
+        }
+        sample_response.extraction_metadata = {}
+
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        # Custom config with bool fields
+        bool_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'is_active': {'alias': 'Is Active', 'type': 'bool'},
+                            'has_discount': {'alias': 'Has Discount', 'type': 'bool'},
+                            'is_valid': {'alias': 'Is Valid', 'type': 'bool'},
+                            'status': {'alias': 'Status', 'type': 'bool'},
+                            'enabled': {'alias': 'Enabled', 'type': 'bool'},
+                            'flag': {'alias': 'Flag', 'type': 'bool'},
+                            'toggle': {'alias': 'Toggle', 'type': 'bool'},
+                            'valid': {'alias': 'Valid', 'type': 'bool'},
+                            'boolean_field': {'alias': 'Boolean Field', 'type': 'bool'}
+                        }
+                    }
+                }
+            }
+        }
+
+        def bool_mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = bool_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
+
+        self.config_manager.get.side_effect = bool_mock_get
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
+
+        data = result_context["data"]
+
+        # Test false values
+        assert data["is_active"] == False
+        assert isinstance(data["is_active"], bool)
+        assert data["has_discount"] == False
+        assert isinstance(data["has_discount"], bool)
+        assert data["enabled"] == False
+        assert isinstance(data["enabled"], bool)
+        assert data["flag"] == False
+        assert isinstance(data["flag"], bool)
+
+        # Test true values
+        assert data["is_valid"] == True
+        assert isinstance(data["is_valid"], bool)
+        assert data["status"] == True
+        assert isinstance(data["status"], bool)
+        assert data["toggle"] == True
+        assert isinstance(data["toggle"], bool)
+        assert data["valid"] == True
+        assert isinstance(data["valid"], bool)
+        assert data["boolean_field"] == True
+        assert isinstance(data["boolean_field"], bool)
+
+        # Test string field remains string
+        assert data["supplier_name"] == "Test Supplier"
+        assert isinstance(data["supplier_name"], str)
+
+    def test_int_coercion(self, monkeypatch):
+        """Test int coercion using a float intermediate step for scalar extraction."""
+        # Mock response with various string values for integer coercion
+        sample_response = MagicMock()
+        sample_response.data = {
+            "Supplier name": "Test Supplier",
+            "Quantity": "12.0",        # Decimal string -> 12
+            "Count": "00123",          # Leading zeros -> 123
+            "Value": "42",             # Normal string -> 42
+            "Amount": 15.7,            # Float -> 15
+            "Score": "invalid",        # Invalid string -> should remain as string with warning
+            "Ref": "007",              # Leading zeros -> 7
+            "Code": "0",               # Zero string -> 0
+            "Int Field": 99            # Non-string should work normally
+        }
+        sample_response.extraction_metadata = {}
+
+        monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
+
+        # Custom config with int fields
+        int_config = {
+            'tasks': {
+                'extract_document_data': {
+                    'params': {
+                        'api_key': 'test_api_key',
+                        'configuration_id': 'test_configuration_id',
+                        'fields': {
+                            'supplier_name': {'alias': 'Supplier name', 'type': 'str'},
+                            'quantity': {'alias': 'Quantity', 'type': 'int'},
+                            'count': {'alias': 'Count', 'type': 'int'},
+                            'value': {'alias': 'Value', 'type': 'int'},
+                            'amount': {'alias': 'Amount', 'type': 'int'},
+                            'score': {'alias': 'Score', 'type': 'int'},
+                            'ref': {'alias': 'Ref', 'type': 'int'},
+                            'code': {'alias': 'Code', 'type': 'int'},
+                            'int_field': {'alias': 'Int Field', 'type': 'int'}
+                        }
+                    }
+                }
+            }
+        }
+
+        def int_mock_get(key, default=None):
+            keys = key.split('.') if '.' in key else [key]
+            result = int_config
+            for k in keys:
+                if isinstance(result, dict) and k in result:
+                    result = result[k]
+                else:
+                    return default
+            return result
+
+        self.config_manager.get.side_effect = int_mock_get
+
+        context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
+        task = ExtractPdfTask(config_manager=self.config_manager)
+        task.on_start(context)
+        result_context = task.run(context)
+
+        data = result_context["data"]
+
+        # Test decimal string conversion
+        assert data["quantity"] == 12
+        assert isinstance(data["quantity"], int)
+
+        # Test leading zeros stripped
+        assert data["count"] == 123
+        assert isinstance(data["count"], int)
+        assert data["ref"] == 7
+        assert isinstance(data["ref"], int)
+
+        # Test normal conversion
+        assert data["value"] == 42
+        assert isinstance(data["value"], int)
+
+        # Test float to int conversion
+        assert data["amount"] == 15
+        assert isinstance(data["amount"], int)
+
+        # Test zero conversion
+        assert data["code"] == 0
+        assert isinstance(data["code"], int)
+
+        # Test non-string conversion
+        assert data["int_field"] == 99
+        assert isinstance(data["int_field"], int)
+
+        # Test invalid string remains as string (with warning logged)
+        assert data["score"] == "invalid"
+        assert isinstance(data["score"], str)
+
+        # Test string field remains string
+        assert data["supplier_name"] == "Test Supplier"
+        assert isinstance(data["supplier_name"], str)

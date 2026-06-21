@@ -24,8 +24,8 @@ class TempConfig:
             "watch_folder.validate_pdf_header": True,
             "tasks": {
                 "extract_invoice": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {"api_key": "secret"},
                 },
                 "store_json": {

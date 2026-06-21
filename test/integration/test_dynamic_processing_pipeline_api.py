@@ -25,8 +25,8 @@ class TempConfig:
             "watch_folder.validate_pdf_header": True,
             "tasks": {
                 "extract_invoice": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {"api_key": "secret"},
                 },
                 "review_gate": {
@@ -82,8 +82,8 @@ def test_batch_processing_state_api_returns_snapshot_and_task_states(tmp_path, m
             document_id=created["documents"][0]["id"],
             task_key="extract_invoice",
             task_index=0,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
         TaskRunRepository(conn).mark_completed(task_run["id"])
 

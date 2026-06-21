@@ -34,8 +34,8 @@ def _base_config(tmp_path: Path, *, split_api_key: str = "llx-secret") -> dict[s
                 },
             },
             "extract": {
-                "module": "standard_step.extraction.extract_pdf_v2",
-                "class": "ExtractPdfV2Task",
+                "module": "standard_step.extraction.extract_pdf",
+                "class": "ExtractPdfTask",
                 "params": {"fields": {"supplier": {"alias": "Supplier", "type": "str"}}},
             },
             "review": {

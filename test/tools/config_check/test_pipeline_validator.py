@@ -168,19 +168,19 @@ def test_duplicate_pipeline_entries_warn():
 
 
 
-def test_v2_storage_warns_when_metadata_missing():
+def test_metadata_storage_warns_when_metadata_missing():
     config = {
         "tasks": {
             "extract_headers": {
-                "module": "standard_step.extraction.extract_pdf_v2",
-                "class": "ExtractPdfV2Task",
+                "module": "standard_step.extraction.extract_pdf",
+                "class": "ExtractPdfTask",
                 "params": {
                     "fields": {},
                 },
             },
-            "store_json_v2": {
-                "module": "standard_step.storage.store_metadata_as_json_v2",
-                "class": "StoreMetadataAsJsonV2",
+            "store_json": {
+                "module": "standard_step.storage.store_metadata_as_json",
+                "class": "StoreMetadataAsJson",
                 "params": {
                     "filename": "{id}.json",
                 },
@@ -193,7 +193,7 @@ def test_v2_storage_warns_when_metadata_missing():
         },
         "pipeline": [
             "extract_headers",
-            "store_json_v2",
+            "store_json",
             "cleanup",
         ],
     }
@@ -204,21 +204,21 @@ def test_v2_storage_warns_when_metadata_missing():
     assert "pipeline-storage-metadata-missing" in codes
 
 
-def test_v2_storage_metadata_ready_suppresses_warning():
+def test_metadata_storage_ready_suppresses_warning():
     config = {
         "tasks": {
             "extract_metadata": {
-                "module": "standard_step.extraction.extract_pdf_v2",
-                "class": "ExtractPdfV2Task",
+                "module": "standard_step.extraction.extract_pdf",
+                "class": "ExtractPdfTask",
                 "params": {
                     "fields": {
                         "supplier_name": {"alias": "Supplier"},
                     }
                 },
             },
-            "store_json_v2": {
-                "module": "standard_step.storage.store_metadata_as_json_v2",
-                "class": "StoreMetadataAsJsonV2",
+            "store_json": {
+                "module": "standard_step.storage.store_metadata_as_json",
+                "class": "StoreMetadataAsJson",
                 "params": {
                     "filename": "{id}.json",
                 },
@@ -231,7 +231,7 @@ def test_v2_storage_metadata_ready_suppresses_warning():
         },
         "pipeline": [
             "extract_metadata",
-            "store_json_v2",
+            "store_json",
             "cleanup",
         ],
     }

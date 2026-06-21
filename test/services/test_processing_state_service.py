@@ -28,8 +28,8 @@ def _config(tmp_path: Path) -> TempConfig:
                     "params": {"api_key": "hidden", "split_dir": str(tmp_path / "split")},
                 },
                 "extract_invoice": {
-                    "module": "standard_step.extraction.extract_pdf_v2",
-                    "class": "ExtractPdfV2Task",
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
                     "params": {"api_key": "hidden"},
                 },
                 "review_gate": {
@@ -148,16 +148,16 @@ def test_processing_state_aggregates_running_failed_and_paused_steps(tmp_path):
             document_id="doc-a",
             task_key="extract_invoice",
             task_index=2,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
         failed = runs.create_started(
             batch_id=created["batch"]["id"],
             document_id="doc-b",
             task_key="extract_invoice",
             task_index=2,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
         runs.mark_failed(failed["id"], "boom")
         paused = runs.create_started(
@@ -220,8 +220,8 @@ def test_processing_state_handles_split_fan_out_applicability(tmp_path):
             document_id=child["id"],
             task_key="extract_invoice",
             task_index=2,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
 
         payload = ProcessingStateService(config, conn).get_batch_state(created["batch"]["id"])

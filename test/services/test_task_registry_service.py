@@ -23,9 +23,9 @@ def _config(tmp_path: Path, values: dict | None = None) -> TempConfig:
 def test_builtin_standard_tasks_are_approved(tmp_path: Path) -> None:
     registry = ApprovedTaskRegistry(_config(tmp_path))
 
-    assert registry.is_approved("standard_step.extraction.extract_pdf_v2", "ExtractPdfV2Task")
+    assert registry.is_approved("standard_step.extraction.extract_pdf", "ExtractPdfTask")
     assert registry.is_approved("standard_step.review.review_gate", "ReviewGateTask")
-    assert registry.is_approved("standard_step.storage.store_metadata_as_json_v2", "StoreMetadataAsJsonV2")
+    assert registry.is_approved("standard_step.storage.store_metadata_as_json", "StoreMetadataAsJson")
 
 
 def test_builtin_registry_covers_all_standard_step_base_tasks() -> None:
@@ -99,8 +99,8 @@ def test_startup_validation_allows_valid_active_pipeline(tmp_path: Path) -> None
         "logging": {"log_file": str(tmp_path / "app.log")},
         "tasks": {
             "extract": {
-                "module": "standard_step.extraction.extract_pdf_v2",
-                "class": "ExtractPdfV2Task",
+                "module": "standard_step.extraction.extract_pdf",
+                "class": "ExtractPdfTask",
             }
         },
         "pipeline": ["extract"],

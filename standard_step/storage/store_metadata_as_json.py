@@ -1,199 +1,296 @@
-"""Persist extracted metadata as a JSON file with optional alias mapping.
+"""Persist extracted metadata as a JSON file while preserving array-of-objects.
 
-This module provides StoreMetadataAsJson, a pipeline task that serializes
-context['data'] to a JSON file in a configured directory. Keys are mapped to
-their configured aliases when available. The file name is created from a
-template and uniqueness is ensured before writing.
+This task is intended to work with extract_pdf, which writes extracted
+values to context["data"] under configured workflow field keys (e.g.,
+"items"). The task preserves list-of-objects for fields marked as is_table:
+true in the extraction.fields configuration while keeping scalar fields as
+single JSON values.
 
-Notes:
-    - Reads 'data_dir' and 'filename' from task params (required).
-    - Registers the generated JSON as an ``export_json`` document artifact when
-      SQLite document context is available.
-    - Performs filesystem writes and guarantees a unique output path.
+Behavior:
+- Reads configuration (data_dir, filename template) from task params via
+  ConfigManager singleton.
+- Uses alias mapping from extraction.fields config when available.
+- For fields marked with is_table: true, it keeps the list-of-objects
+  structure intact under the configured output alias when available.
+- Generates a safe, unique filename (appending _1, _2, ...) to avoid
+  overwrites.
+- Uses windows_long_path for all filesystem paths.
+- Registers the generated JSON as an ``export_json`` document artifact when
+  SQLite document context is available.
+
+This file follows the conventions used in the existing
+standard_step/storage/store_metadata_as_json.py module but adapts the
+transformation step for array-of-objects support.
 """
+
+from __future__ import annotations
 
 import json
 import os
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
-from modules.utils import sanitize_filename, generate_unique_filepath, preprocess_filename_value
+
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
-import logging
-from modules.utils import windows_long_path
+from modules.utils import (
+    sanitize_filename,
+    generate_unique_filepath,
+    preprocess_filename_value,
+    windows_long_path,
+)
+
+# Task slug used for status updates
+TASK_SLUG = "store_metadata_json"
 
 
 class StoreMetadataAsJson(BaseTask):
-    """Task that writes extracted metadata to a JSON file.
+    """Write extracted metadata to JSON while preserving list-of-objects.
 
-    Responsibilities:
-        - Validate required parameters and resolve output directory.
-        - Map keys to configured aliases when available.
-        - Generate a unique filename from a template and write JSON output.
-
-    Integration:
-        Uses BaseTask params for configuration. Expects extracted data in
-        context['data'].
-
-    Args:
-        config_manager (ConfigManager): Project configuration manager.
-        **params: Must include 'data_dir' (str) and 'filename' (str).
-
-    Notes:
-        - Side effects: Filesystem write and SQLite artifact registration.
-        - Errors are reported as TaskError and logged.
+    This task expects the pipeline to put extraction output into context["data"]
+    as a dict keyed by workflow field names. Fields that are arrays of objects
+    (tables) are preserved when the extraction configuration marks them with
+    is_table: true.
     """
 
-    def __init__(self, config_manager: ConfigManager, **params):
-        """Initialize the task and capture required parameters.
+    def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
+        """Initialize task and read configuration.
 
         Args:
-            config_manager (ConfigManager): The configuration manager instance.
-            **params: Must include 'data_dir' and 'filename'.
+            config_manager: ConfigManager singleton instance.
+            **params: Task parameters; expected keys: 'data_dir', 'filename'.
 
         Raises:
             TaskError: If required parameters are missing.
         """
         super().__init__(config_manager=config_manager, **params)
-        self.logger = logging.getLogger(__name__)  # Initialize logger
-        
-        self.data_dir: Optional[Path] = None
-        self.filename_template: Optional[str] = None
-        self.extraction_fields_config: Optional[Dict[str, Any]] = None
+        logging.getLogger(__name__)  # ensure logging config has been applied
+        self.logger = logging.getLogger(__name__)
 
-        # Extract parameters from self.params
-        data_dir_str = self.params.get('data_dir')
-        filename = self.params.get('filename')
+        # Required params
+        data_dir_str = self.params.get("data_dir")
+        filename_template = self.params.get("filename")
 
         if not data_dir_str:
             raise TaskError("Missing 'data_dir' parameter in configuration for StoreMetadataAsJson task.")
-        if not filename:
+        if not filename_template:
             raise TaskError("Missing 'filename' parameter in configuration for StoreMetadataAsJson task.")
 
-        
-        self.data_dir = Path(windows_long_path(data_dir_str))
-        self.filename_template = filename
+        self.data_dir: Path = Path(windows_long_path(str(data_dir_str)))
+        self.filename_template: str = str(filename_template)
 
-        # Optional: look up extraction fields configuration for aliasing
+        # Locate extraction.fields config for aliasing and is_table flags.
         tasks_config = get_all_config(self.config_manager).get("tasks", {})
-        extract_task_definition = tasks_config.get("extract_document_data", {})
-        extraction_step_params = extract_task_definition.get("params", {})
-        
-        if "fields" in extraction_step_params:
-            self.extraction_fields_config = extraction_step_params["fields"]
+        # Retain older fixture/task keys so existing configs still resolve aliases.
+        extract_task_def = (
+            tasks_config.get("extract_document_data")
+            or tasks_config.get("extract_document")
+            or {}
+        )
+        extraction_params = extract_task_def.get("params", {}) if isinstance(extract_task_def, dict) else {}
+        self.extraction_fields_config: Dict[str, Any] = extraction_params.get("fields", {})
 
         if not self.extraction_fields_config:
-            self.logger.warning("Could not find 'extraction.fields' configuration. JSON keys might not use aliases.")
+            # Not fatal; we can still write JSON without aliasing/is_table metadata
+            self.logger.debug("No extraction.fields config found; aliasing/is_table info unavailable.")
 
     def on_start(self, context: Dict[str, Any]) -> None:
-        """Lifecycle hook executed when the task starts.
-
-        Initializes context.
-
-        Args:
-            context (Dict[str, Any]): The pipeline context.
-        """
+        """Lifecycle hook executed when the task starts."""
         self.initialize_context(context)
 
-    def validate_required_fields(self, context: Dict[str, Any]):
-        """Validate required parameters.
-
-        Args:
-            context (Dict[str, Any]): Unused; present for interface parity.
+    def validate_required_fields(self, context: Dict[str, Any]) -> None:
+        """Validate that required internal configuration is present.
 
         Raises:
-            TaskError: If data_dir or filename_template are not set.
+            TaskError: If required configuration is missing.
         """
         if not self.data_dir:
-            raise TaskError("StoreMetadataAsJson task missing required field: 'data_dir'")
+            raise TaskError("StoreMetadataAsJson missing required 'data_dir'.")
         if not self.filename_template:
-            raise TaskError("StoreMetadataAsJson task missing required field: 'filename_template'")
-        # No need to validate extraction_fields_config as it's optional for basic functionality
+            raise TaskError("StoreMetadataAsJson missing required 'filename' template.")
 
-    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Write extracted metadata to a JSON file in the configured directory.
+    def _build_safe_filename(self, data: Dict[str, Any]) -> str:
+        """Build and sanitize filename from template and extracted data.
 
-        Serializes context['data'] to JSON, mapping keys to aliases if provided
-        in the extraction fields configuration.
+        Missing fields are filled with 'unknown'. Lists are joined by comma
+        for filename purposes (but are preserved in JSON output).
 
         Args:
-            context (Dict[str, Any]): Pipeline context containing:
-                - id (str): Unique identifier for status logging.
-                - data (dict): Extracted metadata to persist.
+            data: Extracted data dictionary.
 
         Returns:
-            Dict[str, Any]: The unmodified context.
-
-        Raises:
-            TaskError: If extracted data is missing/unsupported or writing fails.
-
-        Notes:
-            - Side effects: Filesystem write and SQLite artifact registration.
+            str: base filename with .json extension
         """
-        extracted_data = context.get("data")  # Use "data" as per PRD
-        unique_id = context.get("id")
-
-        if not extracted_data:
-            self.logger.warning(f"No extracted data found for {unique_id}. Skipping JSON storage.")
-            return context
-
-        self.validate_required_fields(context)  # Call validation here
-
-        # Ensure filename_template and data_dir are not None after validation
-        if self.filename_template is None:
-            raise TaskError("Filename template is not set after validation.")
-        if self.data_dir is None:
-            raise TaskError("Data directory is not set after validation.")
-
-        # Generate filename from template and extracted data
-        try:
-            # Format the filename using extracted_data. Ensure all values are strings for formatting.
-            # Also, sanitize each part of the filename.
-            formatted_filename_parts = {
-                k: sanitize_filename(preprocess_filename_value(v)) if not isinstance(v, list) else sanitize_filename(",".join(map(preprocess_filename_value, v)))
-                for k, v in extracted_data.items()
-            }
-            base_filename = self.filename_template.format(**formatted_filename_parts)
-        except KeyError as e:
-            raise TaskError(f"Filename template '{self.filename_template}' contains missing key from extracted data: {e}")
-        except Exception as e:
-            raise TaskError(f"Failed to format filename using template '{self.filename_template}': {e}")
-
-        # Ensure .json extension
-        if not base_filename.lower().endswith(".json"):
-            base_filename += ".json"
-        
-        # Generate unique filepath
-        output_path = generate_unique_filepath(self.data_dir, os.path.splitext(base_filename)[0], ".json")
-
-        try:
-            # Transform keys to aliases
-            processed_json_data = {}
-            if isinstance(extracted_data, dict):
-                for key, value in extracted_data.items():
-                    alias = key
-                    if self.extraction_fields_config and key in self.extraction_fields_config:
-                        alias = self.extraction_fields_config[key].get("alias", key)
-                    processed_json_data[alias] = value
+        # Prepare formatting dict: convert values to safe strings
+        formatted_parts: Dict[str, str] = {}
+        for k in self._extract_template_keys(self.filename_template):
+            raw_val = data.get(k, "unknown")
+            if isinstance(raw_val, list):
+                # For filename only, join simple values; nested objects become 'list'
+                try:
+                    joined = ",".join(preprocess_filename_value(x) if not isinstance(x, dict) else "list" for x in raw_val)
+                    formatted_parts[k] = sanitize_filename(joined or "unknown")
+                except Exception:
+                    formatted_parts[k] = "unknown"
             else:
-                # If extracted_data is not a dict, store it as is or raise an error
-                # For now, let's assume it's always a dict for JSON storage based on PRD
-                raise TaskError("Extracted data is not in a supported format (dict) for JSON storage.")
+                formatted_parts[k] = sanitize_filename(preprocess_filename_value(raw_val))
+        try:
+            base = self.filename_template.format(**formatted_parts)
+        except Exception:
+            # Fallback: use a safe fallback name
+            base = "metadata.json"
+        if not base.lower().endswith(".json"):
+            base += ".json"
+        return base
 
-            with open(output_path, 'w', encoding='utf-8') as f:
-                json.dump(processed_json_data, f, indent=4)
-            self.logger.info(f"Metadata for {unique_id} stored as JSON at {output_path}")
-            context["output_path"] = str(output_path)
-            register_document_artifact(
-                self.config_manager,
-                context,
-                file_type="export_json",
-                file_path=output_path,
-                metadata={"task_slug": "store_metadata_json"},
-            )
+    @staticmethod
+    def _extract_template_keys(template: str) -> set:
+        """Naive extraction of {keys} from a format string.
+
+        This is intentionally simple and sufficient for our filename templates.
+        """
+        keys = set()
+        cur = ""
+        in_brace = False
+        for ch in template:
+            if ch == "{":
+                in_brace = True
+                cur = ""
+                continue
+            if ch == "}" and in_brace:
+                in_brace = False
+                if cur:
+                    keys.add(cur)
+                cur = ""
+                continue
+            if in_brace:
+                cur += ch
+        return keys
+
+    def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute the task: transform and write JSON to disk.
+
+        Args:
+            context: Pipeline context. Expects context["data"] to exist.
+
+        Returns:
+            The original context (Railway pattern). On errors, context is updated
+            with 'error' and 'error_step' keys and returned.
+
+        Behavior:
+            - Map top-level scalar fields to aliases (if configured).
+            - Preserve list-of-objects fields (is_table: true) under alias.
+            - Ensure output filename uniqueness.
+            - Register the generated JSON as a SQLite document artifact when
+              document context exists.
+        """
+        unique_id = str(context.get("id", "unknown"))
+        try:
+            data = context.get("data")
+            if data is None:
+                self.logger.warning(f"No extracted data found for {unique_id}. Skipping JSON storage.")
+                return context
+
+            if not isinstance(data, dict):
+                raise TaskError("Extracted data must be a dict for JSON storage (v2).")
+
+            if isinstance(data, dict) and not data:  # Empty dict
+                self.logger.warning(f"Empty data dict found for {unique_id}. Creating minimal JSON file.")
+                data = {"_empty": True}
+
+            self.validate_required_fields(context)
+
+            # Prepare filename
+            try:
+                base_filename = self._build_safe_filename(data)
+            except Exception as e:
+                raise TaskError(f"Failed to generate filename: {e}")
+
+            # Determine unique output path (use generate_unique_filepath helper)
+            name_without_ext, _ = os.path.splitext(base_filename)
+            try:
+                output_path = generate_unique_filepath(self.data_dir, name_without_ext, ".json")
+                output_path = windows_long_path(str(output_path))
+            except Exception as e:
+                raise TaskError(f"Failed to create unique filepath in '{self.data_dir}': {e}")
+
+            # Transform data according to extraction.fields config
+            processed: Dict[str, Any] = {}
+
+            for orig_key, value in data.items():
+                # Determine config for this field, if present
+                field_conf = {}
+                if isinstance(self.extraction_fields_config, dict) and orig_key in self.extraction_fields_config:
+                    # field_conf can be a dict like {"alias": "supplier_name", "is_table": True}
+                    field_conf = self.extraction_fields_config.get(orig_key, {}) or {}
+
+                alias = field_conf.get("alias") if field_conf.get("alias") else orig_key
+                # Ensure alias is never None
+                if not alias:
+                    alias = orig_key
+
+                # If this field is marked as a table (is_table == True), preserve list structure
+                is_table = bool(field_conf.get("is_table")) if field_conf else False
+
+                if is_table:
+                    # Expect value to be a list (possibly list of dicts). If not, try to coerce.
+                    if isinstance(value, list):
+                        # Validate that all items in the list are dicts
+                        validated_items = []
+                        for item in value:
+                            if isinstance(item, dict):
+                                validated_items.append(item)
+                            else:
+                                # Handle non-dict items by converting to string representation
+                                self.logger.warning(f"Non-dict item found in table field '{orig_key}': {item}. Converting to string.")
+                                validated_items.append({"value": str(item)})
+                        processed[alias] = validated_items
+                    else:
+                        # Coerce single scalar to single-item list to avoid losing data
+                        processed[alias] = [value]
+                else:
+                    # For scalar fields, keep the value as-is.
+                    processed[alias] = value
+
+            # Ensure data_dir exists
+            try:
+                Path(self.data_dir).mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                raise TaskError(f"Failed to create data directory '{self.data_dir}': {e}")
+
+            # Write JSON (use text write with utf-8)
+            try:
+                with open(output_path, "w", encoding="utf-8") as fh:
+                    json.dump(processed, fh, indent=4, ensure_ascii=False)
+                self.logger.info(f"Metadata for {unique_id} stored as JSON at {output_path}")
+                # Put output path into context for downstream steps
+                context["output_path"] = output_path
+                register_document_artifact(
+                    self.config_manager,
+                    context,
+                    file_type="export_json",
+                    file_path=output_path,
+                    metadata={"task_slug": TASK_SLUG},
+                )
+            except Exception as e:
+                # On write failure, record and re-raise as TaskError
+                # Update context with error for Railway pattern
+                context["error"] = str(e)
+                context["error_step"] = "StoreMetadataAsJson"
+                raise TaskError(f"Failed to write JSON to '{output_path}': {e}")
+
+        except TaskError:
+            # TaskError already meaningful; ensure context contains failure info and return
+            if "error_step" not in context:
+                context["error_step"] = "StoreMetadataAsJson"
+            return context
         except Exception as e:
-            raise TaskError(f"Failed to store metadata as JSON for {unique_id}: {e}")
+            # Unexpected exceptions: capture in context and update status manager
+            context["error"] = str(e)
+            context["error_step"] = "StoreMetadataAsJson"
+            self.logger.exception("Unhandled exception in StoreMetadataAsJson")
+            return context
 
         return context

@@ -314,7 +314,7 @@ class TaskCatalogService:
     @staticmethod
     def _label_for(class_name: str) -> str:
         label = class_name
-        for suffix in ("Task", "V2"):
+        for suffix in ("Task",):
             if label.endswith(suffix):
                 label = label[: -len(suffix)]
         words: list[str] = []

@@ -37,7 +37,7 @@ This document provides a comprehensive reference of all validation error codes u
 | `pipeline-duplicate-task` | Warning | Same task id appears more than once in `pipeline` | Remove the duplicate unless repeated execution is intentional |
 | `pipeline-missing-extraction` | Error | Pipeline has no extraction task | Add an extraction task before downstream metadata work |
 | `pipeline-storage-before-extraction` | Error | Storage or rules task uses extracted tokens before extraction runs | Move extraction earlier or remove extracted-field tokens |
-| `pipeline-storage-metadata-missing` | Warning | V2 storage task expects extraction metadata but none is produced earlier | Move metadata-producing extraction earlier or define extraction `fields` |
+| `pipeline-storage-metadata-missing` | Warning | Metadata storage task expects extraction metadata but none is produced earlier | Move metadata-producing extraction earlier or define extraction `fields` |
 | `pipeline-nanoid-before-context` | Error | Task references `{nanoid}` before a context initializer task | Add/move `AssignNanoidTask` before the task using `{nanoid}` |
 | `pipeline-unknown-token` | Error | Template token does not match a known extraction field or context token | Add the extraction field or update the template |
 | `pipeline-storage-filename-non-scalar` | Warning | Storage filename token references a table/non-scalar field | Use a scalar extraction field in filenames |

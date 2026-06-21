@@ -56,8 +56,8 @@ def _client(tmp_path: Path, monkeypatch) -> tuple[TestClient, TempConfig, dict]:
             document_id=document_id,
             task_key="extract_document_data",
             task_index=0,
-            module_name="standard_step.extraction.extract_pdf_v2",
-            class_name="ExtractPdfV2Task",
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
         )
         result = ExtractionRepository(conn).save_result(
             document_id=document_id,
