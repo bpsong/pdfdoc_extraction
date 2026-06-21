@@ -15,6 +15,8 @@ import {
   FolderOpen,
   GitBranch,
   HardDrive,
+  Eye,
+  EyeOff,
   Info,
   KeyRound,
   ListChecks,
@@ -35,24 +37,51 @@ import {
 } from "lucide-react";
 import "./styles.css";
 
-const FIELD_TYPES = [
-  "str",
-  "int",
-  "float",
-  "bool",
-  "Decimal",
-  "Any",
-  "Optional[str]",
-  "Optional[int]",
-  "Optional[float]",
-  "Optional[bool]",
-  "Optional[List[str]]",
-  "Optional[List[float]]",
-  "List[Any]",
-  "List[str]",
-  "List[float]",
-  "Dict[str, Any]",
+const SCALAR_FIELD_TYPE_OPTIONS = [
+  { value: "str", label: "Text" },
+  { value: "int", label: "Integer" },
+  { value: "float", label: "Number" },
+  { value: "bool", label: "Yes / No" },
+  { value: "List[str]", label: "List of text" },
+  { value: "List[float]", label: "List of numbers" },
+  { value: "Dict[str, str]", label: "Object (text values)" },
 ];
+const TABLE_FIELD_TYPE = "List[Any]";
+const FIELD_TYPE_OPTIONS = [
+  ...SCALAR_FIELD_TYPE_OPTIONS,
+  { value: TABLE_FIELD_TYPE, label: "List of objects" },
+];
+const FIELD_TYPE_VALUES = SCALAR_FIELD_TYPE_OPTIONS.map((option) => option.value);
+const ROW_FIELD_TYPE_OPTIONS = [
+  { value: "str", label: "Text (str)" },
+  { value: "int", label: "Integer (int)" },
+  { value: "float", label: "Number (float)" },
+  { value: "bool", label: "Yes / No (bool)" },
+];
+const ROW_FIELD_TYPE_VALUES = ROW_FIELD_TYPE_OPTIONS.map((option) => option.value);
+
+function unwrapOptionalType(type = "str") {
+  const match = String(type).trim().match(/^Optional\[(.*)\]$/);
+  return match ? match[1].trim() : String(type).trim();
+}
+
+function isOptionalType(type = "str") {
+  return String(type).trim().startsWith("Optional[") && String(type).trim().endsWith("]");
+}
+
+function withRequiredState(type, required) {
+  const baseType = unwrapOptionalType(type);
+  return required ? baseType : `Optional[${baseType}]`;
+}
+
+function isSupportedFieldType(type, { table = false } = {}) {
+  const baseType = unwrapOptionalType(type);
+  return table ? baseType === TABLE_FIELD_TYPE : FIELD_TYPE_VALUES.includes(baseType);
+}
+
+function isSupportedRowFieldType(type) {
+  return ROW_FIELD_TYPE_VALUES.includes(unwrapOptionalType(type));
+}
 
 const CONTEXT_TOKENS = ["id", "nanoid", "filename", "source", "original_filename", "file_path"];
 
@@ -411,11 +440,17 @@ function validateExtract(step, findings) {
       return;
     }
     if (!field.alias?.trim()) findings.push(finding("error", "extract-field-alias-empty", `${path}.alias`, `Field '${fieldKey}' needs an alias.`));
-    if (!FIELD_TYPES.includes(field.type)) findings.push(finding("error", "extract-field-type-invalid", `${path}.type`, `Field '${fieldKey}' must use a supported type.`));
+    if (!isSupportedFieldType(field.type, { table: Boolean(field.is_table) })) findings.push(finding("error", "extract-field-type-invalid", `${path}.type`, `Field '${fieldKey}' must use a supported type.`));
     if (field.is_table) {
-      if (field.type !== "List[Any]") findings.push(finding("error", "extract-table-type", `${path}.type`, "Table fields must use List[Any]."));
+      if (unwrapOptionalType(field.type) !== TABLE_FIELD_TYPE) findings.push(finding("error", "extract-table-type", `${path}.type`, "Table fields must use the table row type."));
       if (!isPlainObject(field.item_fields) || !Object.keys(field.item_fields).length) {
         findings.push(finding("error", "extract-table-items-empty", `${path}.item_fields`, `Table field '${fieldKey}' needs item fields.`));
+      } else {
+        Object.entries(field.item_fields).forEach(([itemKey, itemField]) => {
+          if (!isPlainObject(itemField) || !isSupportedRowFieldType(itemField.type)) {
+            findings.push(finding("error", "extract-item-field-type-invalid", `${path}.item_fields.${itemKey}.type`, `Column '${itemKey}' must use Text, Integer, Number, or Yes / No.`));
+          }
+        });
       }
     }
   });
@@ -486,6 +521,7 @@ function App() {
   const [steps, setSteps] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeTab, setActiveTab] = useState("properties");
+  const [pipelineView, setPipelineView] = useState(null);
   const [search, setSearch] = useState("");
   const [currentYaml, setCurrentYaml] = useState("");
   const [source, setSource] = useState(null);
@@ -653,7 +689,7 @@ function App() {
                 <span className="badge badge-primary badge-sm">Prototype</span>
                 <span className="text-xs text-base-content/55">public/config_sample_invoice.yaml</span>
               </div>
-              <h1 className="mt-1 text-xl font-semibold">Visual Pipeline Builder</h1>
+              <h1 className="mt-1 text-lg font-bold">Visual Pipeline Builder</h1>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button className="btn btn-ghost btn-sm" onClick={loadConfig} disabled={loading || saving}>
@@ -670,6 +706,13 @@ function App() {
 
           <SourceBar source={source} dirty={dirty} loading={loading} hasErrors={hasErrors} publishMessage={publishMessage} loadError={loadError} />
 
+          <PipelineActionBar
+            activeView={pipelineView}
+            setActiveView={setPipelineView}
+            findings={findings}
+            dirty={dirty}
+          />
+
           <section className="grid gap-3 border-b border-base-300 bg-base-100/70 px-5 py-3 md:grid-cols-4">
             <StatusStat label="Enabled steps" value={`${enabledCount}/${steps.length}`} icon={ListChecks} />
             <StatusStat label="Dirty state" value={dirty ? "Unsaved draft" : "Matches file"} icon={dirty ? AlertTriangle : CheckCircle2} tone={dirty ? "warning" : "success"} />
@@ -680,13 +723,13 @@ function App() {
           {loadError ? (
             <div className="m-4 alert alert-error">{loadError}</div>
           ) : (
-            <div className="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(13rem,16rem)_minmax(38rem,1fr)_minmax(24rem,31rem)]">
+            <div className="grid min-h-0 flex-1 grid-cols-1 items-start gap-4 p-4 xl:grid-cols-[minmax(12.5rem,14rem)_minmax(28rem,1fr)_minmax(22rem,26rem)]">
               <TaskPalette collapsed={collapsedPalette} setCollapsed={setCollapsedPalette} search={search} setSearch={setSearch} steps={steps} addTask={addTask} />
 
               <section className="flex min-h-[640px] min-w-0 flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <h2 className="text-sm font-semibold">Ordered pipeline</h2>
+                    <h2 className="text-base font-semibold">Ordered pipeline</h2>
                     <p className="text-xs text-base-content/55">Connections are fixed by YAML order. Use controls to change order.</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -714,9 +757,6 @@ function App() {
                 duplicateSelected={duplicateSelected}
                 deleteStep={deleteStep}
                 findings={findings}
-                draftYaml={draftYaml}
-                currentYaml={currentYaml}
-                diffText={diffText}
                 availableTokens={availableTokens}
                 csvMetadata={csvMetadata}
                 setCsvMetadata={setCsvMetadata}
@@ -725,6 +765,18 @@ function App() {
           )}
         </main>
       </div>
+      {pipelineView ? (
+        <PipelineWorkspace
+          activeView={pipelineView}
+          setActiveView={setPipelineView}
+          close={() => setPipelineView(null)}
+          findings={findings}
+          draftYaml={draftYaml}
+          currentYaml={currentYaml}
+          diffText={diffText}
+          dirty={dirty}
+        />
+      ) : null}
     </div>
   );
 }
@@ -749,7 +801,7 @@ function SourceBar({ source, dirty, loading, hasErrors, publishMessage, loadErro
   return (
     <section className="source-bar">
       <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-wide text-base-content/45">Editable source</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Editable source</div>
         <div className="truncate font-mono text-xs">{source?.relativePath || "public/config_sample_invoice.yaml"}</div>
       </div>
       <div className="source-pill">{loading ? "Loading" : dirty ? "Draft changed" : "Clean"}</div>
@@ -768,7 +820,7 @@ function StatusStat({ label, value, icon: Icon, tone }) {
         <Icon size={17} />
       </span>
       <div className="min-w-0">
-        <div className="text-[11px] uppercase tracking-wide text-base-content/45">{label}</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">{label}</div>
         <div className="truncate text-sm font-semibold">{value}</div>
       </div>
     </div>
@@ -782,8 +834,8 @@ function TaskPalette({ collapsed, setCollapsed, search, setSearch, steps, addTas
       <div className="flex items-center justify-between border-b border-base-300 p-3">
         {!collapsed ? (
           <div>
-            <h2 className="text-sm font-semibold">Task Palette</h2>
-            <p className="text-xs text-base-content/50">Approved prototype steps</p>
+            <h2 className="text-base font-semibold">Task Palette</h2>
+            <p className="text-xs text-base-content/55">Approved prototype steps</p>
           </div>
         ) : null}
         <button className="btn btn-ghost btn-square btn-sm" onClick={() => setCollapsed(!collapsed)} title="Toggle palette">
@@ -807,7 +859,7 @@ function TaskPalette({ collapsed, setCollapsed, search, setSearch, steps, addTas
                   </span>
                   <span className="min-w-0 flex-1 text-left">
                     <span className="block truncate text-sm font-medium">{task.label}</span>
-                    <span className="block truncate text-xs text-base-content/50">{task.category} - {task.class}</span>
+                    <span className="block truncate text-xs text-base-content/60">{task.category} - {task.class}</span>
                   </span>
                   <span className={`btn btn-square btn-xs ${alreadyPresent ? "btn-ghost" : "btn-outline"}`}>
                     <Plus size={13} />
@@ -838,8 +890,8 @@ function OrderedPipeline({ steps, selectedIndex, onSelect, onInsert }) {
                 <span className={`badge badge-sm ${kindBadgeClass(kind)}`}>{kind}</span>
               </div>
               <div className="mt-3 truncate text-left text-sm font-semibold">{step.label}</div>
-              <div className="truncate text-left font-mono text-[11px] text-base-content/55">{step.key}</div>
-              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+              <div className="truncate text-left font-mono text-xs text-base-content/55">{step.key}</div>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <Metric label="Order" value={step.enabled === false ? "disabled" : index + 1} />
                 <Metric label="On error" value={step.on_error || "default"} />
               </div>
@@ -901,7 +953,7 @@ function PipelineInsertControl({ position, onInsert }) {
                   <Icon size={14} />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{task.label}</span>
-                    <span className="block truncate text-[11px] text-base-content/50">{task.category}</span>
+                    <span className="block truncate text-xs text-base-content/60">{task.category}</span>
                   </span>
                 </button>
               );
@@ -916,17 +968,94 @@ function PipelineInsertControl({ position, onInsert }) {
 function Metric({ label, value }) {
   return (
     <div className="rounded-md bg-base-200 px-2 py-1">
-      <div className="text-base-content/45">{label}</div>
+      <div className="text-base-content/60">{label}</div>
       <div className="truncate font-medium">{String(value || "-")}</div>
     </div>
   );
 }
 
+function PipelineActionBar({ activeView, setActiveView, findings, dirty }) {
+  const errorCount = findings.filter((item) => item.severity === "error").length;
+  return (
+    <section className="pipeline-action-bar" aria-label="Pipeline tools">
+      <div className="min-w-0">
+        <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Pipeline tools</div>
+        <div className="truncate text-sm text-base-content/70">Inspect the complete configuration before publishing.</div>
+      </div>
+      <div className="pipeline-action-list">
+        <button className={`pipeline-action ${activeView === "validate" ? "active" : ""}`} onClick={() => setActiveView("validate")}>
+          {errorCount ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+          <span>Validate pipeline</span>
+          <span className={`badge badge-sm ${errorCount ? "badge-error" : "badge-success"}`}>{errorCount || "Ready"}</span>
+        </button>
+        <button className={`pipeline-action ${activeView === "yaml" ? "active" : ""}`} onClick={() => setActiveView("yaml")}>
+          <FileJson size={16} />
+          <span>Pipeline YAML</span>
+        </button>
+        <button className={`pipeline-action ${activeView === "diff" ? "active" : ""}`} onClick={() => setActiveView("diff")}>
+          <GitBranch size={16} />
+          <span>Review changes</span>
+          {dirty ? <span className="pipeline-change-dot" aria-label="Unsaved changes" /> : null}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PipelineWorkspace({ activeView, setActiveView, close, findings, draftYaml, currentYaml, diffText, dirty }) {
+  const titles = {
+    validate: ["Validate pipeline", "Check the complete configuration and follow issues back to their task."],
+    yaml: ["Pipeline YAML", "Review the full draft that will be written when you publish."],
+    diff: ["Review changes", "Compare the published file with your current pipeline draft."],
+  };
+  const [title, description] = titles[activeView];
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") close();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [close]);
+  return (
+    <div className="pipeline-workspace-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && close()}>
+      <section className="pipeline-workspace" role="dialog" aria-modal="true" aria-labelledby="pipeline-workspace-title">
+        <header className="pipeline-workspace-header">
+          <div className="min-w-0">
+            <div className="text-xs font-semibold uppercase tracking-wide text-primary">Pipeline workspace</div>
+            <h2 id="pipeline-workspace-title" className="mt-1 text-base font-semibold">{title}</h2>
+            <p className="mt-1 text-sm text-base-content/60">{description}</p>
+          </div>
+          <button className="btn btn-ghost btn-square btn-sm" onClick={close} aria-label="Close pipeline workspace"><X size={18} /></button>
+        </header>
+        <nav className="pipeline-workspace-tabs" role="tablist" aria-label="Pipeline workspace views">
+          {[["validate", "Validate pipeline", ListChecks], ["yaml", "Pipeline YAML", FileJson], ["diff", "Review changes", GitBranch]].map(([view, label, Icon]) => (
+            <button key={view} role="tab" aria-selected={activeView === view} className={activeView === view ? "active" : ""} onClick={() => setActiveView(view)}>
+              <Icon size={16} /> {label}
+            </button>
+          ))}
+        </nav>
+        <div className="pipeline-workspace-body">
+          {activeView === "validate" ? <PipelineValidationPanel findings={findings} /> : null}
+          {activeView === "yaml" ? <YamlPanel draftYaml={draftYaml} currentYaml={currentYaml} /> : null}
+          {activeView === "diff" ? <DiffPanel diffText={diffText} hasChanges={dirty} /> : null}
+        </div>
+        <footer className="pipeline-workspace-footer">
+          <span>Whole pipeline</span>
+          <span className="font-mono">public/config_sample_invoice.yaml</span>
+          <span className={`badge badge-sm ${dirty ? "badge-warning" : "badge-success"}`}>{dirty ? "Unsaved draft" : "Matches file"}</span>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function PropertiesPanel(props) {
-  const { step, activeTab, setActiveTab, findings, draftYaml, currentYaml, diffText } = props;
+  const { step, index, activeTab, setActiveTab, findings } = props;
   if (!step) return <section className="rounded-lg border border-base-300 bg-base-100 p-4">No step selected</section>;
   const KindIcon = iconFor(step);
-  const tabs = [["properties", "Properties"], ["validate", "Validate"], ["yaml", "YAML"], ["diff", "Diff"]];
+  const taskFindings = findings.filter((item) => item.path.startsWith(`tasks.${step.key}`) || item.path.startsWith(`steps.${index}.`));
+  const taskErrorCount = taskFindings.filter((item) => item.severity === "error").length;
+  const tabs = [["properties", "Properties"], ["issues", taskErrorCount ? `Issues (${taskErrorCount})` : "Issues"]];
   return (
     <section className="flex min-h-0 flex-col rounded-lg border border-base-300 bg-base-100">
       <div className="border-b border-base-300 p-4">
@@ -936,15 +1065,15 @@ function PropertiesPanel(props) {
               <KindIcon size={19} />
             </span>
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold">{step.label}</h2>
-              <p className="truncate font-mono text-xs text-base-content/50">{step.key}</p>
+              <h2 className="truncate text-base font-semibold">{step.label}</h2>
+              <p className="truncate font-mono text-xs text-base-content/60">{step.key}</p>
             </div>
           </div>
           <span className={`badge badge-sm ${kindBadgeClass(taskKind(step))}`}>{taskKind(step)}</span>
         </div>
-        <div className="mt-4 grid grid-cols-4 gap-1 rounded-lg bg-base-200 p-1 text-xs">
+        <div className="mt-4 grid grid-cols-2 gap-1 rounded-lg bg-base-200 p-1 text-xs" role="tablist" aria-label="Selected task">
           {tabs.map(([tab, label]) => (
-            <button key={tab} className={`rounded-md px-2 py-1.5 ${activeTab === tab ? "bg-base-100 font-semibold shadow-sm" : "text-base-content/60"}`} onClick={() => setActiveTab(tab)}>
+            <button key={tab} role="tab" aria-selected={activeTab === tab} className={`rounded-md px-2 py-1.5 ${activeTab === tab ? "bg-base-100 font-semibold shadow-sm" : "text-base-content/60"}`} onClick={() => setActiveTab(tab)}>
               {label}
             </button>
           ))}
@@ -952,9 +1081,7 @@ function PropertiesPanel(props) {
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-4">
         {activeTab === "properties" ? <StepProperties {...props} /> : null}
-        {activeTab === "validate" ? <ValidationPanel findings={findings} /> : null}
-        {activeTab === "yaml" ? <YamlPanel draftYaml={draftYaml} currentYaml={currentYaml} /> : null}
-        {activeTab === "diff" ? <DiffPanel diffText={diffText} /> : null}
+        {activeTab === "issues" ? <TaskIssuesPanel findings={taskFindings} step={step} /> : null}
       </div>
     </section>
   );
@@ -962,19 +1089,30 @@ function PropertiesPanel(props) {
 
 function StepProperties({ step, index, steps, updateStep, updateParams, replaceParams, duplicateSelected, deleteStep, availableTokens, csvMetadata, setCsvMetadata, findings }) {
   const kind = taskKind(step);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  useEffect(() => setConfirmRemove(false), [index, step.key]);
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <TextControl label="Label" value={step.label} onChange={(value) => updateStep(index, { label: value })} />
         <TextControl label="Key" value={step.key} onChange={(value) => updateStep(index, { key: uniqueKey(value, steps, index) })} mono />
-        <SelectControl label="On error" value={step.on_error} onChange={(value) => updateStep(index, { on_error: value })} options={["stop", "continue"]} />
+        <SelectControl
+          label="If this task fails"
+          value={step.on_error}
+          onChange={(value) => updateStep(index, { on_error: value })}
+          options={[
+            { value: "stop", label: "Stop the pipeline" },
+            { value: "continue", label: "Continue to the next task" },
+          ]}
+          hint={step.on_error === "continue" ? "Later tasks will run even if this task fails." : "No later tasks will run after this failure."}
+        />
         <label className="flex items-end gap-3 rounded-lg border border-base-300 px-3 py-2">
           <input type="checkbox" className="toggle toggle-sm" checked={step.enabled !== false} onChange={(event) => updateStep(index, { enabled: event.target.checked })} />
           <span className="pb-1 text-sm">Enabled in pipeline</span>
         </label>
       </div>
       <div className="rounded-lg border border-base-300 bg-base-200/50 p-3">
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/45">Task-specific controls</div>
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-base-content/60">Task-specific controls</div>
         {kind === "split" ? <SplitControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "extract" ? <ExtractControls step={step} index={index} updateParams={updateParams} findings={findings} /> : null}
         {kind === "storage" ? <StorageControls step={step} index={index} updateParams={updateParams} availableTokens={availableTokens} findings={findings} /> : null}
@@ -989,10 +1127,20 @@ function StepProperties({ step, index, steps, updateStep, updateParams, replaceP
         <button className="btn btn-outline btn-sm" onClick={duplicateSelected}>
           <Copy size={14} /> Duplicate
         </button>
-        <button className="btn btn-outline btn-error btn-sm" onClick={() => deleteStep(index)}>
+        <button className="btn btn-outline btn-error btn-sm" onClick={() => setConfirmRemove(true)}>
           <Trash2 size={14} /> Remove
         </button>
       </div>
+      {confirmRemove ? (
+        <div className="rounded-lg border border-error/30 bg-error/10 p-3" role="alert">
+          <div className="text-sm font-semibold">Remove {step.label}?</div>
+          <p className="mt-1 text-xs text-base-content/65">This removes the task and its settings from the draft pipeline.</p>
+          <div className="mt-3 flex justify-end gap-2">
+            <button className="btn btn-ghost btn-xs" onClick={() => setConfirmRemove(false)}>Cancel</button>
+            <button className="btn btn-error btn-xs" onClick={() => deleteStep(index)}>Confirm remove</button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1001,33 +1149,63 @@ function SplitControls({ step, index, updateParams, findings }) {
   const params = step.params || {};
   const category = params.categories?.[0] || { name: "", description: "" };
   const levels = Array.isArray(params.fail_on_confidence_levels) ? params.fail_on_confidence_levels : [];
+  const uncategorizedPolicy = params.allow_uncategorized || "include";
+  const uncategorizedHints = {
+    include: "Keep pages that the splitter cannot classify.",
+    forbid: "Treat any unclassified page as a split failure.",
+    omit: "Leave unclassified pages out of generated PDFs.",
+  };
   function toggleLevel(level) {
     const next = levels.includes(level) ? levels.filter((item) => item !== level) : [...levels, level];
     updateParams(index, { fail_on_confidence_levels: next });
   }
   return (
     <div className="space-y-3">
-      <TextControl label="API key" value={params.api_key || ""} onChange={(value) => updateParams(index, { api_key: value })} mono />
-      <SelectControl label="Uncategorized pages" value={params.allow_uncategorized || "include"} onChange={(value) => updateParams(index, { allow_uncategorized: value })} options={["include", "forbid", "omit"]} />
-      <DirectoryControl label="Split output directory" value={params.split_dir || ""} onChange={(value) => updateParams(index, { split_dir: value })} />
+      <SecretControl label="API key" value={params.api_key || ""} onChange={(value) => updateParams(index, { api_key: value })} />
+      <SelectControl
+        label="When pages cannot be categorized"
+        value={uncategorizedPolicy}
+        onChange={(value) => updateParams(index, { allow_uncategorized: value })}
+        options={[
+          { value: "include", label: "Keep uncategorized pages" },
+          { value: "forbid", label: "Stop the split" },
+          { value: "omit", label: "Skip uncategorized pages" },
+        ]}
+        hint={uncategorizedHints[uncategorizedPolicy]}
+      />
+      <DirectoryControl label="Split output directory" hint="Child PDFs created by this task are written here." value={params.split_dir || ""} onChange={(value) => updateParams(index, { split_dir: value })} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.split_dir`} />
       <div className="rounded-lg border border-base-300 bg-base-100 p-3">
-        <div className="mb-2 text-sm font-semibold">Fail on confidence</div>
-        <div className="flex flex-wrap gap-3">
+        <div className="text-sm font-semibold">Stop on confidence levels</div>
+        <p className="mt-1 text-xs text-base-content/55">The split fails when any result reports a selected confidence level.</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
           {["high", "medium", "low"].map((level) => (
-            <label className="flex items-center gap-2 text-sm" key={level}>
+            <label className={`flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${levels.includes(level) ? "border-primary bg-primary/5" : "border-base-300"}`} key={level}>
               <input className="checkbox checkbox-sm" type="checkbox" checked={levels.includes(level)} onChange={() => toggleLevel(level)} />
-              {level}
+              <span className="capitalize">{level}</span>
             </label>
           ))}
         </div>
       </div>
-      <label className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2">
+      <label className="flex items-start gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-3">
         <input type="checkbox" className="toggle toggle-sm" checked={Boolean(params.fail_on_unknown_category)} onChange={(event) => updateParams(index, { fail_on_unknown_category: event.target.checked })} />
-        <span className="text-sm">Fail on unknown category</span>
+        <span>
+          <span className="block text-sm font-medium">Stop on unknown categories</span>
+          <span className="mt-1 block text-xs text-base-content/55">{params.fail_on_unknown_category ? "Only configured category names are accepted." : "Unknown category names are allowed."}</span>
+        </span>
       </label>
-      <TextControl label="Category name" value={category.name} onChange={(value) => updateParams(index, { categories: [{ ...category, name: value }] })} />
-      <TextAreaControl label="Category description" value={category.description} onChange={(value) => updateParams(index, { categories: [{ ...category, description: value }] })} />
+      <div className="rounded-lg border border-base-300 bg-base-100 p-3">
+        <div className="text-sm font-semibold">Document category</div>
+        <p className="mt-1 text-xs text-base-content/55">The splitter uses this definition to classify each page group.</p>
+        <div className="mt-3 space-y-3">
+          <TextControl label="Category name" value={category.name} onChange={(value) => updateParams(index, { categories: [{ ...category, name: value }] })} />
+          <TextAreaControl label="What belongs in this category?" value={category.description} onChange={(value) => updateParams(index, { categories: [{ ...category, description: value }] })} />
+          <div className="rounded-md bg-base-200 px-3 py-2" aria-live="polite">
+            <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Classification target</div>
+            <div className="mt-1 text-sm"><span className="font-semibold">{category.name || "Unnamed category"}</span>{category.description ? ` — ${category.description}` : " — Add a description to guide classification."}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1035,11 +1213,19 @@ function SplitControls({ step, index, updateParams, findings }) {
 function ExtractControls({ step, index, updateParams, findings }) {
   const fields = isPlainObject(step.params.fields) ? step.params.fields : {};
   const tableFieldKeys = Object.entries(fields).filter(([, field]) => field?.is_table).map(([key]) => key);
+  const [editingRowSchema, setEditingRowSchema] = useState(null);
+  useEffect(() => {
+    if (editingRowSchema && !fields[editingRowSchema]) setEditingRowSchema(null);
+  }, [editingRowSchema, fields]);
   function setFields(nextFields) {
     updateParams(index, { fields: nextFields });
   }
   function updateField(key, patch) {
-    setFields({ ...fields, [key]: { ...(fields[key] || {}), ...patch } });
+    const nextField = { ...(fields[key] || {}), ...patch };
+    Object.entries(patch).forEach(([patchKey, value]) => {
+      if (value === undefined) delete nextField[patchKey];
+    });
+    setFields({ ...fields, [key]: nextField });
   }
   function renameField(oldKey, nextKey) {
     const key = uniqueObjectKey(nextKey, fields, oldKey);
@@ -1054,6 +1240,7 @@ function ExtractControls({ step, index, updateParams, findings }) {
     const next = { ...fields };
     delete next[key];
     setFields(next);
+    if (editingRowSchema === key) setEditingRowSchema(null);
   }
   function addField() {
     const key = uniqueObjectKey("new_field", fields);
@@ -1061,7 +1248,7 @@ function ExtractControls({ step, index, updateParams, findings }) {
   }
   return (
     <div className="space-y-3">
-      <TextControl label="API key" value={step.params.api_key || ""} onChange={(value) => updateParams(index, { api_key: value })} mono />
+      <SecretControl label="API key" value={step.params.api_key || ""} onChange={(value) => updateParams(index, { api_key: value })} />
       <TextControl label="LlamaExtract configuration ID" value={step.params.configuration_id || ""} onChange={(value) => updateParams(index, { configuration_id: value })} mono />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SelectControl label="Tier" value={step.params.tier || "agentic"} onChange={(value) => updateParams(index, { tier: value })} options={["agentic", "premium", "balanced"]} />
@@ -1081,112 +1268,175 @@ function ExtractControls({ step, index, updateParams, findings }) {
         </div>
         <div className="space-y-3 p-3">
           {Object.entries(fields).map(([key, config]) => (
-            <FieldEditor key={key} fieldKey={key} config={isPlainObject(config) ? config : {}} fields={fields} tableFieldKeys={tableFieldKeys} renameField={renameField} updateField={updateField} removeField={removeField} findings={findings} stepKey={step.key} />
+            <FieldEditor key={key} fieldKey={key} config={isPlainObject(config) ? config : {}} tableFieldKeys={tableFieldKeys} renameField={renameField} updateField={updateField} removeField={removeField} findings={findings} stepKey={step.key} openRowSchema={() => setEditingRowSchema(key)} />
           ))}
           {!Object.keys(fields).length ? <div className="empty-panel">No extraction fields configured</div> : null}
         </div>
       </div>
+      {editingRowSchema && isPlainObject(fields[editingRowSchema]) ? (
+        <RowSchemaDrawer
+          fieldKey={editingRowSchema}
+          config={fields[editingRowSchema]}
+          onClose={() => setEditingRowSchema(null)}
+          onSave={(itemFields) => {
+            updateField(editingRowSchema, { item_fields: itemFields });
+            setEditingRowSchema(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-function FieldEditor({ fieldKey, config, fields, tableFieldKeys, renameField, updateField, removeField, findings, stepKey }) {
+function FieldEditor({ fieldKey, config, tableFieldKeys, renameField, updateField, removeField, findings, stepKey, openRowSchema }) {
   const [keyDraft, setKeyDraft] = useState(fieldKey);
   useEffect(() => setKeyDraft(fieldKey), [fieldKey]);
   const isTable = Boolean(config.is_table);
   const tableBlocked = !isTable && tableFieldKeys.length >= 1;
-  function toggleTable(checked) {
-    if (checked && tableBlocked) return;
-    if (checked) {
-      updateField(fieldKey, { is_table: true, type: "List[Any]", item_fields: isPlainObject(config.item_fields) ? config.item_fields : {} });
+  function changeType(nextType) {
+    const nextBaseType = unwrapOptionalType(nextType);
+    if (nextBaseType === TABLE_FIELD_TYPE) {
+      if (tableBlocked) return;
+      updateField(fieldKey, { is_table: true, type: nextType, item_fields: isPlainObject(config.item_fields) ? config.item_fields : {} });
+      if (!isTable) openRowSchema();
     } else {
-      const next = { ...config };
-      delete next.is_table;
-      delete next.item_fields;
-      updateField(fieldKey, next);
+      updateField(fieldKey, { type: nextType, is_table: undefined, item_fields: undefined });
     }
   }
   return (
     <div className="field-editor">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
+      <div className="property-field-grid">
         <label className="form-control">
           <span className="label-text mb-1 text-xs">Field key</span>
           <input className="input input-bordered input-sm font-mono" value={keyDraft} onChange={(event) => setKeyDraft(slugKey(event.target.value))} onBlur={() => renameField(fieldKey, keyDraft)} />
         </label>
         <TextControl label="Alias" value={config.alias || ""} onChange={(value) => updateField(fieldKey, { alias: value })} />
-        <SelectControl label="Type" value={isTable ? "List[Any]" : config.type || "str"} onChange={(value) => updateField(fieldKey, { type: value })} options={FIELD_TYPES} disabled={isTable} />
+        <FieldTypeControl value={config.type || "str"} onChange={changeType} disableTableOption={tableBlocked} />
         <button className="btn btn-ghost btn-square btn-sm self-end text-error" onClick={() => removeField(fieldKey)} title="Remove field">
           <Trash2 size={14} />
         </button>
       </div>
       <InlineFindings findings={findings} pathPrefix={`tasks.${stepKey}.params.fields.${fieldKey}`} />
-      <label className={`mt-2 flex items-center gap-3 text-sm ${tableBlocked ? "opacity-50" : ""}`}>
-        <input type="checkbox" className="checkbox checkbox-sm" checked={isTable} disabled={tableBlocked} onChange={(event) => toggleTable(event.target.checked)} />
-        Table field with item columns
-      </label>
-      {tableBlocked ? <div className="mt-1 text-xs text-base-content/50">Only one table field can be enabled.</div> : null}
-      {isTable ? <ItemFieldsEditor fieldKey={fieldKey} config={config} updateField={updateField} /> : null}
+      {tableBlocked ? <div className="mt-2 text-xs text-base-content/55">Only one List of objects field can be configured.</div> : null}
+      {isTable ? (
+        <div className="row-schema-summary">
+          <div>
+            <div className="text-xs font-semibold">Row schema</div>
+            <div className="mt-0.5 text-xs text-base-content/55">{Object.keys(config.item_fields || {}).length} flat row fields defined</div>
+          </div>
+          <button className="btn btn-outline btn-xs" type="button" onClick={openRowSchema}>
+            <PanelRight size={13} /> Edit row schema
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
-function ItemFieldsEditor({ fieldKey, config, updateField }) {
-  function updateItem(itemKey, patch) {
-    updateField(fieldKey, { item_fields: { ...(config.item_fields || {}), [itemKey]: { ...((config.item_fields || {})[itemKey] || {}), ...patch } } });
+function RowSchemaDrawer({ fieldKey, config, onClose, onSave }) {
+  const [rows, setRows] = useState(() => rowSchemaRows(config.item_fields));
+  useEffect(() => setRows(rowSchemaRows(config.item_fields)), [fieldKey, config.item_fields]);
+  function updateRow(rowId, patch) {
+    setRows((current) => current.map((row) => row.id === rowId ? { ...row, ...patch } : row));
   }
-  function renameItem(oldKey, nextKey) {
-    const itemFields = config.item_fields || {};
-    const key = uniqueObjectKey(nextKey, itemFields, oldKey);
-    const next = {};
-    Object.entries(itemFields).forEach(([itemKey, value]) => {
-      next[itemKey === oldKey ? key : itemKey] = value;
-    });
-    updateField(fieldKey, { item_fields: next });
+  function updateItem(rowId, patch) {
+    setRows((current) => current.map((row) => row.id === rowId ? { ...row, config: { ...row.config, ...patch } } : row));
   }
-  function removeItem(itemKey) {
-    const next = { ...(config.item_fields || {}) };
-    delete next[itemKey];
-    updateField(fieldKey, { item_fields: next });
+  function removeItem(rowId) {
+    setRows((current) => current.filter((row) => row.id !== rowId));
   }
   function addItem() {
-    const itemFields = config.item_fields || {};
-    const key = uniqueObjectKey("new_column", itemFields);
-    updateField(fieldKey, { item_fields: { ...itemFields, [key]: { alias: "New column", type: "str" } } });
+    const existing = Object.fromEntries(rows.map((row) => [row.key, true]));
+    const key = uniqueObjectKey("new_field", existing);
+    setRows([...rows, { id: `row-${Date.now()}-${rows.length}`, key, config: { alias: "New field", type: "str" } }]);
   }
+  const normalizedKeys = rows.map((row) => slugKey(row.key));
+  const hasInvalidKeys = normalizedKeys.some((key) => !key) || new Set(normalizedKeys).size !== normalizedKeys.length;
+  const preview = Object.fromEntries(rows.filter((row) => row.key).map((row) => [row.key, sampleValueForType(row.config.type)]));
   return (
-    <div className="mt-3 rounded-md border border-base-300 bg-base-200/60 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-semibold uppercase tracking-wide text-base-content/50">Item fields</span>
-        <button className="btn btn-outline btn-xs" onClick={addItem}>
-          <Plus size={13} /> Add column
-        </button>
-      </div>
-      <div className="space-y-2">
-        {Object.entries(config.item_fields || {}).map(([itemKey, itemConfig]) => (
-          <ItemFieldEditor key={itemKey} itemKey={itemKey} itemConfig={isPlainObject(itemConfig) ? itemConfig : {}} renameItem={renameItem} updateItem={updateItem} removeItem={removeItem} />
-        ))}
-        {!Object.keys(config.item_fields || {}).length ? <div className="empty-panel">No item columns configured</div> : null}
-      </div>
+    <div className="row-schema-backdrop" role="presentation">
+      <aside className="row-schema-drawer" role="dialog" aria-modal="true" aria-labelledby="row-schema-title">
+        <header className="row-schema-header">
+          <div>
+            <h3 id="row-schema-title" className="text-base font-semibold">Row schema — <span className="font-mono">{fieldKey}</span></h3>
+            <p className="mt-1 text-xs text-base-content/55">Define the flat columns for each object in the list.</p>
+          </div>
+          <button className="btn btn-ghost btn-circle btn-sm" type="button" aria-label="Close row schema" onClick={onClose}><X size={17} /></button>
+        </header>
+        <div className="row-schema-body">
+          <div className="row-schema-notice"><Info size={16} /><span>Each row is a flat object. Nested objects or lists are not supported.</span></div>
+          <div className="row-schema-table">
+            <div className="row-schema-columns" aria-hidden="true"><span>Field key</span><span>Type</span><span>Required</span><span>Actions</span></div>
+            {rows.map((row) => (
+              <RowSchemaField key={row.id} row={row} updateRow={updateRow} updateItem={updateItem} removeItem={removeItem} />
+            ))}
+            {!rows.length ? <div className="empty-panel m-3">No row fields yet. Add the first field to define the object.</div> : null}
+          </div>
+          {hasInvalidKeys ? <div className="mt-2 text-xs text-error">Row field keys must be unique and cannot be empty.</div> : null}
+          <button className="btn btn-outline btn-sm mt-3" type="button" onClick={addItem}>
+            <Plus size={14} /> Add row field
+          </button>
+          <div className="mt-8">
+            <div className="text-sm font-semibold">Row preview (example)</div>
+            <div className="mt-1 text-xs text-base-content/55">One sample object from the list</div>
+            <pre className="row-schema-preview">{JSON.stringify(preview, null, 2)}</pre>
+          </div>
+        </div>
+        <footer className="row-schema-footer">
+          <button className="btn btn-ghost btn-sm" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary btn-sm" type="button" disabled={hasInvalidKeys} onClick={() => onSave(rowSchemaItemFields(rows))}>Done</button>
+        </footer>
+      </aside>
     </div>
   );
 }
 
-function ItemFieldEditor({ itemKey, itemConfig, renameItem, updateItem, removeItem }) {
-  const [keyDraft, setKeyDraft] = useState(itemKey);
-  useEffect(() => setKeyDraft(itemKey), [itemKey]);
+function RowSchemaField({ row, updateRow, updateItem, removeItem }) {
+  const itemKey = row.key;
+  const itemConfig = isPlainObject(row.config) ? row.config : {};
+  const required = !isOptionalType(itemConfig.type);
+  const baseType = ROW_FIELD_TYPE_VALUES.includes(unwrapOptionalType(itemConfig.type)) ? unwrapOptionalType(itemConfig.type) : "str";
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-      <label className="form-control">
-        <span className="label-text mb-1 text-xs">Column key</span>
-        <input className="input input-bordered input-sm font-mono" value={keyDraft} onChange={(event) => setKeyDraft(slugKey(event.target.value))} onBlur={() => renameItem(itemKey, keyDraft)} />
+    <div className="row-schema-field">
+      <input className="input input-bordered input-sm min-w-0 font-mono" aria-label={`Field key ${itemKey || "empty"}`} value={itemKey} onChange={(event) => {
+        const nextKey = slugKey(event.target.value);
+        updateRow(row.id, { key: nextKey, config: { ...itemConfig, alias: rowFieldAlias(nextKey) } });
+      }} />
+      <select className="select select-bordered select-sm min-w-0" aria-label={`Type for ${itemKey || "empty"}`} value={baseType} onChange={(event) => updateItem(row.id, { type: withRequiredState(event.target.value, required) })}>
+        {ROW_FIELD_TYPE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+      <label className="row-required-toggle">
+        <input type="checkbox" className="checkbox checkbox-primary checkbox-sm" aria-label={`Required ${itemKey || "empty"}`} checked={required} onChange={(event) => updateItem(row.id, { type: withRequiredState(baseType, event.target.checked) })} />
+        <span className="sr-only">Required</span>
       </label>
-      <TextControl label="Alias" value={itemConfig.alias || ""} onChange={(value) => updateItem(itemKey, { alias: value })} />
-      <SelectControl label="Type" value={itemConfig.type || "str"} onChange={(value) => updateItem(itemKey, { type: value })} options={FIELD_TYPES.filter((type) => type !== "List[Any]")} />
-      <button className="btn btn-ghost btn-square btn-sm self-end text-error" onClick={() => removeItem(itemKey)} title="Remove column">
-        <Trash2 size={14} />
-      </button>
+      <button className="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label={`Remove ${itemKey || "empty"}`} onClick={() => removeItem(row.id)}><Trash2 size={15} /></button>
     </div>
   );
+}
+
+function rowSchemaRows(itemFields) {
+  return Object.entries(isPlainObject(itemFields) ? itemFields : {}).map(([key, value], index) => ({
+    id: `row-${index}-${key}`,
+    key,
+    config: isPlainObject(value) ? { ...value } : { alias: key, type: "str" },
+  }));
+}
+
+function rowSchemaItemFields(rows) {
+  return Object.fromEntries(rows.map((row) => [slugKey(row.key), row.config]));
+}
+
+function rowFieldAlias(key) {
+  const words = String(key || "").split("_").filter(Boolean).join(" ");
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "New field";
+}
+
+function sampleValueForType(type) {
+  const baseType = unwrapOptionalType(type);
+  if (baseType === "int") return 12;
+  if (baseType === "float") return 1234.56;
+  if (baseType === "bool") return true;
+  return "INV-1001";
 }
 
 function StorageControls({ step, index, updateParams, availableTokens, findings }) {
@@ -1203,16 +1453,30 @@ function StorageControls({ step, index, updateParams, availableTokens, findings 
 }
 
 function FilenameBuilder({ value, onChange, tokens }) {
+  const [tokenSearch, setTokenSearch] = useState("");
+  const filteredTokens = tokens.filter((token) => token.toLowerCase().includes(tokenSearch.trim().toLowerCase()));
+  const preview = value || "No filename template yet";
   return (
     <div className="rounded-lg border border-base-300 bg-base-100 p-3">
       <TextControl label="Filename template" value={value} onChange={onChange} mono />
-      <div className="mt-3 text-xs font-semibold">Insert token</div>
+      <div className="mt-3 rounded-md bg-base-200 px-3 py-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">Preview</div>
+        <div className="mt-1 break-all font-mono text-xs">{preview}</div>
+      </div>
+      <label className="form-control mt-3">
+        <span className="label-text mb-1 text-xs font-semibold">Insert a token</span>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-2 text-base-content/40" size={14} />
+          <input className="input input-bordered input-sm w-full pl-8" value={tokenSearch} onChange={(event) => setTokenSearch(event.target.value)} placeholder="Find a field or context token" />
+        </div>
+      </label>
       <div className="mt-2 flex flex-wrap gap-1">
-        {tokens.map((token) => (
-          <button className="badge badge-outline badge-sm font-mono" key={token} onClick={() => onChange(`${value || ""}{${token}}`)}>
+        {filteredTokens.map((token) => (
+          <button className="btn btn-outline btn-xs h-auto min-h-7 font-mono" key={token} onClick={() => onChange(`${value || ""}{${token}}`)} title={`Insert {${token}}`}>
             {`{${token}}`}
           </button>
         ))}
+        {!filteredTokens.length ? <div className="text-xs text-base-content/55">No matching tokens.</div> : null}
       </div>
     </div>
   );
@@ -1269,13 +1533,22 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
       <SelectControl label="Update field" value={params.update_field || ""} onChange={(value) => updateParams(index, { update_field: value })} options={["", ...columns]} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.update_field`} />
       <TextControl label="Write value" value={params.write_value || ""} onChange={(value) => updateParams(index, { write_value: value })} />
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3" aria-live="polite">
+        <div className="text-xs font-semibold uppercase tracking-wide text-primary">Rule outcome</div>
+        <p className="mt-1 text-sm">
+          If all {clauses.length || "configured"} {clauses.length === 1 ? "condition matches" : "conditions match"}, set <code className="font-semibold">{params.update_field || "the selected field"}</code> to <code className="font-semibold">{params.write_value || "the configured value"}</code>.
+        </p>
+      </div>
       <label className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2">
         <input type="checkbox" className="toggle toggle-sm" checked={Boolean(params.backup)} onChange={(event) => updateParams(index, { backup: event.target.checked })} />
         <span className="text-sm">Backup reference CSV before write</span>
       </label>
       <div className="rounded-lg border border-base-300 bg-base-100 p-3">
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-semibold">Match clauses</span>
+          <div>
+            <div className="text-sm font-semibold">Match conditions</div>
+            <div className="text-xs text-base-content/55">Every condition must match (AND).</div>
+          </div>
           <button className="btn btn-outline btn-xs" disabled={clauses.length >= 5} onClick={addClause}>
             <Plus size={13} /> Add clause
           </button>
@@ -1283,10 +1556,11 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
         <div className="space-y-2">
           {clauses.map((clause, clauseIndex) => (
             <div className="rounded-md border border-base-300 p-2" key={clauseIndex}>
+              <div className="mb-2 text-xs font-semibold text-base-content/60">Condition {clauseIndex + 1}</div>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
                 <SelectControl label="CSV column" value={clause.column || ""} onChange={(value) => updateClause(clauseIndex, { column: value })} options={["", ...columns]} />
                 <SelectControl label="From context" value={clause.from_context || ""} onChange={(value) => updateClause(clauseIndex, { from_context: value })} options={["", ...fieldOptions]} />
-                <button className="btn btn-ghost btn-square btn-sm self-end text-error" disabled={clauses.length <= 1} onClick={() => removeClause(clauseIndex)}>
+                <button className="btn btn-ghost btn-square btn-sm self-end text-error" aria-label={`Remove condition ${clauseIndex + 1}`} title={clauses.length <= 1 ? "At least one condition is required" : `Remove condition ${clauseIndex + 1}`} disabled={clauses.length <= 1} onClick={() => removeClause(clauseIndex)}>
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -1306,12 +1580,20 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
 function ReviewControls({ step, index, updateParams, findings }) {
   return (
     <div className="space-y-3">
-      <NumberControl label="Confidence threshold" value={step.params.confidence_threshold ?? 0.8} min={0} max={1} step={0.01} onChange={(value) => updateParams(index, { confidence_threshold: value })} />
+      <ConfidenceControl value={step.params.confidence_threshold ?? 0.8} onChange={(value) => updateParams(index, { confidence_threshold: value })} />
       <FileControl label="Schema file" value={step.params.schema_file || ""} extensions=".yaml,.yml" onChange={(value) => updateParams(index, { schema_file: value })} startPath="schemas" />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.schema_file`} />
       <TextControl label="Queue" value={step.params.queue_name || ""} onChange={(value) => updateParams(index, { queue_name: value })} />
-      <SelectControl label="Review scope" value={step.params.review_scope || "low_confidence_fields"} onChange={(value) => updateParams(index, { review_scope: value })} options={["document", "low_confidence_fields", "schema_errors", "split_result"]} />
-      <SelectControl label="Resume policy" value={step.params.resume_policy || "next_task"} onChange={(value) => updateParams(index, { resume_policy: value })} options={["next_task", "restart_pipeline"]} />
+      <SelectControl label="Review scope" hint="Choose which results are sent to a reviewer." value={step.params.review_scope || "low_confidence_fields"} onChange={(value) => updateParams(index, { review_scope: value })} options={[
+        { value: "document", label: "Entire document" },
+        { value: "low_confidence_fields", label: "Low-confidence fields only" },
+        { value: "schema_errors", label: "Schema errors only" },
+        { value: "split_result", label: "Document split result" },
+      ]} />
+      <SelectControl label="After review" hint="Choose where processing resumes after approval." value={step.params.resume_policy || "next_task"} onChange={(value) => updateParams(index, { resume_policy: value })} options={[
+        { value: "next_task", label: "Continue to next task" },
+        { value: "restart_pipeline", label: "Restart pipeline" },
+      ]} />
       <label className="flex items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2">
         <input type="checkbox" className="toggle toggle-sm" checked={Boolean(step.params.require_review_when_missing_confidence)} onChange={(event) => updateParams(index, { require_review_when_missing_confidence: event.target.checked })} />
         <span className="text-sm">Review when confidence is missing</span>
@@ -1322,10 +1604,14 @@ function ReviewControls({ step, index, updateParams, findings }) {
 
 function ArchiveControls({ step, index, updateParams, findings }) {
   return (
-    <>
+    <div className="space-y-3">
+      <div className="flex gap-2 rounded-lg border border-info/20 bg-info/10 p-3 text-sm">
+        <Info className="mt-0.5 shrink-0 text-info" size={16} />
+        <p>The original source PDF is copied here with a safe, unique filename. The source file remains in place.</p>
+      </div>
       <DirectoryControl label="Archive directory" value={step.params.archive_dir || ""} onChange={(value) => updateParams(index, { archive_dir: value })} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.archive_dir`} />
-    </>
+    </div>
   );
 }
 
@@ -1338,8 +1624,8 @@ function ContextControls({ step, index, updateParams, findings }) {
   );
 }
 
-function DirectoryControl({ label, value, onChange, startPath = "." }) {
-  return <PathBrowser label={label} value={value} onChange={onChange} mode="directory" startPath={isAbsoluteLikePath(value) ? startPath : value || startPath} />;
+function DirectoryControl({ label, value, onChange, startPath = ".", hint }) {
+  return <PathBrowser label={label} value={value} onChange={onChange} mode="directory" hint={hint} startPath={isAbsoluteLikePath(value) ? startPath : value || startPath} />;
 }
 
 function FileControl({ label, value, onChange, extensions, startPath = "." }) {
@@ -1350,13 +1636,14 @@ function isAbsoluteLikePath(value) {
   return /^[A-Za-z]:[\\/]/.test(String(value || "")) || String(value || "").startsWith("\\\\") || String(value || "").startsWith("/");
 }
 
-function PathBrowser({ label, value, onChange, mode, extensions = "", startPath }) {
+function PathBrowser({ label, value, onChange, mode, extensions = "", startPath, hint }) {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(startPath || ".");
   const [listing, setListing] = useState(null);
   const [newDir, setNewDir] = useState("");
   const [errorText, setErrorText] = useState("");
   const [pickerStatus, setPickerStatus] = useState("");
+  const pathType = value ? (isAbsoluteLikePath(value) ? "Absolute path" : "Project-relative") : "No path selected";
 
   useEffect(() => {
     if (!open) return;
@@ -1418,7 +1705,10 @@ function PathBrowser({ label, value, onChange, mode, extensions = "", startPath 
   return (
     <div className="rounded-lg border border-base-300 bg-base-100 p-3">
       <label className="form-control">
-        <span className="label-text mb-1 text-xs">{label}</span>
+        <span className="mb-1 flex items-center justify-between gap-2">
+          <span className="label-text text-xs">{label}</span>
+          <span className="badge badge-ghost badge-xs shrink-0">{pathType}</span>
+        </span>
         <div className="flex flex-col gap-2 sm:flex-row">
           <input className="input input-bordered input-sm font-mono" value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
           {mode === "directory" ? (
@@ -1428,6 +1718,7 @@ function PathBrowser({ label, value, onChange, mode, extensions = "", startPath 
           ) : null}
         </div>
       </label>
+      {hint ? <div className="mt-2 text-xs text-base-content/55">{hint}</div> : null}
       {pickerStatus ? <div className="mt-2 text-xs text-base-content/55">{pickerStatus}</div> : null}
       <details className="mt-2" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
         <summary className="cursor-pointer text-sm font-semibold text-primary">
@@ -1509,6 +1800,33 @@ function InlineFindings({ findings, path, pathPrefix }) {
   );
 }
 
+function TaskIssuesPanel({ findings, step }) {
+  if (!findings.length) {
+    return (
+      <div className="task-issues-empty">
+        <span className="task-issues-icon"><CheckCircle2 size={20} /></span>
+        <div>
+          <div className="font-semibold">No issues in this task</div>
+          <p className="mt-1 text-xs text-base-content/55">{step.label} passes its task-specific checks. Validate the pipeline for whole-file readiness.</p>
+        </div>
+      </div>
+    );
+  }
+  return <ValidationPanel findings={findings} />;
+}
+
+function PipelineValidationPanel({ findings }) {
+  const errors = findings.filter((item) => item.severity === "error");
+  if (errors.length) return <ValidationPanel findings={findings} />;
+  return (
+    <div className="pipeline-empty-state">
+      <span className="pipeline-empty-icon"><CheckCircle2 size={27} /></span>
+      <div className="mt-4 text-lg font-semibold">Pipeline ready to publish</div>
+      <p className="mt-2 max-w-md text-sm text-base-content/55">All tasks and whole-file checks passed. The current draft can be written to the prototype YAML file.</p>
+    </div>
+  );
+}
+
 function ValidationPanel({ findings }) {
   return (
     <div className="space-y-3">
@@ -1543,7 +1861,16 @@ function YamlPanel({ draftYaml, currentYaml }) {
   );
 }
 
-function DiffPanel({ diffText }) {
+function DiffPanel({ diffText, hasChanges = true }) {
+  if (!hasChanges) {
+    return (
+      <div className="pipeline-empty-state">
+        <span className="pipeline-empty-icon"><CheckCircle2 size={27} /></span>
+        <div className="mt-4 text-lg font-semibold">No changes to review</div>
+        <p className="mt-2 max-w-md text-sm text-base-content/55">The pipeline draft matches the published YAML file.</p>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
@@ -1590,25 +1917,94 @@ function TextControl({ label, value, onChange, mono }) {
   );
 }
 
+function SecretControl({ label, value, onChange }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div className="form-control min-w-0">
+      <span className="label-text mb-1 text-xs">{label}</span>
+      <div className="relative min-w-0">
+        <input className="input input-bordered input-sm w-full min-w-0 pr-10 font-mono" aria-label={label} type={visible ? "text" : "password"} autoComplete="off" value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
+        <button className="btn btn-ghost btn-xs btn-circle absolute right-1 top-1" type="button" aria-label={visible ? `Hide ${label}` : `Show ${label}`} onClick={() => setVisible((current) => !current)}>
+          {visible ? <EyeOff size={15} /> : <Eye size={15} />}
+        </button>
+      </div>
+      <span className="mt-1 block text-xs text-base-content/55">Hidden by default to prevent accidental exposure.</span>
+    </div>
+  );
+}
+
 function TextAreaControl({ label, value, onChange }) {
   return (
-    <label className="form-control">
+    <label className="form-control block">
       <span className="label-text mb-1 text-xs">{label}</span>
       <textarea className="textarea textarea-bordered min-h-24 text-sm" value={value ?? ""} onChange={(event) => onChange(event.target.value)} />
     </label>
   );
 }
 
-function SelectControl({ label, value, onChange, options, disabled }) {
+function SelectControl({ label, value, onChange, options, disabled, hint }) {
   return (
-    <label className="form-control">
+    <label className="form-control block">
       <span className="label-text mb-1 text-xs">{label}</span>
       <select className="select select-bordered select-sm" value={value ?? ""} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-        {options.map((option) => (
-          <option key={option} value={option}>{option || "Select..."}</option>
-        ))}
+        {options.map((option) => {
+          const optionValue = typeof option === "string" ? option : option.value;
+          const optionLabel = typeof option === "string" ? option || "Select..." : option.label;
+          return <option key={optionValue} value={optionValue} disabled={typeof option === "object" && option.disabled}>{optionLabel}</option>;
+        })}
       </select>
+      {hint ? <span className="mt-1 block text-xs text-base-content/55">{hint}</span> : null}
     </label>
+  );
+}
+
+function FieldTypeControl({ value, onChange, disableTableOption = false }) {
+  const currentType = value || "str";
+  const required = !isOptionalType(currentType);
+  const baseType = unwrapOptionalType(currentType);
+  const options = FIELD_TYPE_OPTIONS.map((option) => ({ ...option, disabled: option.value === TABLE_FIELD_TYPE && disableTableOption }));
+  return (
+    <div className="field-type-control">
+      <SelectControl
+        label="Type"
+        value={baseType}
+        onChange={(nextType) => onChange(withRequiredState(nextType, required))}
+        options={options}
+        hint={baseType === TABLE_FIELD_TYPE ? `Python type: ${withRequiredState(baseType, required)} · flat row objects` : `Python type: ${withRequiredState(baseType, required)}`}
+      />
+      <label className="field-required-control">
+        <input
+          type="checkbox"
+          className="checkbox checkbox-sm"
+          checked={required}
+          onChange={(event) => onChange(withRequiredState(baseType, event.target.checked))}
+        />
+        <span>
+          <span className="block text-xs font-medium">Required field</span>
+          <span className="block text-xs text-base-content/55">{required ? "Must be returned" : "May be omitted"}</span>
+        </span>
+      </label>
+    </div>
+  );
+}
+
+function ConfidenceControl({ value, onChange }) {
+  const percent = Math.round(Number(value) * 100);
+  function updatePercent(nextPercent) {
+    onChange(Math.min(100, Math.max(0, Number(nextPercent))) / 100);
+  }
+  return (
+    <fieldset className="rounded-lg border border-base-300 bg-base-100 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <legend className="text-xs">Confidence threshold</legend>
+        <label className="flex items-center gap-1 text-sm font-semibold">
+          <input className="input input-bordered input-xs w-20 text-right" type="number" min="0" max="100" step="1" value={percent} aria-label="Confidence threshold percentage" onChange={(event) => updatePercent(event.target.value)} />
+          <span>%</span>
+        </label>
+      </div>
+      <input className="range range-primary range-sm mt-3" type="range" min="0" max="100" step="1" value={percent} aria-label="Confidence threshold slider" onChange={(event) => updatePercent(event.target.value)} />
+      <p className="mt-2 text-xs text-base-content/55">Send results below {percent}% confidence for review.</p>
+    </fieldset>
   );
 }
 

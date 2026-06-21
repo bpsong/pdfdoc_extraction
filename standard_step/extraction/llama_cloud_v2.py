@@ -62,6 +62,7 @@ def build_extraction_configuration(
 def build_data_schema(fields: Dict[str, Any]) -> Dict[str, Any]:
     """Build a JSON schema from extraction fields using workflow field keys."""
     properties: Dict[str, Any] = {}
+    required_fields: list[str] = []
 
     for field_key, field_config in fields.items():
         if not isinstance(field_config, dict):
@@ -76,10 +77,16 @@ def build_data_schema(fields: Dict[str, Any]) -> Dict[str, Any]:
         if description:
             properties[field_key]["description"] = description
 
-    return {
+        if not _is_optional_type(field_config.get("type", "str")):
+            required_fields.append(field_key)
+
+    schema: Dict[str, Any] = {
         "type": "object",
         "properties": properties,
     }
+    if required_fields:
+        schema["required"] = required_fields
+    return schema
 
 
 def run_extract_v2_job(
@@ -248,6 +255,7 @@ def _optional_scope(
 
 def _build_table_schema(field_config: Dict[str, Any]) -> Dict[str, Any]:
     item_properties: Dict[str, Any] = {}
+    required_items: list[str] = []
 
     for item_key, item_config in field_config.get("item_fields", {}).items():
         if not isinstance(item_config, dict):
@@ -257,12 +265,19 @@ def _build_table_schema(field_config: Dict[str, Any]) -> Dict[str, Any]:
         if description:
             item_properties[item_key]["description"] = description
 
+        if not _is_optional_type(item_config.get("type", "str")):
+            required_items.append(item_key)
+
+    item_schema: Dict[str, Any] = {
+        "type": "object",
+        "properties": item_properties,
+    }
+    if required_items:
+        item_schema["required"] = required_items
+
     return {
         "type": "array",
-        "items": {
-            "type": "object",
-            "properties": item_properties,
-        },
+        "items": item_schema,
     }
 
 
@@ -295,6 +310,12 @@ def _unwrap_optional(type_str: str) -> str:
     while clean_type.startswith("Optional[") and clean_type.endswith("]"):
         clean_type = clean_type[9:-1].strip()
     return clean_type
+
+
+def _is_optional_type(type_str: str) -> bool:
+    """Return whether a configured field type may be omitted."""
+    clean_type = str(type_str).strip()
+    return clean_type.startswith("Optional[") and clean_type.endswith("]")
 
 
 def metadata_candidates(metadata: Dict[str, Any], field_key: str, alias: str) -> list[Any]:
