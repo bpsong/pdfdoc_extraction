@@ -87,3 +87,38 @@ For future consideration:
 - If supported, add the top-level `schema` section and `directories` field to the config-check schema.
 - Validate that each entry is a non-empty path and retain runtime containment checks in `SchemaService`.
 - Add config-check tests for valid directories, invalid value types, and unknown nested keys.
+
+## Workflow Artifact Retention and Purge Follow-Up
+
+`CleanupTask` removes transient paths after a workflow but deliberately preserves
+files registered in SQLite `document_files`. Registered internal artifacts such
+as `source_original` and `split_pdf` therefore have no current retention policy
+and may consume increasing disk space over the lifetime of the application.
+
+There is also a classification risk to review: when a UUID-named working PDF in
+the processing directory is registered as `source_original`, Cleanup preserves
+that exact path. A temporary processing copy may consequently be retained as if
+it were a durable business artifact.
+
+For future consideration:
+
+- Audit ingestion and split flows to distinguish temporary working files from
+  durable source artifacts. Temporary processing copies should not be registered
+  as durable unless this is an explicit product requirement.
+- Add a configurable retention/purge service for completed and failed workflow
+  transactions, using age, workflow status, and artifact type as policy inputs.
+- Allow the purge service to delete managed internal artifacts such as
+  `source_original` and `split_pdf` while preserving task-produced exports and
+  archives, including `export_pdf`, `export_csv`, `export_json`, and
+  `source_archive`.
+- Restrict deletion to approved managed directories and resolved paths. Never
+  delete arbitrary paths taken directly from database records.
+- Provide a dry-run report showing affected workflows, files, database rows,
+  estimated reclaimed space, missing files, and excluded artifacts.
+- Define transactional or recoverable handling for partial filesystem/database
+  failures so records and files do not silently diverge.
+- Record purge activity in the audit log and support configurable retention
+  periods, scheduled execution, and an administrator-triggered purge.
+- Add tests covering active workflows, review-paused workflows, registered
+  exports/archives, shared or duplicate paths, missing files, path traversal,
+  partial failures, and idempotent reruns.
