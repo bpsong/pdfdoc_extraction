@@ -241,17 +241,17 @@ def test_authenticated_app_page_sets_missing_csrf_cookie(monkeypatch) -> None:
     assert "csrf_token" in response.cookies
 
 
-def test_retired_legacy_pages_redirect_to_new_app_surfaces(monkeypatch) -> None:
+def test_removed_page_routes_are_not_registered_for_get(monkeypatch) -> None:
     client = build_client(monkeypatch)
-    authenticate(client)
 
-    dashboard = client.get("/dashboard", follow_redirects=False)
-    upload = client.get("/upload", follow_redirects=False)
+    get_paths = {
+        route.path
+        for route in client.app.routes
+        if "GET" in (getattr(route, "methods", None) or set())
+    }
 
-    assert dashboard.status_code == 307
-    assert dashboard.headers["location"] == "/app/reports"
-    assert upload.status_code == 307
-    assert upload.headers["location"] == "/app/upload"
+    assert "/dashboard" not in get_paths
+    assert "/upload" not in get_paths
 
 
 def test_operator_app_routes_render_shared_shell_without_admin_navigation(monkeypatch) -> None:

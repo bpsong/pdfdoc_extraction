@@ -462,20 +462,6 @@ def create_app() -> FastAPI:
         logger.info("User logged out, cookie cleared")
         return response
 
-    @app.get("/dashboard")
-    async def dashboard_page(request: Request):
-        """Redirect the retired legacy dashboard to the reports workspace."""
-
-        await get_current_active_user(request)
-        return RedirectResponse(url="/app/reports", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-
-    @app.get("/upload")
-    async def upload_page(request: Request):
-        """Redirect the retired legacy upload page to the app upload workspace."""
-
-        await get_current_active_user(request)
-        return RedirectResponse(url="/app/upload", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
-
     @app.get("/app", response_class=HTMLResponse)
     async def app_root(request: Request):
         """Redirect authenticated app users to the upload workspace."""

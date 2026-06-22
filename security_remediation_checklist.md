@@ -35,7 +35,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
   - Effort: Easy
   - Value: Low to medium
   - Status: Fixed
-  - Notes: `StatusHelpers.authFetch()` was kept for compatibility, but it now uses cookie-based same-origin requests and no longer reads/writes localStorage.
+  - Notes: The obsolete helper was removed; current requests use cookie-based same-origin authentication and do not read or write tokens in localStorage.
 
 - L-02: Prevent development reload in production.
   - Effort: Easy
@@ -80,11 +80,11 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 ### Medium or Higher Effort
 
-- H-01: Stored XSS in legacy dashboard.
+- H-01: Stored XSS in superseded UI rendering.
   - Effort: Medium
   - Value: High
   - Status: Fixed
-  - Notes: Legacy HTML dashboard/upload pages are retired, and the new Reports batch modal renders task-run details with escaped content.
+  - Notes: The superseded rendering path was removed, and the Reports batch modal renders task-run details with escaped content.
 
 - M-01: CSRF protection or cookie-vs-bearer auth split.
   - Effort: Medium
@@ -129,9 +129,9 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - L-01: Remove localStorage token fallback.
   - Regression risk: Very low
   - Status: Fixed
-  - Why: `web/static/js/status.js` is not referenced by templates or tests, and current auth uses an HttpOnly cookie.
-  - Possible downside: Any untracked/manual page depending on `window.StatusHelpers.authFetch()` would break.
-  - Suggested test: Run UI route tests and search templates for `status.js` or `StatusHelpers` before removal.
+  - Why: The obsolete helper was not referenced by templates or tests, and current authentication uses an HttpOnly cookie.
+  - Possible downside: Any untracked client depending on the helper would break.
+  - Suggested test: Run UI route tests and search templates for obsolete helper references before removal.
 
 - L-02: Guard development reload in production.
   - Regression risk: Low
@@ -193,18 +193,18 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 
 ## High Severity
 
-- [x] H-01: Stored XSS in Legacy Dashboard Rendering
+- [x] H-01: Stored XSS in Superseded UI Rendering
   - Status: Fixed and verified
   - Effort: Completed
   - Primary locations:
     - `web/server.py`
     - `web/templates/reports.html`
     - `web/static/js/reports.js`
-  - Fix summary: Retired the legacy dashboard/upload HTML rendering path, redirected old page routes to the unified app, removed obsolete legacy templates, and added a Reports batch-detail modal that escapes persisted task-run data before display.
+  - Fix summary: Removed the superseded HTML rendering path and added a Reports batch-detail modal that escapes persisted task-run data before display.
   - Verification:
     - `.\.venv\Scripts\python.exe -m pytest -v`
     - `node --check web\static\js\reports.js`
-    - Browser visual check on `http://127.0.0.1:8765/dashboard` confirmed redirect to `/app/reports` and a readable Recent Batches task-run detail modal.
+    - Browser visual check on `/app/reports` confirmed a readable Recent Batches task-run detail modal.
 
 - [x] H-02: Config-Driven `eval()` in Legacy PDF Extraction
   - Status: Fixed and verified
@@ -367,8 +367,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
 - [x] L-01: LocalStorage Token Helper Should Be Removed
   - Status: Fixed and verified
   - Effort: Completed
-  - Primary location: `web/static/js/status.js`
-  - Fix summary: Removed localStorage token access while keeping `StatusHelpers.authFetch()` as a cookie-auth compatible helper.
+  - Primary location: Removed obsolete client-side authentication helper.
+  - Fix summary: Removed the obsolete helper and its localStorage token access.
   - Verification:
     - `C:\Python313\python.exe -m pytest -v`
     - Browser smoke test on `http://127.0.0.1:8765/login` and protected route redirect.

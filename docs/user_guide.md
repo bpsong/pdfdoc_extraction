@@ -1557,7 +1557,7 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Audit | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit** from the left navigation menu. |
 | Review Simulator | `/app/admin/dry-run` | Administrator only | Sign in as the administrator, then select **Review Simulator** from the left navigation menu. |
 
-The retired `/dashboard` and `/upload` pages redirect to the current application. The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface.
+The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface.
 
 ### Example Configuration Files
 

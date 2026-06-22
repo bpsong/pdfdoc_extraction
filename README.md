@@ -208,7 +208,7 @@ SQLite is the primary workflow-state store. The application records:
 - registered document artifacts
 - admin settings versions and audit events
 
-Text status files are not required for configured workflow state. `/api/files` and `/api/status/{file_id}` remain as legacy compatibility APIs, but they read from SQLite. Legacy HTML dashboard/upload pages are retired; use `/app/*` pages for browser workflows.
+Text status files are not required for configured workflow state. `/api/files` and `/api/status/{file_id}` remain as legacy compatibility APIs, but they read from SQLite. Use `/app/*` pages for browser workflows.
 
 ## Usage
 

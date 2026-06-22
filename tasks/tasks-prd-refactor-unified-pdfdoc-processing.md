@@ -408,5 +408,5 @@ C:\Python313\python.exe -m pytest -v
   - [x] 26.14 Document migration from `qa_extracted_data`, including schema editor/review UI behavior that replaced Streamlit flows.
   - [x] 26.15 Document CLI and UI validation usage, and reconcile `tools/config_check/README.md`, `docs/config_check_troubleshooting.md`, `tools/config_check/examples/README.md`, and `tools/config_check/examples/ERROR_CODES.md`.
   - [x] 26.16 Archive/remove or mark historical superseded planning docs and completed backlog docs identified in `tasks/markdown-documentation-audit.md`.
-  - [x] 26.17 Run Markdown stale-reference checks for old primary-state paths (`StatusManager`, `/api/files`, `/api/status`, `dashboard.html`, `status.js`, status files, Streamlit) and fix maintained docs so remaining hits are only legacy/historical/deprecation references.
+  - [x] 26.17 Run Markdown stale-reference checks for old primary-state paths (`StatusManager`, `/api/files`, `/api/status`, status files, Streamlit) and fix maintained docs so remaining hits are only legacy/historical/deprecation references.
   - [x] 26.18 Run full pytest suite.

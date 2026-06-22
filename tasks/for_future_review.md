@@ -122,3 +122,21 @@ For future consideration:
 - Add tests covering active workflows, review-paused workflows, registered
   exports/archives, shared or duplicate paths, missing files, path traversal,
   partial failures, and idempotent reruns.
+
+## Update Reference `task_slug` Follow-Up
+
+`UpdateReferenceTask` accepts `task_slug` and defaults it to
+`update_csv_reference`, but the current implementation only assigns the value to
+`self.task_slug`. It is not subsequently used, written into workflow context,
+included in an artifact record, or consumed by downstream tasks such as
+`StoreMetadataAsCsv`.
+
+For future consideration:
+
+- Confirm whether external configurations or integrations rely on accepting the
+  parameter, even though it currently has no runtime effect.
+- Decide whether `task_slug` should be implemented for a defined status or audit
+  purpose, or removed from `UpdateReferenceTask`, configuration validation,
+  documentation, and the visual pipeline editor.
+- If removing it, define a compatibility/deprecation path for existing YAML
+  files and add tests confirming that downstream task behavior is unchanged.

@@ -56,7 +56,7 @@ The system is organized around pipelines defined in configuration (YAML). For ea
 - SQLite Repository Layer: owns persistence for batches, documents, task runs, extraction results, review items, document files, settings, and audit history.
 - Service Layer: coordinates use cases such as batch upload, review, reports, runtime settings, admin settings, audit events, and artifact registration.
 - Unified Web App: `/app/*` pages provide operator and administrator workflows over SQLite-backed APIs.
-- Legacy Compatibility: `StatusManager`, `/api/files`, and `/api/status/{file_id}` remain compatibility surfaces. Legacy `/dashboard` and `/upload` HTML pages redirect to the unified `/app/*` interface and are not primary workflow surfaces.
+- Legacy Compatibility: `StatusManager`, `/api/files`, and `/api/status/{file_id}` remain compatibility surfaces.
 
 ## Data flow
 

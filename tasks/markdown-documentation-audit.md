@@ -73,7 +73,7 @@ Before marking task 26 complete, run text checks for stale primary-state
 references:
 
 ```powershell
-rg -n "StatusManager|/api/files|/api/status|dashboard.html|status.js|status file|Streamlit" README.md docs tasks tools/config_check -g "*.md"
+rg -n "StatusManager|/api/files|/api/status|status file|Streamlit" README.md docs tasks tools/config_check -g "*.md"
 ```
 
 Expected result: any remaining hits clearly describe legacy compatibility,

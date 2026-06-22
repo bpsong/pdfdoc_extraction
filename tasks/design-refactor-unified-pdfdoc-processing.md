@@ -1369,8 +1369,6 @@ GET /app/reports                 -> reports.html
 GET /app/settings                -> settings.html
 ```
 
-Keep `/dashboard` during transition, but it can redirect to `/app/processing` after the new UI is ready.
-
 All `/app/*` routes must require authentication.
 All `/app/admin/*`, `/app/schemas`, and `/app/settings/validation` routes must require an admin role.
 

@@ -12,7 +12,7 @@ The refactor has several good security foundations: authentication is centralize
 
 Recommended priority order:
 
-1. Fix stored XSS in the legacy dashboard template.
+1. Fix stored XSS in the superseded UI rendering implementation.
 2. Remove `eval()` from config-driven extraction schema handling.
 3. Enforce upload/request size limits and keep FastAPI/Starlette on a patched compatible path.
 4. Move runtime secrets out of YAML, rotate any exposed API keys, and stop logging password hashes or extracted document contents.
@@ -22,25 +22,19 @@ No confirmed unauthenticated remote code execution path was found, but several i
 
 ## Findings
 
-### H-01: Stored XSS in Legacy Dashboard Rendering
+### H-01: Stored XSS in Superseded UI Rendering
 
 Severity: High
 
-Locations:
-
-- `web/templates/dashboard.html:643`
-- `web/templates/dashboard.html:646`
-- `web/templates/dashboard.html:648`
-- `web/templates/dashboard.html:327`
-- `web/templates/dashboard.html:516`
+Location: Superseded server-rendered UI implementation.
 
 Evidence:
 
-The legacy dashboard builds table rows and modal content with `innerHTML` and interpolates values such as `file_id`, `original_name`, timestamps, status text, and error messages. `original_name` originates from uploaded filenames, and errors can contain task or parser output. These values are persisted and later rendered into HTML without escaping.
+The superseded UI builds table rows and modal content with `innerHTML` and interpolates values such as `file_id`, `original_name`, timestamps, status text, and error messages. `original_name` originates from uploaded filenames, and errors can contain task or parser output. These values are persisted and later rendered into HTML without escaping.
 
 Impact:
 
-An authenticated user, or any workflow that stores attacker-controlled filenames/errors, can inject script into the dashboard. Because the application uses HttpOnly cookie authentication, script cannot directly read the cookie, but it can still perform same-origin authenticated actions, read API responses, alter admin forms, publish pipeline changes, or exfiltrate visible document data.
+An authenticated user, or any workflow that stores attacker-controlled filenames/errors, can inject script into the affected UI. Because the application uses HttpOnly cookie authentication, script cannot directly read the cookie, but it can still perform same-origin authenticated actions, read API responses, alter admin forms, publish pipeline changes, or exfiltrate visible document data.
 
 Recommended fix:
 
@@ -56,7 +50,7 @@ tr.appendChild(td);
 
 False-positive notes:
 
-Newer static JavaScript files already use `escapeHtml()` in several places. This finding is specific to the legacy dashboard template.
+Newer static JavaScript files already use `escapeHtml()` in several places. This finding is specific to the superseded rendering implementation.
 
 ### H-02: Config-Driven `eval()` in Legacy PDF Extraction
 
@@ -215,7 +209,7 @@ The authentication dependency accepts either an `Authorization` header or the `a
 
 Impact:
 
-`SameSite=Lax` reduces common cross-site POST attacks but is not a complete CSRF strategy, especially if browser behavior changes, same-site subdomains are introduced, or any same-origin XSS exists. The XSS issue in the legacy dashboard makes this more important.
+`SameSite=Lax` reduces common cross-site POST attacks but is not a complete CSRF strategy, especially if browser behavior changes, same-site subdomains are introduced, or any same-origin XSS exists. The stored XSS finding makes this more important.
 
 Recommended fix:
 
@@ -406,9 +400,7 @@ Source:
 
 Severity: Low
 
-Location:
-
-- `web/static/js/status.js:7`
+Location: Obsolete client-side authentication helper.
 
 Evidence:
 

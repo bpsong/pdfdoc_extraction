@@ -67,9 +67,8 @@ If legacy text status files exist from earlier runs, they are diagnostics only. 
 
 ## Implementation Deviations And Compatibility Notes
 
-- `StatusManager` remains in the repository for legacy compatibility tests and old dashboard/status paths, but configured workflow steps no longer use it as state transport.
+- `StatusManager` remains in the repository for legacy compatibility tests and status endpoints, but configured workflow steps no longer use it as state transport.
 - `/api/files` and `/api/status/{file_id}` remain available as compatibility endpoints. They now read SQLite document, task-run, and artifact state.
-- Legacy `/dashboard` assets may still call compatibility endpoints. New operator/admin workflows should use `/app/*` pages and primary SQLite-backed APIs.
 - `tasks/prd-design-pdf-processing.md`, `tasks/tasks-prd-redesigned-pdf-processing.md`, `tasks/prd-config-checker.md`, and `tasks/tasks-prd-config-checker.md` are historical planning docs after task 26 cleanup.
 - `docs/llamacloud_extract_v2_migration.md` is retained as historical migration context after stable Extract v2 configuration and smoke-check content has been merged into maintained docs.
 
