@@ -111,7 +111,7 @@ graph TD
 - Unified Web Interface
   - **Authentication**: SQLite-backed admin/operator authentication with JWT session management via [`modules/auth_utils.py`](modules/auth_utils.py:1)
   - **Operator UI**: `/app/upload`, `/app/processing`, `/app/batches/{batch_id}`, `/app/batches/{batch_id}/split-results`, `/app/documents/{document_id}/extraction`, `/app/review`, `/app/reports`, and `/app/settings`. Reports expose recent batch records with a modal task-run timeline for each batch.
-  - **Admin UI**: `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
+  - **Admin UI**: `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator).
   - **Primary APIs**: batch, document, extraction, review, reports, settings, admin settings, pipeline, review-gate, split, schema, and audit endpoints in [`modules/api_router.py`](modules/api_router.py:1).
   - **Legacy APIs**: `/api/files` and `/api/status/{file_id}` return SQLite-backed compatibility responses. New UI code should use the primary SQLite APIs.
 
@@ -192,7 +192,7 @@ Split artifacts are stored in `tasks.<split_task>.params.split_dir` as working f
 
 ## Admin Configuration, Audit, and Versioning
 
-Admin UI routes manage runtime settings, pipeline drafts, task catalog views, review-gate rules, split settings, schema validation, and dry runs. Admin changes are versioned where appropriate and recorded through audit services. Audit events should describe:
+Admin UI routes manage runtime settings, pipeline drafts, task catalog views, schema validation, audit history, and dry runs. Admin changes are versioned where appropriate and recorded through audit services. Audit events should describe:
 
 - who initiated the change
 - what setting or configuration was changed
@@ -231,7 +231,7 @@ This preserves the boundary between workflow state and business files:
 - `database.path` controls SQLite state storage; migrations run on startup when configured
 - Task output directories are owned by task parameters such as `data_dir`, `files_dir`, `archive_dir`, `processing_dir`, and split task `split_dir`; `_dir` paths are auto-created at startup except `watch_folder.dir`
 - `review` controls review queue defaults and lock behavior
-- Admin configuration flows validate pipeline, review-gate, split, and schema settings before publishing changes
+- Admin configuration flows validate pipeline and schema settings before publishing changes; review and split behavior are governed by pipeline task parameters and provider configuration
 - Validation guidance:
   - Keep watch folder path stable and ensure permissions are set
   - Avoid using relative paths that may vary between environments

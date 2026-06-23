@@ -40,8 +40,6 @@ def test_admin_can_access_admin_app_routes(monkeypatch) -> None:
         "/app/settings/validation": "Validation Center",
         "/app/admin/pipeline": "Pipeline",
         "/app/admin/tasks": "Task Catalog",
-        "/app/admin/review-gate": "Review Gate",
-        "/app/admin/split": "Split Settings",
         "/app/admin/audit": "Admin Audit",
         "/app/admin/dry-run": "Review Gate Simulator",
     }
@@ -53,6 +51,16 @@ def test_admin_can_access_admin_app_routes(monkeypatch) -> None:
         assert "Admin Home" in response.text
         assert 'href="/app/admin/pipeline"' in response.text
         assert 'href="/app/settings/validation"' in response.text
+
+
+def test_demoted_admin_config_routes_redirect_to_pipeline(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    for route in ("/app/admin/review-gate", "/app/admin/split"):
+        response = client.get(route, follow_redirects=False)
+        assert response.status_code == 307, route
+        assert response.headers["location"] == "/app/admin/pipeline"
 
 
 def test_admin_fallback_uses_configured_single_user_when_admin_list_is_empty(monkeypatch) -> None:

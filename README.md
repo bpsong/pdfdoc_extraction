@@ -37,7 +37,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Modern Web Interface
 - **FastAPI Backend**: High-performance REST API
 - **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/reports`, and `/app/settings`
-- **Admin App**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator)
+- **Admin App**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator)
 - **Review Workflows**: Human review queues for low-confidence or policy-triggered extracted fields
 - **Responsive Design**: Mobile-friendly interface
 
@@ -234,7 +234,7 @@ After a successful import, remove the legacy `authentication` block. Passwords m
 4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
 5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
 6. **Inspect Batch History**: Use `/app/reports` and click a recent batch row to view document task timelines and task-run details
-7. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, review-gate, split, audit, review-gate simulation, and schema workflows
+7. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, audit, review-gate simulation, and schema workflows
 
 ### Watch Folder
 

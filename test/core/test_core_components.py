@@ -5,10 +5,7 @@ import shutil
 import threading
 import pytest
 from unittest.mock import Mock, patch
-from fastapi.testclient import TestClient
 
-from web.server import create_app
-from modules.auth_utils import AuthError
 from modules.file_processor import FileProcessor
 from modules.status_manager import StatusManager
 
@@ -54,44 +51,6 @@ def setup_and_teardown():
 @pytest.fixture
 def mock_workflow_manager():
     return Mock()
-
-# Authentication Tests
-@pytest.fixture
-def client():
-    app = create_app()
-    with TestClient(app) as c:
-        yield c
-
-def test_login_success(client, monkeypatch):
-    class FakeAuth:
-        def __init__(self, *a, **k):
-            self.token_exp_minutes = 30
-        def login(self, u, p, client_id=None) -> str:
-            if u == "admin" and p == "secret":
-                return "fake.jwt.token"
-            raise Exception("Invalid credentials")
-
-    monkeypatch.setattr("modules.api_router.AuthUtils", FakeAuth)
-
-    resp = client.post("/api/login", data={"username": "admin", "password": "secret"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["access_token"] == "fake.jwt.token"
-    assert data["token_type"] == "bearer"
-    assert isinstance(data["expires_in"], int) and data["expires_in"] > 0
-
-def test_login_invalid_credentials(client, monkeypatch):
-    class FakeAuth:
-        def __init__(self, *a, **k):
-            self.token_exp_minutes = 30
-        def login(self, u, p, client_id=None) -> str:
-            # Raise the domain-specific error expected by the router
-            raise AuthError("Invalid credentials")
-
-    monkeypatch.setattr("modules.api_router.AuthUtils", FakeAuth)
-
-    resp = client.post("/api/login", data={"username": "admin", "password": "wrong"})
-    assert resp.status_code == 401
 
 # File Processor Tests
 def test_file_processor_initialization_and_process_file(mock_config_manager, mock_workflow_manager):

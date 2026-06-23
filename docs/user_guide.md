@@ -200,14 +200,14 @@ The system has two fixed account roles:
 | Role | Intended use |
 |------|--------------|
 | **Operator** | Daily document upload, monitoring, review, failure investigation, and reporting. |
-| **Administrator** | All operator work plus account, schema, pipeline, review-gate, split, validation, and audit configuration. |
+| **Administrator** | All operator work plus account, schema, pipeline, validation, and audit configuration. |
 
 | Capability | Operator | Administrator |
 |------------|:--------:|:-------------:|
 | Upload documents and monitor processing | Yes | Yes |
 | Review and correct extracted information | Yes | Yes |
 | View failures, reports, and runtime settings | Yes | Yes |
-| Configure schemas, pipelines, review rules, and split settings | No | Yes |
+| Configure schemas, pipeline tasks, review thresholds, and split behavior | No | Yes |
 | Change account passwords and view the administrative audit history | No | Yes |
 
 Use an operator account for normal daily work. Use the administrator account only when configuration or account management is required.
@@ -285,7 +285,7 @@ The left navigation menu provides the following work areas. If the menu is colla
 | **Reports** | View processing and review activity summaries. |
 | **Settings** | View non-secret runtime settings and configured paths. |
 
-Administrators also see **Admin Home**, **Users**, **Schemas**, **Validation**, **Pipeline**, **Tasks**, **Review Gate**, **Split Settings**, **Audit**, and **Review Simulator**. These administrative areas are not available to operators.
+Administrators also see **Admin Home**, **Users**, **Schemas**, **Validation**, **Pipeline**, **Tasks**, **Audit**, and **Review Simulator**. These administrative areas are not available to operators.
 
 #### Human Review
 
@@ -648,17 +648,15 @@ The administrator menu provides these workflows:
 
 - **Admin Home:** review configuration health, pipeline and review summaries, split status, and recent audit events.
 - **Users:** change the administrator or operator password after confirming the current administrator password.
-- **Pipeline:** prepare a draft, compare it with the active configuration, validate it, and publish it when no blocking errors remain.
+- **Pipeline:** prepare a draft, maintain task order and task parameters including review thresholds and split behavior, compare it with the active configuration, validate it, and publish it when no blocking errors remain.
 - **Tasks:** inspect the workflow task classes available to the pipeline.
-- **Review Gate:** maintain review thresholds, field overrides, queue, schema, and resume behavior.
-- **Split Settings:** maintain non-secret split categories, unmatched-page behavior, output directory, provider configuration identifiers, polling, and timeout.
 - **Review Simulator:** evaluate review-gate decisions with sample JSON without processing a PDF or writing final workflow results.
 - **Audit:** inspect relevant configuration and governance events.
 - **Validation:** review active configuration, schema, and pipeline findings.
 
 For schema-driven review fields, see the [review schema administrator guide](review_schema_admin_guide.md).
 
-Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings, and split settings updates do not save secret keys such as `api_key`; configure those secrets through `config.yaml` or your deployment secret-management process.
+Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings; configure provider secrets such as `api_key` through `config.yaml` or your deployment secret-management process.
 
 #### 4.5.6. Backup and Recovery
 
@@ -1501,8 +1499,8 @@ A: Corrected values are persisted in SQLite with the document extraction state. 
 **Q: Why did one uploaded PDF become multiple documents?**
 A: When split processing is enabled, the source PDF can create child documents based on document category and page range. Open the batch from **Processing Overview**, then select its split results to inspect the source and child documents.
 
-**Q: Can administrators change pipeline, review, or split settings in the UI?**
-A: Yes. Sign in as the administrator and use **Pipeline**, **Review Gate**, **Split Settings**, **Review Simulator**, and **Validation** in the left navigation menu. Split Settings does not save secret values such as the provider API key.
+**Q: Can administrators change pipeline review or split behavior in the UI?**
+A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters, **Review Simulator** to preview review-gate behavior, and **Validation** to check configuration health. Secret provider values such as API keys should be configured through `config.yaml` or deployment secret management.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
 A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.
@@ -1552,8 +1550,6 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Validation | `/app/settings/validation` | Administrator only | Sign in as the administrator, then select **Validation** from the left navigation menu. |
 | Pipeline | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, then select **Pipeline** from the left navigation menu. |
 | Tasks | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Tasks** from the left navigation menu. |
-| Review Gate | `/app/admin/review-gate` | Administrator only | Sign in as the administrator, then select **Review Gate** from the left navigation menu. |
-| Split Settings | `/app/admin/split` | Administrator only | Sign in as the administrator, then select **Split Settings** from the left navigation menu. |
 | Audit | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit** from the left navigation menu. |
 | Review Simulator | `/app/admin/dry-run` | Administrator only | Sign in as the administrator, then select **Review Simulator** from the left navigation menu. |
 

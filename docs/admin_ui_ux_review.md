@@ -1,6 +1,6 @@
 # Admin UI/UX Review Report
 
-**Pages reviewed:** `/app/schemas`, `/app/settings/validation`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, `/app/admin/dry-run`
+**Pages reviewed:** `/app/schemas`, `/app/settings/validation`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/audit`, `/app/admin/dry-run`
 
 **Date:** June 2026
 **Scope:** UI layout, information architecture, usability, functional completeness, and first-timer clarity for the admin role
@@ -173,52 +173,7 @@ The expected inputs and expected outputs sections render as badge groups. When a
 
 ---
 
-## 5. `/app/admin/review-gate` — Review Gate Rules
-
-### What works well
-- Summary cards (Task / Threshold / Queue / Pass-through) give a before-edit snapshot.
-- The linked slider + number input for confidence threshold is a good interaction pattern.
-- Inline-editable threshold tables are functional.
-
-### Layout and whitespace issues
-
-The bottom section has two side-by-side cards: Document Type Thresholds and Field Threshold Overrides. When both are empty, each shows a table with a header row and a single centred "No overrides" row padded to `py-8`. This creates approximately 200 px of combined empty table space at the bottom of the page. There is nothing indicating why these tables are empty or whether empty is normal.
-
-The Triggers card contains toggles followed by a "Split confidence" multi-checkbox grid, followed by a "Business rule flags" textarea. The textarea renders at its default height (~4 rem) but has no placeholder or example text, so it looks like an input that was forgotten.
-
-### Button and action confusion
-
-- The page header has **Refresh** and **Save**. There is no indication of what Save commits to or how it relates to the pipeline YAML config. The source of truth is ambiguous: do these settings override `config.yaml` params, or are they only applied when no pipeline config exists? No text on the page explains this.
-- The "Pass-through" summary card reads "Passed / No review item" — which sounds like the current live runtime status of the review gate. It is actually a computed preview of whether an empty document would pass through. This distinction matters: an admin may assume the system is healthy when in fact no documents have been processed recently.
-- The "Schema file" field is a plain text input. There is no link to the Schema Editor, no file browser, and no validation that the path exists. Entering a wrong path will silently fail at runtime.
-- "Resume policy" is a single-option dropdown ("Next task"). A dropdown with one option looks disabled or broken.
-
----
-
-## 6. `/app/admin/split` — Split Settings
-
-### What works well
-- Four summary cards (Task / Split / Adapter / Connection) are the right at-a-glance view.
-- Enabled toggle is prominent and clearly labelled.
-- Inline category add/remove works correctly.
-- Adapter Status panel separates connection concerns from configuration concerns.
-
-### Layout and whitespace issues
-
-The Adapter Status card occupies one-third of the middle section on wide screens. It contains: an alert box, an API key row, and a network check row. That is roughly 3–4 rem of actual content inside a card with a full panel header. On a 1080p screen the card has approximately 8–10 rem of whitespace below the two data rows. The card looks half-finished.
-
-The Split Categories table at the bottom starts with `py-8` padding in the "No categories" empty row, adding another tall empty area when no categories are configured.
-
-### Button and action confusion
-
-- The header has three buttons: **Refresh**, **Test**, and **Save**. For a first-time admin these look like peer actions of equal importance. **Test** should only be relevant after Save, because testing with unsaved changes checks the live config, not the form values. There is no hint of this ordering.
-- **Test** should be disabled or visually secondary when the adapter is disabled (`enabled = false` toggle). Currently clicking Test while disabled fires the API call anyway.
-- Configuration ID, Project ID, and Organization ID are opaque identifiers with no hint text, no format example, and no link to the LlamaCloud console or documentation. An admin setting this up for the first time has no guidance at all.
-- The "Add" button for categories always inserts a row named "invoice". This default is not explained and may mislead an admin into thinking "invoice" is a required category name.
-
----
-
-## 7. `/app/admin/audit` — Admin Audit
+## 5. `/app/admin/audit` — Admin Audit
 
 ### What works well
 - Two-panel layout (list + detail) is the right model for audit browsing.
@@ -243,7 +198,7 @@ When there are no audit events (fresh install), the table shows "No admin audit 
 
 ---
 
-## 8. `/app/admin/dry-run` — Pipeline Dry Run
+## 6. `/app/admin/dry-run` — Pipeline Dry Run
 
 ### Is this feature actually useful in its current form?
 
@@ -272,11 +227,11 @@ The "extraction" row in the results table shows `mock_field_count` — the numbe
 
 ### What would make this genuinely useful
 
-**Option A — Keep as a threshold simulator, rebrand it clearly.** Rename the page to "Review Gate Simulator" or "Threshold Preview". Integrate it directly into the Review Gate Rules page as a "Test current settings" panel. Remove the PDF upload and document ID fields entirely since the backend ignores them. Add a schema-aware mock fields generator that pre-populates field keys from the configured schema. Label the output as "Given these confidence values, the review gate would: [pass / trigger review]".
+**Option A — Keep as a threshold simulator, rebrand it clearly.** Rename the page to "Review Gate Simulator" or "Threshold Preview". Integrate it with the Pipeline review-gate task settings as a "Test current settings" panel. Remove the PDF upload and document ID fields entirely since the backend ignores them. Add a schema-aware mock fields generator that pre-populates field keys from the configured schema. Label the output as "Given these confidence values, the review gate would: [pass / trigger review]".
 
 **Option B — Implement a genuine dry run.** This requires the backend to actually run the split adapter (with a test mode flag), actually call the extraction API (with a test document), and walk through the configured pipeline tasks. This is a much larger investment but matches what the page name implies.
 
-**Option C — Remove the Dry Run page.** The pipeline validation functionality already exists on the Pipeline Configuration page. The review gate threshold evaluation is better served inside the Review Gate Rules page. If neither Option A nor Option B is feasible in the near term, removing the page is better than leaving an ineffective tool that erodes admin trust in the system.
+**Option C — Remove the Dry Run page.** The pipeline validation functionality already exists on the Pipeline Configuration page. The review gate threshold evaluation is better served inside Pipeline task configuration. If neither Option A nor Option B is feasible in the near term, removing the page is better than leaving an ineffective tool that erodes admin trust in the system.
 
 ### Layout and whitespace issues
 
@@ -308,8 +263,6 @@ Almost every page has one or more fixed-height panels (`min-height` in rem or `c
 | Validation | Draft textarea (14 rem), Raw JSON panel (12 rem), findings table header with no results |
 | Pipeline | YAML preview and diff panel below content (18 rem each) |
 | Task Catalog | Detail panel bottom on tall viewports |
-| Review Gate | Threshold tables (py-8 empty rows × 2) |
-| Split | Adapter status card bottom, categories table empty row |
 | Audit | Detail JSON panel below content |
 | Dry Run | Controls panel, results panel, raw JSON panel all have fixed minimum heights before first run |
 
@@ -320,27 +273,22 @@ The fix is consistent: use `min-height` only where absolutely necessary (typical
 Every admin page has at least one concept that requires prior knowledge to use correctly:
 - Validation: what is the difference between Validate Active vs Validate Draft vs Validate Schemas?
 - Pipeline: what is the correct sequence to publish?
-- Review Gate: does saving here override the pipeline YAML config?
-- Split: what do Configuration ID, Project ID, Organization ID mean and where do I find them?
 - Dry Run: what does the mock JSON need to contain, and what does the result mean?
 
 None of these pages have tooltips, `?` help icons, inline explainers, or links to documentation. Adding a single sentence of contextual help per section would remove the majority of first-timer confusion.
 
 ### 3. No unsaved-changes warnings on navigation
 
-Schema editor, Pipeline, Review Gate, and Split Settings all track `dirty` state in JavaScript but do not intercept sidebar navigation. Clicking any sidebar link while editing silently discards all changes.
+Schema editor and Pipeline track `dirty` state in JavaScript but do not intercept sidebar navigation. Clicking any sidebar link while editing silently discards all changes.
 
 ### 4. No confirmation for consequential actions
 
 - **Publish pipeline**: overwrites the live configuration. No confirmation.
-- **Save Review Gate rules**: changes thresholds affecting all documents in the queue. No confirmation.
-- **Save Split settings**: changes whether uploads will be split. No confirmation.
 - **Remove a step from the draft pipeline**: immediate with no undo.
 
 ### 5. No cross-page navigation links
 
 Pages are isolated. Missing connections that an admin would naturally follow:
-- Review Gate Rules → Schema Editor (for the schema file path field)
 - Pipeline → Task Catalog (to look up a task before adding it)
 - Pipeline → Validation Center (to check findings after publish)
 - Dry Run → Audit (the page shows an audit event ID badge but it is not a link)
@@ -352,9 +300,9 @@ All pages call `apiGet` or `apiPost` on load with no loading spinner. If the cal
 
 ### 7. Flat admin sidebar navigation
 
-Nine admin items with equal visual weight. No grouping. Consider:
+Seven admin items with equal visual weight. No grouping. Consider:
 
-- **Configuration**: Pipeline, Tasks, Review Gate, Split Settings
+- **Configuration**: Pipeline, Tasks
 - **Quality / Compliance**: Schemas, Validation, Audit
 - **Tools**: Dry Run (or remove if not implemented as a genuine run)
 
@@ -370,18 +318,14 @@ Nine admin items with equal visual weight. No grouping. Consider:
 | **High** | Validation: No Validate Pipeline button | Validation |
 | **High** | Pipeline: Publish workflow order is not communicated | Pipeline |
 | **High** | Pipeline: Params editor is raw JSON, not forms | Pipeline |
-| **High** | No unsaved-changes warning on navigation | Schemas, Pipeline, Review Gate, Split |
-| **High** | No confirmation on destructive / consequential saves | Pipeline, Review Gate, Split |
+| **High** | No unsaved-changes warning on navigation | Schemas, Pipeline |
+| **High** | No confirmation on destructive / consequential saves | Pipeline |
 | **Medium** | Whitespace: fixed min-heights inflate all pages before content | All |
 | **Medium** | Draft YAML textarea is always open and dominates controls panel | Validation |
 | **Medium** | Raw Details panel shows `{}` on load, should be collapsed | Validation |
 | **Medium** | Task Catalog is read-only — no Add to Pipeline action | Tasks |
 | **Medium** | Schema save not gated on validation result | Schemas |
 | **Medium** | Schema field properties (help, min, max, default) missing | Schemas |
-| **Medium** | Review Gate: Save vs config.yaml precedence unexplained | Review Gate |
-| **Medium** | Review Gate: Schema file field has no link to Schema Editor | Review Gate |
-| **Medium** | Split: Test ignores unsaved form state | Split |
-| **Medium** | Split: LlamaCloud ID fields have no hint text or docs link | Split |
 | **Medium** | Audit: Event type filter is free-text only | Audit |
 | **Medium** | Audit: 100-event hard cap with no pagination | Audit |
 | **Medium** | No contextual help on any admin page | All |
@@ -389,8 +333,6 @@ Nine admin items with equal visual weight. No grouping. Consider:
 | **Low** | Pipeline: YAML diff is raw text with no colour coding | Pipeline |
 | **Low** | Pipeline: No Reset-to-Active button | Pipeline |
 | **Low** | Task Catalog: Import failures not sorted to top | Tasks |
-| **Low** | Review Gate: Resume policy single-option dropdown looks broken | Review Gate |
-| **Low** | Split: Category Add button pre-fills "invoice" with no explanation | Split |
 | **Low** | Audit: Detail panel is raw JSON dump, no structured diff view | Audit |
 | **Low** | Audit: No export or copy-to-clipboard | Audit |
 | **Low** | Silent loading states — no spinner or skeleton | All |

@@ -95,7 +95,7 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - Custom task pairs are approved only when `custom_steps.enabled` is true and the exact module/class pair is listed under `custom_steps.registry`.
 - Custom task registry modules must use the `custom_step.` prefix.
 
-### Review Gate Rules
+### Review Gate Task Rules
 
 - `ReviewGateTask.params` must be a mapping.
 - `confidence_threshold`, when provided, must be a number from 0 through 1.

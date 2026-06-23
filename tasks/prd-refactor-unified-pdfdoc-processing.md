@@ -530,13 +530,13 @@ The admin view must include:
 - Pipeline Configuration for task ordering, task enablement, and task parameters.
 - Task Catalog for available `standard_step` modules/classes and their expected parameters.
 - Validation Center for schemas, config, pipeline, review gate, imports, paths, and storage filename tokens.
-- Review Gate Rules for confidence thresholds, review scope, split-confidence review, always-review rules, and lock timeout behavior.
-- LlamaCloud Split Settings for split categories, thresholds, adapter status, and connection checks.
+- Pipeline task settings for review confidence thresholds, review scope, split-confidence review, always-review rules, and lock timeout behavior.
+- Pipeline task settings for LlamaCloud Split categories, thresholds, adapter status, and connection checks.
 - System Settings for watch folders, output/archive folders, SQLite path, upload limits, and retention settings.
 - Admin Audit History for schema, pipeline, validation, settings, and publish events.
 - Review Gate Simulator for validating the pipeline model and testing review-gate behavior from mock JSON without final export.
 
-The first admin implementation should prioritize Schema Management, Validation Center, Pipeline Configuration, and Review Gate Rules. Task Catalog, Split Settings, Admin Audit History, and Review Gate Simulator may be implemented incrementally but must be represented in the UI architecture.
+The first admin implementation should prioritize Schema Management, Validation Center, Pipeline Configuration, and task-scoped review/split controls. Task Catalog, Admin Audit History, and Review Gate Simulator may be implemented incrementally but must be represented in the UI architecture.
 
 ### 11.2 Upload and Process
 
@@ -890,7 +890,7 @@ The refactor is acceptable when:
 
 - Build Task Catalog service/API before Pipeline Configuration.
 - Build Pipeline Configuration with draft, diff, validate, and publish.
-- Build Review Gate Rules and Split Settings screens.
+- Fold review and split controls into Pipeline task configuration.
 - Build Validation Center after the validation services and admin configuration APIs exist.
 - Add admin dashboard, audit visibility, settings, and review-gate simulator scaffolding.
 

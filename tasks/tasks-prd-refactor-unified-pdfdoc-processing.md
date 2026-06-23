@@ -62,8 +62,6 @@
 - `web/templates/admin_dashboard.html` - New admin home and configuration health page.
 - `web/templates/pipeline_config.html` - New admin pipeline task configuration page.
 - `web/templates/task_catalog.html` - New admin task catalog page.
-- `web/templates/review_gate_rules.html` - New admin review gate rules page.
-- `web/templates/split_settings.html` - New admin LlamaCloud Split settings page.
 - `web/templates/admin_audit.html` - New admin audit history page.
 - `web/templates/pipeline_dry_run.html` - New admin pipeline dry-run page.
 - `web/templates/reports.html` - New reports screen.
@@ -353,11 +351,11 @@ C:\Python313\python.exe -m pytest -v
   - [x] 21.9 Add `test/services/test_pipeline_config_service.py`.
   - [x] 21.10 Add `test/integration/test_admin_pipeline_config_api.py`.
 
-- [x] 22.0 Build Review Gate Rules and Split Settings
-  - Acceptance: Admin can configure review gate rules and manage non-secret Split settings using the split/review backend already implemented.
-  - [x] 22.1 Build `review_gate_rules.html` and `review_gate_rules.js`.
+- [x] 22.0 Build review/split admin configuration support
+  - Acceptance: Admin can configure review gate rules and manage non-secret split configuration using the split/review backend already implemented.
+  - [x] 22.1 Build review gate configuration UI support.
   - [x] 22.2 Add `GET /api/admin/review-gate-rules` and `PUT /api/admin/review-gate-rules`.
-  - [x] 22.3 Build `split_settings.html` and `split_settings.js`.
+  - [x] 22.3 Build split configuration UI support.
   - [x] 22.4 Add `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`, and `POST /api/admin/split-settings/test-connection`.
   - [x] 22.5 Add review gate rule and split settings tests.
 

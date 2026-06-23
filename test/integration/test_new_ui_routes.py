@@ -386,19 +386,17 @@ def test_pipeline_config_page_includes_task_21_assets(monkeypatch) -> None:
     assert "/static/js/pipeline_config.js" in response.text
 
 
-def test_review_gate_and_split_pages_include_task_22_assets(monkeypatch) -> None:
+def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
 
-    review_gate = client.get("/app/admin/review-gate")
-    split_settings = client.get("/app/admin/split")
+    review_gate = client.get("/app/admin/review-gate", follow_redirects=False)
+    split_settings = client.get("/app/admin/split", follow_redirects=False)
 
-    assert review_gate.status_code == 200
-    assert 'id="review-gate-rules-workspace"' in review_gate.text
-    assert "/static/js/review_gate_rules.js" in review_gate.text
-    assert split_settings.status_code == 200
-    assert 'id="split-settings-workspace"' in split_settings.text
-    assert "/static/js/split_settings.js" in split_settings.text
+    assert review_gate.status_code == 307
+    assert review_gate.headers["location"] == "/app/admin/pipeline"
+    assert split_settings.status_code == 307
+    assert split_settings.headers["location"] == "/app/admin/pipeline"
 
 
 def test_reports_page_includes_task_25_assets(monkeypatch) -> None:

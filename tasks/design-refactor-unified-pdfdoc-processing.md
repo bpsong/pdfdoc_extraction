@@ -98,8 +98,6 @@ web/
     admin_dashboard.html
     pipeline_config.html
     task_catalog.html
-    review_gate_rules.html
-    split_settings.html
     admin_audit.html
     pipeline_dry_run.html
     reports.html
@@ -1315,8 +1313,6 @@ web/templates/config_validation.html
 web/templates/admin_dashboard.html
 web/templates/pipeline_config.html
 web/templates/task_catalog.html
-web/templates/review_gate_rules.html
-web/templates/split_settings.html
 web/templates/admin_audit.html
 web/templates/pipeline_dry_run.html
 web/templates/reports.html
@@ -1361,8 +1357,6 @@ GET /app/settings/validation     -> config_validation.html
 GET /app/admin                   -> admin_dashboard.html
 GET /app/admin/pipeline          -> pipeline_config.html
 GET /app/admin/tasks             -> task_catalog.html
-GET /app/admin/review-gate       -> review_gate_rules.html
-GET /app/admin/split             -> split_settings.html
 GET /app/admin/audit             -> admin_audit.html
 GET /app/admin/dry-run           -> pipeline_dry_run.html
 GET /app/reports                 -> reports.html
@@ -1377,7 +1371,7 @@ All `/app/admin/*`, `/app/schemas`, and `/app/settings/validation` routes must r
 The UI has two roles:
 
 - `operator`: can use upload, processing, split results, extraction results, review queue, human review, basic reports, and read-only settings.
-- `admin`: can use every operator screen plus schema management, validation center, pipeline configuration, task catalog, review-gate rules, split settings, admin audit, and dry run.
+- `admin`: can use every operator screen plus schema management, validation center, pipeline configuration, task catalog, admin audit, and dry run.
 
 The first implementation can use the existing authentication/session mechanism with a simple role field. It does not need SSO or enterprise identity integration.
 
@@ -1431,8 +1425,6 @@ Sidebar requirements:
   - Validation -> `/app/settings/validation`
   - Pipeline -> `/app/admin/pipeline`
   - Tasks -> `/app/admin/tasks`
-  - Review Gate -> `/app/admin/review-gate`
-  - Split Settings -> `/app/admin/split`
   - Audit -> `/app/admin/audit`
   - Review Gate Simulator -> `/app/admin/dry-run`
 - Operators must not see the `Admin` group.
@@ -2469,7 +2461,7 @@ Do not expose secrets such as API keys.
 
 The settings page should link to `/app/schemas` for schema management.
 The settings page should link to `/app/settings/validation` for configuration validation.
-For admins, the settings page should also link to `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/review-gate`, `/app/admin/split`, `/app/admin/audit`, and `/app/admin/dry-run`.
+For admins, the settings page should also link to `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/audit`, and `/app/admin/dry-run`.
 
 #### 13.15.1 Configuration Validation Page
 
@@ -2703,17 +2695,11 @@ API endpoint:
 GET /api/admin/task-catalog
 ```
 
-#### 13.16.4 Review Gate Rules Page
+#### 13.16.4 Review and Split Pipeline Task Settings
 
-Template: `review_gate_rules.html`.
+Review gate and LlamaCloud Split controls belong inside Pipeline Configuration as task-scoped settings for the relevant pipeline steps.
 
-Route:
-
-```text
-GET /app/admin/review-gate
-```
-
-Required sections:
+Required review task controls:
 
 - Global confidence threshold.
 - Per-document-type thresholds.
@@ -2724,24 +2710,7 @@ Required sections:
 - Business-rule flag triggers.
 - Review lock timeout.
 
-API endpoints:
-
-```text
-GET /api/admin/review-gate-rules
-PUT /api/admin/review-gate-rules
-```
-
-#### 13.16.5 Split Settings Page
-
-Template: `split_settings.html`.
-
-Route:
-
-```text
-GET /app/admin/split
-```
-
-Required sections:
+Required split task controls:
 
 - Enable/disable LlamaCloud Split.
 - Split categories.
@@ -2750,15 +2719,17 @@ Required sections:
 - Connection test result.
 - Secret redaction.
 
-API endpoints:
+Supporting API endpoints:
 
 ```text
+GET /api/admin/review-gate-rules
+PUT /api/admin/review-gate-rules
 GET  /api/admin/split-settings
 PUT  /api/admin/split-settings
 POST /api/admin/split-settings/test-connection
 ```
 
-#### 13.16.6 Admin Audit Page
+#### 13.16.5 Admin Audit Page
 
 Template: `admin_audit.html`.
 
@@ -2782,7 +2753,7 @@ API endpoint:
 GET /api/admin/audit
 ```
 
-#### 13.16.7 Review Gate Simulator Page
+#### 13.16.6 Review Gate Simulator Page
 
 Template: `pipeline_dry_run.html`.
 
@@ -2907,7 +2878,7 @@ The UI refactor is acceptable when:
 
 - Build Task Catalog service/API before Pipeline Configuration.
 - Build Pipeline Configuration with draft, diff, validate, and publish.
-- Build Review Gate Rules and Split Settings.
+- Fold review and split controls into Pipeline task configuration.
 - Build Validation Center after validation services and admin configuration APIs exist.
 - Build admin dashboard, audit, settings, and review-gate simulator.
 

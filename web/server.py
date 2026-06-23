@@ -289,6 +289,21 @@ def create_app() -> FastAPI:
             _set_csrf_cookie(response, generate_csrf_token())
         return response
 
+    async def redirect_admin_config_to_pipeline(request: Request) -> RedirectResponse:
+        """Redirect demoted task configuration pages to the pipeline editor."""
+
+        username = await get_current_active_user(request)
+        config, auth, _, _, _ = get_dependencies()
+        if not _is_admin_user(username, config, auth):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin role required",
+            )
+        return RedirectResponse(
+            url="/app/admin/pipeline",
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+        )
+
     # --- Routes ---
 
     @app.get("/", response_class=HTMLResponse)
@@ -686,31 +701,17 @@ def create_app() -> FastAPI:
             admin_required=True,
         )
 
-    @app.get("/app/admin/review-gate", response_class=HTMLResponse)
+    @app.get("/app/admin/review-gate")
     async def app_review_gate_rules_page(request: Request):
-        """Serve the admin review gate rules page."""
+        """Redirect the demoted review gate settings page to Pipeline."""
 
-        return await render_app_page(
-            request,
-            "review_gate_rules.html",
-            page_title="Review Gate",
-            page_subtitle="Configure review thresholds and review triggers.",
-            active_nav="review_gate",
-            admin_required=True,
-        )
+        return await redirect_admin_config_to_pipeline(request)
 
-    @app.get("/app/admin/split", response_class=HTMLResponse)
+    @app.get("/app/admin/split")
     async def app_split_settings_page(request: Request):
-        """Serve the admin split settings page."""
+        """Redirect the demoted split settings page to Pipeline."""
 
-        return await render_app_page(
-            request,
-            "split_settings.html",
-            page_title="Split Settings",
-            page_subtitle="Configure split categories and adapter settings.",
-            active_nav="split",
-            admin_required=True,
-        )
+        return await redirect_admin_config_to_pipeline(request)
 
     @app.get("/app/admin/audit", response_class=HTMLResponse)
     async def app_admin_audit_page(request: Request):
