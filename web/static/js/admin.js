@@ -138,15 +138,25 @@
         return settings;
     }
 
-    async function loadDashboard() {
-        const [summary, settings] = await Promise.all([
-            window.DocFlow.apiGet("/api/admin/summary"),
-            window.DocFlow.apiGet("/api/admin/settings"),
-        ]);
-        state.summary = summary;
-        state.settings = settings;
+    async function loadSummary() {
+        state.summary = await window.DocFlow.apiGet("/api/admin/summary");
         renderSummary();
+    }
+
+    async function loadSettings() {
+        state.settings = await window.DocFlow.apiGet("/api/admin/settings");
         renderSettings();
+    }
+
+    async function loadDashboard() {
+        const results = await Promise.allSettled([
+            loadSummary(),
+            loadSettings(),
+        ]);
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure) {
+            throw failure.reason;
+        }
     }
 
     async function saveSettings() {

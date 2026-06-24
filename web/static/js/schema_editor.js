@@ -23,15 +23,51 @@
     const duplicateButton = document.getElementById("schema-duplicate-button");
     const saveButton = document.getElementById("schema-save-button");
     const validateButton = document.getElementById("schema-validate-button");
+    const LAST_SCHEMA_KEY = "docflow.lastSchemaName";
     const fieldTypes = ["string", "number", "integer", "float", "boolean", "date", "datetime", "enum", "object", "array"];
     let schemas = [];
-    let currentName = workspace.dataset.schemaName || "";
+    let currentName = initialSchemaName();
     let draft = emptySchema();
     let dirty = false;
     let schemaSearch = "";
 
     function emptySchema() {
         return { title: "", description: "", fields: {} };
+    }
+
+    function readLastSchemaName() {
+        try {
+            return window.sessionStorage.getItem(LAST_SCHEMA_KEY) || "";
+        } catch (error) {
+            return "";
+        }
+    }
+
+    function schemaStem(schemaName) {
+        return String(schemaName || "").replace(/\.(?:ya?ml|json)$/i, "");
+    }
+
+    function initialSchemaName() {
+        const routeName = workspace.dataset.schemaName || "";
+        const rememberedName = readLastSchemaName();
+        if (!routeName) {
+            return rememberedName;
+        }
+        if (
+            rememberedName
+            && schemaStem(rememberedName) === schemaStem(routeName)
+        ) {
+            return rememberedName;
+        }
+        return routeName;
+    }
+
+    function rememberSchemaName(schemaName) {
+        try {
+            window.sessionStorage.setItem(LAST_SCHEMA_KEY, schemaName);
+        } catch (error) {
+            // The editor remains functional when browser storage is unavailable.
+        }
     }
 
     function escapeHtml(value) {
@@ -327,23 +363,9 @@
         renderPreview();
     }
 
-    async function loadSchemas() {
-        const payload = await window.DocFlow.apiGet("/api/schemas");
-        schemas = payload.schemas || [];
-        if (!currentName && schemas.length) {
-            currentName = schemas[0].name;
-        }
-        if (currentName) {
-            await loadSchema(currentName);
-        } else {
-            render();
-        }
-    }
-
-    async function loadSchema(schemaName) {
-        setBox(errorBox, "");
-        const payload = await window.DocFlow.apiGet(`/api/schemas/${encodeURIComponent(schemaName)}`);
+    function applySchemaPayload(schemaName, payload) {
         currentName = schemaName;
+        rememberSchemaName(schemaName);
         draft = payload.raw_schema || emptySchema();
         nameInput.value = schemaName;
         titleInput.value = draft.title || "";
@@ -354,6 +376,66 @@
         dirty = false;
         validationResults.innerHTML = "";
         render();
+    }
+
+    async function loadSchemas() {
+        const requestedName = currentName;
+        const listPromise = window.DocFlow.apiGet("/api/schemas");
+        const detailPromise = requestedName && /\.(?:ya?ml|json)$/i.test(requestedName)
+            ? window.DocFlow.apiGet(`/api/schemas/${encodeURIComponent(requestedName)}`)
+            : null;
+        if (detailPromise) {
+            const [listResult, detailResult] = await Promise.allSettled([
+                listPromise,
+                detailPromise,
+            ]);
+            if (listResult.status === "rejected") {
+                throw listResult.reason;
+            }
+            schemas = listResult.value.schemas || [];
+            const resolvedName = resolveSchemaName(requestedName);
+            if (
+                detailResult.status === "fulfilled"
+                && resolvedName === requestedName
+            ) {
+                applySchemaPayload(requestedName, detailResult.value);
+                return;
+            }
+            currentName = resolvedName;
+        } else {
+            const listPayload = await listPromise;
+            schemas = listPayload.schemas || [];
+            currentName = resolveSchemaName(requestedName);
+        }
+        if (!currentName && schemas.length) {
+            currentName = schemas[0].name;
+        }
+        if (currentName) {
+            await loadSchema(currentName);
+        } else {
+            render();
+        }
+    }
+
+    function resolveSchemaName(requestedName) {
+        if (!requestedName) {
+            return "";
+        }
+        const exact = schemas.find((schema) => schema.name === requestedName);
+        if (exact) {
+            return exact.name;
+        }
+        const requestedStem = schemaStem(requestedName);
+        const stemMatch = schemas.find(
+            (schema) => schemaStem(schema.name) === requestedStem
+        );
+        return stemMatch ? stemMatch.name : "";
+    }
+
+    async function loadSchema(schemaName) {
+        setBox(errorBox, "");
+        const payload = await window.DocFlow.apiGet(`/api/schemas/${encodeURIComponent(schemaName)}`);
+        applySchemaPayload(schemaName, payload);
     }
 
     async function saveSchema() {
