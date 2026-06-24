@@ -4,6 +4,8 @@
     const CSRF_COOKIE_NAME = "csrf_token";
     const CSRF_HEADER_NAME = "X-CSRF-Token";
     const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
+    const FAILURE_NOTIFICATION_CACHE_KEY = "docflow.failureNotifications";
+    const FAILURE_NOTIFICATION_CACHE_TTL_MS = 60_000;
 
     function readCookie(name) {
         const prefix = `${encodeURIComponent(name)}=`;
@@ -212,39 +214,84 @@
         }
     }
 
-    async function refreshFailureNotifications() {
+    function readFailureNotificationCache() {
+        const rawValue = storageGet(FAILURE_NOTIFICATION_CACHE_KEY);
+        if (!rawValue) {
+            return null;
+        }
+        try {
+            const cached = JSON.parse(rawValue);
+            const count = Number(cached.count || 0);
+            const cachedAt = Number(cached.cachedAt || 0);
+            if (!Number.isFinite(count) || !Number.isFinite(cachedAt) || cachedAt <= 0) {
+                return null;
+            }
+            return { count, cachedAt };
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function writeFailureNotificationCache(count) {
+        storageSet(FAILURE_NOTIFICATION_CACHE_KEY, JSON.stringify({
+            count,
+            cachedAt: Date.now(),
+        }));
+    }
+
+    function applyFailureNotifications(payload) {
         const button = document.getElementById("failure-notification-button");
         const badge = document.getElementById("failure-notification-badge");
         if (!button || !badge) {
-            return { count: 0 };
+            return payload || { count: 0 };
+        }
+        const count = Number(payload && payload.count ? payload.count : 0);
+        if (count > 0) {
+            badge.textContent = count > 99 ? "99+" : String(count);
+            badge.classList.remove("hidden");
+            button.disabled = false;
+            button.classList.remove("btn-disabled");
+            button.title = `${count} fatal failure${count === 1 ? "" : "s"}`;
+            button.setAttribute("aria-label", `${count} fatal failure notifications`);
+            button.onclick = () => {
+                window.location.href = "/app/failures";
+            };
+        } else {
+            badge.classList.add("hidden");
+            badge.textContent = "0";
+            button.disabled = true;
+            button.classList.add("btn-disabled");
+            button.title = "No fatal failure notifications";
+            button.setAttribute("aria-label", "No fatal failure notifications");
+            button.onclick = null;
+        }
+        return { ...(payload || {}), count };
+    }
+
+    async function refreshFailureNotifications(options) {
+        const requestOptions = options || {};
+        const cached = readFailureNotificationCache();
+        if (
+            !requestOptions.force
+            && cached
+            && Date.now() - cached.cachedAt < FAILURE_NOTIFICATION_CACHE_TTL_MS
+        ) {
+            return applyFailureNotifications({ ...cached, cached: true });
         }
         try {
             const payload = await apiGet("/api/failures/notifications");
             const count = Number(payload && payload.count ? payload.count : 0);
-            if (count > 0) {
-                badge.textContent = count > 99 ? "99+" : String(count);
-                badge.classList.remove("hidden");
-                button.disabled = false;
-                button.classList.remove("btn-disabled");
-                button.title = `${count} fatal failure${count === 1 ? "" : "s"}`;
-                button.setAttribute("aria-label", `${count} fatal failure notifications`);
-                button.onclick = () => {
-                    window.location.href = "/app/failures";
-                };
-            } else {
-                badge.classList.add("hidden");
-                badge.textContent = "0";
-                button.disabled = true;
-                button.classList.add("btn-disabled");
-                button.title = "No fatal failure notifications";
-                button.setAttribute("aria-label", "No fatal failure notifications");
-                button.onclick = null;
-            }
-            return payload || { count: 0 };
+            writeFailureNotificationCache(count);
+            return applyFailureNotifications({ ...(payload || {}), count });
         } catch (error) {
-            badge.classList.add("hidden");
-            button.disabled = true;
-            button.onclick = null;
+            if (cached) {
+                return applyFailureNotifications({
+                    ...cached,
+                    stale: true,
+                    error: error.message || "Unable to load failure notifications",
+                });
+            }
+            applyFailureNotifications({ count: 0 });
             return { count: 0, error: error.message || "Unable to load failure notifications" };
         }
     }

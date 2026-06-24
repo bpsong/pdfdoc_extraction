@@ -382,7 +382,7 @@
         if (!clearFailureNotificationsButton || !window.DocFlow || !window.DocFlow.refreshFailureNotifications) {
             return;
         }
-        const payload = await window.DocFlow.refreshFailureNotifications();
+        const payload = await window.DocFlow.refreshFailureNotifications({ force: true });
         const count = Number(payload && payload.count ? payload.count : 0);
         clearFailureNotificationsButton.classList.toggle("hidden", count <= 0);
     }
