@@ -1562,7 +1562,7 @@ See sections 4.3.1 and 4.8 for complete examples. Use them as templates and adju
 ### Further Documentation
 
 - System Architecture: [design_architecture.md](design_architecture.md)
-- Product Requirements: [prd-refactor-unified-pdfdoc-processing.md](../tasks/prd-refactor-unified-pdfdoc-processing.md)
+- Historical Unified Refactor Requirements: [prd-refactor-unified-pdfdoc-processing.md](../tasks/archive/unified-refactor/prd-refactor-unified-pdfdoc-processing.md)
 - Review Schema Administration: [review_schema_admin_guide.md](review_schema_admin_guide.md)
 - LlamaCloud document splitting: [official LlamaIndex guide](https://developers.llamaindex.ai/llamaparse/split/getting_started)
 

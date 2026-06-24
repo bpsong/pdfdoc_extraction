@@ -1,5 +1,8 @@
 # Dynamic Upload Processing Pipeline Task Plan
 
+> Archived historical record: this task plan has been completed and the
+> dynamic processing pipeline is part of the production UI.
+
 ## Background
 
 The Upload & Process flow redirects users to the processing overview after a batch is submitted. The current processing overview renders a fixed visual pipeline of `Uploaded`, `Splitting`, `Extracting`, `Review`, and `Output`, even though actual workflow execution is driven by the configurable YAML `pipeline` list and `tasks` definitions.

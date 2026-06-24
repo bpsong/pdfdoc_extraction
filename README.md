@@ -330,10 +330,13 @@ pdfdoc_extraction/
 │   └── workflow/               # Workflow tests
 ├── 📁 docs/                    # Documentation
 │   ├── design_architecture.md  # System architecture
-│   └── user_guide.md           # User manual
-└── 📁 tasks/                   # Project management
-    ├── prd-*.md                # Product requirements
-    └── future_todos.md         # Development roadmap
+│   ├── user_guide.md           # User manual
+│   └── review_schema_admin_guide.md
+└── 📁 tasks/                   # Engineering guidance and future designs
+    ├── standard_task_creation_guidelines.md
+    ├── future-design-visual-pipeline-builder.md
+    ├── future-multi-document-routing.md
+    └── archive/                # Historical PRDs, completed task lists, and audits
 ```
 
 ## 🛠️ Development

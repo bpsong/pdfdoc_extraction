@@ -1,5 +1,8 @@
 # Product Requirements Document: Unified PDF Document Processing Refactor
 
+> Archived historical record: this refactor has been implemented. Use
+> `docs/design_architecture.md` and `docs/user_guide.md` for current behavior.
+
 ## 1. Overview
 
 This document defines the requirements for refactoring `pdfdoc_extraction` into a unified document processing application that combines:

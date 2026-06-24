@@ -1,5 +1,8 @@
 # Design: Unified PDF Document Processing Refactor
 
+> Archived historical record: this implementation design describes the
+> completed unified refactor. It is not the current architecture authority.
+
 ## 1. Purpose
 
 This design document translates `tasks/prd-refactor-unified-pdfdoc-processing.md` into implementation guidance.

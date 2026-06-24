@@ -1,5 +1,8 @@
 ## Relevant Files
 
+> Archived historical record: this completed task list is retained for
+> implementation history. Paths below reflect its original repository layout.
+
 - `tasks/prd-refactor-unified-pdfdoc-processing.md` - Requirements source for the unified refactor.
 - `tasks/design-refactor-unified-pdfdoc-processing.md` - Implementation design source for this task list.
 - `tasks/markdown-documentation-audit.md` - Markdown documentation age, update, merge, archive, and removal audit for task 26 cleanup.
