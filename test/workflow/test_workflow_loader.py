@@ -24,7 +24,7 @@ def initial_context():
     return {"id": "testfile123", "data": {}}
 
 @pytest.fixture(autouse=True)
-def mock_all_dependencies(mocker, config_path):
+def mock_all_dependencies(mocker, config_path, reset_singletons):
     # Mock ConfigManager's critical exits
     mocker.patch('modules.config_manager.sys.exit')
     mocker.patch('modules.config_manager.logging.Logger.critical')

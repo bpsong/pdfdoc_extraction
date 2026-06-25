@@ -168,5 +168,30 @@ def test_thread_safety_of_updates(setup_and_teardown):
     assert data['status'] == "Processing"
     assert 'ThreadTest' in data['timestamps']
 
+
+def test_status_manager_logs_file_operation_failures(
+    setup_and_teardown,
+    monkeypatch,
+):
+    sm = StatusManager(setup_and_teardown)
+    errors = []
+    monkeypatch.setattr(sm.logger, "error", lambda message: errors.append(message))
+    read_path = sm._get_status_file_path("read")
+    with open(read_path, "w", encoding="utf-8") as status_file:
+        status_file.write("{}")
+
+    monkeypatch.setattr("builtins.open", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("blocked")))
+    sm.create_status("create", "file.pdf", "web", "file.pdf")
+    sm.update_status("update", "Error")
+    assert sm.get_status("read") is None
+
+    monkeypatch.setattr(
+        "modules.status_manager.os.listdir",
+        lambda path: (_ for _ in ()).throw(OSError("blocked")),
+    )
+    sm.cleanup_status_files()
+
+    assert len(errors) == 4
+
 if __name__ == "__main__":
     pytest.main()
