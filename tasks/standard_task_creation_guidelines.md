@@ -1,6 +1,6 @@
 # Standardized Rules and Guidelines for Creating New Tasks
 
-This document outlines the standardized structure, rules, and best practices for creating new tasks within the PDF document processing system. Following these guidelines will ensure consistency, maintainability, and ease of integration with the dynamic Prefect pipeline.
+This document outlines the standardized structure, rules, and best practices for creating or substantially changing tasks within the PDF document processing system. Following these guidelines will ensure consistency, maintainability, safe dynamic imports, and integration with the Prefect-backed workflow runner and SQLite workflow state.
 
 ---
 
@@ -11,31 +11,57 @@ Each task is a self-contained Python module that implements a specific step in t
 ### Required Methods
 
 - `__init__(self, config_manager: ConfigManager, **params)`
-  Initialize the task instance, extract and validate configuration parameters, and prepare any necessary internal state. This method is called once when the task is instantiated.
+  Initialize the task instance and capture task parameters. Keep construction
+  side-effect free beyond basic field initialization: do not perform network
+  calls, durable file operations, or database writes here. Validation should
+  normally occur in `validate_required_fields()` or `on_start()`.
 
 - `on_start(self, context: dict) -> None`
-  Initialize the task environment and perform any necessary setup or context validation before execution.
+  Initialize or normalize the shared context and perform lightweight setup
+  before execution. `WorkflowLoader` calls this hook before `run()`.
 
-- `run(self, context: dict) -> dict | None`
-  Implement the core business logic of the task. This method receives the shared `context` dictionary and must return an updated `context` dictionary reflecting the task's output or any errors. Terminal tasks may return `None`.
+- `run(self, context: dict) -> dict`
+  Implement the core business logic of the task. This method receives the
+  shared `context` dictionary and must return the same context, possibly
+  mutated, with the task's output or error details. Do not return `None`;
+  `WorkflowLoader` normalizes a falsey task result to an empty dictionary,
+  which would discard the existing workflow context.
 
 - `validate_required_fields(self, context: dict) -> None`
-  Validate that all required configuration parameters and context data are present and correct. This method is called automatically before `run()`. For terminal tasks, validation may be minimal.
+  Validate that all required configuration parameters and context data are
+  present and correct. The base class and workflow loader do not call this
+  method automatically. The task must invoke it from `on_start()` or `run()`
+  before performing the operation. For terminal tasks, validation may be
+  minimal.
 
 ### Error Handling
 
-- Use the `TaskError` exception class to signal critical failures.
-- Wrap the `run()` method logic in a try-except block to catch `TaskError` and register errors in the context.
-- Update the context with error details and the task identifier (`error_step`) to support the Railway Programming pattern.
+- Import and use `TaskError` from `modules.exceptions` to signal expected task
+  failures.
+- When a task handles an error and returns context, call
+  `self.register_error(context, error)` so `error` and `error_step` are set
+  consistently.
+- When execution cannot continue normally, raise `TaskError`. The workflow
+  loader translates raised task errors into failed task-run state and applies
+  the configured `on_error` policy.
+- Catch specific lower-level exceptions and translate them to useful
+  `TaskError` messages. Do not include API keys, credentials, provider
+  payloads, customer data, or other secrets in context, logs, or persisted
+  failure details.
 - Do not write text status files or call `StatusManager` from new configured workflow tasks. Workflow lifecycle state is recorded by `WorkflowLoader`/`WorkflowManager` through SQLite `task_runs` and `documents` when `document_id` context exists.
 
 ---
 
 ## 2. Initial Setup Before Core Logic
 
-- Extract and validate configuration parameters from the centralized `ConfigManager` singleton or task parameters during `__init__`.
-- Use the `windows_long_path` utility function from `modules/utils.py` for all file and directory paths to ensure compatibility with Windows path length limitations.
-- Initialize logging for the task to capture detailed execution information.
+- Read configuration through the injected configuration provider and task
+  parameters captured by `BaseTask`; do not create another configuration
+  singleton inside the task.
+- Prefer `pathlib.Path` for filesystem operations. Use `windows_long_path` from
+  `modules/utils.py` where an underlying Windows API or library needs a
+  long-path-compatible string.
+- Use the logger initialized by `BaseTask` rather than creating unrelated
+  logging configuration inside the task.
 - Prepare any necessary data structures or models (for example, Pydantic models for data validation in extraction tasks).
 - Use utilities like `normalize_field_path` and `resolve_field` from `modules/utils.py` for context access.
 
@@ -56,16 +82,37 @@ For example, a task might:
 
 Tasks should focus on a single responsibility but are not limited to the common functions listed here. The key is to update and pass the shared `context` dictionary appropriately to enable seamless pipeline execution.
 
+If a task needs state for resume, operator visibility, audit, reporting, or
+cross-process behavior, persist that state through the appropriate repository
+and service. The context dictionary is an execution protocol, not the
+authoritative store for durable workflow state.
+
 ---
 
 ## 4. Final Step: Passing the Context Onward
 
 - After completing the core logic, the task must return the updated `context` dictionary.
-- The `context` dictionary should include keys such as:
+- Preserve existing context keys unless the task intentionally owns their
+  transition. Representative keys include:
+  - identity: `id`, `batch_id`, and `document_id`;
+  - input: `file_path`, `original_filename`, and `source`;
+  - workflow position: `current_task_index`, `current_task_key`, and
+    `task_run_id`;
   - `data`: The processed or extracted data.
+  - `metadata`: Supporting extraction or task metadata.
   - `error`: Any error messages encountered during execution.
   - `error_step`: The name of the task where an error occurred.
-- Ensure that the context is passed unchanged if the task is skipped or encounters non-critical issues. Terminal tasks may return `None` instead of context.
+  - `fatal_failure`: A redacted structured failure summary where a task has
+    domain-specific operator guidance.
+  - control-flow keys such as `pipeline_state`, `review_item_id`,
+    `split_children`, and `fan_out_start_task_index`.
+- Ensure that the context is passed unchanged if the task is skipped or
+  encounters a non-critical condition.
+- A task that intentionally pauses review sets `pipeline_state` to `paused`.
+  A split task that creates child workflows sets it to `fan_out`. These are
+  workflow-runner signals: downstream tasks in the current flow do not execute.
+- Do not overwrite workflow-owned identity or position keys with unrelated
+  task data.
 
 ---
 
@@ -83,13 +130,17 @@ The workflow runner records standardized task lifecycle events:
 
 Task implementations should:
 
-- keep a stable task slug/key that matches the `pipeline` and `tasks` configuration key;
+- treat the key referenced by the YAML `pipeline` list as the authoritative
+  configured task key used for task-run tracking;
+- keep any optional internal task slug stable, but do not assume it must equal
+  every deployment's configured task key;
 - return meaningful context changes so the workflow runner can summarize outputs;
-- call `self.register_error(context, TaskError(...))` before returning or raising when the task handles an error;
+- call `self.register_error(context, TaskError(...))` before returning context
+  with a handled error;
 - raise `TaskError` for failures that should stop the current happy path;
 - avoid direct writes to `StatusManager`, status `.txt` files, `/api/files`, or `/api/status/{file_id}` compatibility shapes.
 
-Task slug mapping examples:
+Common configured task-key examples:
 
 - `ExtractPdfTask` -> `extract_document_data`
 - `StoreMetadataAsCsv` -> `store_metadata_csv`
@@ -137,15 +188,48 @@ Common artifact roles:
 
 Do not encode artifact paths only in status details. Store durable files on disk and register them in SQLite `document_files`.
 
+Artifact registration is currently best-effort and may return `None` when
+there is no persisted document or when registration fails. A task should still
+report the primary file-operation outcome accurately, while logging enough
+non-sensitive information to diagnose missing artifact registration.
+
+### 5.4. Task Approval and Dynamic Imports
+
+Dynamic task imports are allow-listed by exact module/class pair.
+
+- A built-in task must use the `standard_step.*` namespace and be added to
+  `BUILTIN_TASKS` in `modules/services/task_registry_service.py`.
+- A deployment-specific custom task must use the `custom_step.*` namespace,
+  be enabled under `custom_steps.enabled`, and have its exact module/class pair
+  listed under `custom_steps.registry`.
+- Do not place customer-specific code under `standard_step.*` or weaken the
+  approval check to accept arbitrary imports.
+- Keep the registry-coverage tests passing so every `BaseTask` subclass under
+  `standard_step/` is explicitly approved.
+
 ---
 
 ## 6. Additional Best Practices
 
-- **Retry Logic:** Implement retry mechanisms for transient I/O errors using decorators or context managers.
+- **Retry Logic:** Configured tasks already receive one Prefect retry from
+  `WorkflowLoader`. Add task- or provider-level retries only for clearly
+  transient operations, and avoid multiplying retries unintentionally.
+- **Idempotency:** Assume `run()` may execute more than once. Use unique-path,
+  existence, transaction, or deduplication safeguards so retries do not create
+  duplicate database rows or corrupt durable files.
 - **Sanitization:** Sanitize all filenames and paths to remove invalid characters and prevent collisions.
-- **Logging:** Log detailed information at each step, including errors and warnings, to facilitate troubleshooting.
-- **Configuration:** Obtain all configuration parameters from the centralized `ConfigManager` to maintain consistency.
+- **Logging:** Log useful task milestones, errors, and warnings without logging
+  secrets, raw provider payloads, or unnecessary customer content.
+- **Configuration:** Obtain configuration through the injected configuration
+  provider and constructor parameters to maintain consistency and testability.
 - **Extensibility:** Design tasks to be modular and easily extendable for future enhancements or customizations.
+- **Testing:** Add focused unit tests for validation, success, handled errors,
+  raised `TaskError`, retries or idempotency where relevant, and context
+  preservation. Add workflow or integration tests when the task affects
+  SQLite state, artifacts, pause/resume, split fan-out, or pipeline ordering.
+- **Configuration validation:** Update the runtime/config-check validators,
+  schemas, examples, and documentation when a task introduces new parameters
+  or pipeline-order constraints.
 
 ---
 
@@ -168,13 +252,23 @@ Avoid using other keys like `processed_file_path` for this purpose, as they may 
 Refer to the following standard task modules as examples of best practices and structure:
 
 - `standard_step.extraction.extract_pdf`
+- `standard_step.split.llamacloud_split`
+- `standard_step.review.review_gate`
 - `standard_step.storage.store_metadata_as_csv`
 - `standard_step.storage.store_metadata_as_json`
 - `standard_step.storage.store_file_to_localdrive`
 - `standard_step.archiver.archive_pdf`
+- `standard_step.rules.update_reference`
+- `standard_step.context.assign_nanoid`
+- `standard_step.housekeeping.cleanup_task`
+
+Helper modules such as provider adapters do not need to inherit `BaseTask`
+unless they are directly configured as pipeline steps.
 
 ---
 
 This document should be updated as new standards emerge or improvements are made to the task creation process.
 
-Note: Terminal tasks, for example housekeeping, may omit artifact registration when they only delete transient processing files, but they should log operations and preserve registered business artifacts.
+Note: Terminal tasks, for example housekeeping, may omit artifact registration
+when they only delete transient processing files, but they must return the
+context, log operations, and preserve registered business artifacts.

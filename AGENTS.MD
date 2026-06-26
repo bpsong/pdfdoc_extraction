@@ -52,7 +52,8 @@ subproject.
 - `tools/`: Administrative and smoke-test scripts.
 - `test/`: Pytest unit, integration, workflow, security, visual, and tool tests.
 - `docs/`: Maintained architecture, operations, and user documentation.
-- `tasks/`: PRDs, implementation task lists, and future-work documents.
+- `tasks/`: PRDs, implementation task lists, future-work documents, and the
+  maintained standard-task creation guidelines.
 - `pipeline_visual_editor_prototype/`: Standalone design prototype; it is not
   the production web application.
 - `schemas/`: Review and extraction schemas used by configured workflows.
@@ -91,6 +92,9 @@ subproject.
 Read `docs/design_architecture.md` before changing architectural boundaries.
 Read `tasks/standard_task_creation_guidelines.md` before adding or substantially
 changing a pipeline task.
+When changes to `BaseTask`, workflow task execution, task approval, shared
+context/error contracts, retry behavior, or artifact handling establish a new
+task standard, update the task creation guidelines in the same change.
 
 ## Configuration and Sensitive Data
 
