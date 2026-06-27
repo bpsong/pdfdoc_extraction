@@ -374,7 +374,7 @@ def test_task_catalog_page_includes_task_20_assets(monkeypatch) -> None:
     assert "/static/js/task_catalog.js" in response.text
 
 
-def test_pipeline_config_page_includes_task_21_assets(monkeypatch) -> None:
+def test_pipeline_config_page_includes_task_32_assets(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
 
@@ -383,7 +383,7 @@ def test_pipeline_config_page_includes_task_21_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="pipeline-config-workspace"' in response.text
     assert 'id="pipeline-publish-button"' in response.text
-    assert "/static/js/pipeline_config.js" in response.text
+    assert "/static/js/pipeline_config.js?v=task32" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:

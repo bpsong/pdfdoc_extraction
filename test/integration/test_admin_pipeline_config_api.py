@@ -26,6 +26,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                 "class": "LlamaCloudSplitTask",
                 "params": {
                     "enabled": True,
+                    "api_key": "split-secret",
                     "adapter": "mock",
                     "categories": [{"name": "invoice"}],
                     "split_dir": str(tmp_path / "split"),
@@ -35,6 +36,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                 "module": "standard_step.extraction.extract_pdf",
                 "class": "ExtractPdfTask",
                 "params": {
+                    "api_key": "extract-secret",
                     "fields": {
                         "supplier": {"alias": "Supplier", "type": "str"},
                     }
@@ -91,6 +93,78 @@ def test_admin_pipeline_api_requires_admin(monkeypatch, tmp_path: Path) -> None:
     assert response.json()["detail"] == "Admin role required"
 
 
+def test_admin_pipeline_directory_browser_lists_and_creates_project_dirs(monkeypatch, tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    client = _client(monkeypatch, config)
+    (tmp_path / "data" / "exports").mkdir(parents=True)
+
+    listing = client.get("/api/admin/pipeline/directories", params={"path": "data"})
+
+    assert listing.status_code == 200
+    payload = listing.json()
+    assert payload["current"] == "data"
+    assert payload["parent"] == "."
+    assert {"name": "exports", "path": "data/exports"} in payload["directories"]
+
+    created = client.post("/api/admin/pipeline/directories", json={"path": "data/new-output"})
+
+    assert created.status_code == 200
+    assert created.json()["path"] == "data/new-output"
+    assert (tmp_path / "data" / "new-output").is_dir()
+
+
+def test_admin_pipeline_directory_browser_rejects_unsafe_paths(monkeypatch, tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    client = _client(monkeypatch, config)
+
+    traversal = client.get("/api/admin/pipeline/directories", params={"path": "../"})
+    absolute = client.post("/api/admin/pipeline/directories", json={"path": str(tmp_path.parent)})
+
+    assert traversal.status_code == 400
+    assert absolute.status_code == 400
+
+
+def test_admin_pipeline_file_browser_and_csv_metadata(monkeypatch, tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    client = _client(monkeypatch, config)
+    reference_dir = tmp_path / "reference_file"
+    reference_dir.mkdir()
+    (reference_dir / "invoices.csv").write_text("invoice_id,matched,amount\n1,no,12.50\n", encoding="utf-8")
+    (reference_dir / "notes.txt").write_text("not a csv", encoding="utf-8")
+
+    listing = client.get(
+        "/api/admin/pipeline/files",
+        params={"path": "reference_file", "extensions": ".csv"},
+    )
+    metadata = client.get(
+        "/api/admin/pipeline/csv-metadata",
+        params={"path": "reference_file/invoices.csv"},
+    )
+
+    assert listing.status_code == 200
+    assert listing.json()["files"] == [
+        {"name": "invoices.csv", "path": "reference_file/invoices.csv"}
+    ]
+    assert metadata.status_code == 200
+    assert metadata.json() == {
+        "path": "reference_file/invoices.csv",
+        "columns": ["invoice_id", "matched", "amount"],
+    }
+    assert "12.50" not in metadata.text
+
+
+def test_admin_pipeline_file_apis_reject_unsafe_paths_and_non_csv(monkeypatch, tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    client = _client(monkeypatch, config)
+    (tmp_path / "notes.txt").write_text("notes", encoding="utf-8")
+
+    traversal = client.get("/api/admin/pipeline/files", params={"path": "../"})
+    non_csv = client.get("/api/admin/pipeline/csv-metadata", params={"path": "notes.txt"})
+
+    assert traversal.status_code == 400
+    assert non_csv.status_code == 400
+
+
 def test_admin_pipeline_api_draft_diff_validate_and_publish(monkeypatch, tmp_path: Path) -> None:
     config = _config(tmp_path)
     client = _client(monkeypatch, config)
@@ -99,7 +173,11 @@ def test_admin_pipeline_api_draft_diff_validate_and_publish(monkeypatch, tmp_pat
     assert overview.status_code == 200
     payload = overview.json()
     assert payload["active"]["summary"]["enabled_steps"] == 4
+    assert "split-secret" not in overview.text
+    assert "extract-secret" not in overview.text
+    assert payload["active"]["model"]["steps"][0]["params"]["api_key"] == "[REDACTED]"
     assert any(task["class_name"] == "ReviewGateTask" for task in payload["catalog"]["tasks"])
+    assert all(task["class_name"] != "CleanupTask" for task in payload["catalog"]["tasks"])
 
     model = _draft_model(payload)
     model["steps"][2]["enabled"] = False
@@ -119,6 +197,8 @@ def test_admin_pipeline_api_draft_diff_validate_and_publish(monkeypatch, tmp_pat
     assert publish_response.status_code == 200
     written = yaml.safe_load(config._config_path.read_text(encoding="utf-8"))
     assert written["pipeline"] == ["split", "extract", "store_json"]
+    assert written["tasks"]["split"]["params"]["api_key"] == "split-secret"
+    assert written["tasks"]["extract"]["params"]["api_key"] == "extract-secret"
 
     with connect(config) as conn:
         active = ConfigVersionRepository(conn).get_active("pipeline", "default")

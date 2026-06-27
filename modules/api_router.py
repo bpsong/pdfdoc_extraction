@@ -24,6 +24,7 @@ Architecture Reference:
 """
 
 from typing import List, Dict, Any, Optional, Tuple, cast
+import csv
 import os
 import json
 from pathlib import Path
@@ -1131,6 +1132,104 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pipeline model must be an object")
         return model
 
+    def _pipeline_browser_root(config: ConfigManager) -> Path:
+        """Return the root directory exposed to the pipeline path browser."""
+        config_path = Path(getattr(config, "_config_path", "config.yaml"))
+        root = config_path.parent if config_path.parent != Path("") else Path.cwd()
+        return root.expanduser().resolve()
+
+    def _pipeline_browser_path(config: ConfigManager, raw_path: str | None) -> tuple[Path, str]:
+        """Resolve a project-relative browser path under the config directory."""
+        root = _pipeline_browser_root(config)
+        requested = str(raw_path or ".").replace("\\", "/").strip() or "."
+        candidate = Path(requested)
+        if candidate.is_absolute() or ".." in candidate.parts:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path must be project-relative")
+        resolved = (root / candidate).resolve()
+        try:
+            relative = resolved.relative_to(root)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path is outside project root") from exc
+        display = "." if str(relative) == "." else relative.as_posix()
+        return resolved, display
+
+    def _pipeline_directory_listing(config: ConfigManager, raw_path: str | None) -> dict[str, Any]:
+        """Return child directories for a project-relative path."""
+        resolved, display = _pipeline_browser_path(config, raw_path)
+        if not resolved.exists() or not resolved.is_dir():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Directory not found")
+        root = _pipeline_browser_root(config)
+        directories = []
+        for child in sorted(resolved.iterdir(), key=lambda path: path.name.lower()):
+            if not child.is_dir():
+                continue
+            try:
+                child_relative = child.resolve().relative_to(root).as_posix()
+            except ValueError:
+                continue
+            directories.append({"name": child.name, "path": child_relative})
+        parent = None
+        if display != ".":
+            parent_relative = resolved.parent.relative_to(root)
+            parent = "." if str(parent_relative) == "." else parent_relative.as_posix()
+        return {"root": str(root), "current": display, "parent": parent, "directories": directories}
+
+    def _pipeline_file_listing(
+        config: ConfigManager,
+        raw_path: str | None,
+        extensions: str | None,
+    ) -> dict[str, Any]:
+        """Return project-relative directories and extension-filtered files."""
+        listing = _pipeline_directory_listing(config, raw_path)
+        resolved, _ = _pipeline_browser_path(config, raw_path)
+        root = _pipeline_browser_root(config)
+        allowed = {
+            suffix if suffix.startswith(".") else f".{suffix}"
+            for suffix in (part.strip().lower() for part in str(extensions or "").split(","))
+            if suffix and suffix.replace(".", "").isalnum()
+        }
+        files = []
+        for child in sorted(resolved.iterdir(), key=lambda path: path.name.lower()):
+            if not child.is_file() or (allowed and child.suffix.lower() not in allowed):
+                continue
+            try:
+                child_relative = child.resolve().relative_to(root).as_posix()
+            except ValueError:
+                continue
+            files.append({"name": child.name, "path": child_relative})
+        return {**listing, "files": files}
+
+    def _pipeline_csv_metadata(config: ConfigManager, raw_path: str | None) -> dict[str, Any]:
+        """Return a CSV header without exposing any data rows."""
+        resolved, display = _pipeline_browser_path(config, raw_path)
+        if resolved.suffix.lower() != ".csv":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Path must reference a CSV file")
+        if not resolved.exists() or not resolved.is_file():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CSV file not found")
+        try:
+            with resolved.open("r", encoding="utf-8-sig", newline="") as handle:
+                columns = next(csv.reader(handle), [])
+        except (OSError, UnicodeError, csv.Error) as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to read CSV header") from exc
+        return {"path": display, "columns": [str(column) for column in columns]}
+
+    def _pipeline_editor_catalog(config: ConfigManager) -> dict[str, Any]:
+        """Return only user-configurable tasks for the pipeline editor."""
+        catalog = TaskCatalogService(config).catalog()
+        tasks = [
+            task
+            for task in catalog.get("tasks", [])
+            if task.get("class_name") != "CleanupTask"
+            and ".housekeeping." not in str(task.get("module") or "")
+        ]
+        summary = {
+            "total": len(tasks),
+            "configured": sum(1 for task in tasks if task.get("is_configured")),
+            "available": sum(1 for task in tasks if task.get("import_status") == "ok"),
+            "failed": sum(1 for task in tasks if task.get("import_status") != "ok"),
+        }
+        return {"summary": summary, "tasks": tasks}
+
     @router.get("/api/admin/pipeline")
     def get_admin_pipeline(user: str = Depends(get_current_user)):
         """Return active and draft pipeline configuration for admin editing."""
@@ -1139,8 +1238,50 @@ def build_router() -> APIRouter:
         with connect(config) as conn:
             service = PipelineConfigService(config, conn)
             payload = service.get_pipeline()
-        payload["catalog"] = TaskCatalogService(config).catalog()
+        payload["catalog"] = _pipeline_editor_catalog(config)
         return payload
+
+    @router.get("/api/admin/pipeline/directories")
+    def browse_admin_pipeline_directories(
+        path: str = ".",
+        user: str = Depends(get_current_user),
+    ):
+        """Return project directories available for pipeline output paths."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        return _pipeline_directory_listing(config, path)
+
+    @router.post("/api/admin/pipeline/directories")
+    async def create_admin_pipeline_directory(request: Request, user: str = Depends(get_current_user)):
+        """Create a project-relative directory for pipeline output paths."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        raw_path = payload.get("path") if isinstance(payload, dict) else None
+        resolved, display = _pipeline_browser_path(config, str(raw_path or ""))
+        resolved.mkdir(parents=True, exist_ok=True)
+        return {"path": display}
+
+    @router.get("/api/admin/pipeline/files")
+    def browse_admin_pipeline_files(
+        path: str = ".",
+        extensions: str = "",
+        user: str = Depends(get_current_user),
+    ):
+        """Return project files available to pipeline file controls."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        return _pipeline_file_listing(config, path, extensions)
+
+    @router.get("/api/admin/pipeline/csv-metadata")
+    def get_admin_pipeline_csv_metadata(
+        path: str,
+        user: str = Depends(get_current_user),
+    ):
+        """Return column names for a project-relative reference CSV."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        return _pipeline_csv_metadata(config, path)
 
     @router.put("/api/admin/pipeline/draft")
     async def save_admin_pipeline_draft(request: Request, user: str = Depends(get_current_user)):

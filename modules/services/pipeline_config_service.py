@@ -21,6 +21,13 @@ from modules.services.task_catalog_service import TaskCatalogService
 
 CONFIG_TYPE = "pipeline"
 CONFIG_NAME = "default"
+REDACTED_SECRET = "[REDACTED]"
+SECRET_KEY_PARTS = ("api_key", "password", "secret", "token", "credential")
+
+
+def _is_housekeeping_task(module_name: Any, class_name: Any) -> bool:
+    """Return whether a configured task is runtime-managed housekeeping."""
+    return str(class_name or "") == "CleanupTask" or ".housekeeping." in str(module_name or "")
 
 
 class PipelineConfigError(ValueError):
@@ -66,7 +73,7 @@ class PipelineConfigService:
     def save_draft(self, model: dict[str, Any], *, user: str | None = None) -> dict[str, Any]:
         """Normalize and persist a pipeline draft model."""
         normalized = self._normalize_model(model)
-        draft_config = self._config_from_model(normalized)
+        draft_config = self._config_from_model(normalized, source_config=self._secret_source_config())
         yaml_preview = self._dump_yaml(draft_config)
         draft_row = self.versions.create_draft(
             config_type=CONFIG_TYPE,
@@ -81,7 +88,7 @@ class PipelineConfigService:
         self.audit.append_event(
             event_type="admin_pipeline_draft_saved",
             user=user,
-            before=self._model_from_config(self._active_config()),
+            before=self._model_from_config(self._active_config(), redact=True),
             after=normalized,
             metadata={"config_version_id": draft_row["id"], "summary": self._summary(normalized)},
         )
@@ -89,9 +96,9 @@ class PipelineConfigService:
 
     def diff(self, model: dict[str, Any] | None = None) -> dict[str, Any]:
         """Return an active-vs-draft unified diff."""
-        active_yaml = self._dump_yaml(self._active_config())
+        active_yaml = self._dump_yaml(_redact_secrets(self._active_config()))
         draft_config = self._draft_config(model)
-        draft_yaml = self._dump_yaml(draft_config)
+        draft_yaml = self._dump_yaml(_redact_secrets(draft_config))
         lines = list(
             difflib.unified_diff(
                 active_yaml.splitlines(),
@@ -121,7 +128,7 @@ class PipelineConfigService:
             "errors": sum(1 for finding in result["findings"] if finding["severity"] == "error"),
             "warnings": sum(1 for finding in result["findings"] if finding["severity"] == "warning"),
         }
-        result["yaml_preview"] = self._dump_yaml(draft_config)
+        result["yaml_preview"] = self._dump_yaml(_redact_secrets(draft_config))
         if audit:
             self.audit.append_event(
                 event_type="admin_pipeline_validated",
@@ -139,13 +146,13 @@ class PipelineConfigService:
     ) -> dict[str, Any]:
         """Publish a validated draft by writing config YAML and recording a version."""
         normalized = self._normalize_model(model) if model is not None else self._stored_or_active_model()
-        draft_config = self._config_from_model(normalized)
+        draft_config = self._config_from_model(normalized, source_config=self._secret_source_config())
         validation = self.validate_draft(normalized)
         blocking = [finding for finding in validation["findings"] if finding["severity"] == "error"]
         if blocking:
             raise PipelineConfigError("Pipeline draft has blocking validation findings.", findings=blocking)
 
-        before_model = self._model_from_config(self._active_config())
+        before_model = self._model_from_config(self._active_config(), redact=True)
         yaml_preview = self._dump_yaml(draft_config)
         draft_row = self._matching_or_new_draft(
             yaml_preview=yaml_preview,
@@ -174,14 +181,15 @@ class PipelineConfigService:
 
     def yaml_preview(self, model: dict[str, Any]) -> str:
         """Return generated YAML for a draft model without saving it."""
-        return self._dump_yaml(self._config_from_model(self._normalize_model(model)))
+        config = self._config_from_model(self._normalize_model(model), source_config=self._secret_source_config())
+        return self._dump_yaml(_redact_secrets(config))
 
     def _pipeline_payload(self, config: dict[str, Any]) -> dict[str, Any]:
         """Build an API/UI-ready pipeline payload from config data."""
-        model = self._model_from_config(config)
+        model = self._model_from_config(config, redact=True)
         return {
             "model": model,
-            "yaml_preview": self._dump_yaml(config),
+            "yaml_preview": self._dump_yaml(_redact_secrets(config)),
             "summary": self._summary(model),
         }
 
@@ -192,20 +200,21 @@ class PipelineConfigService:
         if not isinstance(model, dict):
             model = self._model_from_config(self._config_from_yaml(draft_row["content_text"]))
         normalized = self._normalize_model(model)
+        redacted_model = self._redact_model(normalized)
         return {
             "id": draft_row["id"],
             "created_by": draft_row.get("created_by"),
             "created_at": draft_row.get("created_at"),
             "content_hash": draft_row.get("content_hash"),
-            "model": normalized,
-            "yaml_preview": draft_row["content_text"],
-            "summary": self._summary(normalized),
+            "model": redacted_model,
+            "yaml_preview": self._dump_yaml(_redact_secrets(self._config_from_yaml(draft_row["content_text"]))),
+            "summary": self._summary(redacted_model),
         }
 
     def _draft_config(self, model: dict[str, Any] | None) -> dict[str, Any]:
         """Return full config data for a provided, stored, or active draft."""
         if model is not None:
-            return self._config_from_model(self._normalize_model(model))
+            return self._config_from_model(self._normalize_model(model), source_config=self._secret_source_config())
         draft_row = self.versions.get_draft(CONFIG_TYPE, CONFIG_NAME)
         if draft_row:
             return self._config_from_yaml(draft_row["content_text"])
@@ -215,7 +224,7 @@ class PipelineConfigService:
         """Return the latest stored draft model, or active model when no draft exists."""
         draft_row = self.versions.get_draft(CONFIG_TYPE, CONFIG_NAME)
         if not draft_row:
-            return self._model_from_config(self._active_config())
+            return self._model_from_config(self._active_config(), redact=True)
         return self._draft_payload(draft_row)["model"]
 
     def _matching_or_new_draft(
@@ -244,11 +253,31 @@ class PipelineConfigService:
             return {}
         return deepcopy(config)
 
-    def _config_from_model(self, model: dict[str, Any]) -> dict[str, Any]:
+    def _secret_source_config(self) -> dict[str, Any]:
+        """Return the draft config when present so redacted secrets round-trip."""
+        draft_row = self.versions.get_draft(CONFIG_TYPE, CONFIG_NAME)
+        if draft_row:
+            return self._config_from_yaml(draft_row["content_text"])
+        return self._active_config()
+
+    def _config_from_model(
+        self,
+        model: dict[str, Any],
+        *,
+        source_config: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Merge a normalized draft model into the active config shape."""
         config = self._active_config()
         raw_tasks = config.get("tasks")
         tasks: dict[str, Any] = deepcopy(raw_tasks) if isinstance(raw_tasks, dict) else {}
+        tasks = {
+            key: task
+            for key, task in tasks.items()
+            if not isinstance(task, dict)
+            or not _is_housekeeping_task(task.get("module"), task.get("class"))
+        }
+        source_tasks = (source_config or {}).get("tasks")
+        source_task_map: dict[str, Any] = source_tasks if isinstance(source_tasks, dict) else {}
         pipeline: list[str] = []
         raw_steps = model.get("steps")
         steps: list[Any] = raw_steps if isinstance(raw_steps, list) else []
@@ -256,10 +285,15 @@ class PipelineConfigService:
             if not isinstance(step, dict):
                 continue
             key = step["key"]
+            params = deepcopy(step.get("params", {}))
+            source_params = {}
+            source_task = source_task_map.get(key)
+            if isinstance(source_task, dict) and isinstance(source_task.get("params"), dict):
+                source_params = source_task["params"]
             tasks[key] = {
                 "module": step["module"],
                 "class": step["class"],
-                "params": deepcopy(step.get("params", {})),
+                "params": _preserve_redacted_secrets(params, source_params),
             }
             if step.get("on_error") is not None:
                 tasks[key]["on_error"] = step["on_error"]
@@ -269,7 +303,7 @@ class PipelineConfigService:
         config["pipeline"] = pipeline
         return config
 
-    def _model_from_config(self, config: dict[str, Any]) -> dict[str, Any]:
+    def _model_from_config(self, config: dict[str, Any], *, redact: bool = False) -> dict[str, Any]:
         """Convert config pipeline/tasks data into an ordered step model."""
         raw_tasks = config.get("tasks")
         tasks: dict[str, Any] = raw_tasks if isinstance(raw_tasks, dict) else {}
@@ -293,7 +327,9 @@ class PipelineConfigService:
                     }
                 )
                 continue
-            steps.append(self._step_from_task(entry, task_cfg, enabled=True))
+            if _is_housekeeping_task(task_cfg.get("module"), task_cfg.get("class")):
+                continue
+            steps.append(self._step_from_task(entry, task_cfg, enabled=True, redact=redact))
         return {"steps": steps}
 
     def _normalize_model(self, model: dict[str, Any]) -> dict[str, Any]:
@@ -313,6 +349,8 @@ class PipelineConfigService:
             class_name = str(raw_step.get("class") or raw_step.get("class_name") or "").strip()
             if not module_name or not class_name:
                 raise PipelineConfigError(f"Pipeline step at index {index} requires module and class.")
+            if _is_housekeeping_task(module_name, class_name):
+                continue
             key = str(raw_step.get("key") or "").strip() or _key_from_class(class_name)
             key = _unique_key(_slugify(key), used_keys)
             used_keys.add(key)
@@ -335,18 +373,34 @@ class PipelineConfigService:
         return {"steps": normalized_steps}
 
     @staticmethod
-    def _step_from_task(task_key: str, task_cfg: dict[str, Any], *, enabled: bool) -> dict[str, Any]:
+    def _step_from_task(
+        task_key: str,
+        task_cfg: dict[str, Any],
+        *,
+        enabled: bool,
+        redact: bool = False,
+    ) -> dict[str, Any]:
         """Build a step model from one configured task definition."""
         class_name = str(task_cfg.get("class") or "")
+        params = deepcopy(task_cfg.get("params") if isinstance(task_cfg.get("params"), dict) else {})
         return {
             "key": task_key,
             "label": TaskCatalogService._label_for(class_name) if class_name else _label_for_key(task_key),
             "module": str(task_cfg.get("module") or ""),
             "class": class_name,
             "enabled": enabled,
-            "params": deepcopy(task_cfg.get("params") if isinstance(task_cfg.get("params"), dict) else {}),
+            "params": _redact_secrets(params) if redact else params,
             "on_error": task_cfg.get("on_error"),
         }
+
+    @staticmethod
+    def _redact_model(model: dict[str, Any]) -> dict[str, Any]:
+        """Return a display-safe draft model with secret-like params hidden."""
+        redacted = deepcopy(model)
+        for step in redacted.get("steps", []):
+            if isinstance(step, dict):
+                step["params"] = _redact_secrets(step.get("params", {}))
+        return redacted
 
     @staticmethod
     def _summary(model: dict[str, Any]) -> dict[str, int]:
@@ -428,3 +482,42 @@ def _unique_key(base_key: str, used_keys: set[str]) -> str:
 def _label_for_key(task_key: str) -> str:
     """Build a readable label from a task key."""
     return task_key.replace("_", " ").strip().title() or task_key
+
+
+def _secret_key(key: str) -> bool:
+    """Return whether a key name should be treated as secret-like."""
+    key_text = key.lower()
+    return any(part in key_text for part in SECRET_KEY_PARTS)
+
+
+def _redact_secrets(value: Any) -> Any:
+    """Return a copy with secret-like keys redacted for operator display."""
+    if isinstance(value, dict):
+        return {
+            key: REDACTED_SECRET if _secret_key(str(key)) else _redact_secrets(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_secrets(item) for item in value]
+    return deepcopy(value)
+
+
+def _preserve_redacted_secrets(value: Any, source: Any) -> Any:
+    """Replace redacted secret placeholders with the existing source value."""
+    if isinstance(value, dict):
+        source_dict = source if isinstance(source, dict) else {}
+        preserved: dict[str, Any] = {}
+        for key, item in value.items():
+            source_item = source_dict.get(key)
+            if _secret_key(str(key)) and item == REDACTED_SECRET:
+                preserved[key] = deepcopy(source_item)
+            else:
+                preserved[key] = _preserve_redacted_secrets(item, source_item)
+        return preserved
+    if isinstance(value, list):
+        source_list = source if isinstance(source, list) else []
+        return [
+            _preserve_redacted_secrets(item, source_list[index] if index < len(source_list) else None)
+            for index, item in enumerate(value)
+        ]
+    return deepcopy(value)

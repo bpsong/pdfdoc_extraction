@@ -757,7 +757,7 @@
 
 .pipeline-config-workspace {
     display: grid;
-    grid-template-columns: minmax(16rem, 0.7fr) minmax(26rem, 1fr) minmax(22rem, 0.9fr);
+    grid-template-columns: minmax(13rem, 0.65fr) minmax(20rem, 1fr) minmax(22rem, 1fr);
     grid-template-areas:
         "guide guide guide"
         "active draft editor"
@@ -765,6 +765,10 @@
         "yaml yaml diff";
     gap: 1rem;
     align-items: start;
+}
+
+.pipeline-config-workspace > * {
+    min-width: 0;
 }
 
 .pipeline-guide-panel {
@@ -808,6 +812,10 @@
     gap: 0.5rem;
     padding: 1rem;
     border-bottom: 1px solid oklch(var(--b3));
+}
+
+.pipeline-add-row select {
+    min-width: 0;
 }
 
 .pipeline-static-step,
@@ -866,14 +874,316 @@
     padding: 0 0.75rem 0.75rem 3.5rem;
 }
 
+.pipeline-draft-panel .panel-header {
+    flex-wrap: wrap;
+}
+
 .pipeline-editor-body {
     gap: 1rem;
+}
+
+.pipeline-property-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.property-pane-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border-bottom: 1px solid oklch(var(--b3));
+    padding-bottom: 0.75rem;
+}
+
+.property-kind-icon {
+    display: flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    background: oklch(var(--p) / 0.1);
+    color: oklch(var(--p));
+    font-size: 0.875rem;
+    font-weight: 800;
+}
+
+.property-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.25rem;
+    border-radius: 0.5rem;
+    background: oklch(var(--b2));
+    padding: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.property-tab {
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.5rem;
+    color: oklch(var(--bc) / 0.62);
+}
+
+.property-tab.active {
+    background: oklch(var(--b1));
+    color: oklch(var(--bc));
+    font-weight: 700;
+    box-shadow: 0 1px 2px oklch(var(--bc) / 0.08);
 }
 
 .pipeline-form-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
+}
+
+.task-control-panel {
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    background: oklch(var(--b2) / 0.5);
+    padding: 0.75rem;
+}
+
+.split-category-row {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    align-items: end;
+}
+
+.field-editor {
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    background: oklch(var(--b1));
+    padding: 0.75rem;
+}
+
+.property-field-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(8rem, 0.8fr) max-content;
+    gap: 0.75rem;
+    align-items: end;
+}
+
+.threshold-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 7rem max-content;
+    gap: 0.5rem;
+    align-items: end;
+}
+
+.rule-clause-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) max-content;
+    gap: 0.5rem;
+    align-items: end;
+}
+
+.row-schema-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    background: oklch(var(--b2) / 0.5);
+    padding: 0.75rem;
+}
+
+.row-schema-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    justify-content: flex-end;
+    background: oklch(var(--bc) / 0.28);
+}
+
+.row-schema-drawer {
+    display: flex;
+    width: min(44rem, 100vw);
+    max-width: 100%;
+    flex-direction: column;
+    background: oklch(var(--b1));
+    box-shadow: -12px 0 32px oklch(var(--bc) / 0.16);
+}
+
+.row-schema-header,
+.row-schema-footer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+    padding: 1rem;
+}
+
+.row-schema-footer {
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid oklch(var(--b3));
+    border-bottom: 0;
+}
+
+.row-schema-body {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.row-schema-notice {
+    border: 1px solid oklch(var(--in) / 0.24);
+    border-radius: 0.5rem;
+    background: oklch(var(--in) / 0.08);
+    padding: 0.75rem;
+    font-size: 0.8125rem;
+    color: oklch(var(--bc) / 0.72);
+}
+
+.row-schema-table {
+    margin-top: 0.75rem;
+    overflow: hidden;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+}
+
+.row-schema-columns,
+.row-schema-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(8rem, 0.8fr) 4rem 4rem;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.row-schema-columns {
+    background: oklch(var(--b2));
+    padding: 0.5rem 0.75rem;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: oklch(var(--bc) / 0.56);
+}
+
+.row-schema-field {
+    border-top: 1px solid oklch(var(--b3));
+    padding: 0.75rem;
+}
+
+.row-required-toggle {
+    display: flex;
+    justify-content: center;
+}
+
+.row-schema-preview {
+    margin-top: 0.75rem;
+    border-radius: 0.5rem;
+    background: oklch(var(--b2));
+    padding: 0.75rem;
+    font-size: 0.75rem;
+    line-height: 1.45;
+}
+
+.directory-control .join {
+    min-width: 0;
+}
+
+.directory-browser-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    justify-content: flex-end;
+    background: oklch(var(--bc) / 0.28);
+}
+
+.directory-browser-drawer {
+    display: flex;
+    width: min(32rem, 100vw);
+    max-width: 100%;
+    flex-direction: column;
+    background: oklch(var(--b1));
+    box-shadow: -12px 0 32px oklch(var(--bc) / 0.16);
+}
+
+.directory-browser-header,
+.directory-browser-footer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+    padding: 1rem;
+}
+
+.directory-browser-footer {
+    align-items: center;
+    justify-content: flex-end;
+    border-top: 1px solid oklch(var(--b3));
+    border-bottom: 0;
+}
+
+.directory-browser-body {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    padding: 1rem;
+}
+
+.directory-browser-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.directory-browser-list {
+    margin-top: 0.75rem;
+    display: flex;
+    max-height: 22rem;
+    flex-direction: column;
+    gap: 0.375rem;
+    overflow: auto;
+}
+
+.directory-row {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    gap: 0.5rem;
+    align-items: center;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    background: oklch(var(--b1));
+    padding: 0.625rem 0.75rem;
+    text-align: left;
+    font-size: 0.875rem;
+}
+
+.directory-row:hover {
+    border-color: oklch(var(--p) / 0.5);
+    background: oklch(var(--p) / 0.06);
+}
+
+.directory-row-icon {
+    display: flex;
+    width: 1.75rem;
+    height: 1.75rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    background: oklch(var(--b2));
+    color: oklch(var(--bc) / 0.65);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-weight: 800;
+}
+
+.directory-create-row {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
 }
 
 .pipeline-params-editor {
@@ -1616,6 +1926,14 @@
         flex-wrap: wrap;
     }
 
+    .app-header-actions {
+        width: 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+        flex-shrink: 1;
+        justify-content: flex-start;
+    }
+
     .pipeline-steps {
         flex-direction: column;
         overflow-x: visible;
@@ -1700,6 +2018,23 @@
 
     .pipeline-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .pipeline-draft-panel .panel-header > .flex {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .property-field-grid,
+    .threshold-row,
+    .rule-clause-grid,
+    .row-schema-columns,
+    .row-schema-field {
+        grid-template-columns: 1fr;
+    }
+
+    .row-schema-drawer {
+        width: 100vw;
     }
 
     .validation-workspace {

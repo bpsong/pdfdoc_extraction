@@ -21,6 +21,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                 "class": "LlamaCloudSplitTask",
                 "params": {
                     "enabled": True,
+                    "api_key": "split-secret",
                     "adapter": "mock",
                     "categories": [{"name": "invoice"}],
                     "split_dir": str(tmp_path / "split"),
@@ -30,9 +31,10 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
                 "module": "standard_step.extraction.extract_pdf",
                 "class": "ExtractPdfTask",
                 "params": {
+                    "api_key": "extract-secret",
                     "fields": {
                         "supplier": {"alias": "Supplier", "type": "str"},
-                    }
+                    },
                 },
                 "on_error": "stop",
             },
@@ -93,6 +95,38 @@ def test_pipeline_config_service_saves_draft_and_builds_diff(tmp_path: Path) -> 
         service.conn.close()
 
 
+def test_pipeline_config_service_redacts_and_preserves_secret_params(tmp_path: Path) -> None:
+    config, service = _service(tmp_path)
+    try:
+        overview = service.get_pipeline()
+        model = overview["active"]["model"]
+
+        split_params = model["steps"][0]["params"]
+        extract_params = model["steps"][1]["params"]
+        assert split_params["api_key"] == "[REDACTED]"
+        assert extract_params["api_key"] == "[REDACTED]"
+        assert "split-secret" not in overview["active"]["yaml_preview"]
+        assert "extract-secret" not in overview["active"]["yaml_preview"]
+
+        split_params["split_dir"] = str(tmp_path / "new-split")
+        draft = service.save_draft(model, user="admin")
+        draft_yaml = yaml.safe_load(ConfigVersionRepository(service.conn).get_draft("pipeline", "default")["content_text"])
+
+        assert draft["model"]["steps"][0]["params"]["api_key"] == "[REDACTED]"
+        assert draft_yaml["tasks"]["split"]["params"]["api_key"] == "split-secret"
+        assert draft_yaml["tasks"]["extract"]["params"]["api_key"] == "extract-secret"
+        assert draft_yaml["tasks"]["split"]["params"]["split_dir"] == str(tmp_path / "new-split")
+
+        replacement_model = draft["model"]
+        replacement_model["steps"][1]["params"]["api_key"] = "replacement-secret"
+        service.save_draft(replacement_model, user="admin")
+        replacement_yaml = yaml.safe_load(ConfigVersionRepository(service.conn).get_draft("pipeline", "default")["content_text"])
+        assert replacement_yaml["tasks"]["split"]["params"]["api_key"] == "split-secret"
+        assert replacement_yaml["tasks"]["extract"]["params"]["api_key"] == "replacement-secret"
+    finally:
+        service.conn.close()
+
+
 def test_pipeline_config_service_publish_writes_config_and_audit(tmp_path: Path) -> None:
     config, service = _service(tmp_path)
     try:
@@ -128,5 +162,28 @@ def test_pipeline_config_service_publish_blocks_invalid_order(tmp_path: Path) ->
 
         codes = {finding["code"] for finding in exc_info.value.findings}
         assert "pipeline-review-before-extract" in codes
+    finally:
+        service.conn.close()
+
+
+def test_pipeline_config_service_hides_and_strips_runtime_housekeeping(tmp_path: Path) -> None:
+    values = _base_config(tmp_path)
+    values["tasks"]["cleanup"] = {
+        "module": "standard_step.housekeeping.cleanup_task",
+        "class": "CleanupTask",
+        "params": {"processing_dir": "processing"},
+    }
+    values["pipeline"].append("cleanup")
+    config, service = _service(tmp_path, values)
+    try:
+        model = service.get_pipeline()["active"]["model"]
+        assert all(step["class"] != "CleanupTask" for step in model["steps"])
+
+        service.save_draft(model, user="admin")
+        service.publish(model, user="admin")
+        written = yaml.safe_load(config._config_path.read_text(encoding="utf-8"))
+
+        assert "cleanup" not in written["pipeline"]
+        assert "cleanup" not in written["tasks"]
     finally:
         service.conn.close()
