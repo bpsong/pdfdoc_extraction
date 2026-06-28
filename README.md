@@ -12,6 +12,8 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - **Llama Cloud Integration**: Advanced AI service for intelligent document understanding
 - **Structured Data Extraction**: Converts PDF content into structured JSON/CSV format
 - **Multi-format Support**: Handles invoices, receipts, forms, and various document types
+- **Typed Scalar Lists**: Normalize lists of text, integers, numbers, and yes/no values
+- **Typed Object Support**: Extract fixed flat objects whose properties mix text, integer, number, and yes/no values
 - **Array-of-Objects Support**: Extract line items and tabular data from complex documents
 
 ### Multiple Input Methods
@@ -146,6 +148,19 @@ tasks:
         supplier_name:
           alias: "Supplier name"
           type: "str"
+        summary:
+          alias: "Summary"
+          type: "Dict[str, Any]"
+          object_fields:
+            invoice_count:
+              alias: "Invoice count"
+              type: "int"
+            total_amount:
+              alias: "Total amount"
+              type: "float"
+            approved:
+              alias: "Approved"
+              type: "bool"
         items:
           alias: "Items"
           type: "List[Any]"
@@ -311,7 +326,7 @@ pdfdoc_extraction/
 │   └── workflow_manager.py     # Workflow orchestration
 ├── 📁 standard_step/           # Processing pipeline steps
 │   ├── extraction/             # Data extraction tasks
-│   │   └── extract_pdf.py      # Extraction with array-of-objects support
+│   │   └── extract_pdf.py      # Scalar, typed-object, and array-of-objects extraction
 │   ├── storage/                # Data storage tasks
 │   │   ├── store_metadata_as_csv.py
 │   │   └── store_metadata_as_json.py

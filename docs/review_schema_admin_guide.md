@@ -62,6 +62,66 @@ In this example, `invoice_amount` is the stable key. `label` is only the human-f
 
 When using a saved LlamaCloud Extract v2 configuration, make sure the returned field keys or aliases map cleanly to the workflow field keys configured in `config.yaml`.
 
+### Mapping Structured Extraction Objects
+
+Extraction task configuration and review schemas use different type syntax.
+For a structured extraction object, keep the top-level and child keys aligned
+between the two configurations.
+
+Extraction task field:
+
+```yaml
+summary:
+  alias: Summary
+  type: "Dict[str, Any]"
+  object_fields:
+    customer_name:
+      alias: Customer name
+      type: str
+    invoice_count:
+      alias: Invoice count
+      type: int
+    total_amount:
+      alias: Total amount
+      type: float
+    approved:
+      alias: Approved
+      type: bool
+    notes:
+      alias: Notes
+      type: "Optional[str]"
+```
+
+Matching review schema field:
+
+```yaml
+fields:
+  summary:
+    type: object
+    label: Summary
+    properties:
+      customer_name:
+        type: string
+        label: Customer name
+      invoice_count:
+        type: integer
+        label: Invoice count
+      total_amount:
+        type: number
+        label: Total amount
+      approved:
+        type: boolean
+        label: Approved
+      notes:
+        type: string
+        label: Notes
+        required: false
+```
+
+The review UI renders each property with its typed control. Review schemas are
+not generated automatically from extraction fields, so administrators must
+maintain this key and type alignment when either configuration changes.
+
 ## Supported Field Types
 
 The review schema supports these field types:

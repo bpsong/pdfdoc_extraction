@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 2.7
-Release Date: 2026-06-21
+Version: 2.8
+Release Date: 2026-06-28
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 2.7
-Release Date: 2026-06-21
+Version: 2.8
+Release Date: 2026-06-28
 Author: [Your Organization/Name]
 
 ---
@@ -47,7 +47,7 @@ Author: [Your Organization/Name]
        - [4.8.9. Assign Nanoid (standard_step/context)](#489-assign-nanoid-standard_stepcontext)
        - [4.8.10. housekeeping.cleanup](#4810-housekeepingcleanup)
        - [4.8.11. Validation and Failure Behavior](#4811-validation-and-failure-behavior)
-  - [4.9. LlamaCloud Extract v2 Array-of-Objects Support](#49-llamacloud-extract-v2-array-of-objects-support)
+  - [4.9. LlamaCloud Extract v2 Structured Data Support](#49-llamacloud-extract-v2-structured-data-support)
   - [4.10. Example Workflows](#410-example-workflows)
   - [4.11. Housekeeping and the Processing Folder](#411-housekeeping-and-the-processing-folder)
   - [4.12. Config Check Validation Tool](#412-config-check-validation-tool)
@@ -73,6 +73,7 @@ Author: [Your Organization/Name]
 | 2.5     | 2026-06-03 | [Your Organization] | Updated for the unified operator and administrator interface, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
 | 2.6     | 2026-06-20 | [Your Organization] | Updated role guidance, UI-led operator procedures, account recovery, failure handling, split policy explanations, v2 task examples, upload limits, and recovery guidance |
 | 2.7     | 2026-06-21 | [Your Organization] | Consolidated extraction and metadata storage under canonical module and class names while retaining Extract v2 array-of-objects behavior |
+| 2.8     | 2026-06-28 | [Your Organization] | Added typed scalar-list options and flat structured-object extraction with Pipeline editor, validation, review-schema mapping, and operator documentation |
 
 ---
 
@@ -1203,7 +1204,24 @@ Review schemas are configured separately. To display the same value in the
 review gate, define a matching review field with `type: object` and matching
 keys under `properties`.
 
-#### 4.9.2. Arrays of objects
+#### 4.9.2. Scalar lists
+
+The Pipeline properties editor supports lists containing one primitive value
+type. Use the corresponding extraction type:
+
+| Editor option | Extraction type | Review schema item type |
+| --- | --- | --- |
+| List of text | `List[str]` | `string` |
+| List of integers | `List[int]` | `integer` |
+| List of numbers | `List[float]` | `number` |
+| List of yes/no | `List[bool]` | `boolean` |
+
+For human review, configure the matching field as `type: array` and set
+`items.type` to the review-schema item type shown above. Extraction and review
+schemas remain separate configurations, so their field keys and item types
+must stay aligned.
+
+#### 4.9.3. Arrays of objects
 
 The canonical extraction and storage tasks handle LlamaCloud Extract v2 responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
 
@@ -1307,6 +1325,7 @@ To use the canonical array-of-objects tasks:
 #### 4.9.5. Current Limitations
 
 - Only one `is_table: true` field is supported per extraction.
+- `object_fields` supports flat primitive properties only; nested objects and lists are not supported.
 - Items must be simple dictionaries (no nested arrays or objects).
 - Complex nested structures may require additional processing logic.
 

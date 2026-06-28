@@ -142,6 +142,22 @@ custom_steps:
 - Keep only one field with `is_table: true` in the task, or split additional tables into separate extraction tasks.
 - Cross-check downstream storage tasks; the metadata writers expect a single table payload and will ignore extra tables even if validation succeeds.
 
+## Structured Object Extraction Fields
+
+**Symptoms**
+```
+[ERROR] tasks.extract_metadata.params.fields.summary.object_fields: object_fields must define at least one object property
+[ERROR] tasks.extract_metadata.params.fields.summary.object_fields: object_fields is supported only for Dict[str, Any] fields
+[ERROR] tasks.extract_metadata.params.fields.summary.object_fields.values.type: Structured object properties must use str, int, float, or bool
+```
+
+**Fixes**
+- Use `type: "Dict[str, Any]"` on the parent extraction field.
+- Define at least one child under `object_fields`.
+- Keep `object_fields` flat. Child types may be `str`, `int`, `float`, `bool`, or their `Optional[...]` forms.
+- Use a `List[Any]` table field with `item_fields` when the extracted value is a list of objects rather than one object.
+- Configure the review schema separately with `type: object` and matching child keys under `properties`.
+
 ## Local Drive Storage Requirements
 
 **Symptom**

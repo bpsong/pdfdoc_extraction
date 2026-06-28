@@ -55,7 +55,7 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 ## Validation Coverage Highlights
 
 - Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
-- Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including csv_match clause bounds (1-5) and required column/from_context fields.
+- Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including typed `object_fields`, table `item_fields`, csv_match clause bounds (1-5), and required column/from_context fields.
 - Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and housekeeping ordering rules.
 - UI/API validation adds active workflow business rules for split, review-gate, task approval, and schema references before administrators publish pipeline changes.
 - **New**: Enhanced schema validation for web server and watch folder configuration fields.
@@ -87,6 +87,13 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - Metadata storage tasks warn when no earlier metadata-producing extraction task defines `fields`.
 - Storage filename tokens should reference scalar extraction fields. Tokens pointing at table fields are allowed but warned because filenames cannot reliably represent table payloads.
 - Any non-context task that references `{nanoid}` must run after a context initializer task such as `AssignNanoidTask`.
+
+### Extraction Field Rules
+
+- Scalar extraction fields support `str`, `int`, `float`, `bool`, `Decimal`, and `Any`, including supported `Optional[...]`, `List[...]`, and `Dict[...]` combinations.
+- A list of objects uses `type: "List[Any]"`, `is_table: true`, and a non-empty `item_fields` mapping. Only one table field is supported per extraction task.
+- A flat object with mixed primitive property types uses `type: "Dict[str, Any]"` and a non-empty `object_fields` mapping.
+- Structured object properties may use `str`, `int`, `float`, `bool`, or their `Optional[...]` forms. Nested object and list properties are rejected.
 
 ### Task Approval Rules
 
@@ -760,6 +767,15 @@ Use them as templates for new environments or as fixtures when extending the val
 - **`param-split-missing-split-dir`**: LlamaCloud split task requires `params.split_dir`
   - Fix: Add a non-empty `split_dir` under the configured `LlamaCloudSplitTask` params
   - Example: `split_dir: "data/app/split"`
+
+- **`param-field-missing-object-fields`**: Structured extraction object has no properties
+  - Fix: Add at least one flat primitive property under `object_fields`
+
+- **`param-field-object-fields-type`**: `object_fields` is attached to a non-object extraction type
+  - Fix: Set the parent type to `Dict[str, Any]` or remove `object_fields`
+
+- **`param-field-invalid-object-child-type`**: Structured object property uses an unsupported nested type
+  - Fix: Use `str`, `int`, `float`, `bool`, or an optional form of one of those types
 
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path
