@@ -135,12 +135,14 @@ custom_steps:
 
 **Symptom**
 ```
-[WARNING] tasks.extract_metadata.params.fields: Multiple extraction fields are marked is_table: true; metadata storage tasks currently support only a single table payload.
+[ERROR] tasks.extract_metadata.params.fields: Multiple extraction fields are marked is_table: true; ExtractPdfTask supports only a single table payload.
 ```
 
 **Fixes**
-- Keep only one field with `is_table: true` in the task, or split additional tables into separate extraction tasks.
-- Cross-check downstream storage tasks; the metadata writers expect a single table payload and will ignore extra tables even if validation succeeds.
+- Keep only one table field in the extraction task. A field is treated as a table when `is_table: true` or its type is `List[Any]`, including `Optional[List[Any]]`.
+- Change additional collection fields to a typed scalar list such as `List[str]`, or redesign the extraction schema so the single table contains the required structured rows.
+- Do not add another extraction task as a workaround. The active pipeline permits at most one extraction task, and both violations are blocking errors.
+- The administrator Pipeline editor and publish endpoint use the same validation. A rejected publish does not write the active `config.yaml`.
 
 ## Structured Object Extraction Fields
 
@@ -531,14 +533,15 @@ custom_steps:
 **Symptoms**
 ```
 [WARNING] pipeline: Pipeline has 20 tasks. Consider optimizing for better performance (recommended: <15).
-[WARNING] pipeline: Pipeline has 3 extraction tasks: extract_1, extract_2, extract_3. Multiple extraction tasks may significantly impact performance.
 ```
 
 **Fixes**
 - **Consolidate tasks**: Combine related tasks into single, more efficient tasks
-- **Optimize extraction**: Use a single extraction task with comprehensive field definitions
+- **Optimize extraction**: Keep the required single extraction task focused on the fields needed by the workflow
 - **Parallel processing**: Consider if some tasks can be parallelized (requires code changes)
 - **Remove redundancy**: Eliminate duplicate or unnecessary processing steps
+
+Multiple extraction tasks are not a performance-warning case: they violate the pipeline cardinality rule and produce a blocking validation error.
 
 ## Security Analysis Issues
 

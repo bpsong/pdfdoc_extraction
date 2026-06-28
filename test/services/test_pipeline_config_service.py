@@ -95,6 +95,50 @@ def test_pipeline_config_service_saves_draft_and_builds_diff(tmp_path: Path) -> 
         service.conn.close()
 
 
+def test_pipeline_config_service_preserves_field_order_after_draft_reload(tmp_path: Path) -> None:
+    _, service = _service(tmp_path)
+    try:
+        model = service.get_pipeline()["active"]["model"]
+        extract_params = model["steps"][1]["params"]
+        extract_params["fields"] = {
+            "zeta": {"alias": "Zeta", "type": "str"},
+            "alpha": {"alias": "Alpha", "type": "str"},
+            "middle": {"alias": "Middle", "type": "str"},
+        }
+
+        service.save_draft(model, user="admin")
+        reloaded = service.get_pipeline()["draft"]["model"]
+
+        assert list(reloaded["steps"][1]["params"]["fields"]) == [
+            "zeta",
+            "alpha",
+            "middle",
+        ]
+    finally:
+        service.conn.close()
+
+
+def test_pipeline_config_service_diff_ignores_mapping_and_integer_float_noise(tmp_path: Path) -> None:
+    values = _base_config(tmp_path)
+    values["tasks"]["split"]["params"]["poll_interval_seconds"] = 1.0
+    _, service = _service(tmp_path, values)
+    try:
+        model = service.get_pipeline()["active"]["model"]
+        split_params = model["steps"][0]["params"]
+        model["steps"][0]["params"] = {
+            key: split_params[key]
+            for key in reversed(list(split_params))
+        }
+        model["steps"][0]["params"]["poll_interval_seconds"] = 1
+
+        diff = service.diff(model)
+
+        assert diff["changed"] is False
+        assert diff["text"] == ""
+    finally:
+        service.conn.close()
+
+
 def test_pipeline_config_service_redacts_and_preserves_secret_params(tmp_path: Path) -> None:
     config, service = _service(tmp_path)
     try:

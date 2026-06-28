@@ -7,6 +7,7 @@ from typing import Any
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.services.schema_service import SchemaService
 from modules.services.task_registry_service import ApprovedTaskRegistry
+from tools.config_check.parameter_validator import validate_parameters
 from tools.config_check.pipeline_validator import validate_pipeline
 
 
@@ -59,12 +60,34 @@ class PipelineValidationService:
             )
             for issue in base_result.warnings
         )
+        parameter_result = validate_parameters(config_data)
+        findings.extend(
+            _finding(
+                severity="error",
+                path=issue.path,
+                message=issue.message,
+                code=issue.code,
+                details=issue.details,
+            )
+            for issue in parameter_result.errors
+        )
+        findings.extend(
+            _finding(
+                severity="warning",
+                path=issue.path,
+                message=issue.message,
+                code=issue.code,
+                details=issue.details,
+            )
+            for issue in parameter_result.warnings
+        )
         findings.extend(self._validate_review_gate(config_data))
         findings.extend(self._validate_split(config_data))
         findings.extend(self._validate_pipeline_task_cardinality(config_data))
         findings.extend(self._validate_task_approvals(config_data))
         findings.extend(self._validate_schema_references(config_data))
 
+        findings = _dedupe_findings(findings)
         return {
             "valid": not any(finding["severity"] == "error" for finding in findings),
             "findings": findings,
@@ -451,6 +474,24 @@ def _iter_tasks(config_data: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]
         for task_key, task_cfg in tasks.items()
         if isinstance(task_cfg, dict)
     ]
+
+
+def _dedupe_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return findings without repeated severity, code, path, and message values."""
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for finding in findings:
+        marker = (
+            str(finding.get("severity") or ""),
+            str(finding.get("code") or ""),
+            str(finding.get("path") or ""),
+            str(finding.get("message") or ""),
+        )
+        if marker in seen:
+            continue
+        seen.add(marker)
+        deduped.append(finding)
+    return deduped
 
 
 def _pipeline_task_type(task_cfg: dict[str, Any]) -> str:

@@ -1888,6 +1888,18 @@
     }
 }
 
+@media (min-width: 901px) and (max-width: 1200px) {
+    .pipeline-config-workspace {
+        grid-template-columns: minmax(13rem, 0.7fr) minmax(20rem, 1.3fr);
+        grid-template-areas:
+            "guide guide"
+            "active draft"
+            "editor editor"
+            "validation diff"
+            "yaml yaml";
+    }
+}
+
 @media (max-width: 900px) {
     .login-shell {
         grid-template-columns: 1fr;

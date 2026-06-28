@@ -120,6 +120,26 @@ def test_extraction_table_requires_item_fields():
     assert any("item_fields" in issue.path for issue in result.errors)
 
 
+def test_extraction_list_any_type_counts_as_table_without_legacy_flag():
+    tasks = _base_tasks()
+    tasks["extract_metadata"]["params"]["fields"] = {
+        "items": {
+            "alias": "Items",
+            "type": "List[Any]",
+            "item_fields": {"name": {"alias": "Name", "type": "str"}},
+        },
+        "payments": {
+            "alias": "Payments",
+            "type": "List[Any]",
+            "item_fields": {"amount": {"alias": "Amount", "type": "float"}},
+        },
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert "param-extraction-multiple-tables" in {issue.code for issue in result.errors}
+
+
 def test_split_task_requires_split_dir():
     tasks = _base_tasks()
     tasks["split_documents"] = {

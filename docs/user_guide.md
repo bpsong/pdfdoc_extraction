@@ -503,6 +503,8 @@ Workflows are defined by the ordered list under `pipeline:` and the task registr
 The current implementation runs the same pipeline for every file; dynamic workflow selection or matching by file metadata is not implemented.
 Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
+The active `pipeline` may contain at most one split task, one extraction task, and one review-gate task. Alternate task definitions may remain under `tasks`, but listing more than one task of any singleton type in the active pipeline is a blocking validation error. When used, split must precede extraction and review gate must follow extraction.
+
 Example task categories include:
 
 - `extraction`: Extract data from PDFs.
@@ -649,7 +651,7 @@ The administrator menu provides these workflows:
 
 - **Admin Home:** review configuration health, pipeline and review summaries, split status, and recent audit events.
 - **Users:** change the administrator or operator password after confirming the current administrator password.
-- **Pipeline:** prepare a draft, maintain task order and task parameters including review thresholds and split behavior, compare it with the active configuration, validate it, and publish it when no blocking errors remain.
+- **Pipeline:** prepare a draft, maintain task order and task parameters including review thresholds and split behavior, compare it with the active configuration, and use the required **Save Draft** -> **Validate** -> **Publish** sequence. Editing or saving invalid parameters cannot enable Publish. Publish repeats the authoritative server-side validation and does not write `config.yaml` when any blocking finding remains.
 - **Tasks:** inspect the workflow task classes available to the pipeline.
 - **Review Simulator:** evaluate review-gate decisions with sample JSON without processing a PDF or writing final workflow results.
 - **Audit:** inspect relevant configuration and governance events.
@@ -1155,6 +1157,11 @@ pipeline:
   - Ensures the processing directory remains clean by removing only the processed PDF.
 #### 4.8.11. Validation and Failure Behavior
 
+- The administrator Pipeline editor validates drafts before publication:
+  - The active pipeline may contain at most one split task, one extraction task, and one review-gate task.
+  - Extract tasks support at most one table field. A field is a table when `is_table: true` or its type is `List[Any]`, including the optional form.
+  - Task parameter constraints, including the Nanoid length range of 5-21, are blocking findings.
+  - Publish performs server-side validation again before writing YAML. A rejected publish returns an error and leaves the active `config.yaml` unchanged.
 - Config validation happens at startup via the `ConfigManager`:
   - Validates that `web.upload_dir` exists and is a directory.
   - Validates that `watch_folder.dir` exists and is a directory; if missing/invalid, logs CRITICAL and exits. This path is NOT auto-created.

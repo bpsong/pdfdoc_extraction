@@ -41,6 +41,7 @@
     const addTaskSelect = document.getElementById("pipeline-add-task-select");
     const publishButton = document.getElementById("pipeline-publish-button");
     const saveDraftButton = document.getElementById("pipeline-save-draft-button");
+    const validateButton = document.getElementById("pipeline-validate-button");
     const publishHelp = document.getElementById("pipeline-publish-help");
 
     function escapeHtml(value) {
@@ -139,6 +140,9 @@
             }
             return value.map((item) => {
                 if (item && typeof item === "object") {
+                    if (!Object.keys(item).length) {
+                        return `${indent}- ${renderYamlValue(item, depth + 1)}`;
+                    }
                     return `${indent}- ${renderYamlValue(item, depth + 1).trimStart()}`;
                 }
                 return `${indent}- ${scalarYaml(item)}`;
@@ -150,10 +154,14 @@
                 return "{}";
             }
             return entries.map(([key, item]) => {
+                const renderedKey = scalarYaml(String(key));
                 if (item && typeof item === "object") {
-                    return `${indent}${key}:\n${renderYamlValue(item, depth + 1)}`;
+                    if (!Object.keys(item).length) {
+                        return `${indent}${renderedKey}: ${renderYamlValue(item, depth + 1)}`;
+                    }
+                    return `${indent}${renderedKey}:\n${renderYamlValue(item, depth + 1)}`;
                 }
-                return `${indent}${key}: ${scalarYaml(item)}`;
+                return `${indent}${renderedKey}: ${scalarYaml(item)}`;
             }).join("\n");
         }
         return scalarYaml(value);
@@ -166,11 +174,7 @@
         if (typeof value === "number" || typeof value === "boolean") {
             return String(value);
         }
-        const text = String(value);
-        if (!text || /[:#{}\[\],&*?|\-<>=!%@`]/.test(text) || /^\s|\s$/.test(text)) {
-            return JSON.stringify(text);
-        }
-        return text;
+        return JSON.stringify(String(value));
     }
 
     function draftConfigForPreview() {
@@ -251,13 +255,13 @@
                     ${badgeForStep(step)}
                 </button>
                 <div class="pipeline-step-actions">
-                    <button class="btn btn-ghost btn-xs" type="button" data-move-step="${index}" data-direction="-1" ${index === 0 ? "disabled" : ""}>Up</button>
-                    <button class="btn btn-ghost btn-xs" type="button" data-move-step="${index}" data-direction="1" ${index === steps.length - 1 ? "disabled" : ""}>Down</button>
+                    <button class="btn btn-ghost btn-xs" type="button" aria-label="Move ${escapeHtml(step.label || step.key)} up" data-move-step="${index}" data-direction="-1" ${index === 0 ? "disabled" : ""}>Up</button>
+                    <button class="btn btn-ghost btn-xs" type="button" aria-label="Move ${escapeHtml(step.label || step.key)} down" data-move-step="${index}" data-direction="1" ${index === steps.length - 1 ? "disabled" : ""}>Down</button>
                     <label class="label cursor-pointer gap-2 py-0">
-                        <input class="toggle toggle-xs" type="checkbox" data-toggle-step="${index}" ${step.enabled !== false ? "checked" : ""}>
+                        <input class="toggle toggle-xs" type="checkbox" aria-label="Enable ${escapeHtml(step.label || step.key)}" data-toggle-step="${index}" ${step.enabled !== false ? "checked" : ""}>
                         <span class="label-text text-xs">Enabled</span>
                     </label>
-                    <button class="btn btn-ghost btn-xs text-error" type="button" data-delete-step="${index}">Remove</button>
+                    <button class="btn btn-ghost btn-xs text-error" type="button" aria-label="Remove ${escapeHtml(step.label || step.key)}" data-delete-step="${index}">Remove</button>
                 </div>
             </div>
         `).join("");
@@ -392,7 +396,7 @@
         return `
             <label class="form-control">
                 <span class="label-text">${escapeHtml(label)}</span>
-                <input class="${inputClass}" data-param-path="${pathAttr(path)}" ${opts.paramType ? `data-param-type="${escapeHtml(opts.paramType)}"` : ""} value="${controlValue(value)}" ${opts.readonly ? "readonly" : ""}>
+                <input class="${inputClass}" data-param-path="${pathAttr(path)}" ${opts.paramType ? `data-param-type="${escapeHtml(opts.paramType)}"` : ""} ${opts.ariaLabel ? `aria-label="${escapeHtml(opts.ariaLabel)}"` : ""} value="${controlValue(value)}" ${opts.readonly ? "readonly" : ""}>
                 ${opts.hint ? `<span class="text-xs text-base-content/50 mt-1">${escapeHtml(opts.hint)}</span>` : ""}
                 ${opts.findings || ""}
             </label>
@@ -468,7 +472,7 @@
         return `
             <label class="form-control ${opts.full ? "md:col-span-2" : ""}">
                 <span class="label-text">${escapeHtml(label)}</span>
-                <textarea class="textarea textarea-bordered text-sm ${opts.mono ? "font-mono" : ""}" data-param-path="${pathAttr(path)}" ${opts.paramType ? `data-param-type="${escapeHtml(opts.paramType)}"` : ""}>${escapeHtml(value || "")}</textarea>
+                <textarea class="textarea textarea-bordered text-sm ${opts.mono ? "font-mono" : ""}" data-param-path="${pathAttr(path)}" ${opts.paramType ? `data-param-type="${escapeHtml(opts.paramType)}"` : ""} ${opts.ariaLabel ? `aria-label="${escapeHtml(opts.ariaLabel)}"` : ""}>${escapeHtml(value || "")}</textarea>
                 ${opts.findings || ""}
             </label>
         `;
@@ -646,28 +650,28 @@
                     <div class="property-field-grid">
                         <label class="form-control">
                             <span class="label-text">Field key</span>
-                            <input class="input input-bordered input-sm font-mono" data-param-action="rename-extract-field" data-field-key="${escapeHtml(fieldKey)}" value="${escapeHtml(fieldKey)}">
+                            <input class="input input-bordered input-sm font-mono" aria-label="Field key for ${escapeHtml(fieldKey)}" data-param-action="rename-extract-field" data-field-key="${escapeHtml(fieldKey)}" value="${escapeHtml(fieldKey)}">
                         </label>
-                        ${textControl("Alias", ["fields", fieldKey, "alias"], fieldValue.alias || "")}
+                        ${textControl("Alias", ["fields", fieldKey, "alias"], fieldValue.alias || "", { ariaLabel: `Alias for ${fieldKey}` })}
                         <label class="form-control">
                             <span class="label-text">Type</span>
-                            <select class="select select-bordered select-sm" data-param-action="field-type" data-field-key="${escapeHtml(fieldKey)}" data-required="${required ? "true" : "false"}">
+                            <select class="select select-bordered select-sm" aria-label="Type for ${escapeHtml(fieldKey)}" data-param-action="field-type" data-field-key="${escapeHtml(fieldKey)}" data-required="${required ? "true" : "false"}">
                                 ${renderedTypeOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""} ${(option.value === "List[Any]" && tableBlocked) || option.disabled ? "disabled" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                             </select>
                             <span class="mt-1 text-xs text-base-content/50">Python type: ${escapeHtml(withRequiredState(baseType, required))}${isTable ? " · flat row objects" : ""}</span>
                         </label>
-                        <button class="btn btn-ghost btn-square btn-sm self-end text-error" type="button" title="Remove field" data-param-action="remove-extract-field" data-field-key="${escapeHtml(fieldKey)}">Remove</button>
+                        <button class="btn btn-ghost btn-square btn-sm self-end text-error" type="button" title="Remove field" aria-label="Remove field ${escapeHtml(fieldKey)}" data-param-action="remove-extract-field" data-field-key="${escapeHtml(fieldKey)}">Remove</button>
                     </div>
                     ${inlineFindings(step, `fields.${fieldKey}`, true)}
                     <div class="mt-3 grid gap-3 md:grid-cols-2">
                         <label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-3">
-                            <input class="checkbox checkbox-sm" type="checkbox" data-param-action="field-required" data-field-key="${escapeHtml(fieldKey)}" ${required ? "checked" : ""}>
+                            <input class="checkbox checkbox-sm" type="checkbox" aria-label="Required field ${escapeHtml(fieldKey)}" data-param-action="field-required" data-field-key="${escapeHtml(fieldKey)}" ${required ? "checked" : ""}>
                             <span>
                                 <span class="label-text block">Required field</span>
                                 <span class="text-xs text-base-content/50">${required ? "Must be returned" : "May be omitted"}</span>
                             </span>
                         </label>
-                        ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: true })}
+                        ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: true, ariaLabel: `Extraction guidance for ${fieldKey}` })}
                         ${schemaControls}
                     </div>
                     ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Only one List of objects field can be configured.</div>' : ""}
@@ -712,16 +716,16 @@
             const required = isRequiredType(itemConfig.type || "str");
             return `
                 <div class="row-schema-field">
-                    <input class="input input-bordered input-sm min-w-0 font-mono" aria-label="Field key" data-param-action="rename-schema-draft-field" data-item-key="${escapeHtml(itemKey)}" value="${escapeHtml(itemKey)}">
-                    <select class="select select-bordered select-sm min-w-0" data-param-action="schema-draft-field-type" data-item-key="${escapeHtml(itemKey)}" data-required="${required ? "true" : "false"}">
+                    <input class="input input-bordered input-sm min-w-0 font-mono" aria-label="Field key for ${escapeHtml(itemKey)}" data-param-action="rename-schema-draft-field" data-item-key="${escapeHtml(itemKey)}" value="${escapeHtml(itemKey)}">
+                    <select class="select select-bordered select-sm min-w-0" aria-label="Type for ${escapeHtml(itemKey)}" data-param-action="schema-draft-field-type" data-item-key="${escapeHtml(itemKey)}" data-required="${required ? "true" : "false"}">
                         ${fieldOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                     </select>
                     <label class="row-required-toggle">
-                        <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" aria-label="Required field" data-param-action="schema-draft-field-required" data-item-key="${escapeHtml(itemKey)}" ${required ? "checked" : ""}>
+                        <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" aria-label="Required field ${escapeHtml(itemKey)}" data-param-action="schema-draft-field-required" data-item-key="${escapeHtml(itemKey)}" ${required ? "checked" : ""}>
                     </label>
-                    <button class="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label="Remove field" data-param-action="remove-schema-draft-field" data-item-key="${escapeHtml(itemKey)}">Remove</button>
-                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Field alias" placeholder="Field alias" data-param-action="schema-draft-alias" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.alias || "")}">
-                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Field guidance" placeholder="Extraction guidance (optional)" data-param-action="schema-draft-guidance" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.description || "")}">
+                    <button class="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label="Remove field ${escapeHtml(itemKey)}" data-param-action="remove-schema-draft-field" data-item-key="${escapeHtml(itemKey)}">Remove</button>
+                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Alias for ${escapeHtml(itemKey)}" placeholder="Field alias" data-param-action="schema-draft-alias" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.alias || "")}">
+                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Extraction guidance for ${escapeHtml(itemKey)}" placeholder="Extraction guidance (optional)" data-param-action="schema-draft-guidance" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.description || "")}">
                 </div>
             `;
         }).join("");
@@ -1228,6 +1232,7 @@
             : "Not validated";
         publishButton.disabled = !state.validation || errors > 0 || state.dirty || state.paramsInvalid;
         saveDraftButton.disabled = state.paramsInvalid;
+        validateButton.disabled = state.paramsInvalid;
         if (state.paramsInvalid) {
             publishHelp.textContent = "Fix invalid Params JSON before saving or publishing.";
         } else if (state.dirty) {
@@ -1343,6 +1348,7 @@
         const payload = await window.DocFlow.apiPut("/api/admin/pipeline/draft", { model: state.draft });
         state.draft = clone(payload.draft.model);
         state.dirty = false;
+        state.validation = null;
         window.DocFlow.showToast("Draft saved", "success");
         render();
     }
@@ -1354,7 +1360,6 @@
         }
         const validation = await window.DocFlow.apiPost("/api/admin/pipeline/validate", { model: state.draft });
         state.validation = validation;
-        state.dirty = false;
         render();
     }
 

@@ -166,6 +166,37 @@ def test_validate_pipeline_enforces_singleton_and_order_rules(tmp_path: Path) ->
     assert "pipeline-duplicate-task-type" in codes
 
 
+def test_validate_pipeline_enforces_editor_parameter_constraints(tmp_path: Path) -> None:
+    config = _base_config(tmp_path)
+    config["tasks"]["extract"]["params"]["fields"] = {
+        "items": {
+            "alias": "Items",
+            "type": "List[Any]",
+            "item_fields": {"name": {"alias": "Name", "type": "str"}},
+        },
+        "payments": {
+            "alias": "Payments",
+            "type": "List[Any]",
+            "item_fields": {"amount": {"alias": "Amount", "type": "float"}},
+        },
+    }
+    config["tasks"]["assign_nanoid"] = {
+        "module": "standard_step.context.assign_nanoid",
+        "class": "AssignNanoidTask",
+        "params": {"length": 4},
+    }
+    config["pipeline"].append("assign_nanoid")
+    service = _service(tmp_path, config)
+
+    result = service.validate_pipeline({"config": config})
+
+    assert result["valid"] is False
+    assert {
+        "param-extraction-multiple-tables",
+        "param-context-length-bounds",
+    } <= _codes(result)
+
+
 def test_validate_pipeline_blocks_unapproved_task_pair(tmp_path: Path) -> None:
     config = _base_config(tmp_path)
     config["tasks"]["bad"] = {

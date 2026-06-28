@@ -379,7 +379,7 @@ def _validate_extraction_params(
     table_fields: List[str] = []
 
     for field_name, spec in fields.items():
-        if isinstance(spec, dict) and spec.get('is_table') is True:
+        if _is_table_field_spec(spec):
             table_fields.append(field_name)
 
         field_path = f"{params_path}.fields.{field_name}"
@@ -517,7 +517,7 @@ def _validate_field_spec(
         )
         is_table = bool(is_table)
 
-    if is_table:
+    if is_table or _is_table_field_spec(spec):
         item_fields = spec.get("item_fields")
         if not isinstance(item_fields, dict) or not item_fields:
             errors.append(
@@ -998,6 +998,17 @@ def _unwrap_optional_field_type(type_value: str) -> str:
     while value.startswith("Optional[") and value.endswith("]"):
         value = value[len("Optional[") : -1].strip()
     return value
+
+
+def _is_table_field_spec(spec: Any) -> bool:
+    """Return whether a field represents the supported list-of-objects table type."""
+    if not isinstance(spec, dict):
+        return False
+    type_value = spec.get("type")
+    return spec.get("is_table") is True or (
+        isinstance(type_value, str)
+        and _unwrap_optional_field_type(type_value) == "List[Any]"
+    )
 
 
 def _split_top_level_type_args(type_args: str) -> List[str]:

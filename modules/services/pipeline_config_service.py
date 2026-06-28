@@ -96,9 +96,9 @@ class PipelineConfigService:
 
     def diff(self, model: dict[str, Any] | None = None) -> dict[str, Any]:
         """Return an active-vs-draft unified diff."""
-        active_yaml = self._dump_yaml(_redact_secrets(self._active_config()))
+        active_yaml = self._dump_yaml(_canonicalize_for_diff(_redact_secrets(self._active_config())))
         draft_config = self._draft_config(model)
-        draft_yaml = self._dump_yaml(_redact_secrets(draft_config))
+        draft_yaml = self._dump_yaml(_canonicalize_for_diff(_redact_secrets(draft_config)))
         lines = list(
             difflib.unified_diff(
                 active_yaml.splitlines(),
@@ -195,11 +195,19 @@ class PipelineConfigService:
 
     def _draft_payload(self, draft_row: dict[str, Any]) -> dict[str, Any]:
         """Build an API/UI-ready draft payload from a config version row."""
+        stored_config = self._config_from_yaml(draft_row["content_text"])
+        stored_model = self._model_from_config(stored_config)
+        raw_stored_tasks = stored_config.get("tasks")
+        stored_tasks: dict[str, Any] = raw_stored_tasks if isinstance(raw_stored_tasks, dict) else {}
         metadata = json_loads(draft_row.get("metadata_json"), {})
         model = metadata.get("model") if isinstance(metadata, dict) else None
         if not isinstance(model, dict):
-            model = self._model_from_config(self._config_from_yaml(draft_row["content_text"]))
+            model = stored_model
         normalized = self._normalize_model(model)
+        for step in normalized.get("steps", []):
+            stored_task = stored_tasks.get(step.get("key"))
+            if isinstance(stored_task, dict) and isinstance(stored_task.get("params"), dict):
+                step["params"] = deepcopy(stored_task["params"])
         redacted_model = self._redact_model(normalized)
         return {
             "id": draft_row["id"],
@@ -207,7 +215,7 @@ class PipelineConfigService:
             "created_at": draft_row.get("created_at"),
             "content_hash": draft_row.get("content_hash"),
             "model": redacted_model,
-            "yaml_preview": self._dump_yaml(_redact_secrets(self._config_from_yaml(draft_row["content_text"]))),
+            "yaml_preview": self._dump_yaml(_redact_secrets(stored_config)),
             "summary": self._summary(redacted_model),
         }
 
@@ -458,6 +466,20 @@ def _slugify(value: str) -> str:
     """Return a config-key-safe slug."""
     slug = re.sub(r"[^A-Za-z0-9_]+", "_", value.strip()).strip("_").lower()
     return slug or "task"
+
+
+def _canonicalize_for_diff(value: Any) -> Any:
+    """Normalize mapping order and equivalent numeric values for readable diffs."""
+    if isinstance(value, dict):
+        return {
+            key: _canonicalize_for_diff(value[key])
+            for key in sorted(value, key=str)
+        }
+    if isinstance(value, list):
+        return [_canonicalize_for_diff(item) for item in value]
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def _key_from_class(class_name: str) -> str:

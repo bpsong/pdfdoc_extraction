@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -225,3 +226,65 @@ def test_admin_pipeline_publish_rejects_blocking_findings(monkeypatch, tmp_path:
     detail = response.json()["detail"]
     assert detail["message"] == "Pipeline draft has blocking validation findings."
     assert "pipeline-review-before-extract" in {finding["code"] for finding in detail["findings"]}
+
+
+def _invalid_publish_model(model: dict[str, Any], scenario: str) -> tuple[dict[str, Any], str]:
+    """Return a model containing one publish-blocking editor violation."""
+    if scenario == "duplicate-extract":
+        duplicate = dict(model["steps"][1])
+        duplicate["key"] = "extract_two"
+        model["steps"].append(duplicate)
+        return model, "pipeline-multiple-extract-tasks"
+    if scenario == "duplicate-split":
+        duplicate = dict(model["steps"][0])
+        duplicate["key"] = "split_two"
+        model["steps"].insert(1, duplicate)
+        return model, "pipeline-multiple-split-tasks"
+    if scenario == "duplicate-table":
+        fields = model["steps"][1]["params"]["fields"]
+        fields["items"] = {
+            "alias": "Items",
+            "type": "List[Any]",
+            "item_fields": {"name": {"alias": "Name", "type": "str"}},
+        }
+        fields["payments"] = {
+            "alias": "Payments",
+            "type": "List[Any]",
+            "item_fields": {"amount": {"alias": "Amount", "type": "float"}},
+        }
+        return model, "param-extraction-multiple-tables"
+    model["steps"].append(
+        {
+            "key": "assign_nanoid",
+            "label": "Assign Nanoid",
+            "module": "standard_step.context.assign_nanoid",
+            "class": "AssignNanoidTask",
+            "enabled": True,
+            "params": {"length": 4},
+            "on_error": "stop",
+        }
+    )
+    return model, "param-context-length-bounds"
+
+
+@pytest.mark.parametrize(
+    "scenario",
+    ["duplicate-extract", "duplicate-split", "duplicate-table", "invalid-nanoid"],
+)
+def test_admin_pipeline_publish_rejects_editor_constraints_without_writing_yaml(
+    monkeypatch,
+    tmp_path: Path,
+    scenario: str,
+) -> None:
+    config = _config(tmp_path)
+    client = _client(monkeypatch, config)
+    original_yaml = config._config_path.read_text(encoding="utf-8")
+    model = client.get("/api/admin/pipeline").json()["active"]["model"]
+    invalid_model, expected_code = _invalid_publish_model(model, scenario)
+
+    response = client.post("/api/admin/pipeline/publish", json={"model": invalid_model})
+
+    assert response.status_code == 409
+    findings = response.json()["detail"]["findings"]
+    assert expected_code in {finding["code"] for finding in findings}
+    assert config._config_path.read_text(encoding="utf-8") == original_yaml

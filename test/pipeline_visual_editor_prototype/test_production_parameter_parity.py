@@ -5,6 +5,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_SOURCE = PROJECT_ROOT / "web" / "static" / "js" / "pipeline_config.js"
+PRODUCTION_CSS = PROJECT_ROOT / "web" / "static" / "css" / "app.css"
 
 
 TASK_PARAMETERS: dict[str, set[str]] = {
@@ -95,3 +96,32 @@ def test_production_editor_separates_provider_modes_and_hides_operational_contro
     assert 'selectControl("After review"' not in source
     assert "Schema errors only" not in source
     assert "Document split result" not in source
+
+
+def test_production_editor_keeps_publish_validation_and_yaml_preview_safe() -> None:
+    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    validate_body = source.split("async function validateDraftPipeline()", 1)[1].split(
+        "async function renderPipelineDiff()", 1
+    )[0]
+
+    assert "return JSON.stringify(String(value));" in source
+    assert "validateButton.disabled = state.paramsInvalid;" in source
+    assert "state.dirty = false;" not in validate_body
+    assert "state.validation = null;" in source.split("async function saveDraft()", 1)[1].split(
+        "async function validateDraftPipeline()", 1
+    )[0]
+
+
+def test_production_editor_has_unique_accessible_names_and_compact_breakpoint() -> None:
+    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    css = PRODUCTION_CSS.read_text(encoding="utf-8")
+
+    for marker in (
+        'aria-label="Move ${escapeHtml(step.label || step.key)} up"',
+        'aria-label="Remove field ${escapeHtml(fieldKey)}"',
+        'aria-label="Type for ${escapeHtml(itemKey)}"',
+        'aria-label="Required field ${escapeHtml(itemKey)}"',
+    ):
+        assert marker in source
+    assert "@media (min-width: 901px) and (max-width: 1200px)" in css
+    assert '"editor editor"' in css
