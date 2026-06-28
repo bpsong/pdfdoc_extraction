@@ -22,6 +22,8 @@
         validation: null,
         dirty: false,
         paramsInvalid: false,
+        providerModes: {},
+        providerModeDrafts: {},
     };
 
     const activeList = document.getElementById("pipeline-active-list");
@@ -598,7 +600,7 @@
         return required ? base : `Optional[${base}]`;
     }
 
-    function extractionFieldControls(step) {
+    function extractionFieldControls(step, hint) {
         const params = step.params || {};
         const fields = params.fields && typeof params.fields === "object" && !Array.isArray(params.fields) ? params.fields : {};
         const fieldEntries = Object.entries(fields);
@@ -665,7 +667,7 @@
         }).join("");
         return `${tableKeys.length > 1 ? '<div class="alert alert-error py-2 text-xs">Only one table field is supported. Change extra fields to a scalar type.</div>' : ""}${section("Extraction fields", `
             <div class="flex justify-between items-center gap-3 mb-3">
-                <p class="text-xs text-base-content/60">Define scalar fields and one optional table-style field without editing JSON.</p>
+                <p class="text-xs text-base-content/60">${escapeHtml(hint || "Define scalar fields and one optional table-style field without editing JSON.")}</p>
                 <button class="btn btn-outline btn-xs" type="button" data-param-action="add-extract-field">Add field</button>
             </div>
             <div class="space-y-3">${controls || '<div class="empty-panel">No extraction fields configured</div>'}</div>
@@ -776,6 +778,7 @@
         const categories = Array.isArray(params.categories) ? params.categories : [];
         const failLevels = Array.isArray(params.fail_on_confidence_levels) ? params.fail_on_confidence_levels : [];
         const policy = params.allow_uncategorized || "include";
+        const mode = state.providerModes[step.key] || (params.configuration_id ? "saved" : "inline");
         const policyHints = {
             include: "Keep pages that the splitter cannot classify.",
             forbid: "Treat any unclassified page as a split failure.",
@@ -785,16 +788,19 @@
             <div class="space-y-3">
                 ${checkboxControl("Enable document splitting", ["enabled"], params.enabled !== false, "This runtime switch is separate from including the task in the pipeline.")}
                 ${secretControl("API key", ["api_key"], params.api_key || "")}
-                ${textControl("LlamaCloud configuration ID (optional)", ["configuration_id"], params.configuration_id || "", { mono: true })}
-                <div class="grid gap-3 md:grid-cols-2">
-                    ${textControl("Project ID (optional)", ["project_id"], params.project_id || "", { mono: true })}
-                    ${textControl("Organization ID (optional)", ["organization_id"], params.organization_id || "", { mono: true })}
-                </div>
-                ${selectControl("When pages cannot be categorized", ["allow_uncategorized"], policy, [
+                <label class="form-control">
+                    <span class="label-text">Split configuration</span>
+                    <select class="select select-bordered select-sm" data-param-action="provider-mode" data-provider-kind="split">
+                        <option value="inline" ${mode === "inline" ? "selected" : ""}>Define categories here</option>
+                        <option value="saved" ${mode === "saved" ? "selected" : ""}>Use saved LlamaCloud configuration</option>
+                    </select>
+                </label>
+                ${mode === "saved" ? textControl("LlamaCloud configuration ID", ["configuration_id"], params.configuration_id || "", { mono: true, findings: inlineFindings(step, "configuration_id") }) : ""}
+                ${mode === "inline" ? selectControl("When pages cannot be categorized", ["allow_uncategorized"], policy, [
                     { value: "include", label: "Keep uncategorized pages" },
                     { value: "forbid", label: "Stop the split" },
                     { value: "omit", label: "Skip uncategorized pages" },
-                ], policyHints[policy])}
+                ], policyHints[policy]) : ""}
                 ${directoryControl("Split output directory", ["split_dir"], params.split_dir || "", { hint: "Child PDFs created by this task are written here.", findings: inlineFindings(step, "split_dir") })}
                 ${section("Stop on confidence levels", `
                     <p class="mb-3 text-xs text-base-content/55">The split fails when any result reports a selected confidence level.</p>
@@ -807,8 +813,8 @@
                         `).join("")}
                     </div>
                 `)}
-                ${checkboxControl("Stop on unknown categories", ["fail_on_unknown_category"], Boolean(params.fail_on_unknown_category), params.fail_on_unknown_category ? "Only configured category names are accepted." : "Unknown category names are allowed.")}
-                ${section("Document categories", `
+                ${checkboxControl("Stop on unknown categories", ["fail_on_unknown_category"], params.fail_on_unknown_category !== false, params.fail_on_unknown_category !== false ? "Only configured category names are accepted." : "Unknown category names are allowed.")}
+                ${mode === "inline" ? section("Document categories", `
                     <div class="mb-3 flex items-start justify-between gap-3">
                         <p class="text-xs text-base-content/55">Define every document type the splitter should recognize.</p>
                         <button class="btn btn-outline btn-xs" type="button" data-param-action="add-split-category">Add category</button>
@@ -827,42 +833,59 @@
                             </div>
                         `).join("") || '<div class="empty-panel">No inline categories. Provide a configuration ID or add a category.</div>'}
                     </div>
+                `) : ""}
+                ${textControl("Allowed category names (optional)", ["allowed_categories"], Array.isArray(params.allowed_categories) ? params.allowed_categories.join(", ") : "", { hint: mode === "saved" ? "Comma-separated local allow-list. Leave blank to accept provider category names except blank, other, or uncategorized." : "Comma-separated allow-list. Leave blank to use the category names above.", paramType: "csv-list" })}
+                ${detailsSection("Advanced provider settings", `
+                    <div class="grid gap-3 md:grid-cols-2">
+                        ${textControl("Project ID (optional)", ["project_id"], params.project_id || "", { mono: true })}
+                        ${textControl("Organization ID (optional)", ["organization_id"], params.organization_id || "", { mono: true })}
+                        ${numberControl("Polling interval (seconds)", ["poll_interval_seconds"], params.poll_interval_seconds ?? 1, 'min="0.1" step="0.1"')}
+                        ${numberControl("Timeout (seconds)", ["timeout_seconds"], params.timeout_seconds ?? 7200, 'min="1" step="1"')}
+                    </div>
                 `)}
-                ${textControl("Allowed category names (optional)", ["allowed_categories"], Array.isArray(params.allowed_categories) ? params.allowed_categories.join(", ") : "", { hint: "Comma-separated allow-list. Leave blank to use the category names above.", paramType: "csv-list" })}
-                <div class="grid gap-3 md:grid-cols-2">
-                    ${numberControl("Polling interval (seconds)", ["poll_interval_seconds"], params.poll_interval_seconds ?? 1, 'min="0.1" step="0.1"')}
-                    ${numberControl("Timeout (seconds)", ["timeout_seconds"], params.timeout_seconds ?? 7200, 'min="1" step="1"')}
-                </div>
             </div>
         `;
     }
 
     function extractControls(step) {
         const params = step.params || {};
+        const mode = state.providerModes[step.key] || (params.configuration_id ? "saved" : "inline");
+        const supportedTiers = ["agentic", "cost_effective"];
+        const tier = params.tier || "agentic";
+        const tierOptions = supportedTiers.includes(tier)
+            ? [{ value: "agentic", label: "Agentic" }, { value: "cost_effective", label: "Cost effective" }]
+            : [{ value: tier, label: `Unsupported legacy value: ${tier}` }, { value: "agentic", label: "Agentic" }, { value: "cost_effective", label: "Cost effective" }];
         return `
             <div class="space-y-3">
                 ${secretControl("API key", ["api_key"], params.api_key || "")}
-                ${textControl("LlamaExtract configuration ID", ["configuration_id"], params.configuration_id || "", { mono: true, findings: inlineFindings(step, "configuration_id") })}
-                <div class="grid gap-3 md:grid-cols-2">
-                    ${selectControl("Tier", ["tier"], params.tier || "agentic", [
-                        { value: "agentic", label: "Agentic" },
-                        { value: "premium", label: "Premium" },
-                        { value: "balanced", label: "Balanced" },
-                    ])}
-                    ${selectControl("Target", ["extraction_target"], params.extraction_target || "per_doc", [
-                        { value: "per_doc", label: "Per document" },
-                        { value: "per_page", label: "Per page" },
-                        { value: "per_table_row", label: "Per table row" },
-                    ])}
-                </div>
-                ${checkboxControl("Request confidence scores", ["confidence_scores"], params.confidence_scores !== false)}
-                ${detailsSection("Advanced extraction settings", `
-                    ${textControl("Parse tier (optional)", ["parse_tier"], params.parse_tier || "")}
-                    ${selectControl("Source citations", ["cite_sources"], params.cite_sources === true ? "true" : params.cite_sources === false ? "false" : "", [
-                        { value: "", label: "Use provider default" },
-                        { value: "true", label: "Request citations" },
-                        { value: "false", label: "Do not request citations" },
-                    ], "Use provider default unless this pipeline needs an explicit setting.", "", "nullable-boolean")}
+                <label class="form-control">
+                    <span class="label-text">Extraction configuration</span>
+                    <select class="select select-bordered select-sm" data-param-action="provider-mode" data-provider-kind="extract">
+                        <option value="inline" ${mode === "inline" ? "selected" : ""}>Define extraction here</option>
+                        <option value="saved" ${mode === "saved" ? "selected" : ""}>Use saved LlamaCloud configuration</option>
+                    </select>
+                </label>
+                ${mode === "saved" ? textControl("LlamaCloud configuration ID", ["configuration_id"], params.configuration_id || "", { mono: true, findings: inlineFindings(step, "configuration_id") }) : ""}
+                ${mode === "inline" ? `
+                    <div class="grid gap-3 md:grid-cols-2">
+                        ${selectControl("Tier", ["tier"], tier, tierOptions)}
+                        ${selectControl("Target", ["extraction_target"], params.extraction_target || "per_doc", [
+                            { value: "per_doc", label: "Per document" },
+                            { value: "per_page", label: "Per page" },
+                            { value: "per_table_row", label: "Per table row" },
+                        ])}
+                    </div>
+                    ${checkboxControl("Request confidence scores", ["confidence_scores"], params.confidence_scores !== false)}
+                    ${detailsSection("Advanced inline extraction settings", `
+                        ${textControl("Parse tier (optional)", ["parse_tier"], params.parse_tier || "")}
+                        ${selectControl("Source citations", ["cite_sources"], params.cite_sources === true ? "true" : params.cite_sources === false ? "false" : "", [
+                            { value: "", label: "Use provider default" },
+                            { value: "true", label: "Request citations" },
+                            { value: "false", label: "Do not request citations" },
+                        ], "Use provider default unless this pipeline needs an explicit setting.", "", "nullable-boolean")}
+                    `)}
+                ` : ""}
+                ${detailsSection("Advanced provider settings", `
                     <div class="grid gap-3 md:grid-cols-2">
                         ${textControl("Project ID (optional)", ["project_id"], params.project_id || "", { mono: true })}
                         ${textControl("Organization ID (optional)", ["organization_id"], params.organization_id || "", { mono: true })}
@@ -870,7 +893,7 @@
                         ${numberControl("Timeout (seconds)", ["timeout_seconds"], params.timeout_seconds ?? 1800, 'min="1" step="1"')}
                     </div>
                 `)}
-                ${extractionFieldControls(step)}
+                ${extractionFieldControls(step, mode === "saved" ? "Define the local field mapping used to normalize saved-configuration results for review and storage." : "Define the inline provider schema and local field mapping.")}
                 ${rowSchemaDrawer(step)}
             </div>
         `;
@@ -966,6 +989,14 @@
         const params = step.params || {};
         const splitLevels = Array.isArray(params.split_confidence_levels_requiring_review) ? params.split_confidence_levels_requiring_review : [];
         const percent = Math.round(Number(params.confidence_threshold ?? 0.8) * 100);
+        const reviewScope = params.review_scope || "low_confidence_fields";
+        const reviewScopeOptions = [
+            { value: "document", label: "Entire document" },
+            { value: "low_confidence_fields", label: "Low-confidence fields" },
+        ];
+        if (!["document", "low_confidence_fields"].includes(reviewScope)) {
+            reviewScopeOptions.unshift({ value: reviewScope, label: `Legacy scope: ${reviewScope}` });
+        }
         return `
             <div class="space-y-3">
                 <div class="rounded-lg border border-info/20 bg-info/10 p-3 text-sm">Threshold priority is field override, then document type, then the default threshold.</div>
@@ -979,13 +1010,7 @@
                 ${section("Review split confidence levels", `<p class="mb-3 text-xs text-base-content/55">Pause when the upstream split result reports a selected level.</p><div class="grid grid-cols-3 gap-2">${["high", "medium", "low"].map((level) => `<label class="flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${splitLevels.includes(level) ? "border-primary bg-primary/5" : "border-base-300"}"><input class="checkbox checkbox-sm" type="checkbox" data-param-action="review-split-level" value="${level}" ${splitLevels.includes(level) ? "checked" : ""}><span class="capitalize">${level}</span></label>`).join("")}</div>`)}
                 ${fileControl("Schema file (optional)", ["schema_file"], params.schema_file || "", ".yaml,.yml", { startPath: "schemas", findings: inlineFindings(step, "schema_file") })}
                 ${textControl("Queue", ["queue_name"], params.queue_name || "default_review")}
-                ${selectControl("Review scope", ["review_scope"], params.review_scope || "low_confidence_fields", [
-                    { value: "document", label: "Entire document" },
-                    { value: "low_confidence_fields", label: "Low-confidence fields only" },
-                    { value: "schema_errors", label: "Schema errors only" },
-                    { value: "split_result", label: "Document split result" },
-                ], "Choose which results are sent to a reviewer.")}
-                ${selectControl("After review", ["resume_policy"], "next_task", [{ value: "next_task", label: "Continue to next task" }], "Production resumes at the next task after approval.")}
+                ${selectControl("Reviewer editing scope", ["review_scope"], reviewScope, reviewScopeOptions, "Review conditions below determine when review is required.")}
                 ${checkboxControl("Review when confidence is missing", ["require_review_when_missing_confidence"], params.require_review_when_missing_confidence !== false)}
                 ${checkboxControl("Review missing required fields", ["require_review_for_missing_required_fields"], params.require_review_for_missing_required_fields !== false, "Schema-required fields trigger review when absent.")}
                 ${checkboxControl("Always require review", ["always_review"], Boolean(params.always_review), "Pause every document regardless of confidence and schema results.")}
@@ -1007,7 +1032,6 @@
                 ${columns.length ? `<div class="text-xs text-base-content/60">${columns.length} CSV columns loaded.</div>` : ""}
                 <label class="form-control"><span class="label-text">Update field</span><select class="select select-bordered select-sm" data-param-path="${pathAttr(["update_field"])}">${optionHtml(columns, params.update_field || "")}</select>${inlineFindings(step, "update_field")}</label>
                 ${textControl("Write value", ["write_value"], params.write_value || "")}
-                ${textControl("Task status key (optional)", ["task_slug"], params.task_slug || "", { mono: true, hint: "Overrides the task slug written to status metadata." })}
                 <div class="rounded-lg border border-primary/20 bg-primary/5 p-3"><div class="text-xs font-semibold uppercase text-primary">Rule outcome</div><p class="mt-1 text-sm">If all ${clauses.length || "configured"} ${clauses.length === 1 ? "condition matches" : "conditions match"}, set <code class="font-semibold">${escapeHtml(params.update_field || "the selected field")}</code> to <code class="font-semibold">${escapeHtml(params.write_value || "the configured value")}</code>.</p></div>
                 ${checkboxControl("Backup reference CSV before write", ["backup"], params.backup !== false)}
                 ${section("Match conditions", `
@@ -1268,14 +1292,14 @@
 
     function defaultParamsForClass(className) {
         const defaults = {
-            LlamaCloudSplitTask: { enabled: true, api_key: "", configuration_id: "", project_id: "", organization_id: "", allow_uncategorized: "forbid", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
-            ExtractPdfTask: { api_key: "", configuration_id: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
-            AssignNanoidTask: { length: 12 },
+            LlamaCloudSplitTask: { enabled: true, api_key: "", allow_uncategorized: "include", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
+            ExtractPdfTask: { api_key: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
+            AssignNanoidTask: { length: 10 },
             StoreMetadataAsCsv: { data_dir: "data", filename: "{id}" },
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },
             StoreFileToLocaldrive: { files_dir: "files", filename: "{id}" },
             UpdateReferenceTask: { reference_file: "reference_file/reference_file.csv", update_field: "MATCHED", write_value: "match_all", backup: true, csv_match: { type: "column_equals_all", clauses: [{ column: "", from_context: "" }] } },
-            ReviewGateTask: { confidence_threshold: 0.95, per_document_type_thresholds: {}, field_threshold_overrides: {}, split_confidence_levels_requiring_review: [], require_review_when_missing_confidence: true, require_review_for_missing_required_fields: true, always_review: false, queue_name: "default_review", review_scope: "low_confidence_fields", allow_operator_to_edit_high_confidence_fields: true, resume_policy: "next_task" },
+            ReviewGateTask: { confidence_threshold: 0.8, per_document_type_thresholds: {}, field_threshold_overrides: {}, split_confidence_levels_requiring_review: [], require_review_when_missing_confidence: true, require_review_for_missing_required_fields: true, always_review: false, queue_name: "default_review", review_scope: "low_confidence_fields", allow_operator_to_edit_high_confidence_fields: true, resume_policy: "next_task" },
             ArchivePdfTask: { archive_dir: "archive_folder" },
         };
         return clone(defaults[className] || {});
@@ -1290,6 +1314,8 @@
         state.validation = null;
         state.dirty = false;
         state.paramsInvalid = false;
+        state.providerModes = {};
+        state.providerModeDrafts = {};
         diffPreview.textContent = "No diff loaded";
         render();
     }
@@ -1334,6 +1360,8 @@
         state.draft = clone(payload.active && payload.active.model);
         state.validation = payload.validation || null;
         state.dirty = false;
+        state.providerModes = {};
+        state.providerModeDrafts = {};
         window.DocFlow.showToast("Pipeline published", "success");
         render();
     }
@@ -2002,6 +2030,48 @@
             markDirty();
             return true;
         }
+        if (action === "provider-mode") {
+            const step = selectedStep();
+            if (!step) {
+                return true;
+            }
+            const kind = field.dataset.providerKind;
+            const draft = state.providerModeDrafts[step.key] || {};
+            state.providerModes[step.key] = field.value;
+            if (field.value === "saved") {
+                if (kind === "split") {
+                    draft.inline = {
+                        categories: clone(Array.isArray(params.categories) ? params.categories : []),
+                        allow_uncategorized: params.allow_uncategorized || "include",
+                    };
+                    delete params.categories;
+                    delete params.allow_uncategorized;
+                } else if (kind === "extract") {
+                    draft.inline = {};
+                    for (const key of ["tier", "parse_tier", "extraction_target", "cite_sources", "confidence_scores"]) {
+                        if (Object.prototype.hasOwnProperty.call(params, key)) {
+                            draft.inline[key] = clone(params[key]);
+                            delete params[key];
+                        }
+                    }
+                }
+            } else {
+                delete params.configuration_id;
+                if (kind === "split") {
+                    params.categories = clone(draft.inline && draft.inline.categories || [{ name: "invoice", description: "A single invoice document." }]);
+                    params.allow_uncategorized = draft.inline && draft.inline.allow_uncategorized || "include";
+                } else if (kind === "extract") {
+                    Object.assign(params, clone(draft.inline || {
+                        tier: "agentic",
+                        extraction_target: "per_doc",
+                        confidence_scores: true,
+                    }));
+                }
+            }
+            state.providerModeDrafts[step.key] = draft;
+            markDirty();
+            return true;
+        }
         if (action === "split-confidence-level") {
             updateArrayToggle(["fail_on_confidence_levels"], field.value, field.checked);
             return true;
@@ -2116,6 +2186,8 @@
         state.validation = null;
         state.dirty = true;
         state.paramsInvalid = false;
+        state.providerModes = {};
+        state.providerModeDrafts = {};
         diffPreview.textContent = "No diff loaded";
         render();
     });

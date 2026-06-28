@@ -656,7 +656,7 @@ The administrator menu provides these workflows:
 
 For schema-driven review fields, see the [review schema administrator guide](review_schema_admin_guide.md).
 
-Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings; configure provider secrets such as `api_key` through `config.yaml` or your deployment secret-management process.
+Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings. Configure provider secrets such as `api_key` through `config.yaml`, deployment secret management, or the masked credential control in the administrator Pipeline editor; saved values remain redacted when the pipeline is loaded again.
 
 #### 4.5.6. Backup and Recovery
 
@@ -720,13 +720,16 @@ Standard steps are predefined operations configured in workflows. Below are the 
 - **Current module/class:** `standard_step.extraction.extract_pdf` / `ExtractPdfTask`
 - **Purpose:** Extracts structured data and confidence information from PDF documents through LlamaCloud Extract v2.
 - **params:**
-  - `provider`: string, currently LlamaCloud Extract v2 through the `llama-cloud` SDK.
   - `api_key`: string, required LlamaCloud credential.
   - `configuration_id`: optional saved Extract v2 configuration ID from the LlamaCloud UI. If omitted, the task builds an inline schema from `fields`.
-  - `tier`: optional Extract v2 tier, default `"agentic"`.
+  - `tier`: optional inline Extract v2 tier. Supported values are `"agentic"` and `"cost_effective"`; the default is `"agentic"`.
   - `parse_tier`: optional Parse tier for inline extraction.
   - `extraction_target`: optional target, default `"per_doc"`.
   - `cite_sources`: optional boolean to request citation metadata.
+  - `confidence_scores`: optional boolean to request confidence metadata. Default is `true`.
+  - `project_id` / `organization_id`: optional advanced provider-scoping values.
+  - `poll_interval_seconds`: optional advanced polling interval. Default is `2.0`.
+  - `timeout_seconds`: optional advanced timeout. Default is `1800.0`.
   - `fields`: map of field keys to alias and type, e.g.:
 
     ```yaml
@@ -742,11 +745,12 @@ Standard steps are predefined operations configured in workflows. Below are the 
   - Storage tasks can transform workflow field keys to configured aliases for CSV/JSON output.
 - **Notes:**
   - Use `configuration_id` when you want LlamaCloud to use a saved Extract v2 configuration. Omit it when you want the application to build the extraction schema from the YAML `fields` block.
+  - In saved-configuration mode, `tier`, `parse_tier`, `extraction_target`, `cite_sources`, and `confidence_scores` come from the saved LlamaCloud configuration. Local `fields` remain the workflow mapping used to normalize results for review and storage.
   - Do not use `agent_id` for new configurations. It is a legacy Extract v1/LlamaExtract-era parameter and is not required by the current Extract v2 runtime.
   - Field names and types must match the provider's schema.
   - Internet access over HTTPS is required.
 
-**YAML configuration example:**
+**Inline YAML configuration example:**
 
 ```yaml
 tasks:
@@ -755,7 +759,6 @@ tasks:
     class: ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
-      configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
       tier: "agentic"
       extraction_target: "per_doc"
       fields:
@@ -821,7 +824,7 @@ Before enabling split processing for production documents:
 4. Confirm in **Split Results** that every page that must be retained appears in a child document.
 5. Configure the review gate to catch the split confidence levels that require an operator decision.
 
-**YAML configuration example:**
+**Inline YAML configuration example:**
 
 ```yaml
 tasks:
@@ -831,7 +834,6 @@ tasks:
     params:
       enabled: true
       api_key: "llx-REDACTED"
-      configuration_id: "YOUR-SPLIT-CONFIGURATION-ID"  # optional
       categories:
         - name: "invoice"
           description: "Supplier invoice pages"
@@ -855,6 +857,8 @@ pipeline:
   - store_metadata_json
 ```
 
+For a saved LlamaCloud split configuration, set `configuration_id` instead of `categories` and `allow_uncategorized`. The confidence policy, allowed-category checks, output directory, and advanced provider settings remain local task behavior.
+
 After fan-out, each child document is a **leaf document** because it is processed independently. Fan-in summarizes those child statuses for the source document and batch:
 
 - **Processing** (`processing`): at least one child is still running.
@@ -870,6 +874,7 @@ After fan-out, each child document is a **leaf document** because it is processe
 - **params:**
   - `data_dir`: string (required). Destination folder for CSV.
   - `filename`: string (required). Base filename template; `.csv` is auto-added.
+  - Advanced compatibility parameters may use nested `storage.data_dir` / `storage.filename`, a task-specific `extraction.fields` mapping, and an operational `task_slug`. New configurations should normally use the top-level directory and filename with the extraction task's shared fields.
 - **Behavior:**
   - Uses configured field aliases for column names.
   - If one extraction field has `is_table: true`, writes one row per item and repeats the document-level values.
@@ -1043,9 +1048,9 @@ pipeline:
   - `always_review`: boolean. If `true`, every document entering this task requires review.
   - `schema_file`: optional schema name or path used to validate corrected/final field values. It must resolve under a configured schema directory such as `schema.directories`; by default this is `schemas` relative to the config file.
   - `queue_name`: review queue name. Defaults to `review.default_queue_name` or `default_review`.
-  - `review_scope`: review scope, commonly `"low_confidence_fields"`.
+  - `review_scope`: controls the reviewer editing scope. Use `"document"` or `"low_confidence_fields"`; it does not decide which review conditions trigger the gate.
   - `allow_operator_to_edit_high_confidence_fields`: boolean. Default is `true`.
-  - `resume_policy`: currently supports `"next_task"`.
+  - `resume_policy`: fixed to `"next_task"`; the Pipeline editor does not expose it as a choice.
 - **Behavior:**
   - Evaluates persisted extracted fields, confidence values, missing-confidence conditions for mandatory schema fields, schema errors, split confidence, and business rule flags.
   - For object, scalar-array, and object-array fields, the persisted field confidence uses the minimum numeric nested confidence returned by LlamaCloud Extract. For example, an invoice `items` field is gated by the lowest line-item cell confidence.
@@ -1179,11 +1184,9 @@ To configure array-of-objects extraction, update your `config.yaml` to:
      class: ExtractPdfTask
      params:
        api_key: "llx-REDACTED"
-       configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
-       tier: "agentic"
-       parse_tier: "agentic"          # optional
-       extraction_target: "per_doc"   # optional
-       cite_sources: true             # optional
+       configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"
+       project_id: "YOUR-PROJECT-ID"  # optional advanced scope
+       organization_id: "YOUR-ORGANIZATION-ID"  # optional advanced scope
        poll_interval_seconds: 2       # optional
        timeout_seconds: 1800          # optional
    ```
@@ -1300,7 +1303,6 @@ tasks:
     class: ExtractPdfTask
     params:
       api_key: "llx-REDACTED"
-      configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"  # optional
       tier: "agentic"
       extraction_target: "per_doc"
       fields:
@@ -1500,7 +1502,7 @@ A: Corrected values are persisted in SQLite with the document extraction state. 
 A: When split processing is enabled, the source PDF can create child documents based on document category and page range. Open the batch from **Processing Overview**, then select its split results to inspect the source and child documents.
 
 **Q: Can administrators change pipeline review or split behavior in the UI?**
-A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters, **Review Simulator** to preview review-gate behavior, and **Validation** to check configuration health. Secret provider values such as API keys should be configured through `config.yaml` or deployment secret management.
+A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters, **Review Simulator** to preview review-gate behavior, and **Validation** to check configuration health. Secret provider values such as API keys can be configured through `config.yaml`, deployment secret management, or the masked administrator Pipeline control.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
 A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.
