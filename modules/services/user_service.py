@@ -71,10 +71,12 @@ class UserService:
             self._reject(actor, target, "New password must differ from the current password")
         password_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt(rounds=12)).decode()
         self.users.update_password(target, password_hash)
+        updated = self.users.get(target)
+        if updated is None:
+            raise UserServiceError("Updated user could not be loaded")
         self.audit.append(
             event_type="admin_user_password_changed",
             event={"target": target, "outcome": "success"},
             user=actor,
         )
-        updated = self.users.get(target)
         return {key: updated[key] for key in ("username", "role", "token_version", "password_updated_at")}

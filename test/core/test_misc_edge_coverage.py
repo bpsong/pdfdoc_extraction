@@ -149,6 +149,37 @@ def test_user_service_rejection_paths(monkeypatch):
     assert UserService._matches("password", "invalid") is False
 
 
+def test_user_service_rejects_missing_post_update_user(monkeypatch):
+    service = object.__new__(UserService)
+    service.users = Mock()
+    service.audit = Mock()
+    service.users.get.side_effect = [
+        {"role": "admin", "password_hash": "admin-hash"},
+        {"password_hash": "target-hash"},
+        None,
+    ]
+    monkeypatch.setattr(
+        UserService,
+        "_matches",
+        staticmethod(lambda password, password_hash: password_hash == "admin-hash"),
+    )
+    monkeypatch.setattr("modules.services.user_service.validate_password", lambda password: None)
+    monkeypatch.setattr("modules.services.user_service.bcrypt.hashpw", lambda password, salt: b"new-hash")
+    monkeypatch.setattr("modules.services.user_service.bcrypt.gensalt", lambda rounds: b"salt")
+
+    with pytest.raises(UserServiceError, match="Updated user could not be loaded"):
+        service.change_password(
+            actor="admin",
+            target="operator",
+            current_admin_password="AdminPassword1!",
+            new_password="ReplacementPass2!",
+            confirmation="ReplacementPass2!",
+        )
+
+    service.users.update_password.assert_called_once_with("operator", "new-hash")
+    service.audit.append.assert_not_called()
+
+
 def test_watch_monitor_start_registers_cleanup(monkeypatch, tmp_path):
     monitor = WatchFolderMonitor(
         Config(
