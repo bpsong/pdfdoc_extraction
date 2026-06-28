@@ -83,3 +83,14 @@ def test_task_catalog_reports_configured_import_failure(tmp_path: Path) -> None:
     assert missing["import_status"] == "failed"
     assert "not approved" in missing["import_error"]
     assert catalog["summary"]["failed"] >= 1
+
+
+def test_task_catalog_includes_assign_nanoid_summary(tmp_path: Path) -> None:
+    config = TempConfig(tmp_path / "app.sqlite3", {"pipeline": [], "tasks": {}})
+
+    catalog = TaskCatalogService(config).catalog()
+    task = next(task for task in catalog["tasks"] if task["class_name"] == "AssignNanoidTask")
+
+    assert task["docstring_summary"] == (
+        "Generate a unique nanoid string and add it to the shared context."
+    )

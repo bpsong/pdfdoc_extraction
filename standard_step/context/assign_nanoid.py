@@ -15,6 +15,8 @@ from modules.config_protocol import ConfigProvider as ConfigManager
 
 
 class AssignNanoidTask(BaseTask):
+    """Generate a unique nanoid string and add it to the shared context."""
+
     TASK_SLUG = "assign_nanoid"
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
