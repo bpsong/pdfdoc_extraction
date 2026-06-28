@@ -174,6 +174,9 @@ This document provides a comprehensive reference of all validation error codes u
 | `param-field-invalid-type` | Error | Field type is unsupported | Use a supported type such as `str`, `float`, `Optional[str]`, or `List[Any]` |
 | `param-field-istable-bool` | Error | `is_table` is not boolean | Set `is_table` to `true` or `false` |
 | `param-field-missing-item-fields` | Error | Table field lacks `item_fields` | Add non-empty nested item fields |
+| `param-field-missing-object-fields` | Error | Structured object has no properties | Add at least one flat property under `object_fields` |
+| `param-field-object-fields-type` | Error | `object_fields` is attached to a non-object type | Use `Dict[str, Any]` or remove `object_fields` |
+| `param-field-invalid-object-child-type` | Error | Structured object property is not primitive | Use `str`, `int`, `float`, or `bool` |
 
 ### Storage, Context, And Housekeeping Parameters
 | Code | Severity | Description | Fix |

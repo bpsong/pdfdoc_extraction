@@ -266,6 +266,52 @@ def test_extraction_field_types_match_v2_task_type_parser():
     assert result.errors == []
 
 
+def test_extraction_accepts_flat_structured_object_fields():
+    tasks = _base_tasks()
+    tasks["extract_metadata"]["params"]["fields"]["summary"] = {
+        "alias": "Summary",
+        "type": "Dict[str, Any]",
+        "object_fields": {
+            "customer_name": {"alias": "Customer name", "type": "str"},
+            "invoice_count": {"alias": "Invoice count", "type": "int"},
+            "approved": {"alias": "Approved", "type": "Optional[bool]"},
+        },
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert result.errors == []
+
+
+def test_extraction_rejects_invalid_structured_object_fields():
+    tasks = _base_tasks()
+    fields = tasks["extract_metadata"]["params"]["fields"]
+    fields["empty"] = {
+        "alias": "Empty",
+        "type": "Dict[str, Any]",
+        "object_fields": {},
+    }
+    fields["wrong_parent"] = {
+        "alias": "Wrong parent",
+        "type": "str",
+        "object_fields": {"name": {"alias": "Name", "type": "str"}},
+    }
+    fields["nested"] = {
+        "alias": "Nested",
+        "type": "Dict[str, Any]",
+        "object_fields": {
+            "values": {"alias": "Values", "type": "List[str]"},
+        },
+    }
+
+    result = validate_parameters({"tasks": tasks})
+    codes = {issue.code for issue in result.errors}
+
+    assert "param-field-missing-object-fields" in codes
+    assert "param-field-object-fields-type" in codes
+    assert "param-field-invalid-object-child-type" in codes
+
+
 def test_multiple_table_fields_emit_error():
     tasks = _base_tasks()
     fields = tasks["extract_metadata"]["params"]["fields"]

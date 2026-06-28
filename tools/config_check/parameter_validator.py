@@ -533,6 +533,43 @@ def _validate_field_spec(
                 sub_path = f"{path}.item_fields.{sub_name}"
                 _validate_field_spec(sub_spec, sub_path, errors, sub_name)
 
+    if "object_fields" in spec:
+        object_fields = spec.get("object_fields")
+        base_type = _unwrap_optional_field_type(type_value) if isinstance(type_value, str) else ""
+        if base_type != "Dict[str, Any]":
+            errors.append(
+                ParameterIssue(
+                    path=f"{path}.object_fields",
+                    message="object_fields is supported only for Dict[str, Any] fields",
+                    code="param-field-object-fields-type",
+                    details={"field": field},
+                )
+            )
+        if not isinstance(object_fields, dict) or not object_fields:
+            errors.append(
+                ParameterIssue(
+                    path=f"{path}.object_fields",
+                    message="object_fields must define at least one object property",
+                    code="param-field-missing-object-fields",
+                    details={"field": field},
+                )
+            )
+        else:
+            for child_name, child_spec in object_fields.items():
+                child_path = f"{path}.object_fields.{child_name}"
+                _validate_field_spec(child_spec, child_path, errors, child_name)
+                child_type = child_spec.get("type") if isinstance(child_spec, dict) else None
+                child_base_type = _unwrap_optional_field_type(child_type) if isinstance(child_type, str) else ""
+                if child_base_type not in {"str", "int", "float", "bool"}:
+                    errors.append(
+                        ParameterIssue(
+                            path=f"{child_path}.type",
+                            message="Structured object properties must use str, int, float, or bool",
+                            code="param-field-invalid-object-child-type",
+                            details={"field": child_name},
+                        )
+                    )
+
 def _validate_rules_params(
     params: Any, params_path: str, errors: List[ParameterIssue]
 ) -> None:
@@ -953,6 +990,14 @@ def _is_valid_field_type(type_value: str) -> bool:
         return _is_valid_field_type(key_type) and _is_valid_field_type(value_type)
 
     return False
+
+
+def _unwrap_optional_field_type(type_value: str) -> str:
+    """Return the base type for a possibly optional extraction field."""
+    value = type_value.strip()
+    while value.startswith("Optional[") and value.endswith("]"):
+        value = value[len("Optional[") : -1].strip()
+    return value
 
 
 def _split_top_level_type_args(type_args: str) -> List[str]:

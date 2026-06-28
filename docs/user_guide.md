@@ -1165,15 +1165,53 @@ pipeline:
   - Task-run and document state are updated in SQLite when document context exists; pipeline flow may continue or stop per each task’s `on_error`.
 - **Tip:** Set `logging.log_level = DEBUG` in `config.yaml` for detailed diagnostics.
 
-### 4.9. LlamaCloud Extract v2 Array-of-Objects Support
+### 4.9. LlamaCloud Extract v2 Structured Data Support
+
+#### 4.9.1. Flat objects
+
+Use `Dict[str, Any]` with `object_fields` when one extracted field contains a
+fixed object whose properties have different primitive types. The Pipeline
+properties editor exposes this as **Object with defined fields**.
+
+```yaml
+summary:
+  alias: "Summary"
+  type: "Dict[str, Any]"
+  object_fields:
+    customer_name:
+      alias: "Customer name"
+      type: "str"
+    invoice_count:
+      alias: "Invoice count"
+      type: "int"
+    total_amount:
+      alias: "Total amount"
+      type: "float"
+    approved:
+      alias: "Approved"
+      type: "bool"
+    notes:
+      alias: "Notes"
+      type: "Optional[str]"
+```
+
+`object_fields` is intentionally flat. Its properties support text, integer,
+number, and yes/no values; nested objects and lists are not supported. The
+normalized workflow context uses the configured stable property keys.
+
+Review schemas are configured separately. To display the same value in the
+review gate, define a matching review field with `type: object` and matching
+keys under `properties`.
+
+#### 4.9.2. Arrays of objects
 
 The canonical extraction and storage tasks handle LlamaCloud Extract v2 responses containing arrays of objects, such as invoice line items or multiple entries that need to be processed individually.
 
-#### 4.9.1. Overview
+##### Overview
 
 The canonical tasks allow extraction of structured data where certain fields return lists of sub-objects. For example, an invoice might have an "Items" field containing multiple line items with descriptions, quantities, and prices.
 
-#### 4.9.2. Configuration
+##### Configuration
 
 To configure array-of-objects extraction, update your `config.yaml` to:
 
@@ -1208,7 +1246,7 @@ To configure array-of-objects extraction, update your `config.yaml` to:
          type: "str"
    ```
 
-#### 4.9.3. Storage Behavior
+##### Storage Behavior
 
 ##### Confidence Persistence
 - Scalar fields persist the provider's numeric confidence when available.

@@ -148,6 +148,40 @@ def test_table_processing_skips_invalid_and_empty_items(tmp_path):
     ) == [{"quantity": 2}]
 
 
+def test_structured_object_processing_normalizes_child_keys_and_types(tmp_path):
+    task = _task(tmp_path)
+    field_config = {
+        "type": "Dict[str, Any]",
+        "object_fields": {
+            "customer_name": {"alias": "Customer name", "type": "str"},
+            "invoice_count": {"alias": "Invoice count", "type": "int"},
+            "total_amount": {"alias": "Total amount", "type": "float"},
+            "approved": {"alias": "Approved", "type": "bool"},
+            "notes": {"alias": "Notes", "type": "Optional[str]"},
+        },
+    }
+
+    result = task._process_scalar_field(
+        {
+            "Customer name": "Acme Ltd",
+            "Invoice count": "3",
+            "Total amount": "1250.75",
+            "Approved": "yes",
+            "Notes": None,
+            "Ignored": "value",
+        },
+        field_config,
+    )
+
+    assert result == {
+        "customer_name": "Acme Ltd",
+        "invoice_count": 3,
+        "total_amount": 1250.75,
+        "approved": True,
+        "notes": None,
+    }
+
+
 def test_metadata_candidate_wrapper_and_table_lookup(tmp_path):
     task = _task(
         tmp_path,

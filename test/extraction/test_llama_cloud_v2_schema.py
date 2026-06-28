@@ -47,6 +47,37 @@ def test_build_data_schema_marks_table_columns_required() -> None:
     assert item_schema["properties"]["is_credit"]["type"] == "boolean"
 
 
+def test_build_data_schema_defines_structured_object_properties() -> None:
+    """Configured object fields become typed JSON Schema properties."""
+    schema = build_data_schema(
+        {
+            "summary": {
+                "alias": "Summary",
+                "type": "Dict[str, Any]",
+                "object_fields": {
+                    "customer_name": {"alias": "Customer name", "type": "str"},
+                    "invoice_count": {"alias": "Invoice count", "type": "int"},
+                    "total_amount": {"alias": "Total amount", "type": "float"},
+                    "approved": {"alias": "Approved", "type": "bool"},
+                    "notes": {"alias": "Notes", "type": "Optional[str]"},
+                },
+            }
+        }
+    )
+
+    object_schema = schema["properties"]["summary"]
+    assert object_schema["type"] == "object"
+    assert object_schema["required"] == [
+        "customer_name",
+        "invoice_count",
+        "total_amount",
+        "approved",
+    ]
+    assert object_schema["properties"]["invoice_count"]["type"] == "integer"
+    assert object_schema["properties"]["total_amount"]["type"] == "number"
+    assert object_schema["properties"]["approved"]["type"] == "boolean"
+
+
 def test_build_data_schema_omits_empty_required_lists() -> None:
     """Schemas with only optional fields do not emit empty required arrays."""
     schema = build_data_schema(

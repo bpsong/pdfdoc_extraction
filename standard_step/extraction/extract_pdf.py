@@ -1,12 +1,12 @@
-"""PDF extraction task with array-of-objects support for LlamaCloud Extract v2 responses.
+"""PDF extraction task with structured-object support for LlamaCloud Extract v2.
 
 This module provides ExtractPdfTask, an enhanced pipeline step that handles
-both scalar fields and table fields (arrays of objects) from LlamaCloud Extract
-responses. It keeps the existing scalar extraction contract and adds support
-for structured data from tables and arrays within PDF documents.
+scalar fields, flat objects, and table fields (arrays of objects) from
+LlamaCloud Extract responses.
 
 Key Features:
     - Extracts scalar fields with type conversion and normalization
+    - Handles flat object fields with typed child-property mapping
     - Handles table fields as arrays of objects with subfield mapping
     - Preserves extraction metadata including field citations and usage stats
     - Supports dynamic field configuration via ConfigManager
@@ -61,7 +61,7 @@ class ExtractPdfTask(BaseTask):
         config_manager (ConfigManager): Central configuration manager instance.
         api_key (str): LlamaCloud API key for authentication.
         configuration_id (Optional[str]): Saved LlamaCloud Extract v2 configuration identifier.
-        fields (Dict[str, Any]): Field configuration including scalar and table fields.
+        fields (Dict[str, Any]): Scalar, object, and table field configuration.
         table_field_key (Optional[str]): Key of the table field (marked with is_table: true).
         item_fields (Dict[str, Any]): Subfield configuration for the table field.
         task_slug (str): Task identifier for status tracking.
@@ -85,6 +85,13 @@ class ExtractPdfTask(BaseTask):
                 supplier_name:
                   alias: "Supplier name"
                   type: "str"
+                summary:
+                  alias: "Summary"
+                  type: "Dict[str, Any]"
+                  object_fields:
+                    invoice_count:
+                      alias: "Invoice count"
+                      type: "int"
                 items:
                   alias: "Items"
                   type: "List[Any]"
@@ -763,8 +770,40 @@ class ExtractPdfTask(BaseTask):
         Returns:
             Processed value with appropriate type conversion.
         """
-        field_type = field_config.get('type', 'str')
+        field_type = str(field_config.get('type', 'str'))
+        base_type = field_type
+        while base_type.startswith('Optional[') and base_type.endswith(']'):
+            base_type = base_type[9:-1].strip()
+        object_fields = field_config.get('object_fields')
+        if base_type == 'Dict[str, Any]' and isinstance(object_fields, dict):
+            return self._process_configured_object(value, object_fields)
+
         return self._process_value(value, field_type)
+
+    def _process_configured_object(
+        self,
+        value: Any,
+        configured_fields: Dict[str, Any],
+    ) -> Any:
+        """Normalize a flat object using configured child keys and types."""
+        if not isinstance(value, dict):
+            return value
+
+        processed: Dict[str, Any] = {}
+        for child_key, child_config in configured_fields.items():
+            if not isinstance(child_config, dict):
+                continue
+            child_alias = child_config.get('alias', child_key)
+            found, child_value = self._get_extracted_value(value, child_key, child_alias)
+            if not found:
+                continue
+            if isinstance(child_value, str):
+                child_value = re.sub(r'\n+', ' ', child_value.strip())
+            processed[child_key] = self._process_value(
+                child_value,
+                child_config.get('type', 'str'),
+            )
+        return processed
 
     def _process_table_field(self, data: Dict[str, Any], field_key: str, alias: str,
                             field_config: Dict[str, Any]) -> List[Dict[str, Any]]:

@@ -175,6 +175,12 @@ def _suggest_field_item_fields(details: Dict[str, Any]) -> str:
     return f"Define item_fields for table field '{field_name}' describing the columns returned."
 
 
+def _suggest_field_object_fields(details: Dict[str, Any]) -> str:
+    """Suggest defining typed properties for a structured object field."""
+    field_name = details.get("field", "the field")
+    return f"Define object_fields for object field '{field_name}' using flat primitive properties."
+
+
 def _suggest_context_length(details: Dict[str, Any]) -> str:
     """Suggest choosing a valid nanoid length."""
     return "Choose a length between 5 and 21 for nanoid generation."
@@ -280,6 +286,9 @@ _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "param-field-invalid-type": _suggest_field_type,
     "param-field-istable-bool": lambda d: f"Set 'is_table' for field '{d.get('field', 'field')}' to true or false.",
     "param-field-missing-item-fields": _suggest_field_item_fields,
+    "param-field-missing-object-fields": _suggest_field_object_fields,
+    "param-field-object-fields-type": lambda d: f"Set field '{d.get('field', 'field')}' to Dict[str, Any] or remove object_fields.",
+    "param-field-invalid-object-child-type": lambda d: f"Use str, int, float, or bool for object property '{d.get('field', 'field')}'.",
     "param-extraction-multiple-tables": _suggest_multiple_tables,
     "param-rules-not-mapping": lambda _: "Define this task's params as a mapping that includes reference_file, update_field, and csv_match.",
     "param-rules-missing-reference-file": lambda _: "Set reference_file to the CSV file that should be updated.",

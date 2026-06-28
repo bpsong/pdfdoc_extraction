@@ -12,8 +12,9 @@
         catalog: [],
         selectedIndex: 0,
         editorTab: "properties",
-        editingRowField: null,
-        rowSchemaDraft: null,
+        editingFieldSchema: null,
+        fieldSchemaKind: null,
+        fieldSchemaDraft: null,
         directoryBrowser: null,
         csvMetadata: {},
         advancedParamsError: "",
@@ -614,8 +615,7 @@
             { value: "List[int]", label: "List of integers" },
             { value: "List[float]", label: "List of numbers" },
             { value: "List[bool]", label: "List of yes / no" },
-            { value: "Dict[str, str]", label: "Object of text values" },
-            { value: "Dict[str, Any]", label: "Object of mixed values" },
+            { value: "Dict[str, Any]", label: "Object with defined fields" },
             { value: "List[Any]", label: "List of objects" },
         ];
         const controls = fieldEntries.map(([fieldKey, field]) => {
@@ -624,17 +624,23 @@
             const baseType = unwrapOptionalType(fieldType);
             const required = isRequiredType(fieldType);
             const isTable = baseType === "List[Any]" || Boolean(fieldValue.is_table);
+            const isObject = baseType === "Dict[str, Any]";
             const tableBlocked = !isTable && tableKeys.length >= 1;
             const itemFields = fieldValue.item_fields && typeof fieldValue.item_fields === "object" ? fieldValue.item_fields : {};
-            const tableControls = isTable ? `
+            const objectFields = fieldValue.object_fields && typeof fieldValue.object_fields === "object" ? fieldValue.object_fields : {};
+            const schemaFields = isTable ? itemFields : objectFields;
+            const schemaControls = isTable || isObject ? `
                 <div class="row-schema-summary md:col-span-2">
                     <div>
-                        <div class="text-xs font-semibold">Row schema</div>
-                        <div class="mt-0.5 text-xs text-base-content/55">${Object.keys(itemFields).length} flat row fields defined</div>
+                        <div class="text-xs font-semibold">${isTable ? "Row schema" : "Object properties"}</div>
+                        <div class="mt-0.5 text-xs text-base-content/55">${Object.keys(schemaFields).length} flat ${isTable ? "row fields" : "properties"} defined</div>
                     </div>
-                    <button class="btn btn-outline btn-xs" type="button" data-param-action="edit-row-schema" data-field-key="${escapeHtml(fieldKey)}">Edit row schema</button>
+                    <button class="btn btn-outline btn-xs" type="button" data-param-action="edit-field-schema" data-field-key="${escapeHtml(fieldKey)}" data-schema-kind="${isTable ? "row" : "object"}">Edit ${isTable ? "row schema" : "object properties"}</button>
                 </div>
             ` : "";
+            const renderedTypeOptions = typeOptions.some((option) => option.value === baseType)
+                ? typeOptions
+                : [{ value: baseType, label: `Legacy type (${baseType})`, disabled: true }, ...typeOptions];
             return `
                 <div class="field-editor">
                     <div class="property-field-grid">
@@ -646,7 +652,7 @@
                         <label class="form-control">
                             <span class="label-text">Type</span>
                             <select class="select select-bordered select-sm" data-param-action="field-type" data-field-key="${escapeHtml(fieldKey)}" data-required="${required ? "true" : "false"}">
-                                ${typeOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""} ${option.value === "List[Any]" && tableBlocked ? "disabled" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+                                ${renderedTypeOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""} ${(option.value === "List[Any]" && tableBlocked) || option.disabled ? "disabled" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                             </select>
                             <span class="mt-1 text-xs text-base-content/50">Python type: ${escapeHtml(withRequiredState(baseType, required))}${isTable ? " · flat row objects" : ""}</span>
                         </label>
@@ -662,7 +668,7 @@
                             </span>
                         </label>
                         ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: true })}
-                        ${tableControls}
+                        ${schemaControls}
                     </div>
                     ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Only one List of objects field can be configured.</div>' : ""}
                 </div>
@@ -677,72 +683,78 @@
         `)}`;
     }
 
-    function rowSchemaDrawer(step) {
-        const fieldKey = state.editingRowField;
-        if (!fieldKey || !step) {
+    function structuredFieldSchemaDrawer(step) {
+        const fieldKey = state.editingFieldSchema;
+        const schemaKind = state.fieldSchemaKind;
+        if (!fieldKey || !schemaKind || !step) {
             return "";
         }
         const fieldConfig = getParam(step.params || {}, ["fields", fieldKey], null);
         if (!fieldConfig || typeof fieldConfig !== "object") {
-            state.editingRowField = null;
+            state.editingFieldSchema = null;
+            state.fieldSchemaKind = null;
+            state.fieldSchemaDraft = null;
             return "";
         }
-        const itemFields = state.rowSchemaDraft && typeof state.rowSchemaDraft === "object"
-            ? state.rowSchemaDraft
-            : (fieldConfig.item_fields && typeof fieldConfig.item_fields === "object" ? fieldConfig.item_fields : {});
-        const rowOptions = [
+        const configKey = schemaKind === "object" ? "object_fields" : "item_fields";
+        const configuredFields = state.fieldSchemaDraft && typeof state.fieldSchemaDraft === "object"
+            ? state.fieldSchemaDraft
+            : (fieldConfig[configKey] && typeof fieldConfig[configKey] === "object" ? fieldConfig[configKey] : {});
+        const fieldOptions = [
             { value: "str", label: "Text" },
             { value: "int", label: "Integer" },
             { value: "float", label: "Number" },
             { value: "bool", label: "Yes / No" },
         ];
-        const rows = Object.entries(itemFields).map(([itemKey, itemField]) => {
+        const rows = Object.entries(configuredFields).map(([itemKey, itemField]) => {
             const itemConfig = itemField && typeof itemField === "object" ? itemField : {};
-            const baseType = rowOptions.some((option) => option.value === unwrapOptionalType(itemConfig.type)) ? unwrapOptionalType(itemConfig.type) : "str";
+            const baseType = fieldOptions.some((option) => option.value === unwrapOptionalType(itemConfig.type)) ? unwrapOptionalType(itemConfig.type) : "str";
             const required = isRequiredType(itemConfig.type || "str");
             return `
                 <div class="row-schema-field">
-                    <input class="input input-bordered input-sm min-w-0 font-mono" aria-label="Row field key" data-param-action="rename-table-draft-field" data-item-key="${escapeHtml(itemKey)}" value="${escapeHtml(itemKey)}">
-                    <select class="select select-bordered select-sm min-w-0" data-param-action="row-draft-field-type" data-item-key="${escapeHtml(itemKey)}" data-required="${required ? "true" : "false"}">
-                        ${rowOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
+                    <input class="input input-bordered input-sm min-w-0 font-mono" aria-label="Field key" data-param-action="rename-schema-draft-field" data-item-key="${escapeHtml(itemKey)}" value="${escapeHtml(itemKey)}">
+                    <select class="select select-bordered select-sm min-w-0" data-param-action="schema-draft-field-type" data-item-key="${escapeHtml(itemKey)}" data-required="${required ? "true" : "false"}">
+                        ${fieldOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                     </select>
                     <label class="row-required-toggle">
-                        <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" aria-label="Required row field" data-param-action="row-draft-field-required" data-item-key="${escapeHtml(itemKey)}" ${required ? "checked" : ""}>
+                        <input class="checkbox checkbox-primary checkbox-sm" type="checkbox" aria-label="Required field" data-param-action="schema-draft-field-required" data-item-key="${escapeHtml(itemKey)}" ${required ? "checked" : ""}>
                     </label>
-                    <button class="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label="Remove row field" data-param-action="remove-table-draft-field" data-item-key="${escapeHtml(itemKey)}">Remove</button>
-                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Row field guidance" placeholder="Extraction guidance (optional)" data-param-action="row-draft-guidance" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.description || "")}">
+                    <button class="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label="Remove field" data-param-action="remove-schema-draft-field" data-item-key="${escapeHtml(itemKey)}">Remove</button>
+                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Field alias" placeholder="Field alias" data-param-action="schema-draft-alias" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.alias || "")}">
+                    <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Field guidance" placeholder="Extraction guidance (optional)" data-param-action="schema-draft-guidance" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.description || "")}">
                 </div>
             `;
         }).join("");
-        const preview = Object.fromEntries(Object.entries(itemFields).map(([itemKey, itemField]) => [itemKey, sampleValueForType(itemField && itemField.type)]));
-        const invalidKeys = Object.keys(itemFields).some((key) => !String(key).trim()) || new Set(Object.keys(itemFields)).size !== Object.keys(itemFields).length;
+        const preview = Object.fromEntries(Object.entries(configuredFields).map(([itemKey, itemField]) => [itemKey, sampleValueForType(itemField && itemField.type)]));
+        const invalidKeys = Object.keys(configuredFields).some((key) => !String(key).trim()) || new Set(Object.keys(configuredFields)).size !== Object.keys(configuredFields).length;
+        const isObject = schemaKind === "object";
         return `
             <div class="row-schema-backdrop" role="presentation">
-                <aside class="row-schema-drawer" role="dialog" aria-modal="true" aria-labelledby="row-schema-title">
+                <aside class="row-schema-drawer" role="dialog" aria-modal="true" aria-labelledby="field-schema-title">
                     <header class="row-schema-header">
                         <div>
-                            <h3 id="row-schema-title" class="text-base font-semibold">Row schema - <span class="font-mono">${escapeHtml(fieldKey)}</span></h3>
-                            <p class="mt-1 text-xs text-base-content/55">Define the flat columns for each object in the list.</p>
+                            <h3 id="field-schema-title" class="text-base font-semibold">${isObject ? "Object properties" : "Row schema"} - <span class="font-mono">${escapeHtml(fieldKey)}</span></h3>
+                            <p class="mt-1 text-xs text-base-content/55">Define the flat ${isObject ? "properties in this object" : "columns for each object in the list"}.</p>
                         </div>
-                        <button class="btn btn-ghost btn-circle btn-sm" type="button" aria-label="Close row schema" data-param-action="close-row-schema">Close</button>
+                        <button class="btn btn-ghost btn-circle btn-sm" type="button" aria-label="Close field schema" data-param-action="close-field-schema">Close</button>
                     </header>
                     <div class="row-schema-body">
-                        <div class="row-schema-notice"><span>Each row is a flat object. Nested objects or lists are not supported.</span></div>
+                        <div class="row-schema-notice"><span>${isObject ? "This is a flat object" : "Each row is a flat object"}. Nested objects or lists are not supported.</span></div>
                         <div class="row-schema-table">
                             <div class="row-schema-columns" aria-hidden="true"><span>Field key</span><span>Type</span><span>Required</span><span>Actions</span></div>
-                            ${rows || '<div class="empty-panel m-3">No row fields yet. Add the first field to define the object.</div>'}
+                            ${rows || '<div class="empty-panel m-3">No fields yet. Add the first field to define the object.</div>'}
                         </div>
-                        ${invalidKeys ? '<div class="mt-2 text-xs text-error">Row field keys must be unique and cannot be empty.</div>' : ""}
-                        <button class="btn btn-outline btn-sm mt-3" type="button" data-param-action="add-table-draft-field">Add row field</button>
+                        ${invalidKeys ? '<div class="mt-2 text-xs text-error">Field keys must be unique and cannot be empty.</div>' : ""}
+                        <button class="btn btn-outline btn-sm mt-3" type="button" data-param-action="add-schema-draft-field">Add field</button>
                         <div class="mt-8">
-                            <div class="text-sm font-semibold">Row preview</div>
-                            <div class="mt-1 text-xs text-base-content/55">One sample object from the list</div>
+                            <div class="text-sm font-semibold">Object preview</div>
+                            <div class="mt-1 text-xs text-base-content/55">Sample values using the configured types</div>
                             <pre class="row-schema-preview">${escapeHtml(JSON.stringify(preview, null, 2))}</pre>
                         </div>
                     </div>
                     <footer class="row-schema-footer">
-                        <button class="btn btn-ghost btn-sm" type="button" data-param-action="cancel-row-schema">Cancel</button>
-                        <button class="btn btn-primary btn-sm" type="button" data-param-action="save-row-schema" ${invalidKeys ? "disabled" : ""}>Done</button>
+                        <button class="btn btn-ghost btn-sm" type="button" data-param-action="cancel-field-schema">Cancel</button>
+                        <button class="btn btn-primary btn-sm" type="button" data-param-action="save-field-schema" ${invalidKeys || !Object.keys(configuredFields).length ? "disabled" : ""}>Done</button>
                     </footer>
                 </aside>
             </div>
@@ -897,7 +909,7 @@
                     </div>
                 `)}
                 ${extractionFieldControls(step, mode === "saved" ? "Define the local field mapping used to normalize saved-configuration results for review and storage." : "Define the inline provider schema and local field mapping.")}
-                ${rowSchemaDrawer(step)}
+                ${structuredFieldSchemaDrawer(step)}
             </div>
         `;
     }
@@ -1746,38 +1758,44 @@
             markDirty();
             return true;
         }
-        if (action === "edit-row-schema") {
-            state.editingRowField = button.dataset.fieldKey;
-            state.rowSchemaDraft = clone(getParam(params, ["fields", button.dataset.fieldKey, "item_fields"], {}));
+        if (action === "edit-field-schema") {
+            const schemaKind = button.dataset.schemaKind === "object" ? "object" : "row";
+            const configKey = schemaKind === "object" ? "object_fields" : "item_fields";
+            state.editingFieldSchema = button.dataset.fieldKey;
+            state.fieldSchemaKind = schemaKind;
+            state.fieldSchemaDraft = clone(getParam(params, ["fields", button.dataset.fieldKey, configKey], {}));
             render();
             return true;
         }
-        if (action === "close-row-schema" || action === "cancel-row-schema") {
-            state.editingRowField = null;
-            state.rowSchemaDraft = null;
+        if (action === "close-field-schema" || action === "cancel-field-schema") {
+            state.editingFieldSchema = null;
+            state.fieldSchemaKind = null;
+            state.fieldSchemaDraft = null;
             render();
             return true;
         }
-        if (action === "save-row-schema") {
-            const keys = Object.keys(state.rowSchemaDraft || {});
-            if (keys.some((key) => !key.trim()) || new Set(keys).size !== keys.length) {
+        if (action === "save-field-schema") {
+            const keys = Object.keys(state.fieldSchemaDraft || {});
+            if (!keys.length || keys.some((key) => !key.trim()) || new Set(keys).size !== keys.length) {
                 return true;
             }
-            setParam(params, ["fields", state.editingRowField, "item_fields"], clone(state.rowSchemaDraft || {}));
-            state.editingRowField = null;
-            state.rowSchemaDraft = null;
+            const configKey = state.fieldSchemaKind === "object" ? "object_fields" : "item_fields";
+            setParam(params, ["fields", state.editingFieldSchema, configKey], clone(state.fieldSchemaDraft || {}));
+            state.editingFieldSchema = null;
+            state.fieldSchemaKind = null;
+            state.fieldSchemaDraft = null;
             markDirty();
             return true;
         }
-        if (action === "add-table-draft-field") {
-            const draft = state.rowSchemaDraft || {};
+        if (action === "add-schema-draft-field") {
+            const draft = state.fieldSchemaDraft || {};
             draft[uniqueObjectKey("new_field", draft)] = { alias: "New field", type: "str" };
-            state.rowSchemaDraft = draft;
+            state.fieldSchemaDraft = draft;
             render();
             return true;
         }
-        if (action === "remove-table-draft-field") {
-            delete state.rowSchemaDraft[button.dataset.itemKey];
+        if (action === "remove-schema-draft-field") {
+            delete state.fieldSchemaDraft[button.dataset.itemKey];
             render();
             return true;
         }
@@ -1947,7 +1965,8 @@
             const fieldConfig = getParam(params, ["fields", field.dataset.fieldKey], {});
             const required = field.dataset.required !== "false";
             fieldConfig.type = withRequiredState(field.value, required);
-            fieldConfig.is_table = unwrapOptionalType(fieldConfig.type) === "List[Any]";
+            const baseType = unwrapOptionalType(fieldConfig.type);
+            fieldConfig.is_table = baseType === "List[Any]";
             if (fieldConfig.is_table && (!fieldConfig.item_fields || typeof fieldConfig.item_fields !== "object")) {
                 fieldConfig.item_fields = {};
             }
@@ -1955,10 +1974,17 @@
                 delete fieldConfig.is_table;
                 delete fieldConfig.item_fields;
             }
+            if (baseType === "Dict[str, Any]" && (!fieldConfig.object_fields || typeof fieldConfig.object_fields !== "object")) {
+                fieldConfig.object_fields = {};
+            }
+            if (baseType !== "Dict[str, Any]") {
+                delete fieldConfig.object_fields;
+            }
             setParam(params, ["fields", field.dataset.fieldKey], fieldConfig);
-            if (unwrapOptionalType(fieldConfig.type) === "List[Any]") {
-                state.editingRowField = field.dataset.fieldKey;
-                state.rowSchemaDraft = clone(fieldConfig.item_fields || {});
+            if (baseType === "List[Any]" || baseType === "Dict[str, Any]") {
+                state.editingFieldSchema = field.dataset.fieldKey;
+                state.fieldSchemaKind = baseType === "List[Any]" ? "row" : "object";
+                state.fieldSchemaDraft = clone(baseType === "List[Any]" ? fieldConfig.item_fields || {} : fieldConfig.object_fields || {});
             }
             markDirty();
             return true;
@@ -1970,41 +1996,49 @@
             markDirty();
             return true;
         }
-        if (action === "rename-table-draft-field") {
-            const itemFields = state.rowSchemaDraft || {};
+        if (action === "rename-schema-draft-field") {
+            const itemFields = state.fieldSchemaDraft || {};
             const oldKey = field.dataset.itemKey;
             const newKey = uniqueObjectKey(field.value, itemFields, oldKey);
             if (newKey !== oldKey) {
+                const oldDefaultAlias = oldKey.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
                 itemFields[newKey] = itemFields[oldKey] || { alias: "New field", type: "str" };
                 delete itemFields[oldKey];
-                if (itemFields[newKey] && !itemFields[newKey].alias) {
+                if (itemFields[newKey] && (!itemFields[newKey].alias || itemFields[newKey].alias === "New field" || itemFields[newKey].alias === oldDefaultAlias)) {
                     itemFields[newKey].alias = newKey.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
                 }
             }
-            state.rowSchemaDraft = itemFields;
+            state.fieldSchemaDraft = itemFields;
             render();
             return true;
         }
-        if (action === "row-draft-field-type") {
-            const itemConfig = state.rowSchemaDraft[field.dataset.itemKey] || {};
+        if (action === "schema-draft-field-type") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
             const required = field.dataset.required !== "false";
             itemConfig.type = withRequiredState(field.value, required);
-            state.rowSchemaDraft[field.dataset.itemKey] = itemConfig;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
             render();
             return true;
         }
-        if (action === "row-draft-field-required") {
-            const itemConfig = state.rowSchemaDraft[field.dataset.itemKey] || {};
+        if (action === "schema-draft-field-required") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
             itemConfig.type = withRequiredState(itemConfig.type || "str", field.checked);
-            state.rowSchemaDraft[field.dataset.itemKey] = itemConfig;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
             render();
             return true;
         }
-        if (action === "row-draft-guidance") {
-            const itemConfig = state.rowSchemaDraft[field.dataset.itemKey] || {};
+        if (action === "schema-draft-alias") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
+            itemConfig.alias = field.value;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
+            render();
+            return true;
+        }
+        if (action === "schema-draft-guidance") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
             if (field.value) itemConfig.description = field.value;
             else delete itemConfig.description;
-            state.rowSchemaDraft[field.dataset.itemKey] = itemConfig;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
             render();
             return true;
         }
@@ -2103,7 +2137,9 @@
         if (selectButton) {
             state.selectedIndex = Number(selectButton.dataset.selectStep);
             state.editorTab = "properties";
-            state.editingRowField = null;
+            state.editingFieldSchema = null;
+            state.fieldSchemaKind = null;
+            state.fieldSchemaDraft = null;
             render();
             return;
         }

@@ -43,7 +43,7 @@ def test_production_editor_has_prototype_interaction_builders() -> None:
         "insert-filename-token",
         "add-rule-clause",
         "confidence-percent",
-        "save-row-schema",
+        "save-field-schema",
         "apply-advanced-params",
         "duplicate-task",
         "confirm-remove-task",
@@ -75,13 +75,15 @@ def test_production_extract_field_types_are_complete_and_ordered() -> None:
         '{ value: "List[int]", label: "List of integers" }',
         '{ value: "List[float]", label: "List of numbers" }',
         '{ value: "List[bool]", label: "List of yes / no" }',
-        '{ value: "Dict[str, str]", label: "Object of text values" }',
-        '{ value: "Dict[str, Any]", label: "Object of mixed values" }',
+        '{ value: "Dict[str, Any]", label: "Object with defined fields" }',
         '{ value: "List[Any]", label: "List of objects" }',
     ]
 
     option_positions = [source.index(option) for option in expected_options]
     assert option_positions == sorted(option_positions)
+    assert "Object of text values" not in source
+    assert "object_fields" in source
+    assert 'data-param-action="schema-draft-alias"' in source
 
 
 def test_production_editor_separates_provider_modes_and_hides_operational_controls() -> None:

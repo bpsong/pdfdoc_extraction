@@ -70,6 +70,8 @@ def build_data_schema(fields: Dict[str, Any]) -> Dict[str, Any]:
 
         if field_config.get("is_table", False):
             properties[field_key] = _build_table_schema(field_config)
+        elif _has_object_fields(field_config):
+            properties[field_key] = _build_object_schema(field_config)
         else:
             properties[field_key] = _schema_for_type(field_config.get("type", "str"))
 
@@ -254,10 +256,24 @@ def _optional_scope(
 
 
 def _build_table_schema(field_config: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "type": "array",
+        "items": _schema_for_configured_fields(field_config.get("item_fields", {})),
+    }
+
+
+def _build_object_schema(field_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a typed object schema from configured extraction properties."""
+    return _schema_for_configured_fields(field_config.get("object_fields", {}))
+
+
+def _schema_for_configured_fields(fields: Any) -> Dict[str, Any]:
+    """Build a flat object schema from extraction-style field definitions."""
     item_properties: Dict[str, Any] = {}
     required_items: list[str] = []
 
-    for item_key, item_config in field_config.get("item_fields", {}).items():
+    configured_fields = fields if isinstance(fields, dict) else {}
+    for item_key, item_config in configured_fields.items():
         if not isinstance(item_config, dict):
             continue
         item_properties[item_key] = _schema_for_type(item_config.get("type", "str"))
@@ -275,10 +291,13 @@ def _build_table_schema(field_config: Dict[str, Any]) -> Dict[str, Any]:
     if required_items:
         item_schema["required"] = required_items
 
-    return {
-        "type": "array",
-        "items": item_schema,
-    }
+    return item_schema
+
+
+def _has_object_fields(field_config: Dict[str, Any]) -> bool:
+    """Return whether a field defines a structured object payload."""
+    clean_type = _unwrap_optional(str(field_config.get("type", "str")).strip())
+    return clean_type == "Dict[str, Any]" and isinstance(field_config.get("object_fields"), dict)
 
 
 def _schema_for_type(type_str: str) -> Dict[str, Any]:
