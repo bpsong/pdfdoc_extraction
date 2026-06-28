@@ -611,8 +611,11 @@
             { value: "float", label: "Number" },
             { value: "bool", label: "Yes / No" },
             { value: "List[str]", label: "List of text" },
+            { value: "List[int]", label: "List of integers" },
             { value: "List[float]", label: "List of numbers" },
+            { value: "List[bool]", label: "List of yes / no" },
             { value: "Dict[str, str]", label: "Object of text values" },
+            { value: "Dict[str, Any]", label: "Object of mixed values" },
             { value: "List[Any]", label: "List of objects" },
         ];
         const controls = fieldEntries.map(([fieldKey, field]) => {

@@ -64,6 +64,26 @@ def test_production_editor_uses_runtime_defaults_and_supported_provider_values()
     assert '{ value: "balanced"' not in source
 
 
+def test_production_extract_field_types_are_complete_and_ordered() -> None:
+    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    expected_options = [
+        '{ value: "str", label: "Text" }',
+        '{ value: "int", label: "Integer" }',
+        '{ value: "float", label: "Number" }',
+        '{ value: "bool", label: "Yes / No" }',
+        '{ value: "List[str]", label: "List of text" }',
+        '{ value: "List[int]", label: "List of integers" }',
+        '{ value: "List[float]", label: "List of numbers" }',
+        '{ value: "List[bool]", label: "List of yes / no" }',
+        '{ value: "Dict[str, str]", label: "Object of text values" }',
+        '{ value: "Dict[str, Any]", label: "Object of mixed values" }',
+        '{ value: "List[Any]", label: "List of objects" }',
+    ]
+
+    option_positions = [source.index(option) for option in expected_options]
+    assert option_positions == sorted(option_positions)
+
+
 def test_production_editor_separates_provider_modes_and_hides_operational_controls() -> None:
     source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
 
