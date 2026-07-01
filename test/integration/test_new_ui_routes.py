@@ -438,6 +438,8 @@ def test_admin_dashboard_audit_and_dry_run_pages_include_task_24_assets(monkeypa
     assert 'id="admin-audit-workspace"' in audit.text
     assert users.status_code == 200
     assert 'id="user-management"' in users.text
+    assert "Current admin password" in users.text
+    assert "Current Operator password" in users.text
     assert "/static/js/admin_users.js" in users.text
     assert "/static/js/admin_audit.js" in audit.text
     assert dry_run.status_code == 200

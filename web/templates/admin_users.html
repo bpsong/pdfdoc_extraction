@@ -7,7 +7,7 @@
     <form class="card bg-base-100 border border-base-200 shadow-sm user-password-form" data-user="{{ account }}">
       <div class="card-body">
         <h2 class="card-title">{{ account|capitalize }}</h2>
-        <label class="form-control"><span class="label-text">Current admin password</span>
+        <label class="form-control"><span class="label-text">Current {{ 'Operator' if account == 'operator' else 'admin' }} password</span>
           <input name="current_admin_password" type="password" class="input input-bordered" required autocomplete="current-password">
         </label>
         <label class="form-control"><span class="label-text">New password</span>
