@@ -1,6 +1,7 @@
 from pathlib import Path
 import random
 import time
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -91,7 +92,7 @@ def test_run_wraps_unexpected_validation_error(tmp_path, monkeypatch):
         "validate_required_fields",
         Mock(side_effect=RuntimeError("unexpected secret")),
     )
-    context = {"file_path": "file.pdf"}
+    context: dict[str, Any] = {"file_path": "file.pdf"}
 
     with pytest.raises(TaskError, match="Unexpected error"):
         task.run(context)

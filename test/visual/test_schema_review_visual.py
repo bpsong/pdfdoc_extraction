@@ -406,8 +406,11 @@ def test_operator_visual_login_hides_and_blocks_admin_surfaces(
     assert api_statuses == [403] * len(admin_apis)
 
     csrf_token = next(
-        cookie["value"] for cookie in page.context.cookies() if cookie["name"] == "csrf_token"
+        cookie.get("value")
+        for cookie in page.context.cookies()
+        if cookie.get("name") == "csrf_token"
     )
+    assert csrf_token is not None
     mutations = [
         ("PUT", "/api/admin/users/operator/password"),
         ("PUT", "/api/admin/settings"),

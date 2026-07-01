@@ -4,11 +4,32 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from decimal import Decimal
+from typing import Any, Dict, List, Optional
 
 from llama_cloud import LlamaCloud
 
 from modules.exceptions import TaskError
+
+
+def parse_field_type(type_str: str) -> Any:
+    """Convert a configured extraction type string to a Python annotation."""
+    clean_type = type_str.strip()
+    if clean_type.startswith("Optional[") and clean_type.endswith("]"):
+        return Optional[parse_field_type(clean_type[9:-1])]
+    if clean_type.startswith("List[") and clean_type.endswith("]"):
+        return List[parse_field_type(clean_type[5:-1])]
+    if clean_type in {"Dict[str, Any]", "dict"}:
+        return Dict[str, Any]
+
+    return {
+        "str": str,
+        "int": int,
+        "float": float,
+        "bool": bool,
+        "Decimal": Decimal,
+        "Any": Any,
+    }.get(clean_type, Any)
 
 
 @dataclass

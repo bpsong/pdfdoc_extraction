@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 from fastapi import HTTPException
+from fastapi.routing import APIRoute
 from starlette.requests import Request
 
 import modules.api_router as api
@@ -32,7 +33,11 @@ class Config:
 
 
 def _route(name):
-    return next(route.endpoint for route in api.build_router().routes if route.name == name)
+    return next(
+        route.endpoint
+        for route in api.build_router().routes
+        if isinstance(route, APIRoute) and route.name == name
+    )
 
 
 def _request(body=b"", content_type="application/json", client=("127.0.0.1", 1234)):

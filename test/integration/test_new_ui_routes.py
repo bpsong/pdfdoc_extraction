@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
-from fastapi import Response
+from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
+from starlette.routing import Route
 
 import web.server as web_server
 import modules.api_router as api_router
@@ -121,7 +122,7 @@ def test_security_headers_are_added(monkeypatch) -> None:
 
 def test_pdf_security_headers_allow_same_origin_preview(monkeypatch) -> None:
     client = build_client(monkeypatch)
-    client.app.add_api_route(
+    cast(FastAPI, client.app).add_api_route(
         "/test-preview.pdf",
         lambda: Response(content=b"%PDF-1.4\n", media_type="application/pdf"),
     )
@@ -246,8 +247,8 @@ def test_removed_page_routes_are_not_registered_for_get(monkeypatch) -> None:
 
     get_paths = {
         route.path
-        for route in client.app.routes
-        if "GET" in (getattr(route, "methods", None) or set())
+        for route in cast(FastAPI, client.app).routes
+        if isinstance(route, Route) and "GET" in (route.methods or set())
     }
 
     assert "/dashboard" not in get_paths

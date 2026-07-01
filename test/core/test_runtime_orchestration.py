@@ -1,6 +1,7 @@
 import argparse
 import io
 import logging
+import logging.handlers
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, mock_open
@@ -167,7 +168,7 @@ def test_main_supervises_web_process_and_stops_cleanly(
         no_web=False,
         process=process,
     )
-    log_handle = main.start_web_server(None, None)[1]
+    log_handle = Mock()
     monkeypatch.setattr(main, "start_web_server", lambda *args: (process, log_handle))
     log_method = Mock()
     monkeypatch.setattr(main.logger, expected_level, log_method)
@@ -238,23 +239,24 @@ def test_main_exits_when_web_server_cannot_start(monkeypatch):
 
 def test_logging_helpers_cover_stream_and_setup_paths(monkeypatch, tmp_path):
     plain_stream = io.StringIO()
-    monkeypatch.setattr(logging_config.sys, "__stdout__", plain_stream)
-    assert logging_config._resolve_console_stream(False) is plain_stream
-    assert logging_config._resolve_console_stream(True) is plain_stream
-
     file_handler = Mock()
     console_handler = Mock()
-    monkeypatch.setattr(
-        logging_config,
-        "_NonClosingRotatingFileHandler",
-        Mock(return_value=file_handler),
-    )
-    monkeypatch.setattr(
-        logging_config,
-        "PrefectConsoleHandler",
-        Mock(return_value=console_handler),
-    )
-    root = logging_config.setup_logging()
+    with monkeypatch.context() as patch:
+        patch.setattr(logging_config.sys, "__stdout__", plain_stream)
+        assert logging_config._resolve_console_stream(False) is plain_stream
+        assert logging_config._resolve_console_stream(True) is plain_stream
+
+        patch.setattr(
+            logging_config,
+            "_NonClosingRotatingFileHandler",
+            Mock(return_value=file_handler),
+        )
+        patch.setattr(
+            logging_config,
+            "PrefectConsoleHandler",
+            Mock(return_value=console_handler),
+        )
+        root = logging_config.setup_logging()
 
     assert root.level == logging.INFO
     file_handler.setFormatter.assert_called_once()
@@ -265,13 +267,14 @@ def test_logging_helpers_cover_stream_and_setup_paths(monkeypatch, tmp_path):
 def test_logging_stream_wrapper_and_handler_tolerate_errors(monkeypatch):
     base = Mock()
     base.buffer = Mock()
-    monkeypatch.setattr(logging_config.sys, "__stdout__", base)
-    monkeypatch.setattr(
-        logging_config,
-        "_NonClosingUTF8Wrapper",
-        Mock(side_effect=OSError("unsupported")),
-    )
-    assert logging_config._resolve_console_stream(True) is base
+    with monkeypatch.context() as patch:
+        patch.setattr(logging_config.sys, "__stdout__", base)
+        patch.setattr(
+            logging_config,
+            "_NonClosingUTF8Wrapper",
+            Mock(side_effect=OSError("unsupported")),
+        )
+        assert logging_config._resolve_console_stream(True) is base
 
     handler = object.__new__(logging_config._NonClosingRotatingFileHandler)
     monkeypatch.setattr(

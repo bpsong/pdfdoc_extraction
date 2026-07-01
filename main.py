@@ -103,6 +103,7 @@ warnings.filterwarnings(
 
 from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
+from modules.config_protocol import ConfigProvider
 from modules.shutdown_manager import ShutdownManager
 from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.file_processor import FileProcessor
@@ -161,11 +162,11 @@ def resolve_config_path(args) -> Path:
     return (Path(__file__).parent / "config.yaml").resolve()
 
 
-def start_web_server(config: ConfigManager, logger: logging.Logger):
+def start_web_server(config: ConfigProvider, logger: logging.Logger):
     """Spawn Uvicorn as a subprocess with configured host, port, and reload options.
 
     Args:
-        config (ConfigManager): Configuration manager instance.
+        config: Configuration provider used to resolve server settings.
         logger (logging.Logger): Logger instance for logging.
 
     Returns:

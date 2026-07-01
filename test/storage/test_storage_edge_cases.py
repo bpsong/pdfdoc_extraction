@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -105,7 +106,7 @@ def test_json_helpers_and_error_paths(tmp_path, monkeypatch):
     task.filename_template = "{broken"
     assert task._build_safe_filename({}) == "metadata.json"
 
-    task.data_dir = None
+    task.data_dir = cast(Any, None)
     with pytest.raises(TaskError, match="data_dir"):
         task.validate_required_fields({})
     task.data_dir = tmp_path

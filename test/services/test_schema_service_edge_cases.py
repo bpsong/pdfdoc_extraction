@@ -27,7 +27,9 @@ def test_schema_file_error_and_serialization_paths(tmp_path):
     )
 
     assert service.load_schema("invalid.json") is None
-    assert service.load_schema("valid.json")["fields"]["name"]["type"] == "string"
+    valid_schema = service.load_schema("valid.json")
+    assert valid_schema is not None
+    assert valid_schema["fields"]["name"]["type"] == "string"
     assert service.validate_payload({}, schema_name="missing.yaml")[0]["path"] == "missing.yaml"
     assert service.validate_payload({}, schema={"fields": []})[0]["path"] == "fields"
     assert service.validate_schema({"fields": []})[0]["path"] == "fields"

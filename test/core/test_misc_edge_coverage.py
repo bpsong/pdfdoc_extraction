@@ -19,8 +19,9 @@ from modules import utils
 
 
 class Config:
-    def __init__(self, values=None):
+    def __init__(self, values=None, *, config_path=None):
         self.values = values or {}
+        self._config_path = config_path
 
     def get(self, key, default=None):
         return self.values.get(key, default)
@@ -37,20 +38,21 @@ def test_file_processor_configuration_and_io_failures(tmp_path, monkeypatch):
             Mock(),
         )
 
+    config = Config(
+        {
+            "watch_folder.processing_dir": str(tmp_path / "processing"),
+            "web.upload_dir": "",
+        }
+    )
     processor = FileProcessor(
-        Config(
-            {
-                "watch_folder.processing_dir": str(tmp_path / "processing"),
-                "web.upload_dir": "",
-            }
-        ),
+        config,
         Mock(),
         Mock(),
     )
     with pytest.raises(ValueError, match="upload_dir"):
         processor.process_web_upload(b"%PDF-")
 
-    processor.config_manager.values["web.upload_dir"] = str(tmp_path / "upload")
+    config.values["web.upload_dir"] = str(tmp_path / "upload")
     (tmp_path / "upload").mkdir()
     monkeypatch.setattr("builtins.open", Mock(side_effect=OSError("write failed")))
     with pytest.raises(OSError, match="write failed"):
@@ -70,9 +72,7 @@ def test_file_processor_configuration_and_io_failures(tmp_path, monkeypatch):
 
 
 def test_config_validation_payload_shapes(tmp_path):
-    service = ConfigValidationService(
-        SimpleNamespace(_config_path=tmp_path / "config.yaml")
-    )
+    service = ConfigValidationService(Config(config_path=tmp_path / "config.yaml"))
 
     assert service._extra_findings(None) == []
     with pytest.raises(ValueError, match="must be a string"):
@@ -117,7 +117,7 @@ def test_reports_helpers_and_invalid_table():
 
 def test_runtime_settings_invalid_pipeline_and_redaction():
     service = object.__new__(RuntimeSettingsService)
-    service.config_manager = SimpleNamespace()
+    service.config_manager = Config()
     service.config = {"tasks": [], "pipeline": "bad"}
     assert service._get("tasks.missing", "default") == "default"
     assert service._pipeline_steps() == []

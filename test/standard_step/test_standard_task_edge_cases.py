@@ -37,7 +37,7 @@ def test_review_gate_no_document_and_validation_edges(tmp_path):
     with pytest.raises(TaskError, match="between 0 and 1"):
         task.validate_required_fields({})
     task.confidence_threshold = 0.8
-    task.field_threshold_overrides = {"field": -1}
+    task.field_threshold_overrides = {"field": -1.0}
     with pytest.raises(TaskError, match="field"):
         task.validate_required_fields({})
 

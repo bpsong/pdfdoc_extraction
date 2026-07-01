@@ -22,8 +22,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from standard_step.extraction.extract_pdf import _parse_field_type
-from standard_step.extraction.llama_cloud_v2 import run_extract_v2_job
+from standard_step.extraction.llama_cloud_v2 import parse_field_type, run_extract_v2_job
 
 
 def main() -> int:
@@ -219,7 +218,7 @@ def _build_dynamic_model(fields: Dict[str, Any]):
             continue
 
         field_type_str = field_config.get("type", "Any")
-        field_type = _parse_field_type(field_type_str)
+        field_type = parse_field_type(field_type_str)
         alias = field_config.get("alias", field_name)
         model_fields[field_name] = (field_type, Field(alias=alias))
 

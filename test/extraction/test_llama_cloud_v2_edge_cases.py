@@ -1,10 +1,26 @@
+from decimal import Decimal
 from types import SimpleNamespace
+from typing import Any, Dict, List, Optional
 from unittest.mock import Mock
 
 import pytest
 
 from modules.exceptions import TaskError
 from standard_step.extraction import llama_cloud_v2 as llama
+
+
+@pytest.mark.parametrize(
+    ("configured_type", "expected_type"),
+    [
+        ("str", str),
+        ("Decimal", Decimal),
+        ("Dict[str, Any]", Dict[str, Any]),
+        ("Optional[List[int]]", Optional[List[int]]),
+        ("Custom", Any),
+    ],
+)
+def test_parse_field_type(configured_type, expected_type):
+    assert llama.parse_field_type(configured_type) == expected_type
 
 
 def test_build_configuration_and_schema_type_variants():

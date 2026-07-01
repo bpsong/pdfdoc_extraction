@@ -1,5 +1,6 @@
 from datetime import timedelta
 from pathlib import Path
+from typing import Any, cast
 from unittest.mock import Mock
 
 import bcrypt
@@ -82,7 +83,7 @@ def test_auth_configuration_parsers_and_required_secret(tmp_path):
 def test_password_verification_handles_missing_and_bcrypt_errors(tmp_path, monkeypatch):
     auth = AuthUtils(_config(tmp_path))
 
-    assert auth.verify_password(None, "hash") is False
+    assert auth.verify_password(cast(Any, None), "hash") is False
     monkeypatch.setattr(
         "modules.auth_utils.bcrypt.checkpw",
         Mock(side_effect=ValueError("too long")),

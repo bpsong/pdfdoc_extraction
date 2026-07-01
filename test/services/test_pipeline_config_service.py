@@ -154,7 +154,9 @@ def test_pipeline_config_service_redacts_and_preserves_secret_params(tmp_path: P
 
         split_params["split_dir"] = str(tmp_path / "new-split")
         draft = service.save_draft(model, user="admin")
-        draft_yaml = yaml.safe_load(ConfigVersionRepository(service.conn).get_draft("pipeline", "default")["content_text"])
+        stored_draft = ConfigVersionRepository(service.conn).get_draft("pipeline", "default")
+        assert stored_draft is not None
+        draft_yaml = yaml.safe_load(stored_draft["content_text"])
 
         assert draft["model"]["steps"][0]["params"]["api_key"] == "[REDACTED]"
         assert draft_yaml["tasks"]["split"]["params"]["api_key"] == "split-secret"
@@ -164,7 +166,11 @@ def test_pipeline_config_service_redacts_and_preserves_secret_params(tmp_path: P
         replacement_model = draft["model"]
         replacement_model["steps"][1]["params"]["api_key"] = "replacement-secret"
         service.save_draft(replacement_model, user="admin")
-        replacement_yaml = yaml.safe_load(ConfigVersionRepository(service.conn).get_draft("pipeline", "default")["content_text"])
+        stored_replacement = ConfigVersionRepository(service.conn).get_draft(
+            "pipeline", "default"
+        )
+        assert stored_replacement is not None
+        replacement_yaml = yaml.safe_load(stored_replacement["content_text"])
         assert replacement_yaml["tasks"]["split"]["params"]["api_key"] == "split-secret"
         assert replacement_yaml["tasks"]["extract"]["params"]["api_key"] == "replacement-secret"
     finally:
