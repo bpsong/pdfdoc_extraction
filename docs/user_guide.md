@@ -656,6 +656,55 @@ The administrator menu provides these workflows:
 - **Audit:** inspect relevant configuration and governance events.
 - **Validation:** review active configuration, schema, and pipeline findings.
 
+##### Administrator Audit History
+
+The **Audit** page at `/app/admin/audit` shows the append-only history of
+administrator configuration and governance actions. It is available only to the
+administrator role. The page displays events whose event type begins with
+`admin_`; operational document events such as review activity, processing
+failures, splitting, and fan-in completion are stored separately in the audit
+stream and are not shown on this page.
+
+The following administrator events are currently recorded:
+
+| Event type | Recorded when |
+|------------|---------------|
+| `admin_user_password_changed` | An administrator successfully changes the administrator or operator password. The event identifies the target account and successful outcome, but never contains either password. |
+| `admin_user_password_change_rejected` | A password-change request is rejected, for example because the current administrator password is incorrect, the target account is unknown, the confirmation does not match, or the new password violates policy. The target, rejected outcome, and reason are recorded without credential material. |
+| `admin_settings_updated` | An administrator changes an allow-listed, non-secret runtime setting. |
+| `admin_review_gate_rules_updated` | Review queue, confidence threshold, field override, or related review-gate settings are changed. |
+| `admin_split_settings_updated` | Non-secret split settings are changed. |
+| `admin_split_connection_tested` | An administrator runs the split connection/status test. This records adapter status; the current test does not make a provider network request. |
+| `admin_pipeline_draft_saved` | A pipeline draft is saved. |
+| `admin_pipeline_validated` | A pipeline draft is validated. The result includes validity, a summary, and validation finding codes. |
+| `admin_pipeline_published` | A validated pipeline draft is published as the active configuration. |
+| `admin_schemas_validated` | Validation is run for all configured schemas. |
+| `admin_schema_validated` | An individual schema draft is validated without being saved. |
+| `admin_schema_created` | A schema is created. |
+| `admin_schema_updated` | An existing schema is changed. |
+| `admin_schema_duplicated` | An existing schema is copied to a new schema name. |
+
+Each audit row has an immutable event ID, event type, acting user, and creation
+time. Depending on the action, **Details** can also show structured `before` and
+`after` values and metadata such as a configuration-version ID, validation
+summary, finding codes or paths, schema name, schema hash, field count, or source
+schema name. Fields that do not apply to an event are omitted or empty. Secret
+settings and password values are not included in administrator audit payloads.
+
+Events are displayed newest first. The page loads up to 100 matching events and
+supports exact filtering by event type and user, plus inclusive **From** and
+**To** creation timestamps. Select **Apply** to run the filters, **Clear** to
+remove them, **Refresh** to reload the current view, and **Details** on an event
+to inspect its complete structured payload. The event-type suggestions are
+derived from the events in the current result set, but an exact event type can
+also be typed directly.
+
+Audit history is evidence of actions performed through these application
+workflows; it is not a substitute for protecting the SQLite database and its
+backups. Include the configured database in backup, access-control, and
+retention procedures. There is no delete or edit action for audit events in the
+administrator interface.
+
 For schema-driven review fields, see the [review schema administrator guide](review_schema_admin_guide.md).
 
 Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings. Configure provider secrets such as `api_key` through `config.yaml`, deployment secret management, or the masked credential control in the administrator Pipeline editor; saved values remain redacted when the pipeline is loaded again.
