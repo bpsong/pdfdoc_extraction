@@ -286,7 +286,7 @@ The left navigation menu provides the following work areas. If the menu is colla
 | **Reports** | View processing and review activity summaries. |
 | **Settings** | View non-secret runtime settings and configured paths. |
 
-Administrators also see **Admin Home**, **Users**, **Schemas**, **Validation**, **Pipeline**, **Tasks**, **Audit**, and **Review Simulator**. These administrative areas are not available to operators.
+Administrators also see **Admin Home**, **Users**, **Schemas**, **Validation**, **Pipeline**, **Tasks**, and **Audit**. These administrative areas are not available to operators.
 
 #### Human Review
 
@@ -653,7 +653,6 @@ The administrator menu provides these workflows:
 - **Users:** change the administrator or operator password after confirming the current administrator password.
 - **Pipeline:** prepare a draft, maintain task order and task parameters including review thresholds and split behavior, compare it with the active configuration, and use the required **Save Draft** -> **Validate** -> **Publish** sequence. Editing or saving invalid parameters cannot enable Publish. Publish repeats the authoritative server-side validation and does not write `config.yaml` when any blocking finding remains.
 - **Tasks:** inspect the workflow task classes available to the pipeline.
-- **Review Simulator:** evaluate review-gate decisions with sample JSON without processing a PDF or writing final workflow results.
 - **Audit:** inspect relevant configuration and governance events.
 - **Validation:** review active configuration, schema, and pipeline findings.
 
@@ -1566,7 +1565,7 @@ A: Corrected values are persisted in SQLite with the document extraction state. 
 A: When split processing is enabled, the source PDF can create child documents based on document category and page range. Open the batch from **Processing Overview**, then select its split results to inspect the source and child documents.
 
 **Q: Can administrators change pipeline review or split behavior in the UI?**
-A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters, **Review Simulator** to preview review-gate behavior, and **Validation** to check configuration health. Secret provider values such as API keys can be configured through `config.yaml`, deployment secret management, or the masked administrator Pipeline control.
+A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters and **Validation** to check configuration health. Secret provider values such as API keys can be configured through `config.yaml`, deployment secret management, or the masked administrator Pipeline control.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
 A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.
@@ -1617,7 +1616,6 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Pipeline | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, then select **Pipeline** from the left navigation menu. |
 | Tasks | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Tasks** from the left navigation menu. |
 | Audit | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit** from the left navigation menu. |
-| Review Simulator | `/app/admin/dry-run` | Administrator only | Sign in as the administrator, then select **Review Simulator** from the left navigation menu. |
 
 The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface.
 

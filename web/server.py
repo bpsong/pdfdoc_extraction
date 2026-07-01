@@ -726,19 +726,6 @@ def create_app() -> FastAPI:
             admin_required=True,
         )
 
-    @app.get("/app/admin/dry-run", response_class=HTMLResponse)
-    async def app_pipeline_dry_run_page(request: Request):
-        """Serve the admin review gate simulator page."""
-
-        return await render_app_page(
-            request,
-            "pipeline_dry_run.html",
-            page_title="Review Gate Simulator",
-            page_subtitle="Run sample documents through draft pipeline decisions.",
-            active_nav="dry_run",
-            admin_required=True,
-        )
-
     # Exception handler for authentication redirects
     from fastapi.responses import JSONResponse
 

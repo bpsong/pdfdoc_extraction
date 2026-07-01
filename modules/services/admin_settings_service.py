@@ -1,4 +1,4 @@
-"""Admin-facing settings, summary, audit, and dry-run services."""
+"""Admin-facing settings, summary, and audit services."""
 
 from __future__ import annotations
 
@@ -15,11 +15,10 @@ from modules.db.repositories import (
     AppSettingsRepository,
     AuditRepository,
     ConfigVersionRepository,
-    DocumentRepository,
 )
 from modules.services.config_validation_service import ConfigValidationService
 from modules.services.audit_service import AuditService
-from modules.services.pipeline_config_service import PipelineConfigError, PipelineConfigService
+from modules.services.pipeline_config_service import PipelineConfigService
 
 
 ADMIN_SETTINGS_KEY = "admin.non_secret_settings"
@@ -707,185 +706,6 @@ class AdminSummaryService:
             }
 
 
-class PipelineDryRunService:
-    """Preview draft pipeline decisions without writing final exports."""
-
-    def __init__(self, config_manager: ConfigManager, conn: sqlite3.Connection) -> None:
-        self.config_manager = config_manager
-        self.conn = conn
-        self.audit = AuditService(conn)
-
-    def run(self, payload: dict[str, Any], *, user: str | None = None) -> dict[str, Any]:
-        """Run a non-mutating pipeline decision preview and audit the result."""
-        model = payload.get("model")
-        if model is not None and not isinstance(model, dict):
-            raise PipelineConfigError("Dry-run model must be an object.")
-
-        pipeline_service = PipelineConfigService(self.config_manager, self.conn)
-        overview = pipeline_service.get_pipeline()
-        selected_model = model or (
-            overview["draft"]["model"] if overview.get("draft") else overview["active"]["model"]
-        )
-        if not isinstance(selected_model, dict):
-            raise PipelineConfigError("Dry-run pipeline model must be an object.")
-        validation = pipeline_service.validate_draft(selected_model)
-        raw_mock_results = payload.get("mock_results")
-        mock_results: dict[str, Any] = (
-            raw_mock_results if isinstance(raw_mock_results, dict) else {}
-        )
-        sample = self._sample_payload(payload)
-        raw_steps = selected_model.get("steps")
-        steps: list[Any] = raw_steps if isinstance(raw_steps, list) else []
-        result = {
-            "dry_run_id": f"dry-run-{len(steps)}-{len(mock_results)}",
-            "mode": "draft" if overview.get("draft") and model is None else "submitted",
-            "sample": sample,
-            "pipeline": {
-                "summary": PipelineConfigService._summary(selected_model),
-                "steps": [
-                    {
-                        "key": step.get("key"),
-                        "label": step.get("label"),
-                        "class": step.get("class"),
-                        "enabled": bool(step.get("enabled", True)),
-                    }
-                    for step in steps
-                    if isinstance(step, dict)
-                ],
-            },
-            "split": self._split_summary(steps, mock_results),
-            "extraction": self._extraction_summary(steps, mock_results),
-            "review_gate": self._review_gate_summary(steps, mock_results),
-            "exports": self._export_summary(steps),
-            "validation": validation,
-            "writes": {
-                "final_exports_written": False,
-                "workflow_state_written": False,
-                "audit_event_written": True,
-            },
-        }
-        event = self.audit.append_event(
-            event_type="admin_pipeline_dry_run",
-            user=user,
-            after=result,
-            metadata={
-                "request": _redact_secrets(payload),
-                "validation_summary": validation.get("summary", {}),
-                "sample": sample,
-            },
-        )
-        result["audit_event_id"] = event["id"]
-        return result
-
-    def _sample_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        document_id = str(payload.get("document_id") or "").strip()
-        if document_id:
-            document = DocumentRepository(self.conn).get(document_id)
-            if document:
-                return {
-                    "source": "document",
-                    "document_id": document["id"],
-                    "filename": document.get("original_filename"),
-                    "status": document.get("status"),
-                }
-        raw_sample = payload.get("sample")
-        sample: dict[str, Any] = raw_sample if isinstance(raw_sample, dict) else {}
-        filename = str(payload.get("sample_filename") or sample.get("filename") or "").strip()
-        return {
-            "source": "uploaded_sample" if filename else "none",
-            "filename": filename or None,
-            "size_bytes": sample.get("size_bytes"),
-        }
-
-    @staticmethod
-    def _split_summary(steps: list[Any], mock_results: dict[str, Any]) -> dict[str, Any]:
-        step = _first_step(steps, "LlamaCloudSplitTask")
-        decisions = mock_results.get("split_decisions")
-        if not isinstance(decisions, list):
-            decisions = []
-        if not step:
-            return {"status": "not_configured", "decisions": []}
-        raw_params = step.get("params")
-        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
-        enabled = bool(step.get("enabled", True)) and bool(params.get("enabled", False))
-        return {
-            "status": "would_run" if enabled else "disabled",
-            "task_key": step.get("key"),
-            "categories": params.get("categories") if isinstance(params.get("categories"), list) else [],
-            "decisions": decisions,
-        }
-
-    @staticmethod
-    def _extraction_summary(steps: list[Any], mock_results: dict[str, Any]) -> dict[str, Any]:
-        step = _first_matching_step(steps, lambda item: _is_extraction_step(item))
-        fields = mock_results.get("extraction_fields")
-        if not isinstance(fields, list):
-            fields = []
-        if not step:
-            return {"status": "not_configured", "configured_fields": [], "mock_fields": fields}
-        raw_params = step.get("params")
-        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
-        raw_fields = params.get("fields")
-        configured_fields: dict[str, Any] = raw_fields if isinstance(raw_fields, dict) else {}
-        return {
-            "status": "would_extract" if step.get("enabled", True) else "disabled",
-            "task_key": step.get("key"),
-            "provider": step.get("class"),
-            "configured_fields": sorted(configured_fields),
-            "mock_fields": fields,
-            "mock_field_count": len(fields),
-        }
-
-    @staticmethod
-    def _review_gate_summary(steps: list[Any], mock_results: dict[str, Any]) -> dict[str, Any]:
-        step = _first_step(steps, "ReviewGateTask")
-        if not step:
-            return {"status": "not_configured", "review_required": False, "reasons": []}
-        raw_params = step.get("params")
-        params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
-        threshold = float(params.get("confidence_threshold", 0.8))
-        fields = mock_results.get("extraction_fields")
-        fields = fields if isinstance(fields, list) else []
-        reasons: list[str] = []
-        for field in fields:
-            if not isinstance(field, dict):
-                continue
-            confidence = field.get("confidence")
-            field_key = str(field.get("field_key") or field.get("key") or "field")
-            if confidence is None and params.get("require_review_when_missing_confidence", True):
-                reasons.append(f"{field_key}: missing confidence")
-                continue
-            try:
-                if confidence is not None and float(confidence) < threshold:
-                    reasons.append(f"{field_key}: below threshold")
-            except (TypeError, ValueError):
-                reasons.append(f"{field_key}: invalid confidence")
-        explicit_required = mock_results.get("review_required")
-        review_required = bool(params.get("always_review")) or bool(reasons)
-        if explicit_required is not None:
-            review_required = bool(explicit_required)
-        return {
-            "status": "would_evaluate" if step.get("enabled", True) else "disabled",
-            "task_key": step.get("key"),
-            "confidence_threshold": threshold,
-            "review_required": review_required,
-            "reasons": reasons,
-        }
-
-    @staticmethod
-    def _export_summary(steps: list[Any]) -> dict[str, Any]:
-        export_steps = [
-            {
-                "key": step.get("key"),
-                "class": step.get("class"),
-                "status": "skipped_in_dry_run",
-            }
-            for step in steps
-            if isinstance(step, dict) and _is_export_step(step)
-        ]
-        return {"final_exports_written": False, "steps": export_steps}
-
-
 def _float_between(value: Any, field_name: str) -> float:
     """Return a float between 0 and 1 inclusive."""
     try:
@@ -1050,53 +870,3 @@ def _summary_for_findings(findings: Any) -> dict[str, int]:
             1 for finding in findings if isinstance(finding, dict) and finding.get("severity") == "warning"
         ),
     }
-
-
-def _first_step(steps: list[Any], class_name: str) -> dict[str, Any] | None:
-    """Return the first step matching a class name."""
-    return _first_matching_step(steps, lambda step: step.get("class") == class_name)
-
-
-def _first_matching_step(steps: list[Any], predicate: Any) -> dict[str, Any] | None:
-    """Return the first step matching a predicate."""
-    for step in steps:
-        if isinstance(step, dict) and predicate(step):
-            return step
-    return None
-
-
-def _is_extraction_step(step: dict[str, Any]) -> bool:
-    """Return whether a pipeline step represents extraction."""
-    module_name = str(step.get("module") or "")
-    class_name = str(step.get("class") or "")
-    return ".extraction." in module_name or class_name == "ExtractPdfTask"
-
-
-def _is_export_step(step: dict[str, Any]) -> bool:
-    """Return whether a pipeline step writes final output artifacts."""
-    module_name = str(step.get("module") or "")
-    class_name = str(step.get("class") or "")
-    return (
-        ".storage." in module_name
-        or ".archiver." in module_name
-        or class_name.startswith("Store")
-        or class_name.startswith("Archive")
-    )
-
-
-def _secret_key(key: str) -> bool:
-    """Return whether a key name should be treated as secret."""
-    lowered = str(key or "").lower()
-    return lowered in SECRET_KEYS or any(lowered.endswith(f"_{secret}") for secret in SECRET_KEYS)
-
-
-def _redact_secrets(value: Any) -> Any:
-    """Return a copy with secret-looking keys redacted."""
-    if isinstance(value, dict):
-        return {
-            key: "[REDACTED]" if _secret_key(str(key)) else _redact_secrets(item)
-            for key, item in value.items()
-        }
-    if isinstance(value, list):
-        return [_redact_secrets(item) for item in value]
-    return value

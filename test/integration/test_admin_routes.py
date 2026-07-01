@@ -15,7 +15,6 @@ ADMIN_ROUTES = [
     "/app/admin/review-gate",
     "/app/admin/split",
     "/app/admin/audit",
-    "/app/admin/dry-run",
 ]
 
 
@@ -41,7 +40,6 @@ def test_admin_can_access_admin_app_routes(monkeypatch) -> None:
         "/app/admin/pipeline": "Pipeline",
         "/app/admin/tasks": "Task Catalog",
         "/app/admin/audit": "Admin Audit",
-        "/app/admin/dry-run": "Review Gate Simulator",
     }
 
     for route, title in expected_titles.items():
@@ -51,6 +49,18 @@ def test_admin_can_access_admin_app_routes(monkeypatch) -> None:
         assert "Admin Home" in response.text
         assert 'href="/app/admin/pipeline"' in response.text
         assert 'href="/app/settings/validation"' in response.text
+
+
+def test_removed_review_simulator_surfaces_are_not_available(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    dashboard = client.get("/app/admin")
+
+    assert client.get("/app/admin/dry-run").status_code == 404
+    assert client.post("/api/admin/dry-run", json={}).status_code == 404
+    assert "Review Simulator" not in dashboard.text
+    assert ">Tools</div>" not in dashboard.text
 
 
 def test_demoted_admin_config_routes_redirect_to_pipeline(monkeypatch) -> None:

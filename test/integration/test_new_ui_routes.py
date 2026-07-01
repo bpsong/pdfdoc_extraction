@@ -422,13 +422,12 @@ def test_settings_page_includes_task_25_assets(monkeypatch) -> None:
     assert "/static/js/settings.js" in response.text
 
 
-def test_admin_dashboard_audit_and_dry_run_pages_include_task_24_assets(monkeypatch) -> None:
+def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
 
     dashboard = client.get("/app/admin")
     audit = client.get("/app/admin/audit")
-    dry_run = client.get("/app/admin/dry-run")
     users = client.get("/app/admin/users")
 
     assert dashboard.status_code == 200
@@ -442,6 +441,3 @@ def test_admin_dashboard_audit_and_dry_run_pages_include_task_24_assets(monkeypa
     assert "Current Operator password" in users.text
     assert "/static/js/admin_users.js" in users.text
     assert "/static/js/admin_audit.js" in audit.text
-    assert dry_run.status_code == 200
-    assert 'id="pipeline-dry-run-workspace"' in dry_run.text
-    assert "/static/js/pipeline_dry_run.js" in dry_run.text

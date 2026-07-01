@@ -6,14 +6,13 @@ from typing import Any
 import pytest
 import yaml
 
-from modules.db.connection import connect, json_loads
+from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.db.repositories import AuditRepository, ConfigVersionRepository
 from modules.services.admin_settings_service import (
     AdminAuditService,
     AdminSettingsError,
     AdminSettingsService,
-    PipelineDryRunService,
 )
 from test.helpers_sqlite import TempConfig
 
@@ -124,29 +123,3 @@ def test_admin_audit_service_filters_admin_events_only(tmp_path: Path) -> None:
     assert result["total"] == 1
     assert result["events"][0]["id"] == admin_event["id"]
     assert result["events"][0]["event_type"] == "admin_pipeline_published"
-
-
-def test_pipeline_dry_run_records_audit_and_redacts_request(tmp_path: Path) -> None:
-    config = _config(tmp_path)
-
-    with connect(config) as conn:
-        result = PipelineDryRunService(config, conn).run(
-            {
-                "sample_filename": "sample.pdf",
-                "api_key": "llx-secret",
-                "mock_results": {
-                    "extraction_fields": [{"field_key": "supplier", "confidence": 0.72}],
-                    "review_required": True,
-                },
-            },
-            user="admin",
-        )
-        events = AuditRepository(conn).list_admin_events(event_type="admin_pipeline_dry_run")
-
-    event_payload = json_loads(events[0]["event_json"])
-
-    assert result["writes"]["final_exports_written"] is False
-    assert result["review_gate"]["review_required"] is True
-    assert result["exports"]["steps"][0]["status"] == "skipped_in_dry_run"
-    assert events[0]["id"] == result["audit_event_id"]
-    assert event_payload["metadata"]["request"]["api_key"] == "[REDACTED]"

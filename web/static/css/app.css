@@ -1358,8 +1358,7 @@
     min-width: 48rem;
 }
 
-.admin-audit-json,
-.dry-run-json {
+.admin-audit-json {
     min-height: 5rem;
     max-height: 34rem;
     margin: 0;
@@ -1368,39 +1367,6 @@
     background: oklch(var(--b2));
     font-size: 0.75rem;
     line-height: 1.45;
-}
-
-.pipeline-dry-run-layout {
-    display: grid;
-    grid-template-columns: minmax(18rem, 0.5fr) minmax(0, 1fr);
-    grid-template-areas:
-        "controls results"
-        "json json";
-    gap: 1rem;
-    align-items: start;
-}
-
-.dry-run-controls-panel {
-    grid-area: controls;
-}
-
-.dry-run-results-panel {
-    grid-area: results;
-}
-
-.dry-run-json-panel {
-    grid-area: json;
-}
-
-.dry-run-mock-json {
-    min-height: 9rem;
-    resize: vertical;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-    font-size: 0.75rem;
-}
-
-.dry-run-summary-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .reports-summary-grid {
@@ -2203,7 +2169,6 @@
 
     .admin-summary-grid,
     .admin-settings-grid,
-    .dry-run-summary-grid,
     .reports-summary-grid,
     .settings-summary-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2211,7 +2176,6 @@
 
     .admin-dashboard-grid,
     .admin-audit-layout,
-    .pipeline-dry-run-layout,
     .reports-layout,
     .settings-layout {
         grid-template-columns: 1fr;
@@ -2222,9 +2186,6 @@
     .admin-audit-panel,
     .admin-shortcuts-panel,
     .admin-settings-panel,
-    .dry-run-controls-panel,
-    .dry-run-results-panel,
-    .dry-run-json-panel,
     .reports-status-panel,
     .reports-source-panel,
     .reports-review-panel,

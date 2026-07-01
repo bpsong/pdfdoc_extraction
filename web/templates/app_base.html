@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     {% set current_path = request.url.path if request is defined else '' %}
-    {% set display_page_title = 'Review Gate Simulator' if current_path == '/app/admin/dry-run' else page_title|default('DocFlow AI') %}
+    {% set display_page_title = page_title|default('DocFlow AI') %}
     <title>{% block title %}{{ display_page_title }} - {{ app_name|default('DocFlow AI') }}{% endblock %}</title>
     <link href="/static/css/vendor.css?v=tailwind-3.4.17-daisyui-4.12.10" rel="stylesheet" />
     <link href="/static/css/app.css?v=schema-pattern-helper" rel="stylesheet" />
@@ -157,18 +157,6 @@
                             d="M9 17v-2a4 4 0 014-4h4m0 0l-3-3m3 3l-3 3M5 4h8a2 2 0 012 2v2M5 4v16h14v-4" />
                     </svg>
                     <span>Audit</span>
-                </a>
-                <div class="divider my-2 text-[0.65rem] text-base-content/35">Tools</div>
-                <a href="/app/admin/dry-run" title="Review Simulator" aria-label="Review Simulator" data-nav-label="Review Simulator"
-                    class="nav-link{% if active_nav|default('') == 'dry_run' or current_path == '/app/admin/dry-run' %} active{% endif %}">
-                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M14.752 11.168l-5.197-3.03A1 1 0 008 9.002v5.996a1 1 0 001.555.832l5.197-2.966a1 1 0 000-1.696z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M21 12A9 9 0 113 12a9 9 0 0118 0z" />
-                    </svg>
-                    <span>Review Simulator</span>
                 </a>
             </nav>
             {% endif %}

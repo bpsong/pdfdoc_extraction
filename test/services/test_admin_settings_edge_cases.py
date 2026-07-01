@@ -5,18 +5,13 @@ import pytest
 from modules.services.admin_settings_service import (
     AdminSettingsError,
     AdminSettingsService,
-    PipelineConfigError,
-    PipelineDryRunService,
     _audit_event_payload,
     _default_for_setting,
-    _first_matching_step,
-    _first_step,
     _float_between,
     _get_nested,
     _normalize_categories,
     _positive_float,
     _positive_int,
-    _redact_secrets,
     _set_nested,
     _settings_groups,
     _string_list,
@@ -96,52 +91,3 @@ def test_admin_payload_audit_summary_and_step_helpers():
     assert _summary_for_findings(
         [{"severity": "error"}, {"severity": "warning"}]
     ) == {"errors": 1, "warnings": 1}
-
-    steps = [{"class": "ExtractPdfTask"}, "bad"]
-    assert _first_step(steps, "Missing") is None
-    assert _first_matching_step(steps, lambda step: step.get("class") == "ExtractPdfTask") == steps[0]
-    assert _redact_secrets({"api_key": "secret", "nested": [{"token": "x"}]}) == {
-        "api_key": "[REDACTED]",
-        "nested": [{"token": "[REDACTED]"}],
-    }
-
-
-def test_pipeline_dry_run_invalid_models_and_not_configured_summaries(monkeypatch):
-    service = object.__new__(PipelineDryRunService)
-    with pytest.raises(PipelineConfigError, match="Dry-run model"):
-        service.run({"model": []})
-    service.config_manager = Mock()
-    service.conn = Mock()
-    pipeline_service = Mock()
-    pipeline_service.get_pipeline.return_value = {
-        "draft": None,
-        "active": {"model": []},
-    }
-    monkeypatch.setattr(
-        "modules.services.admin_settings_service.PipelineConfigService",
-        Mock(return_value=pipeline_service),
-    )
-    with pytest.raises(PipelineConfigError, match="pipeline model"):
-        service.run({})
-
-    assert service._split_summary([], {}) == {
-        "status": "not_configured",
-        "decisions": [],
-    }
-    assert service._extraction_summary([], {})["status"] == "not_configured"
-    assert service._review_gate_summary([], {}) == {
-        "status": "not_configured",
-        "review_required": False,
-        "reasons": [],
-    }
-
-    review = service._review_gate_summary(
-        [{"class": "ReviewGateTask", "params": {"confidence_threshold": 0.8}}],
-        {
-            "extraction_fields": [
-                {"field_key": "missing", "confidence": None},
-                {"field_key": "invalid", "confidence": "bad"},
-            ]
-        },
-    )
-    assert review["review_required"] is True

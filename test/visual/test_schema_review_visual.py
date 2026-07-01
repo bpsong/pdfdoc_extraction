@@ -387,7 +387,7 @@ def test_operator_visual_login_hides_and_blocks_admin_surfaces(
     admin_pages = [
         "/app/admin", "/app/admin/users", "/app/admin/pipeline", "/app/admin/tasks",
         "/app/admin/review-gate", "/app/admin/split", "/app/admin/audit",
-        "/app/admin/dry-run", "/app/schemas", "/app/settings/validation",
+        "/app/schemas", "/app/settings/validation",
     ]
     page_statuses = [
         page.request.get(f"{visual_app['base_url']}{path}").status for path in admin_pages
@@ -411,7 +411,6 @@ def test_operator_visual_login_hides_and_blocks_admin_surfaces(
     mutations = [
         ("PUT", "/api/admin/users/operator/password"),
         ("PUT", "/api/admin/settings"),
-        ("POST", "/api/admin/dry-run"),
         ("PUT", "/api/admin/pipeline/draft"),
         ("POST", "/api/admin/pipeline/diff"),
         ("POST", "/api/admin/pipeline/validate"),

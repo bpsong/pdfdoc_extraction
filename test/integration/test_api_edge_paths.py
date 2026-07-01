@@ -342,14 +342,6 @@ def test_admin_endpoint_success_and_error_translation(monkeypatch):
         _run(_route("update_admin_settings")(_request(b"{}"), user="admin"))
     assert exc_info.value.status_code == 400
 
-    dry_run = Mock()
-    dry_run.run.side_effect = PipelineConfigError("bad model")
-    monkeypatch.setattr(api, "PipelineDryRunService", lambda config, conn: dry_run)
-    with pytest.raises(HTTPException) as exc_info:
-        _run(_route("run_admin_pipeline_dry_run")(_request(b"{}"), user="admin"))
-    assert exc_info.value.status_code == 400
-
-
 def test_admin_pipeline_model_and_service_errors(monkeypatch):
     config = Config()
     connection = Mock()

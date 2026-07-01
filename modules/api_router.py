@@ -58,7 +58,6 @@ from .services.admin_settings_service import (
     AdminSettingsError,
     AdminSettingsService,
     AdminSummaryService,
-    PipelineDryRunService,
 )
 from .services.audit_service import AuditService
 from .services.batch_service import BatchService
@@ -1106,21 +1105,6 @@ def build_router() -> APIRouter:
                 created_to=created_to,
                 limit=limit,
                 offset=offset,
-            )
-
-    @router.post("/api/admin/dry-run")
-    async def run_admin_pipeline_dry_run(request: Request, user: str = Depends(get_current_user)):
-        """Run a non-mutating draft pipeline dry run."""
-        config, _, _, _, _ = get_dependencies()
-        require_admin_user(user, config)
-        payload = await _json_body(request)
-        try:
-            with connect(config) as conn:
-                return PipelineDryRunService(config, conn).run(payload, user=user)
-        except PipelineConfigError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"message": str(exc), "findings": exc.findings},
             )
 
     def _pipeline_model_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
