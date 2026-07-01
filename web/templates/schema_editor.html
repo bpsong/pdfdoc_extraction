@@ -33,6 +33,7 @@
 
         <div id="schema-warning" class="alert alert-warning hidden text-sm"></div>
         <div id="schema-error" class="alert alert-error hidden text-sm"></div>
+        <p id="schema-action-guidance" class="schema-action-guidance text-xs text-base-content/60" aria-live="polite"></p>
 
         <div class="schema-meta-grid">
             <label class="form-control">
@@ -59,6 +60,8 @@
             <button class="btn btn-outline btn-xs" type="button" data-add-field="array">Array</button>
         </div>
 
+        <nav id="schema-field-outline" class="schema-field-outline hidden" aria-label="Schema field outline"></nav>
+
         <div id="schema-field-tree" class="schema-field-tree">
             <div class="empty-panel">No fields</div>
         </div>
@@ -69,12 +72,12 @@
             <h2 class="font-semibold text-sm">YAML Preview</h2>
             <button id="schema-validate-button" class="btn btn-outline btn-sm" type="button" disabled>Validate</button>
         </div>
+        <div id="schema-validation-results" class="schema-validation-results text-sm" role="status" aria-live="polite" tabindex="-1"></div>
         <pre id="schema-yaml-preview" class="schema-yaml-preview"></pre>
-        <div id="schema-validation-results" class="schema-validation-results text-sm"></div>
     </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/schema_editor.js?v=ui-performance-parallel-load" defer></script>
+<script src="/static/js/schema_editor.js?v=schema-pattern-helper" defer></script>
 {% endblock %}

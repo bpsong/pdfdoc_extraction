@@ -55,4 +55,4 @@ def test_named_schema_route_loads_list_and_detail_in_parallel() -> None:
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
     assert "function resolveSchemaName(requestedName)" in source
     assert "applySchemaPayload(requestedName, detailResult.value)" in source
-    assert "schema_editor.js?v=ui-performance-parallel-load" in template
+    assert "schema_editor.js?v=schema-pattern-helper" in template

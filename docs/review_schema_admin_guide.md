@@ -252,20 +252,53 @@ fields:
 
 ## Validation
 
+The Schema Editor validates draft structure before saving. Invalid regular
+expressions, contradictory minimum/maximum constraints, duplicate or empty
+field keys, and missing schema metadata are shown as linked findings. Selecting
+a finding moves focus to the affected control. Save remains disabled until the
+draft is valid, while Validate stays available to refresh the full result.
+
+The editor warns before discarding unsaved changes when switching schemas,
+starting a new schema, duplicating, navigating away, or closing the page. Long
+schemas include a field outline for direct navigation. At narrower widths the
+schema list, editor, and YAML preview reflow instead of requiring page-level
+horizontal scrolling.
+
+Validation findings appear above the YAML preview with an error count and the
+affected field path. Select a finding to move focus to its field. Object-array
+paths use the compact form `line_items[].unit_price` so nested fields remain
+easy to identify.
+
+### Testing a string pattern
+
+Every string Pattern control includes an Example value and **Test pattern**
+button. Enter a representative extracted value and run the test before saving:
+
+- **Example matches this pattern** confirms that the expression compiles and
+  accepts the example.
+- **Example does not match this pattern** means the expression is valid but the
+  example would fail review validation.
+- A red syntax message means the regular expression does not compile; Save is
+  disabled until the pattern is corrected.
+
+Pattern tests run on the server with the same Python regular-expression
+semantics used during review validation. Example values and test results are
+editor aids only and are not written into the schema file.
+
 After changing `config.yaml` or schema files, run:
 
 ```powershell
-C:\Python313\python.exe -m tools.config_check --verbose validate --config config.yaml
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --import-checks
 ```
 
 To validate schema behavior through tests:
 
 ```powershell
-C:\Python313\python.exe -m pytest -v test\services\test_schema_service.py test\standard_step\review\test_review_gate.py
+.\.venv\Scripts\python.exe -m pytest -v test\services\test_schema_service.py test\standard_step\review\test_review_gate.py
 ```
 
 To run the schema-driven review and schema-editor visual checks:
 
 ```powershell
-C:\Python313\python.exe -m pytest -v test\visual\test_schema_review_visual.py
+.\.venv\Scripts\python.exe -m pytest -v test\visual\test_schema_review_visual.py
 ```

@@ -184,6 +184,36 @@ class SchemaService:
             findings.extend(self._validate_value(str(field_key), value, field_config))
         return findings
 
+    @staticmethod
+    def test_pattern(pattern: Any, example: Any) -> dict[str, Any]:
+        """Compile a schema regex and test one example using review semantics."""
+
+        if not isinstance(pattern, str) or not pattern:
+            return {
+                "valid": False,
+                "matches": False,
+                "error": "Pattern is required.",
+            }
+        if not isinstance(example, str):
+            return {
+                "valid": False,
+                "matches": False,
+                "error": "Example value must be a string.",
+            }
+        try:
+            compiled = re.compile(pattern)
+        except re.error as exc:
+            return {
+                "valid": False,
+                "matches": False,
+                "error": f"Invalid regular expression: {exc}.",
+            }
+        return {
+            "valid": True,
+            "matches": compiled.match(example) is not None,
+            "error": None,
+        }
+
     def schema_hash(self, schema_name: str) -> str | None:
         """Return a SHA-256 hash of a schema file for review traceability."""
         path = self._resolve_schema_path(schema_name)
@@ -430,6 +460,8 @@ class SchemaService:
                 findings.append({"path": f"{path}.default", "message": "Default value must be one of the configured choices."})
         if field_type in {"number", "integer", "float"}:
             findings.extend(self._validate_numeric_config(path, field_config))
+        if field_type == "string":
+            findings.extend(self._validate_string_config(path, field_config))
         if field_type == "object":
             properties = field_config.get("properties")
             if not isinstance(properties, dict):
@@ -451,6 +483,57 @@ class SchemaService:
                     findings.append({"path": f"{item_path}.choices", "message": "Only enum array items can define choices."})
             else:
                 findings.append({"path": f"{path}.items", "message": "Array items must be a mapping."})
+        return findings
+
+    @staticmethod
+    def _validate_string_config(path: str, field_config: dict[str, Any]) -> list[dict[str, str]]:
+        """Validate string length limits and regular-expression syntax."""
+
+        findings: list[dict[str, str]] = []
+        min_length = field_config.get("min_length")
+        max_length = field_config.get("max_length")
+        for key, value in (("min_length", min_length), ("max_length", max_length)):
+            if value is None:
+                continue
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                findings.append(
+                    {
+                        "path": f"{path}.{key}",
+                        "message": f"{key} must be a non-negative integer.",
+                    }
+                )
+        if (
+            isinstance(min_length, int)
+            and not isinstance(min_length, bool)
+            and isinstance(max_length, int)
+            and not isinstance(max_length, bool)
+            and min_length > max_length
+        ):
+            findings.append(
+                {
+                    "path": f"{path}.min_length",
+                    "message": "min_length cannot be greater than max_length.",
+                }
+            )
+        pattern = field_config.get("pattern")
+        if pattern not in (None, ""):
+            if not isinstance(pattern, str):
+                findings.append(
+                    {
+                        "path": f"{path}.pattern",
+                        "message": "pattern must be a string.",
+                    }
+                )
+            else:
+                try:
+                    re.compile(pattern)
+                except re.error as exc:
+                    findings.append(
+                        {
+                            "path": f"{path}.pattern",
+                            "message": f"Invalid regular expression: {exc}.",
+                        }
+                    )
         return findings
 
     @staticmethod

@@ -15,8 +15,10 @@
     const titleInput = document.getElementById("schema-title-input");
     const descriptionInput = document.getElementById("schema-description-input");
     const fieldTree = document.getElementById("schema-field-tree");
+    const fieldOutline = document.getElementById("schema-field-outline");
     const yamlPreview = document.getElementById("schema-yaml-preview");
     const validationResults = document.getElementById("schema-validation-results");
+    const actionGuidance = document.getElementById("schema-action-guidance");
     const warningBox = document.getElementById("schema-warning");
     const errorBox = document.getElementById("schema-error");
     const createButton = document.getElementById("schema-create-button");
@@ -30,6 +32,12 @@
     let draft = emptySchema();
     let dirty = false;
     let schemaSearch = "";
+    let pendingFindings = [];
+    let localFindings = [];
+    let serverFindings = [];
+    let validationState = "";
+    const patternExamples = new Map();
+    const patternResults = new Map();
 
     function emptySchema() {
         return { title: "", description: "", fields: {} };
@@ -84,6 +92,60 @@
         element.classList.toggle("hidden", !message);
     }
 
+    function findingId(path) {
+        return `schema-finding-${String(path).replace(/[^a-zA-Z0-9_-]+/g, "-")}`;
+    }
+
+    function combinedFindings() {
+        const findings = [...pendingFindings, ...localFindings, ...serverFindings];
+        return findings.filter((finding, index) => (
+            findings.findIndex((candidate) => candidate.path === finding.path && candidate.message === finding.message) === index
+        ));
+    }
+
+    function pathsMatch(controlPath, findingPath) {
+        return controlPath === findingPath || controlPath === findingPath.replace(/\.items\./g, ".");
+    }
+
+    function findingFor(path, prop) {
+        const findingPath = prop ? `${path}.${prop}` : path;
+        return combinedFindings().find((finding) => pathsMatch(findingPath, finding.path)) || null;
+    }
+
+    function fieldErrorMarkup(path, prop) {
+        const finding = findingFor(path, prop);
+        if (!finding) {
+            return "";
+        }
+        return `<span id="${findingId(finding.path)}" class="schema-field-error text-xs text-error">${escapeHtml(finding.message)}</span>`;
+    }
+
+    function invalidAttributes(path, prop) {
+        const finding = findingFor(path, prop);
+        return finding
+            ? ` aria-invalid="true" aria-describedby="${findingId(finding.path)}"`
+            : "";
+    }
+
+    function patternTester(path, prop, value) {
+        const key = `${path}.${prop}`;
+        const result = patternResults.get(key);
+        const resultClass = result ? ` schema-pattern-result-${result.tone}` : "";
+        return `
+            <div class="schema-pattern-control">
+                ${fieldControl(path, prop, "Pattern", value)}
+                <div class="schema-pattern-tester" data-pattern-tester="${escapeHtml(key)}">
+                    <label class="form-control">
+                        <span class="label-text">Example value</span>
+                        <input class="input input-bordered input-xs" type="text" data-pattern-example="${escapeHtml(key)}" value="${escapeHtml(patternExamples.get(key) || "")}" placeholder="Value to test">
+                    </label>
+                    <button class="btn btn-outline btn-xs" type="button" data-test-pattern="${escapeHtml(key)}" data-pattern-path="${escapeHtml(path)}" data-pattern-prop="${escapeHtml(prop)}">Test pattern</button>
+                    <span class="schema-pattern-result${resultClass}" data-pattern-result="${escapeHtml(key)}" role="status" aria-live="polite" tabindex="-1">${escapeHtml(result ? result.message : "")}</span>
+                </div>
+            </div>
+        `;
+    }
+
     function fieldEntries(container) {
         return Object.entries(container || {}).filter(([, config]) => config && typeof config === "object");
     }
@@ -135,6 +197,8 @@
 
     function markDirty() {
         dirty = true;
+        serverFindings = [];
+        validationState = "";
         render();
     }
 
@@ -172,7 +236,8 @@
         return `
             <label class="form-control">
                 <span class="label-text">${escapeHtml(label)}</span>
-                <input class="input input-bordered input-xs" type="${escapeHtml(type)}" data-field-prop="${escapeHtml(prop)}" data-field-path="${escapeHtml(path)}" value="${escapeHtml(value ?? "")}">
+                <input class="input input-bordered input-xs" type="${escapeHtml(type)}" data-field-prop="${escapeHtml(prop)}" data-field-path="${escapeHtml(path)}" value="${escapeHtml(value ?? "")}"${invalidAttributes(path, prop)}>
+                ${fieldErrorMarkup(path, prop)}
             </label>
         `;
     }
@@ -209,10 +274,11 @@
 
     function stringControls(config, path, prefix = "") {
         const target = prefix ? config.items || {} : config;
+        const patternProp = `${prefix}pattern`;
         return `
             ${fieldControl(path, `${prefix}min_length`, "Min length", target.min_length, "number")}
             ${fieldControl(path, `${prefix}max_length`, "Max length", target.max_length, "number")}
-            ${fieldControl(path, `${prefix}pattern`, "Pattern", target.pattern)}
+            ${patternTester(path, patternProp, target.pattern)}
             ${fieldControl(path, `${prefix}placeholder`, "Placeholder", target.placeholder)}
             ${checkboxControl(path, `${prefix}multiline`, "Multiline", Boolean(target.multiline))}
         `;
@@ -282,7 +348,8 @@
             <div class="schema-field-row" data-row-path="${escapeHtml(fullPath)}">
                 <label class="form-control">
                     <span class="label-text">Key</span>
-                    <input class="input input-bordered input-xs" data-field-prop="key" data-field-path="${escapeHtml(fullPath)}" value="${escapeHtml(key)}">
+                    <input class="input input-bordered input-xs" data-field-prop="key" data-field-path="${escapeHtml(fullPath)}" value="${escapeHtml(key)}"${invalidAttributes(fullPath, "key")}>
+                    ${fieldErrorMarkup(fullPath, "key")}
                 </label>
                 <label class="form-control">
                     <span class="label-text">Label</span>
@@ -352,15 +419,219 @@
         yamlPreview.textContent = renderYamlValue(draft, 0).trimStart() + "\n";
     }
 
+    function collectClientFindings() {
+        const findings = [];
+        const name = nameInput.value.trim();
+        if (!name) {
+            findings.push({ path: "name", message: "Schema file name is required." });
+        } else if (!/^[^\\/]+\.(?:ya?ml|json)$/i.test(name)) {
+            findings.push({ path: "name", message: "Use a file name ending in .yaml, .yml, or .json." });
+        }
+        if (!titleInput.value.trim()) {
+            findings.push({ path: "title", message: "Schema title is required." });
+        }
+
+        function inspectFields(fields, parentPath = "") {
+            fieldEntries(fields).forEach(([key, config]) => {
+                const path = parentPath ? `${parentPath}.${key}` : key;
+                const minLength = config.min_length;
+                const maxLength = config.max_length;
+                if (Number.isInteger(minLength) && Number.isInteger(maxLength) && minLength > maxLength) {
+                    findings.push({ path: `${path}.min_length`, message: "Min length cannot be greater than max length." });
+                }
+                const minValue = config.min_value;
+                const maxValue = config.max_value;
+                if (Number.isFinite(minValue) && Number.isFinite(maxValue) && minValue > maxValue) {
+                    findings.push({ path: `${path}.min_value`, message: "Min value cannot be greater than max value." });
+                }
+                if (config.type === "object") {
+                    inspectFields(config.properties || {}, path);
+                } else if (config.type === "array" && config.items && config.items.type === "object") {
+                    inspectFields(config.items.properties || {}, path);
+                } else if (config.type === "array" && config.items) {
+                    const itemMinLength = config.items.min_length;
+                    const itemMaxLength = config.items.max_length;
+                    if (Number.isInteger(itemMinLength) && Number.isInteger(itemMaxLength) && itemMinLength > itemMaxLength) {
+                        findings.push({ path: `${path}.items.min_length`, message: "Min length cannot be greater than max length." });
+                    }
+                    const itemMinValue = config.items.min_value;
+                    const itemMaxValue = config.items.max_value;
+                    if (Number.isFinite(itemMinValue) && Number.isFinite(itemMaxValue) && itemMinValue > itemMaxValue) {
+                        findings.push({ path: `${path}.items.min_value`, message: "Min value cannot be greater than max value." });
+                    }
+                }
+            });
+        }
+
+        inspectFields(draft.fields || {});
+        return findings;
+    }
+
+    function renderFieldOutline() {
+        const links = [];
+        function visit(fields, parentPath = "", depth = 0) {
+            fieldEntries(fields).forEach(([key, config]) => {
+                const path = parentPath ? `${parentPath}.${key}` : key;
+                const depthClass = `schema-outline-depth-${Math.min(depth, 4)}`;
+                links.push(`
+                    <button class="schema-outline-link ${depthClass}" type="button" data-outline-path="${escapeHtml(path)}">
+                        <span class="font-medium">${escapeHtml(config.label || key)}</span>
+                        <span class="font-mono text-base-content/50">${escapeHtml(key)}</span>
+                    </button>
+                `);
+                if (config.type === "object") {
+                    visit(config.properties || {}, path, depth + 1);
+                } else if (config.type === "array" && config.items && config.items.type === "object") {
+                    visit(config.items.properties || {}, path, depth + 1);
+                }
+            });
+        }
+        visit(draft.fields || {});
+        fieldOutline.innerHTML = links.join("");
+        fieldOutline.classList.toggle("hidden", links.length < 4);
+    }
+
+    function focusFinding(path) {
+        if (path === "name" || path === "title") {
+            const input = path === "name" ? nameInput : titleInput;
+            input.scrollIntoView({ behavior: "smooth", block: "center" });
+            input.focus();
+            return;
+        }
+        const input = Array.from(fieldTree.querySelectorAll("[data-field-path][data-field-prop]"))
+            .find((candidate) => pathsMatch(`${candidate.dataset.fieldPath}.${candidate.dataset.fieldProp}`, path));
+        if (input) {
+            input.scrollIntoView({ behavior: "smooth", block: "center" });
+            input.focus();
+        }
+    }
+
+    function displayFindingPath(path) {
+        return String(path).replace(/\.items(?=\.|$)/g, "[]");
+    }
+
+    async function testPattern(button) {
+        const key = button.dataset.testPattern;
+        const path = button.dataset.patternPath;
+        const prop = button.dataset.patternProp;
+        const tester = button.closest("[data-pattern-tester]");
+        const exampleInput = tester.querySelector("[data-pattern-example]");
+        const resultElement = tester.querySelector("[data-pattern-result]");
+        const patternInput = Array.from(fieldTree.querySelectorAll("[data-field-path][data-field-prop]"))
+            .find((candidate) => candidate.dataset.fieldPath === path && candidate.dataset.fieldProp === prop);
+        const pattern = patternInput ? patternInput.value : "";
+        const example = exampleInput.value;
+        patternExamples.set(key, example);
+        button.disabled = true;
+        resultElement.className = "schema-pattern-result";
+        resultElement.textContent = "Testing…";
+        try {
+            const result = await window.DocFlow.apiPost("/api/schemas/pattern-test", { pattern, example });
+            serverFindings = serverFindings.filter((finding) => !pathsMatch(key, finding.path));
+            let testResult;
+            if (!result.valid) {
+                const message = result.error || "Pattern is invalid.";
+                serverFindings.push({ path: key, message });
+                validationState = "invalid";
+                testResult = { tone: "error", message };
+            } else if (result.matches) {
+                testResult = { tone: "success", message: "Example matches this pattern." };
+            } else {
+                testResult = { tone: "warning", message: "Example does not match this pattern." };
+            }
+            patternResults.set(key, testResult);
+            render();
+            const refreshedResult = fieldTree.querySelector(`[data-pattern-result="${CSS.escape(key)}"]`);
+            if (refreshedResult) {
+                refreshedResult.focus({ preventScroll: true });
+            }
+        } catch (error) {
+            patternResults.set(key, { tone: "error", message: error.message || "Unable to test pattern." });
+            resultElement.className = "schema-pattern-result schema-pattern-result-error";
+            resultElement.textContent = error.message || "Unable to test pattern.";
+            button.disabled = false;
+        }
+    }
+
+    function showInlineFinding(input, finding) {
+        if (!input || !finding) {
+            return;
+        }
+        const id = findingId(finding.path);
+        input.setAttribute("aria-invalid", "true");
+        input.setAttribute("aria-describedby", id);
+        let message = input.parentElement.querySelector(`#${id}`);
+        if (!message) {
+            message = document.createElement("span");
+            message.id = id;
+            message.className = "schema-field-error text-xs text-error";
+            input.insertAdjacentElement("afterend", message);
+        }
+        message.textContent = finding.message;
+    }
+
+    function renderValidationSummary() {
+        const findings = combinedFindings();
+        if (findings.length) {
+            validationResults.innerHTML = `
+                <div class="font-medium text-error mb-2">${findings.length} validation ${findings.length === 1 ? "issue" : "issues"}</div>
+                <div class="schema-finding-list">
+                    ${findings.map((finding) => `
+                        <button class="schema-finding-link" type="button" data-finding-path="${escapeHtml(finding.path)}">
+                            <span class="font-mono">${escapeHtml(displayFindingPath(finding.path))}</span>: ${escapeHtml(finding.message)}
+                        </button>
+                    `).join("")}
+                </div>
+            `;
+        } else if (validationState === "valid") {
+            validationResults.innerHTML = '<span class="text-success font-medium">Valid</span>';
+        } else {
+            validationResults.innerHTML = "";
+        }
+    }
+
+    function renderActionState() {
+        const findings = combinedFindings();
+        const hasBlockingFinding = findings.length > 0;
+        saveButton.disabled = hasBlockingFinding;
+        validateButton.disabled = false;
+        const invalidName = findings.some((finding) => finding.path === "name");
+        const invalidTitle = findings.some((finding) => finding.path === "title");
+        nameInput.setAttribute("aria-invalid", String(invalidName));
+        titleInput.setAttribute("aria-invalid", String(invalidTitle));
+        if (invalidName) {
+            nameInput.setAttribute("aria-describedby", "schema-action-guidance");
+        } else {
+            nameInput.removeAttribute("aria-describedby");
+        }
+        if (invalidTitle) {
+            titleInput.setAttribute("aria-describedby", "schema-action-guidance");
+        } else {
+            titleInput.removeAttribute("aria-describedby");
+        }
+        const metadataMessages = findings
+            .filter((finding) => finding.path === "name" || finding.path === "title")
+            .map((finding) => finding.message);
+        actionGuidance.textContent = hasBlockingFinding
+            ? metadataMessages.length
+                ? `${metadataMessages.join(" ")} Resolve all validation issues before saving.`
+                : "Resolve the validation issues before saving. Validate remains available to refresh the full error list."
+            : dirty
+                ? "Unsaved changes. Validate or save when ready."
+                : "";
+    }
+
     function render() {
         renderSchemaList();
         const displayName = nameInput.value || currentName || "New schema";
         detailTitle.textContent = `${dirty ? "* " : ""}${displayName}`;
+        localFindings = collectClientFindings();
         fieldTree.innerHTML = renderFieldRows(draft.fields || {}, []);
-        saveButton.disabled = !nameInput.value.trim();
-        validateButton.disabled = !nameInput.value.trim();
         duplicateButton.disabled = !currentName;
         renderPreview();
+        renderFieldOutline();
+        renderActionState();
+        renderValidationSummary();
     }
 
     function applySchemaPayload(schemaName, payload) {
@@ -374,7 +645,12 @@
         const warning = payload.active_review_warning;
         setBox(warningBox, warning ? `${warning.message} (${warning.active_review_count})` : "");
         dirty = false;
-        validationResults.innerHTML = "";
+        pendingFindings = [];
+        localFindings = [];
+        serverFindings = [];
+        validationState = "";
+        patternExamples.clear();
+        patternResults.clear();
         render();
     }
 
@@ -440,13 +716,21 @@
 
     async function saveSchema() {
         syncMeta();
+        localFindings = collectClientFindings();
+        if (pendingFindings.length || localFindings.length) {
+            validationState = "invalid";
+            render();
+            validationResults.focus();
+            return;
+        }
         const name = nameInput.value.trim();
         const validation = await window.DocFlow.apiPost(`/api/schemas/${encodeURIComponent(name || currentName || "draft.yaml")}/validate`, { schema: draft });
         if (!validation.valid) {
-            validationResults.innerHTML = (validation.findings || []).map((finding) => `
-                <div class="text-error">${escapeHtml(finding.path)}: ${escapeHtml(finding.message)}</div>
-            `).join("") || '<span class="text-error font-medium">Schema validation failed</span>';
+            serverFindings = validation.findings || [];
+            validationState = "invalid";
             setBox(errorBox, "Fix validation findings before saving this schema.");
+            render();
+            validationResults.focus();
             return;
         }
         const method = currentName ? window.DocFlow.apiPut : window.DocFlow.apiPost;
@@ -465,15 +749,20 @@
 
     async function validateSchema() {
         syncMeta();
+        localFindings = collectClientFindings();
+        if (pendingFindings.length || localFindings.length) {
+            serverFindings = [];
+            validationState = "invalid";
+            render();
+            validationResults.focus();
+            return;
+        }
         const name = nameInput.value.trim() || currentName || "draft.yaml";
         const result = await window.DocFlow.apiPost(`/api/schemas/${encodeURIComponent(name)}/validate`, { schema: draft });
-        if (result.valid) {
-            validationResults.innerHTML = '<span class="text-success font-medium">Valid</span>';
-        } else {
-            validationResults.innerHTML = (result.findings || []).map((finding) => `
-                <div class="text-error">${escapeHtml(finding.path)}: ${escapeHtml(finding.message)}</div>
-            `).join("");
-        }
+        serverFindings = result.findings || [];
+        validationState = result.valid ? "valid" : "invalid";
+        render();
+        validationResults.focus();
         const warning = result.active_review_warning;
         setBox(warningBox, warning ? `${warning.message} (${warning.active_review_count})` : "");
     }
@@ -504,21 +793,30 @@
     function updateField(pathText, prop, value) {
         const found = findField(pathText);
         if (!found.container || !found.key || !found.field) {
-            return;
+            return false;
         }
+        const findingPath = `${pathText}.${prop}`;
+        pendingFindings = pendingFindings.filter((finding) => finding.path !== findingPath);
         const target = targetForProp(found.field, prop);
         const propName = prop.startsWith("items.") ? prop.slice("items.".length) : prop;
         if (prop === "key") {
             const nextKey = String(value || "").trim();
-            if (!nextKey || nextKey === found.key) {
-                return;
+            if (!nextKey) {
+                pendingFindings.push({ path: findingPath, message: "Field key cannot be empty." });
+                return false;
+            }
+            if (nextKey === found.key) {
+                return true;
             }
             if (found.container[nextKey]) {
-                setBox(errorBox, `Field key "${nextKey}" already exists at this level.`);
-                return;
+                pendingFindings.push({ path: findingPath, message: `Field key "${nextKey}" already exists at this level.` });
+                return false;
             }
-            found.container[nextKey] = found.field;
-            delete found.container[found.key];
+            const entries = Object.entries(found.container);
+            Object.keys(found.container).forEach((key) => delete found.container[key]);
+            entries.forEach(([key, config]) => {
+                found.container[key === found.key ? nextKey : key] = config;
+            });
         } else if (prop === "type") {
             found.field.type = value;
             if (value === "object") {
@@ -573,8 +871,12 @@
         } else {
             found.field[prop] = value;
         }
+        if (prop.endsWith("pattern")) {
+            patternResults.delete(findingPath);
+        }
         setBox(errorBox, "");
         markDirty();
+        return true;
     }
 
     function targetForProp(field, prop) {
@@ -668,9 +970,13 @@
         }
     }
 
+    function confirmDiscardChanges() {
+        return !dirty || window.confirm("Discard unsaved schema changes?");
+    }
+
     schemaList.addEventListener("click", (event) => {
         const button = event.target.closest("[data-schema-name]");
-        if (button) {
+        if (button && button.dataset.schemaName !== currentName && confirmDiscardChanges()) {
             loadSchema(button.dataset.schemaName).catch((error) => setBox(errorBox, error.message));
         }
     });
@@ -680,6 +986,11 @@
     });
 
     fieldTree.addEventListener("click", (event) => {
+        const testPatternButton = event.target.closest("[data-test-pattern]");
+        if (testPatternButton) {
+            testPattern(testPatternButton).catch((error) => setBox(errorBox, error.message));
+            return;
+        }
         const deleteButton = event.target.closest("[data-delete-field]");
         if (deleteButton) {
             deleteField(deleteButton.dataset.deleteField);
@@ -691,13 +1002,38 @@
         }
     });
 
+    fieldTree.addEventListener("input", (event) => {
+        const exampleInput = event.target.closest("[data-pattern-example]");
+        if (!exampleInput) {
+            return;
+        }
+        patternExamples.set(exampleInput.dataset.patternExample, exampleInput.value);
+        const tester = exampleInput.closest("[data-pattern-tester]");
+        const resultElement = tester.querySelector("[data-pattern-result]");
+        patternResults.delete(exampleInput.dataset.patternExample);
+        resultElement.className = "schema-pattern-result";
+        resultElement.textContent = "";
+    });
+
     fieldTree.addEventListener("change", (event) => {
         const input = event.target.closest("[data-field-prop]");
         if (!input) {
             return;
         }
         const value = input.type === "checkbox" ? input.checked : input.value;
-        updateField(input.dataset.fieldPath, input.dataset.fieldProp, value);
+        const updated = updateField(input.dataset.fieldPath, input.dataset.fieldProp, value);
+        if (!updated) {
+            dirty = true;
+            validationState = "invalid";
+            localFindings = collectClientFindings();
+            const path = `${input.dataset.fieldPath}.${input.dataset.fieldProp}`;
+            showInlineFinding(input, combinedFindings().find((finding) => finding.path === path));
+            detailTitle.textContent = detailTitle.textContent.startsWith("* ")
+                ? detailTitle.textContent
+                : `* ${detailTitle.textContent}`;
+            renderActionState();
+            renderValidationSummary();
+        }
     });
 
     [titleInput, descriptionInput].forEach((input) => {
@@ -707,7 +1043,12 @@
         });
     });
 
-    nameInput.addEventListener("input", render);
+    nameInput.addEventListener("input", () => {
+        dirty = true;
+        serverFindings = [];
+        validationState = "";
+        render();
+    });
     schemaSearchInput.addEventListener("input", (event) => {
         schemaSearch = event.target.value || "";
         renderSchemaList();
@@ -715,6 +1056,9 @@
     saveButton.addEventListener("click", () => saveSchema().catch((error) => setBox(errorBox, error.message)));
     validateButton.addEventListener("click", () => validateSchema().catch((error) => setBox(errorBox, error.message)));
     createButton.addEventListener("click", () => {
+        if (!confirmDiscardChanges()) {
+            return;
+        }
         currentName = "";
         draft = emptySchema();
         nameInput.value = "new_schema.yaml";
@@ -724,11 +1068,16 @@
         validationResults.innerHTML = "";
         setBox(warningBox, "");
         setBox(errorBox, "");
+        pendingFindings = [];
+        serverFindings = [];
+        validationState = "";
+        patternExamples.clear();
+        patternResults.clear();
         dirty = true;
         render();
     });
     duplicateButton.addEventListener("click", async () => {
-        if (!currentName) {
+        if (!currentName || !confirmDiscardChanges()) {
             return;
         }
         const newName = window.prompt("Duplicate schema as", currentName.replace(/(\.ya?ml|\.json)$/i, "_copy$1"));
@@ -758,6 +1107,28 @@
         }
         if (!window.confirm("Leave this page and discard unsaved schema changes?")) {
             event.preventDefault();
+        }
+    });
+
+    fieldOutline.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-outline-path]");
+        if (!button) {
+            return;
+        }
+        const row = fieldTree.querySelector(`[data-row-path="${CSS.escape(button.dataset.outlinePath)}"]`);
+        if (row) {
+            row.scrollIntoView({ behavior: "smooth", block: "start" });
+            const input = row.querySelector("[data-field-prop='key']");
+            if (input) {
+                input.focus({ preventScroll: true });
+            }
+        }
+    });
+
+    validationResults.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-finding-path]");
+        if (button) {
+            focusFinding(button.dataset.findingPath);
         }
     });
 

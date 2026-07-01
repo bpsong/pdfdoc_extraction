@@ -115,6 +115,55 @@ def test_schema_structure_validation_covers_invalid_configs(tmp_path):
     } <= paths
 
 
+def test_schema_structure_validation_rejects_invalid_string_constraints(tmp_path):
+    service = _service(tmp_path)
+
+    findings = service.validate_schema(
+        {
+            "fields": {
+                "invalid_pattern": {"type": "string", "pattern": "["},
+                "invalid_range": {
+                    "type": "string",
+                    "min_length": 5,
+                    "max_length": 2,
+                },
+                "invalid_length_type": {"type": "string", "min_length": 1.5},
+                "items": {
+                    "type": "array",
+                    "items": {"type": "string", "pattern": "("},
+                },
+            }
+        }
+    )
+
+    paths = {finding["path"] for finding in findings}
+    assert {
+        "invalid_pattern.pattern",
+        "invalid_range.min_length",
+        "invalid_length_type.min_length",
+        "items.items.pattern",
+    } <= paths
+    pattern_finding = next(
+        finding for finding in findings if finding["path"] == "invalid_pattern.pattern"
+    )
+    assert "Invalid regular expression" in pattern_finding["message"]
+
+
+def test_pattern_helper_uses_review_matching_semantics(tmp_path):
+    service = _service(tmp_path)
+
+    assert service.test_pattern(r"^[A-Z]{2}\d{3}$", "AB123") == {
+        "valid": True,
+        "matches": True,
+        "error": None,
+    }
+    assert service.test_pattern(r"^[A-Z]{2}\d{3}$", "bad")["matches"] is False
+    invalid = service.test_pattern("[", "AB123")
+    assert invalid["valid"] is False
+    assert "Invalid regular expression" in invalid["error"]
+    assert service.test_pattern("", "AB123")["error"] == "Pattern is required."
+
+
 def test_payload_validation_covers_all_value_types(tmp_path):
     service = _service(tmp_path)
     schema = {

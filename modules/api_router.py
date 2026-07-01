@@ -1435,6 +1435,18 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         return {"schemas": SchemaService(config).list_schemas()}
 
+    @router.post("/api/schemas/pattern-test")
+    async def test_schema_pattern(request: Request, user: str = Depends(get_current_user)):
+        """Test a schema regex against an example without saving it."""
+
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        return SchemaService(config).test_pattern(
+            payload.get("pattern"),
+            payload.get("example"),
+        )
+
     @router.post("/api/schemas")
     async def create_schema(request: Request, user: str = Depends(get_current_user)):
         """Create a new review schema file."""

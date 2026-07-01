@@ -110,6 +110,54 @@ def test_schema_api_requires_admin_user(tmp_path, monkeypatch) -> None:
     assert response.json()["detail"] == "Admin role required"
 
 
+def test_schema_api_rejects_invalid_pattern_and_length_range(tmp_path, monkeypatch) -> None:
+    client, _ = _client(tmp_path, monkeypatch)
+
+    response = client.post(
+        "/api/schemas/invalid.yaml/validate",
+        json={
+            "schema": {
+                "title": "Invalid",
+                "fields": {
+                    "supplier": {
+                        "type": "string",
+                        "pattern": "[",
+                        "min_length": 10,
+                        "max_length": 2,
+                    }
+                },
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["valid"] is False
+    assert {finding["path"] for finding in payload["findings"]} == {
+        "supplier.pattern",
+        "supplier.min_length",
+    }
+
+
+def test_schema_pattern_test_api_reports_match_and_syntax_errors(tmp_path, monkeypatch) -> None:
+    client, _ = _client(tmp_path, monkeypatch)
+
+    matching = client.post(
+        "/api/schemas/pattern-test",
+        json={"pattern": r"^[A-Z]{2}\d{3}$", "example": "AB123"},
+    )
+    invalid = client.post(
+        "/api/schemas/pattern-test",
+        json={"pattern": "[", "example": "AB123"},
+    )
+
+    assert matching.status_code == 200
+    assert matching.json() == {"valid": True, "matches": True, "error": None}
+    assert invalid.status_code == 200
+    assert invalid.json()["valid"] is False
+    assert "Invalid regular expression" in invalid.json()["error"]
+
+
 def test_schema_api_rejects_absolute_path_outside_schema_directory(tmp_path, monkeypatch) -> None:
     client, _ = _client(tmp_path, monkeypatch)
     outside_schema = tmp_path / "outside.yaml"
