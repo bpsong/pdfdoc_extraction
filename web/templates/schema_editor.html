@@ -34,6 +34,7 @@
         <div id="schema-warning" class="alert alert-warning hidden text-sm"></div>
         <div id="schema-error" class="alert alert-error hidden text-sm"></div>
         <p id="schema-action-guidance" class="schema-action-guidance text-xs text-base-content/60" aria-live="polite"></p>
+        <p id="schema-field-status" class="schema-field-status" role="status" aria-live="polite"></p>
 
         <div class="schema-meta-grid">
             <label class="form-control">
@@ -79,5 +80,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/schema_editor.js?v=schema-pattern-helper" defer></script>
+<script src="/static/js/schema_editor.js?v=schema-field-actions" defer></script>
 {% endblock %}

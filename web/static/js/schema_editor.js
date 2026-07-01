@@ -16,6 +16,7 @@
     const descriptionInput = document.getElementById("schema-description-input");
     const fieldTree = document.getElementById("schema-field-tree");
     const fieldOutline = document.getElementById("schema-field-outline");
+    const fieldStatus = document.getElementById("schema-field-status");
     const yamlPreview = document.getElementById("schema-yaml-preview");
     const validationResults = document.getElementById("schema-validation-results");
     const actionGuidance = document.getElementById("schema-action-guidance");
@@ -229,7 +230,10 @@
         if (!entries.length && !path.length) {
             return '<div class="empty-panel">No fields</div>';
         }
-        return entries.map(([key, config]) => renderFieldRow(key, config, path)).join("");
+        return entries.map(([key, config], index) => renderFieldRow(key, config, path, {
+            canMoveUp: index > 0,
+            canMoveDown: index < entries.length - 1,
+        })).join("");
     }
 
     function fieldControl(path, prop, label, value, type = "text") {
@@ -324,8 +328,9 @@
         return fieldControl(path, "default", "Default", config.default, inputType);
     }
 
-    function renderFieldRow(key, config, path) {
+    function renderFieldRow(key, config, path, movement) {
         const fullPath = [...path, key].join(".");
+        const fieldName = config.label || config.title || key;
         const typeOptions = fieldTypes.map((type) => `<option value="${type}" ${config.type === type ? "selected" : ""}>${type}</option>`).join("");
         const extra = config.type === "enum"
             ? `
@@ -346,6 +351,13 @@
                 : null;
         return `
             <div class="schema-field-row" data-row-path="${escapeHtml(fullPath)}">
+                <div class="schema-field-actions">
+                    <div class="schema-field-order-actions" role="group" aria-label="Reorder ${escapeHtml(fieldName)}">
+                        <button class="btn btn-outline btn-xs" type="button" data-move-field="${escapeHtml(fullPath)}" data-move-direction="up" aria-label="Move ${escapeHtml(fieldName)} up" ${movement.canMoveUp ? "" : "disabled"}>Move up</button>
+                        <button class="btn btn-outline btn-xs" type="button" data-move-field="${escapeHtml(fullPath)}" data-move-direction="down" aria-label="Move ${escapeHtml(fieldName)} down" ${movement.canMoveDown ? "" : "disabled"}>Move down</button>
+                    </div>
+                    <button class="btn btn-outline btn-error btn-xs schema-delete-field" type="button" data-delete-field="${escapeHtml(fullPath)}" aria-label="Delete field ${escapeHtml(fieldName)}">Delete field</button>
+                </div>
                 <label class="form-control">
                     <span class="label-text">Key</span>
                     <input class="input input-bordered input-xs" data-field-prop="key" data-field-path="${escapeHtml(fullPath)}" value="${escapeHtml(key)}"${invalidAttributes(fullPath, "key")}>
@@ -364,7 +376,6 @@
                     <span class="label-text">Required</span>
                 </label>
                 ${checkboxControl(fullPath, "readonly", "Read only", Boolean(config.readonly))}
-                <button class="btn btn-ghost btn-xs" type="button" data-delete-field="${escapeHtml(fullPath)}">Delete</button>
                 ${extra}
                 <label class="form-control">
                     <span class="label-text">Help</span>
@@ -651,6 +662,7 @@
         validationState = "";
         patternExamples.clear();
         patternResults.clear();
+        fieldStatus.textContent = "";
         render();
     }
 
@@ -788,6 +800,51 @@
         const key = parts.pop();
         const container = getFieldContainer(parts);
         return { container, key, field: container && key ? container[key] : null };
+    }
+
+    function fieldPath(parentPath, key) {
+        return parentPath ? `${parentPath}.${key}` : key;
+    }
+
+    function focusFieldAction(pathText, action) {
+        const row = fieldTree.querySelector(`[data-row-path="${CSS.escape(pathText)}"]`);
+        const preferred = row && row.querySelector(`[data-move-direction="${action}"]`);
+        const control = preferred && !preferred.disabled
+            ? preferred
+            : row && (row.querySelector("[data-move-field]:not([disabled])") || row.querySelector("[data-delete-field]"));
+        if (control) {
+            control.focus();
+        }
+    }
+
+    function announceFieldChange(message) {
+        fieldStatus.textContent = "";
+        window.requestAnimationFrame(() => {
+            fieldStatus.textContent = message;
+        });
+    }
+
+    function moveField(pathText, direction) {
+        const found = findField(pathText);
+        if (!found.container || !found.key || !found.field || !["up", "down"].includes(direction)) {
+            return false;
+        }
+        const entries = Object.entries(found.container);
+        const currentIndex = entries.findIndex(([key]) => key === found.key);
+        const nextIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+        if (currentIndex < 0 || nextIndex < 0 || nextIndex >= entries.length) {
+            return false;
+        }
+        [entries[currentIndex], entries[nextIndex]] = [entries[nextIndex], entries[currentIndex]];
+        Object.keys(found.container).forEach((key) => delete found.container[key]);
+        entries.forEach(([key, config]) => {
+            found.container[key] = config;
+        });
+        const fieldName = found.field.label || found.field.title || found.key;
+        markDirty();
+        focusFieldAction(pathText, direction);
+        announceFieldChange(`Moved ${fieldName} ${direction}.`);
+        return true;
     }
 
     function updateField(pathText, prop, value) {
@@ -964,10 +1021,40 @@
 
     function deleteField(pathText) {
         const found = findField(pathText);
-        if (found.container && found.key) {
-            delete found.container[found.key];
-            markDirty();
+        if (!found.container || !found.key || !found.field) {
+            return false;
         }
+        const fieldName = found.field.label || found.field.title || found.key;
+        const confirmed = window.confirm(
+            `Delete field "${fieldName}" from this schema draft?\n\n` +
+            "The field will be permanently removed when you save the schema."
+        );
+        if (!confirmed) {
+            return false;
+        }
+        const parentPath = pathText.split(".").slice(0, -1).join(".");
+        const entries = Object.entries(found.container);
+        const deletedIndex = entries.findIndex(([key]) => key === found.key);
+        delete found.container[found.key];
+        const remaining = Object.keys(found.container);
+        const focusKey = remaining[Math.min(deletedIndex, remaining.length - 1)];
+        const focusPath = focusKey ? fieldPath(parentPath, focusKey) : "";
+        markDirty();
+        if (focusPath) {
+            const nextInput = fieldTree.querySelector(`[data-row-path="${CSS.escape(focusPath)}"] [data-field-prop="key"]`);
+            if (nextInput) {
+                nextInput.focus();
+            }
+        } else {
+            const addControl = parentPath
+                ? fieldTree.querySelector(`[data-add-child="${CSS.escape(parentPath)}"]`)
+                : document.querySelector("[data-add-field]");
+            if (addControl) {
+                addControl.focus();
+            }
+        }
+        announceFieldChange(`Deleted ${fieldName} from the schema draft.`);
+        return true;
     }
 
     function confirmDiscardChanges() {
@@ -989,6 +1076,11 @@
         const testPatternButton = event.target.closest("[data-test-pattern]");
         if (testPatternButton) {
             testPattern(testPatternButton).catch((error) => setBox(errorBox, error.message));
+            return;
+        }
+        const moveButton = event.target.closest("[data-move-field]");
+        if (moveButton) {
+            moveField(moveButton.dataset.moveField, moveButton.dataset.moveDirection);
             return;
         }
         const deleteButton = event.target.closest("[data-delete-field]");
@@ -1073,6 +1165,7 @@
         validationState = "";
         patternExamples.clear();
         patternResults.clear();
+        fieldStatus.textContent = "";
         dirty = true;
         render();
     });

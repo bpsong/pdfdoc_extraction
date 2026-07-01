@@ -137,7 +137,8 @@ Each field has these main settings:
 | **Read only** | Displays the value but prevents the operator from correcting it. Use this only when correction is intentionally prohibited. |
 | **Help** | Short instruction displayed with the field. Explain what the operator should check or enter. |
 | **Default** | Starting value used when the form needs to create a value. It does not repair missing extraction configuration. |
-| **Delete** | Removes the field from the draft form. The change is not permanent until the schema is saved. |
+| **Move up / Move down** | Changes the field's position among fields at the same level. Nested fields remain inside their current object or array. |
+| **Delete field** | Opens a confirmation before removing the field from the draft form. The change is not permanent until the schema is saved. |
 
 The add-field toolbar contains the most common types. To use `integer`,
 `float`, `date`, or `datetime`, add a field first and then select the required
@@ -146,6 +147,11 @@ value from its **Type** list.
 Use simple keys made from lowercase letters, numbers, and underscores, for
 example `policy_number` or `invoice_date`. Do not use the label as the key
 unless it is also the exact key returned by extraction.
+
+Review schemas can contain multiple arrays of objects. This differs from an
+extraction task's field configuration, which supports at most one
+`List[Any]` table field. The extraction pipeline editor explains and enforces
+that task-specific limit; it does not limit arrays in this Schema Editor.
 
 ### Choose the right field type
 

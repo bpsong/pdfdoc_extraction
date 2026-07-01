@@ -368,6 +368,72 @@ def test_schema_editor_visual_renders_rich_schema_controls(page: Page, visual_ap
     _assert_nonblank_screenshot(page)
 
 
+def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app: dict[str, str]) -> None:
+    page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
+    rows = page.locator("#schema-field-tree > .schema-field-row")
+    rows.first.wait_for()
+
+    def top_level_paths() -> list[str]:
+        return rows.evaluate_all("nodes => nodes.map(node => node.dataset.rowPath)")
+
+    assert top_level_paths()[:2] == ["supplier", "invoice_amount"]
+    assert page.locator('[data-move-field="supplier"][data-move-direction="up"]').is_disabled()
+    assert page.locator('[data-move-field="line_items"][data-move-direction="down"]').is_disabled()
+    delete_supplier = page.locator('[data-delete-field="supplier"]')
+    assert delete_supplier.text_content() == "Delete field"
+    assert "btn-error" in (delete_supplier.get_attribute("class") or "")
+
+    page.locator('[data-move-field="supplier"][data-move-direction="down"]').click()
+    assert top_level_paths()[:2] == ["invoice_amount", "supplier"]
+    page.locator("#schema-field-status").wait_for()
+    assert page.locator("#schema-field-status").text_content() == "Moved Supplier down."
+    assert page.evaluate("document.activeElement?.dataset.moveField") == "supplier"
+    assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
+    outline_paths = page.locator("#schema-field-outline [data-outline-path]").evaluate_all(
+        "nodes => nodes.map(node => node.dataset.outlinePath)"
+    )
+    assert outline_paths[:2] == ["invoice_amount", "supplier"]
+    preview = page.locator("#schema-yaml-preview").text_content() or ""
+    assert preview.index("invoice_amount:") < preview.index("supplier:")
+
+    page.locator('[data-move-field="supplier"][data-move-direction="up"]').click()
+    assert top_level_paths()[:2] == ["supplier", "invoice_amount"]
+    assert page.evaluate("document.activeElement?.dataset.moveField") == "supplier"
+    assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
+
+    page.locator('[data-move-field="line_items.quantity"][data-move-direction="up"]').click()
+    nested_paths = page.locator(
+        '[data-row-path="line_items"] .schema-field-children > .schema-field-row'
+    ).evaluate_all("nodes => nodes.map(node => node.dataset.rowPath)")
+    assert nested_paths[:2] == ["line_items.quantity", "line_items.sku"]
+    assert top_level_paths()[-1] == "line_items"
+    assert page.evaluate("document.activeElement?.dataset.moveField") == "line_items.quantity"
+    assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
+
+    dialog_messages: list[str] = []
+
+    def dismiss_delete(dialog) -> None:
+        dialog_messages.append(dialog.message)
+        dialog.dismiss()
+
+    page.once("dialog", dismiss_delete)
+    page.locator('[data-delete-field="approved"]').click()
+    assert page.locator('[data-row-path="approved"]').count() == 1
+    assert dialog_messages == [
+        'Delete field "Approved" from this schema draft?\n\n'
+        "The field will be permanently removed when you save the schema."
+    ]
+
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.locator('[data-delete-field="approved"]').click()
+    assert page.locator('[data-row-path="approved"]').count() == 0
+    page.locator("#schema-field-status").wait_for()
+    assert page.locator("#schema-field-status").text_content() == "Deleted Approved from the schema draft."
+    assert page.evaluate("document.activeElement?.dataset.fieldPath") == "reviewed_at"
+    assert (page.locator("#schema-detail-title").text_content() or "").startswith("* ")
+    _assert_no_horizontal_overflow(page)
+
+
 def test_operator_visual_login_hides_and_blocks_admin_surfaces(
     page: Page, visual_app: dict[str, str]
 ) -> None:

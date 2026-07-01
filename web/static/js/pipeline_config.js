@@ -674,13 +674,13 @@
                         ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: true, ariaLabel: `Extraction guidance for ${fieldKey}` })}
                         ${schemaControls}
                     </div>
-                    ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Only one List of objects field can be configured.</div>' : ""}
+                    ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review schemas in Schemas may contain multiple arrays of objects.</div>' : ""}
                 </div>
             `;
         }).join("");
         return `${tableKeys.length > 1 ? '<div class="alert alert-error py-2 text-xs">Only one table field is supported. Change extra fields to a scalar type.</div>' : ""}${section("Extraction fields", `
             <div class="flex justify-between items-center gap-3 mb-3">
-                <p class="text-xs text-base-content/60">${escapeHtml(hint || "Define scalar fields and one optional table-style field without editing JSON.")}</p>
+                <p class="text-xs text-base-content/60">${escapeHtml(hint || "Define scalar fields and one optional table-style field for extraction. Review schemas are configured separately and may contain multiple arrays of objects.")}</p>
                 <button class="btn btn-outline btn-xs" type="button" data-param-action="add-extract-field">Add field</button>
             </div>
             <div class="space-y-3">${controls || '<div class="empty-panel">No extraction fields configured</div>'}</div>
