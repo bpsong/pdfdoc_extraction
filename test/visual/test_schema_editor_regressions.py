@@ -40,6 +40,29 @@ def test_schema_editor_has_accessible_guidance_outline_and_responsive_rules() ->
     assert "overflow: hidden;" in styles
 
 
+def test_schema_and_pipeline_editors_share_admin_panel_structure() -> None:
+    schema_template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
+    pipeline_template = (ROOT / "web/templates/pipeline_config.html").read_text(encoding="utf-8")
+    styles = (ROOT / "web/static/css/app.css").read_text(encoding="utf-8")
+
+    assert schema_template.count('class="admin-panel ') == 3
+    assert schema_template.count('class="admin-panel-header"') == 3
+    assert "schema-panel-header" not in schema_template
+    assert pipeline_template.count('class="admin-panel ') == 7
+    assert pipeline_template.count('class="admin-panel-header"') == 6
+    assert 'class="card ' not in pipeline_template
+    assert 'class="panel-header"' not in pipeline_template
+    assert schema_template.count("admin-panel-title") == 3
+    assert pipeline_template.count("admin-panel-title") == 6
+    assert ".admin-panel" in styles
+    assert ".admin-panel-header" in styles
+    assert ".admin-panel-heading" in styles
+    assert ".admin-panel-title" in styles
+    assert ".admin-panel-subtitle" in styles
+    assert ".admin-panel-actions" in styles
+    assert ".schema-panel-header" not in styles
+
+
 def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:
     source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")

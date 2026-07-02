@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -202,7 +203,7 @@ def visual_app(tmp_path_factory: pytest.TempPathFactory):
     env["CONFIG_PATH"] = str(config_path)
     env["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
     process = subprocess.Popen(
-        [r"C:\Python313\python.exe", "-m", "uvicorn", "web.server:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+        [sys.executable, "-m", "uvicorn", "web.server:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
         cwd=Path(__file__).resolve().parents[2],
         env=env,
         stdout=subprocess.PIPE,
@@ -260,6 +261,16 @@ def _assert_nonblank_screenshot(page: Page) -> None:
 def _assert_no_horizontal_overflow(page: Page) -> None:
     overflow = page.evaluate("() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
     assert overflow <= 4
+
+
+def _computed_style(page: Page, selector: str, properties: list[str]) -> dict[str, str]:
+    return page.locator(selector).first.evaluate(
+        """(node, names) => {
+            const style = getComputedStyle(node);
+            return Object.fromEntries(names.map(name => [name, style[name]]));
+        }""",
+        properties,
+    )
 
 
 def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visual_app: dict[str, str]) -> None:
@@ -366,6 +377,45 @@ def test_schema_editor_visual_renders_rich_schema_controls(page: Page, visual_ap
     page.set_viewport_size({"width": 390, "height": 900})
     page.locator("#schema-field-tree").wait_for()
     _assert_nonblank_screenshot(page)
+
+
+def test_admin_panel_styles_match_and_wrap_without_clipping(page: Page, visual_app: dict[str, str]) -> None:
+    panel_properties = ["backgroundColor", "borderColor", "borderRadius", "boxShadow", "overflow"]
+    header_properties = ["minHeight", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]
+    title_properties = ["fontSize", "fontWeight", "lineHeight"]
+
+    page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
+    page.locator("#schema-field-tree .schema-field-row").first.wait_for()
+    schema_panel = _computed_style(page, ".schema-detail-panel", panel_properties)
+    schema_header = _computed_style(page, ".schema-detail-panel .admin-panel-header", header_properties)
+    schema_title = _computed_style(page, ".schema-detail-panel .admin-panel-title", title_properties)
+    assert page.locator(".schema-editor-workspace > .admin-panel").count() == 3
+    assert schema_panel["overflow"] == "visible"
+
+    page.goto(f"{visual_app['base_url']}/app/admin/pipeline")
+    page.locator("#pipeline-config-workspace").wait_for()
+    pipeline_panel = _computed_style(page, ".pipeline-draft-panel", panel_properties)
+    pipeline_header = _computed_style(page, ".pipeline-draft-panel .admin-panel-header", header_properties)
+    pipeline_title = _computed_style(page, ".pipeline-draft-panel .admin-panel-title", title_properties)
+    assert page.locator(".pipeline-config-workspace > .admin-panel").count() == 7
+    assert page.locator(".pipeline-config-workspace > .card").count() == 0
+    assert page.locator("#pipeline-reset-button").count() == 1
+    assert page.locator("#pipeline-save-draft-button").count() == 1
+    assert page.locator("#pipeline-validate-button").count() == 1
+    assert page.locator("#pipeline-diff-button").count() == 1
+    assert schema_panel == pipeline_panel
+    assert schema_header == pipeline_header
+    assert schema_title == pipeline_title
+    _assert_nonblank_screenshot(page)
+    _assert_no_horizontal_overflow(page)
+
+    page.set_viewport_size({"width": 390, "height": 900})
+    page.reload()
+    page.locator(".pipeline-draft-panel .admin-panel-actions").wait_for()
+    assert _computed_style(page, ".pipeline-draft-panel .admin-panel-header", ["flexWrap"])["flexWrap"] == "wrap"
+    assert _computed_style(page, ".pipeline-draft-panel .admin-panel-actions", ["width"])["width"] != "auto"
+    _assert_nonblank_screenshot(page)
+    _assert_no_horizontal_overflow(page)
 
 
 def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app: dict[str, str]) -> None:

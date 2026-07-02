@@ -201,6 +201,58 @@
     gap: 1rem;
 }
 
+.admin-panel {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex-direction: column;
+    border: 1px solid oklch(var(--b3));
+    border-radius: 0.5rem;
+    background: oklch(var(--b1));
+    box-shadow: 0 1px 2px oklch(var(--bc) / 0.08);
+}
+
+.admin-panel-header {
+    display: flex;
+    min-height: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1rem;
+    border-bottom: 1px solid oklch(var(--b3));
+}
+
+.admin-panel-heading {
+    min-width: 0;
+}
+
+.admin-panel-title {
+    overflow: hidden;
+    color: oklch(var(--bc));
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.25rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-panel-subtitle {
+    overflow: hidden;
+    color: oklch(var(--bc) / 0.5);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-panel-actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
 .app-table-region {
     overflow-x: auto;
     border: 1px solid oklch(var(--b3));
@@ -872,10 +924,6 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0 0.75rem 0.75rem 3.5rem;
-}
-
-.pipeline-draft-panel .panel-header {
-    flex-wrap: wrap;
 }
 
 .pipeline-editor-body {
@@ -1611,16 +1659,6 @@
     max-width: 100%;
 }
 
-.schema-panel-header {
-    min-height: 3.5rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 1rem;
-    border-bottom: 1px solid oklch(var(--b3));
-}
-
 .schema-list {
     padding: 0.75rem;
     display: flex;
@@ -2167,9 +2205,15 @@
         grid-template-columns: 1fr;
     }
 
-    .pipeline-draft-panel .panel-header > .flex {
-        width: 100%;
+    .admin-panel-header {
         flex-wrap: wrap;
+        align-items: flex-start;
+    }
+
+    .admin-panel-actions {
+        width: 100%;
+        min-width: 0;
+        flex-shrink: 1;
     }
 
     .property-field-grid,
@@ -2241,22 +2285,13 @@
     .schema-list-panel,
     .schema-detail-panel,
     .schema-preview-panel,
-    .schema-panel-header,
+    .admin-panel-header,
     .schema-meta-grid,
     .schema-toolbar,
     .schema-field-tree,
     .schema-field-row {
         min-width: 0;
         max-width: 100%;
-    }
-
-    .schema-panel-header {
-        flex-wrap: wrap;
-    }
-
-    .schema-panel-header > .flex {
-        width: 100%;
-        flex-wrap: wrap;
     }
 
     .schema-field-outline {

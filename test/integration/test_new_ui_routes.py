@@ -384,6 +384,8 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="pipeline-config-workspace"' in response.text
     assert 'id="pipeline-publish-button"' in response.text
+    assert response.text.count('class="admin-panel ') == 7
+    assert response.text.count('class="admin-panel-header"') == 6
     assert "/static/js/pipeline_config.js?v=task34" in response.text
 
 

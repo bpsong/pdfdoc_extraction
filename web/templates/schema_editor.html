@@ -6,10 +6,14 @@
 
 {% block content %}
 <div id="schema-editor-workspace" class="schema-editor-workspace" data-schema-name="{{ schema_name|default('') }}">
-    <section class="schema-list-panel bg-base-100 border border-base-300 rounded-lg">
-        <div class="schema-panel-header">
-            <h2 class="font-semibold text-sm">Schemas</h2>
-            <span id="schema-count" class="badge badge-ghost badge-sm">0</span>
+    <section class="admin-panel schema-list-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">Schemas</h2>
+            </div>
+            <div class="admin-panel-actions">
+                <span id="schema-count" class="badge badge-ghost badge-sm">0</span>
+            </div>
         </div>
         <div class="px-3 pt-3">
             <input id="schema-search-input" class="input input-bordered input-sm w-full" type="search" placeholder="Search schemas">
@@ -19,13 +23,13 @@
         </div>
     </section>
 
-    <section class="schema-detail-panel bg-base-100 border border-base-300 rounded-lg">
-        <div class="schema-panel-header">
-            <div class="min-w-0">
-                <h2 id="schema-detail-title" class="font-semibold text-sm truncate">Schema</h2>
-                <p id="schema-detail-hash" class="text-xs text-base-content/50 truncate"></p>
+    <section class="admin-panel schema-detail-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 id="schema-detail-title" class="admin-panel-title">Schema</h2>
+                <p id="schema-detail-hash" class="admin-panel-subtitle"></p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="admin-panel-actions">
                 <button id="schema-duplicate-button" class="btn btn-outline btn-sm" type="button" disabled>Duplicate</button>
                 <button id="schema-save-button" class="btn btn-primary btn-sm" type="button" disabled>Save</button>
             </div>
@@ -68,10 +72,14 @@
         </div>
     </section>
 
-    <section class="schema-preview-panel bg-base-100 border border-base-300 rounded-lg">
-        <div class="schema-panel-header">
-            <h2 class="font-semibold text-sm">YAML Preview</h2>
-            <button id="schema-validate-button" class="btn btn-outline btn-sm" type="button" disabled>Validate</button>
+    <section class="admin-panel schema-preview-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">YAML Preview</h2>
+            </div>
+            <div class="admin-panel-actions">
+                <button id="schema-validate-button" class="btn btn-outline btn-sm" type="button" disabled>Validate</button>
+            </div>
         </div>
         <div id="schema-validation-results" class="schema-validation-results text-sm" role="status" aria-live="polite" tabindex="-1"></div>
         <pre id="schema-yaml-preview" class="schema-yaml-preview"></pre>

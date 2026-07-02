@@ -7,8 +7,8 @@
 
 {% block content %}
 <div class="pipeline-config-workspace" id="pipeline-config-workspace">
-    <section class="card bg-base-100 shadow-sm pipeline-guide-panel">
-        <div class="card-body p-4">
+    <section class="admin-panel pipeline-guide-panel">
+        <div class="p-4">
             <div class="flex flex-wrap items-center gap-3 text-sm">
                 <span class="font-semibold">Publish sequence</span>
                 <span class="badge badge-outline">1 Edit draft</span>
@@ -20,11 +20,11 @@
             </div>
         </div>
     </section>
-    <section class="card bg-base-100 shadow-sm pipeline-active-panel">
-        <div class="panel-header">
-            <div>
-                <h2 class="font-semibold">Active Pipeline</h2>
-                <p class="text-xs text-base-content/50" id="pipeline-active-summary">0 steps</p>
+    <section class="admin-panel pipeline-active-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">Active Pipeline</h2>
+                <p class="admin-panel-subtitle" id="pipeline-active-summary">0 steps</p>
             </div>
         </div>
         <div class="pipeline-active-list" id="pipeline-active-list">
@@ -32,13 +32,13 @@
         </div>
     </section>
 
-    <section class="card bg-base-100 shadow-sm pipeline-draft-panel">
-        <div class="panel-header">
-            <div>
-                <h2 class="font-semibold">Draft Pipeline</h2>
-                <p class="text-xs text-base-content/50" id="pipeline-draft-summary">0 steps</p>
+    <section class="admin-panel pipeline-draft-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">Draft Pipeline</h2>
+                <p class="admin-panel-subtitle" id="pipeline-draft-summary">0 steps</p>
             </div>
-            <div class="flex gap-2">
+            <div class="admin-panel-actions">
                 <button class="btn btn-ghost btn-sm" id="pipeline-reset-button" type="button">Reset to Active</button>
                 <button class="btn btn-outline btn-sm" id="pipeline-save-draft-button" type="button">Save Draft</button>
                 <button class="btn btn-outline btn-sm" id="pipeline-validate-button" type="button">Validate</button>
@@ -55,11 +55,11 @@
         </div>
     </section>
 
-    <section class="card bg-base-100 shadow-sm pipeline-editor-panel">
-        <div class="panel-header">
-            <div class="min-w-0">
-                <h2 class="font-semibold truncate" id="pipeline-editor-title">Step Parameters</h2>
-                <p class="text-xs text-base-content/50 truncate" id="pipeline-editor-subtitle">Select a draft step</p>
+    <section class="admin-panel pipeline-editor-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title" id="pipeline-editor-title">Step Parameters</h2>
+                <p class="admin-panel-subtitle" id="pipeline-editor-subtitle">Select a draft step</p>
             </div>
         </div>
         <div class="card-body p-4 pipeline-editor-body" id="pipeline-editor-body">
@@ -67,29 +67,35 @@
         </div>
     </section>
 
-    <section class="card bg-base-100 shadow-sm pipeline-yaml-panel">
-        <div class="panel-header">
-            <h2 class="font-semibold">YAML Preview</h2>
+    <section class="admin-panel pipeline-yaml-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">YAML Preview</h2>
+            </div>
         </div>
         <pre class="pipeline-yaml-preview" id="pipeline-yaml-preview">Loading...</pre>
     </section>
 
-    <section class="card bg-base-100 shadow-sm pipeline-validation-panel">
-        <div class="panel-header">
-            <div>
-                <h2 class="font-semibold">Validation</h2>
-                <p class="text-xs text-base-content/50" id="pipeline-validation-summary">Not validated</p>
+    <section class="admin-panel pipeline-validation-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">Validation</h2>
+                <p class="admin-panel-subtitle" id="pipeline-validation-summary">Not validated</p>
             </div>
-            <button class="btn btn-outline btn-sm" id="pipeline-diff-button" type="button">Diff</button>
+            <div class="admin-panel-actions">
+                <button class="btn btn-outline btn-sm" id="pipeline-diff-button" type="button">Diff</button>
+            </div>
         </div>
         <div class="pipeline-validation-results" id="pipeline-validation-results">
             <div class="empty-panel">No validation run</div>
         </div>
     </section>
 
-    <section class="card bg-base-100 shadow-sm pipeline-diff-panel">
-        <div class="panel-header">
-            <h2 class="font-semibold">Diff</h2>
+    <section class="admin-panel pipeline-diff-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">Diff</h2>
+            </div>
         </div>
         <pre class="pipeline-diff-preview" id="pipeline-diff-preview">No diff loaded</pre>
     </section>
