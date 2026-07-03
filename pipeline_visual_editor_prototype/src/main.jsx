@@ -2150,7 +2150,7 @@ function CopyButton({ getText }) {
     setTimeout(() => setStatus("idle"), 1500);
   }
   return (
-    <button className="pipeline-action btn-xs" onClick={handleCopy} title="Copy to clipboard">
+    <button className="pipeline-action code-copy-button btn-xs" onClick={handleCopy} title="Copy to clipboard">
       <Copy size={13} />
       {status === "copied" ? "Copied" : status === "error" ? "Failed" : null}
     </button>
