@@ -143,7 +143,8 @@ C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py
 
 ## Implementation Notes
 
-- Follow `tasks/process-task-list.mdc`: implement one sub-task at a time, mark it complete, then pause for approval before starting the next sub-task.
+- Historical workflow note: this task list was implemented one subtask at a
+  time. Current task-list rules live in the repository-root `AGENTS.md`.
 - Prefer small helper methods with type hints and Google-style docstrings for snapshot conversion and state aggregation.
 - Keep UI logic independent of known built-in task names except for optional display category badges and action links.
 - If a schema migration is introduced, include migration tests and backward compatibility tests for databases without the new column.

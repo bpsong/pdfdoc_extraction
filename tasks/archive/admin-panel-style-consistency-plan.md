@@ -1,5 +1,10 @@
 # Shared Admin Panel Style Consistency Plan
 
+> **Status: Completed and archived (2026-07-03).** The shared production panel
+> and header styles were implemented for the Schema and Pipeline editors. The
+> focused visual suite passed 13 tests, and the full suite passed 735 tests with
+> 4 skips when the plan was archived.
+
 ## Objective
 
 Create one reusable panel surface and header treatment for the production
@@ -122,4 +127,3 @@ npm run build:css
 - No menus, drawers, popovers, or focus rings are clipped.
 - No functional behavior or API contract changes.
 - Focused visual tests and the full pytest suite pass.
-

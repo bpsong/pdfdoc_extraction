@@ -195,6 +195,26 @@ Additional rules:
 - Ruff and pytest-cov are not currently project dependencies. Do not claim or
   require those checks without first adding and documenting the tooling.
 
+## Task List Workflow
+
+When implementing work from a checkbox-based task list:
+
+- Before starting, identify the next unchecked task and confirm its prerequisites
+  are complete.
+- Mark a task or subtask `[x]` promptly after its implementation and required
+  verification are complete. Mark a parent task complete only after all of its
+  required subtasks are complete.
+- Add newly discovered required work to the task list instead of leaving it only
+  in chat, comments, or personal notes.
+- If the task list contains a `Relevant Files` section, keep it accurate with
+  every file created or materially changed and a concise description of its
+  purpose.
+- Apply the proportional testing rules above before marking work complete. A
+  task-list parent does not by itself require the full suite unless the change is
+  broad or constitutes a substantial refactor.
+- Do not stage, commit, or pause after each subtask unless the user explicitly
+  requests that workflow.
+
 ## Completion Checklist
 
 Before handing off a change:

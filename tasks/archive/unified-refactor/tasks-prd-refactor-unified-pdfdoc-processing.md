@@ -117,7 +117,8 @@
 
 ## Notes
 
-- Follow `tasks/process-task-list.mdc`: implement one sub-task at a time, mark it complete, then pause for approval before starting the next sub-task.
+- Historical workflow note: this task list was implemented one subtask at a
+  time. Current task-list rules live in the repository-root `AGENTS.md`.
 - Keep the existing file-based status system only during the migration until SQLite-backed UI/API paths are working. By the migration cleanup task, SQLite must be the sole workflow-state source of truth, and intermediate text status files must no longer be required for any configured workflow step.
 - Preserve watch-folder ingestion as a first-class input path. Do not remove or disable `modules/watch_folder_monitor.py`; adapt it to create the same SQLite batch/document records as web uploads while keeping existing archive/error behavior.
 - Do not remove existing tests. Update incrementally.
