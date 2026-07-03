@@ -286,7 +286,7 @@ The left navigation menu provides the following work areas. If the menu is colla
 | **Reports** | View processing and review activity summaries. |
 | **Settings** | View non-secret runtime settings and configured paths. |
 
-Administrators also see **Admin Home**, **Users**, **Schemas**, **Validation**, **Pipeline**, **Tasks**, and **Audit**. These administrative areas are not available to operators.
+Administrators also see **Overview**, **Users**, **Pipeline**, **Review Forms**, **Task Catalog**, **Validation**, and **Audit Log**. These administrative areas are not available to operators.
 
 #### Human Review
 
@@ -326,13 +326,13 @@ The current application replaces the previous separate review program. Operators
 
 Migrated capabilities:
 
-- administrators maintain review forms from **Schemas**;
+- administrators maintain review forms from **Review Forms**;
 - operators work on documents from **Review Queue**;
 - drafts, comparisons, corrections, and completed values remain associated with the document;
 - administrators review schema and pipeline findings from **Validation**;
-- relevant administrator changes are recorded in **Audit**.
+- relevant administrator changes are recorded in **Audit Log**.
 
-Administrators should use the unified schema editor to maintain review schemas. Operators should use the review queue rather than editing schema files directly.
+Administrators should use the unified Review Form Editor to maintain review schemas. Operators should use the review queue rather than editing schema files directly.
 
 #### Split Results
 
@@ -649,16 +649,17 @@ PDF previews in the web app are served only when the registered file path resolv
 
 The administrator menu provides these workflows:
 
-- **Admin Home:** review configuration health, pipeline and review summaries, split status, and recent audit events.
+- **Overview:** review configuration health, pipeline and review summaries, split status, and recent audit events.
 - **Users:** change the administrator or operator password after confirming the current administrator password.
 - **Pipeline:** prepare a draft, maintain task order and task parameters including review thresholds and split behavior, compare it with the active configuration, and use the required **Save Draft** -> **Validate** -> **Publish** sequence. Editing or saving invalid parameters cannot enable Publish. Publish repeats the authoritative server-side validation and does not write `config.yaml` when any blocking finding remains.
-- **Tasks:** inspect the workflow task classes available to the pipeline.
-- **Audit:** inspect relevant configuration and governance events.
+- **Review Forms:** configure the fields and controls operators use to review extracted document data.
+- **Task Catalog:** inspect the workflow task classes available to the pipeline.
 - **Validation:** review active configuration, schema, and pipeline findings.
+- **Audit Log:** inspect relevant configuration and governance events.
 
 ##### Administrator Audit History
 
-The **Audit** page at `/app/admin/audit` shows the append-only history of
+The **Audit Log** page at `/app/admin/audit` shows the append-only history of
 administrator configuration and governance actions. It is available only to the
 administrator role. The page displays events whose event type begins with
 `admin_`; operational document events such as review activity, processing
@@ -1658,13 +1659,13 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Failures | `/app/failures` | Operator and administrator | Select **Failures** from the left navigation menu. |
 | Reports | `/app/reports` | Operator and administrator | Select **Reports** from the left navigation menu. |
 | Settings | `/app/settings` | Operator and administrator | Select **Settings** from the left navigation menu. |
-| Admin Home | `/app/admin` | Administrator only | Sign in as the administrator, then select **Admin Home** from the left navigation menu. |
+| Overview | `/app/admin` | Administrator only | Sign in as the administrator, then select **Overview** from the left navigation menu. |
 | Users | `/app/admin/users` | Administrator only | Sign in as the administrator, then select **Users** from the left navigation menu. |
-| Schemas | `/app/schemas` | Administrator only | Sign in as the administrator, then select **Schemas** from the left navigation menu. |
-| Validation | `/app/settings/validation` | Administrator only | Sign in as the administrator, then select **Validation** from the left navigation menu. |
 | Pipeline | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, then select **Pipeline** from the left navigation menu. |
-| Tasks | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Tasks** from the left navigation menu. |
-| Audit | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit** from the left navigation menu. |
+| Review Forms | `/app/schemas` | Administrator only | Sign in as the administrator, then select **Review Forms** from the left navigation menu. |
+| Task Catalog | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Task Catalog** from the left navigation menu. |
+| Validation | `/app/settings/validation` | Administrator only | Sign in as the administrator, then select **Validation** from the left navigation menu. |
+| Audit Log | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit Log** from the left navigation menu. |
 
 The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface.
 

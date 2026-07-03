@@ -674,7 +674,7 @@
                         ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: true, ariaLabel: `Extraction guidance for ${fieldKey}` })}
                         ${schemaControls}
                     </div>
-                    ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review schemas in Schemas may contain multiple arrays of objects.</div>' : ""}
+                    ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review forms may contain multiple arrays of objects.</div>' : ""}
                 </div>
             `;
         }).join("");

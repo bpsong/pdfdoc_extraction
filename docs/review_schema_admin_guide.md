@@ -4,10 +4,10 @@ This guide explains how an application administrator creates and maintains the
 form that operators use to check extracted document data in the **Review
 Queue**. You can use either:
 
-- the **Schema Editor** at `http://localhost:8000/app/schemas`; or
+- the **Review Form Editor** at `http://localhost:8000/app/schemas`; or
 - a plain-text editor to create or change a schema file directly.
 
-Use the Schema Editor for routine changes. It shows the available settings,
+Use the Review Form Editor for routine changes. It shows the available settings,
 checks the schema before saving, and reduces the risk of formatting errors.
 Direct file editing is useful for copying a known schema, making several
 changes at once, or maintaining configuration through an established
@@ -17,7 +17,7 @@ administrative process.
 
 - [What a Review Schema Controls](#what-a-review-schema-controls)
 - [Before You Begin](#before-you-begin)
-- [Method 1: Use the Schema Editor](#method-1-use-the-schema-editor)
+- [Method 1: Use the Review Form Editor](#method-1-use-the-review-form-editor)
 - [Method 2: Create or Edit a Schema File Directly](#method-2-create-or-edit-a-schema-file-directly)
 - [Schema File Reference](#schema-file-reference)
 - [Complete Example: Invoice Review Form](#complete-example-invoice-review-form)
@@ -71,18 +71,18 @@ Avoid changing a production schema while operators are actively reviewing
 documents that use it. Complete the change, validate it, and test the form
 before asking operators to continue.
 
-## Method 1: Use the Schema Editor
+## Method 1: Use the Review Form Editor
 
 ### Open the editor
 
 1. Start the application and sign in as an administrator.
-2. Open `http://localhost:8000/app/schemas`, or select **Schemas** from the
+2. Open `http://localhost:8000/app/schemas`, or select **Review Forms** from the
    administrator navigation.
 3. Select an existing schema from the left panel, or select **New Schema**.
 
 The page contains three areas:
 
-- **Schemas** lists the available schema files and provides a search box.
+- **Review Forms** lists the available schema files and provides a search box.
 - The center panel contains the schema name, description, and fields.
 - **YAML Preview** shows the current draft in YAML form. The preview is read
   only; use the center-panel controls to make changes. When the selected file
@@ -151,7 +151,7 @@ unless it is also the exact key returned by extraction.
 Review schemas can contain multiple arrays of objects. This differs from an
 extraction task's field configuration, which supports at most one
 `List[Any]` table field. The extraction pipeline editor explains and enforces
-that task-specific limit; it does not limit arrays in this Schema Editor.
+that task-specific limit; it does not limit arrays in the Review Form Editor.
 
 ### Choose the right field type
 
@@ -245,7 +245,7 @@ tasks:
 ```
 
 In this example, edit `schemas\invoice.yaml`. Do not assume that every schema
-shown in the Schema Editor is currently used by a workflow.
+shown in the Review Form Editor is currently used by a workflow.
 
 The schema folders can be configured explicitly:
 
@@ -256,7 +256,7 @@ schema:
 ```
 
 Relative folder names are resolved from the folder containing `config.yaml`.
-If several schema folders are configured, the Schema Editor saves new schemas
+If several schema folders are configured, the Review Form Editor saves new schemas
 in the first folder. Ask the application owner before changing these folders.
 
 ### Safe direct-editing procedure
@@ -273,7 +273,7 @@ in the first folder. Ask the application owner before changing these folders.
 7. Correct all findings and save the file again if necessary.
 8. Test a representative document in the Review Queue.
 
-If the file does not appear in the Schema Editor, check its folder and file
+If the file does not appear in the Review Form Editor, check its folder and file
 extension. If the editor cannot load it after a change, restore the backup and
 validate the restored file.
 
@@ -327,7 +327,7 @@ fields:
 | `version` | Recommended | Administrator-controlled version label, such as `"1.1"` |
 | `fields` | Yes | Collection of fields displayed on the review form |
 
-The Schema Editor preserves a version already present in a file, but it does
+The Review Form Editor preserves a version already present in a file, but it does
 not provide a separate Version control. Change `version` through direct file
 editing when your administrative process requires it.
 
@@ -544,7 +544,7 @@ prove that the form matches real documents. After every material change:
 
 If possible, ask an operator who did not design the schema to perform this
 test. Confusing wording and missing instructions are easier to detect during a
-real review than in the Schema Editor.
+real review than in the Review Form Editor.
 
 ## Safely Change an Existing Schema
 
@@ -656,7 +656,7 @@ both configurations when their shared structure changes.
 
 ## Advanced Validation
 
-The Schema Editor is the primary validation method for administrators. After
+The Review Form Editor is the primary validation method for administrators. After
 changing `config.yaml` or schema files directly, an administrator who has
 terminal access can also run the application configuration check from the
 repository root:

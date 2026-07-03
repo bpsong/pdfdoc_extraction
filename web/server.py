@@ -630,8 +630,8 @@ def create_app() -> FastAPI:
         return await render_app_page(
             request,
             "schema_editor.html",
-            page_title="Schema Editor",
-            page_subtitle="Manage schemas used by extraction review workflows.",
+            page_title="Review Form Editor",
+            page_subtitle="Manage forms used by operators to review extracted document data.",
             active_nav="schemas",
             admin_required=True,
         )
@@ -643,8 +643,8 @@ def create_app() -> FastAPI:
         return await render_app_page(
             request,
             "schema_editor.html",
-            page_title="Schema Editor",
-            page_subtitle="Manage schemas used by extraction review workflows.",
+            page_title="Review Form Editor",
+            page_subtitle="Manage forms used by operators to review extracted document data.",
             active_nav="schemas",
             admin_required=True,
             schema_name=schema_name,
@@ -657,7 +657,7 @@ def create_app() -> FastAPI:
         return await render_app_page(
             request,
             "admin_dashboard.html",
-            page_title="Admin",
+            page_title="Admin Overview",
             page_subtitle="Configuration health and governance overview.",
             active_nav="admin_home",
             admin_required=True,
@@ -720,7 +720,7 @@ def create_app() -> FastAPI:
         return await render_app_page(
             request,
             "admin_audit.html",
-            page_title="Admin Audit",
+            page_title="Audit Log",
             page_subtitle="Inspect configuration and governance events.",
             active_nav="audit",
             admin_required=True,

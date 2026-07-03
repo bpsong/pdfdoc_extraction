@@ -105,4 +105,4 @@ def test_extraction_editor_explains_its_single_table_limit() -> None:
     assert "tableKeys.length >= 1" in source
     assert 'option.value === "List[Any]" && tableBlocked' in source
     assert "Extraction tasks support one List of objects field." in source
-    assert "Review schemas in Schemas may contain multiple arrays of objects." in source
+    assert "Review forms may contain multiple arrays of objects." in source

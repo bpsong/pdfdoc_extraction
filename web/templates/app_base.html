@@ -97,28 +97,47 @@
             {% if is_admin_user %}
             <div class="divider my-3 text-xs text-base-content/40">Admin</div>
             <nav class="flex flex-col gap-1" aria-label="Admin navigation">
-                <a href="/app/admin" title="Admin Home" aria-label="Admin Home" data-nav-label="Admin Home"
+                <a href="/app/admin" title="Overview" aria-label="Overview" data-nav-label="Overview"
                     class="nav-link{% if active_nav|default('') == 'admin_home' or current_path == '/app/admin' %} active{% endif %}">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                         aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M3 12l2-2m0 0l7-7 7 7m-9 2v8m4-8v8m5 0a2 2 0 002-2v-7.172a2 2 0 00-.586-1.414l-6-6a2 2 0 00-2.828 0l-6 6A2 2 0 005 10.828V18a2 2 0 002 2h10z" />
                     </svg>
-                    <span>Admin Home</span>
+                    <span>Overview</span>
                 </a>
                 <a href="/app/admin/users" title="Users" aria-label="Users" data-nav-label="Users"
                     class="nav-link{% if active_nav|default('') == 'users' or current_path == '/app/admin/users' %} active{% endif %}">
                     <span>Users</span>
                 </a>
-                <div class="divider my-2 text-[0.65rem] text-base-content/35">Quality</div>
-                <a href="/app/schemas" title="Schemas" aria-label="Schemas" data-nav-label="Schemas"
+                <h2 id="admin-configuration-heading" class="divider my-2 text-[0.65rem] text-base-content/35">Configuration</h2>
+                <div class="flex flex-col gap-1" role="group" aria-labelledby="admin-configuration-heading">
+                <a href="/app/admin/pipeline" title="Pipeline" aria-label="Pipeline" data-nav-label="Pipeline"
+                    class="nav-link{% if active_nav|default('') == 'pipeline' or current_path == '/app/admin/pipeline' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6h16M4 12h10M4 18h7" />
+                    </svg>
+                    <span>Pipeline</span>
+                </a>
+                <a href="/app/schemas" title="Review Forms" aria-label="Review Forms" data-nav-label="Review Forms"
                     class="nav-link{% if active_nav|default('') == 'schemas' or current_path.startswith('/app/schemas') %} active{% endif %}">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                         aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M4 7h16M4 12h16M4 17h10" />
                     </svg>
-                    <span>Schemas</span>
+                    <span>Review Forms</span>
+                </a>
+                <a href="/app/admin/tasks" title="Task Catalog" aria-label="Task Catalog" data-nav-label="Task Catalog"
+                    class="nav-link{% if active_nav|default('') == 'tasks' or current_path == '/app/admin/tasks' %} active{% endif %}">
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 5h6M9 12h6M9 19h6M5 5h.01M5 12h.01M5 19h.01" />
+                    </svg>
+                    <span>Task Catalog</span>
                 </a>
                 <a href="/app/settings/validation" title="Validation" aria-label="Validation" data-nav-label="Validation"
                     class="nav-link{% if active_nav|default('') == 'validation' or current_path == '/app/settings/validation' %} active{% endif %}">
@@ -129,35 +148,19 @@
                     </svg>
                     <span>Validation</span>
                 </a>
-                <div class="divider my-2 text-[0.65rem] text-base-content/35">Configuration</div>
-                <a href="/app/admin/pipeline" title="Pipeline" aria-label="Pipeline" data-nav-label="Pipeline"
-                    class="nav-link{% if active_nav|default('') == 'pipeline' or current_path == '/app/admin/pipeline' %} active{% endif %}">
-                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M4 6h16M4 12h10M4 18h7" />
-                    </svg>
-                    <span>Pipeline</span>
-                </a>
-                <a href="/app/admin/tasks" title="Tasks" aria-label="Tasks" data-nav-label="Tasks"
-                    class="nav-link{% if active_nav|default('') == 'tasks' or current_path == '/app/admin/tasks' %} active{% endif %}">
-                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M9 5h6M9 12h6M9 19h6M5 5h.01M5 12h.01M5 19h.01" />
-                    </svg>
-                    <span>Tasks</span>
-                </a>
-                <div class="divider my-2 text-[0.65rem] text-base-content/35">Compliance</div>
-                <a href="/app/admin/audit" title="Audit" aria-label="Audit" data-nav-label="Audit"
+                </div>
+                <h2 id="admin-compliance-heading" class="divider my-2 text-[0.65rem] text-base-content/35">Compliance</h2>
+                <div class="flex flex-col gap-1" role="group" aria-labelledby="admin-compliance-heading">
+                <a href="/app/admin/audit" title="Audit Log" aria-label="Audit Log" data-nav-label="Audit Log"
                     class="nav-link{% if active_nav|default('') == 'audit' or current_path == '/app/admin/audit' %} active{% endif %}">
                     <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                         aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M9 17v-2a4 4 0 014-4h4m0 0l-3-3m3 3l-3 3M5 4h8a2 2 0 012 2v2M5 4v16h14v-4" />
                     </svg>
-                    <span>Audit</span>
+                    <span>Audit Log</span>
                 </a>
+                </div>
             </nav>
             {% endif %}
 

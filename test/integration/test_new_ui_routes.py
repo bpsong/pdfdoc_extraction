@@ -279,7 +279,7 @@ def test_operator_app_routes_render_shared_shell_without_admin_navigation(monkey
         assert "DocFlow AI" in response.text
         assert 'href="/app/upload"' in response.text
         assert 'href="/app/review"' in response.text
-        assert "Admin Home" not in response.text
+        assert 'data-nav-label="Overview"' not in response.text
         assert 'href="/app/admin' not in response.text
 
 

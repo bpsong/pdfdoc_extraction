@@ -33,22 +33,45 @@ def test_admin_can_access_admin_app_routes(monkeypatch) -> None:
     authenticate(client)
 
     expected_titles = {
-        "/app/admin": "Admin",
-        "/app/schemas": "Schema Editor",
-        "/app/schemas/invoice": "Schema Editor",
+        "/app/admin": "Admin Overview",
+        "/app/schemas": "Review Form Editor",
+        "/app/schemas/invoice": "Review Form Editor",
         "/app/settings/validation": "Validation Center",
         "/app/admin/pipeline": "Pipeline",
         "/app/admin/tasks": "Task Catalog",
-        "/app/admin/audit": "Admin Audit",
+        "/app/admin/audit": "Audit Log",
     }
 
     for route, title in expected_titles.items():
         response = client.get(route)
         assert response.status_code == 200, route
         assert title in response.text
-        assert "Admin Home" in response.text
+        assert "Overview" in response.text
         assert 'href="/app/admin/pipeline"' in response.text
         assert 'href="/app/settings/validation"' in response.text
+
+
+def test_admin_navigation_uses_configuration_workflow_labels(monkeypatch) -> None:
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/app/admin")
+
+    assert response.status_code == 200
+    assert ">Quality</" not in response.text
+    assert 'id="admin-configuration-heading"' in response.text
+    assert 'aria-labelledby="admin-configuration-heading"' in response.text
+    assert 'id="admin-compliance-heading"' in response.text
+    assert 'aria-labelledby="admin-compliance-heading"' in response.text
+    assert 'data-nav-label="Review Forms"' in response.text
+    assert 'data-nav-label="Task Catalog"' in response.text
+    assert 'data-nav-label="Audit Log"' in response.text
+
+    pipeline_position = response.text.index('data-nav-label="Pipeline"')
+    forms_position = response.text.index('data-nav-label="Review Forms"')
+    catalog_position = response.text.index('data-nav-label="Task Catalog"')
+    validation_position = response.text.index('data-nav-label="Validation"')
+    assert pipeline_position < forms_position < catalog_position < validation_position
 
 
 def test_removed_review_simulator_surfaces_are_not_available(monkeypatch) -> None:
@@ -80,7 +103,7 @@ def test_admin_fallback_uses_configured_single_user_when_admin_list_is_empty(mon
     response = client.get("/app/admin")
 
     assert response.status_code == 200
-    assert "Admin Home" in response.text
+    assert "Overview" in response.text
 
 
 def test_admin_task_catalog_api_requires_admin(monkeypatch) -> None:
