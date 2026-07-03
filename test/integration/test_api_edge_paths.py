@@ -70,7 +70,15 @@ def _run(awaitable):
 
 def test_top_level_api_helpers_cover_edge_values(tmp_path, monkeypatch):
     assert api.convert_to_singapore_time(None) == ""
-    assert api.convert_to_singapore_time("2026-01-01T00:00:00Z").endswith("GMT+8")
+    assert api.convert_to_singapore_time(
+        "2026-01-01T00:00:00Z"
+    ) == "01-01-2026 08:00:00 GMT+8"
+    assert api.convert_to_singapore_time(
+        "2026-01-01T00:00:00"
+    ) == "01-01-2026 08:00:00 GMT+8"
+    assert api.convert_to_singapore_time(
+        "2026-01-01T00:00:00+08:00"
+    ) == "01-01-2026 00:00:00 GMT+8"
     assert api.convert_to_singapore_time("invalid") == "invalid"
     assert api._as_string_list(None) == []
     assert api._as_string_list("") == []
@@ -99,6 +107,37 @@ def test_top_level_api_helpers_cover_edge_values(tmp_path, monkeypatch):
     with pytest.raises(HTTPException) as exc_info:
         api.get_current_user("token", auth)
     assert exc_info.value.status_code == 401
+
+
+def test_dependency_resolution_does_not_run_database_migrations(
+    tmp_path,
+    monkeypatch,
+):
+    config = Config({"database.run_migrations_on_startup": True})
+    auth = object()
+    status_manager = object()
+    workflow_manager = object()
+    file_processor = object()
+    migration = Mock()
+
+    monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "config.yaml"))
+    monkeypatch.setattr(api, "ConfigManager", Mock(return_value=config))
+    monkeypatch.setattr(api, "initialize_database", migration)
+    monkeypatch.setattr(api, "AuthUtils", Mock(return_value=auth))
+    monkeypatch.setattr(api, "StatusManager", Mock(return_value=status_manager))
+    monkeypatch.setattr(api, "WorkflowManager", Mock(return_value=workflow_manager))
+    monkeypatch.setattr(api, "FileProcessor", Mock(return_value=file_processor))
+
+    dependencies = api.get_dependencies()
+
+    assert dependencies == (
+        config,
+        auth,
+        status_manager,
+        workflow_manager,
+        file_processor,
+    )
+    migration.assert_not_called()
 
 
 def test_login_body_parsing_success_and_failure_paths(monkeypatch):

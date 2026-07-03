@@ -16,6 +16,10 @@ FAILED_STATUSES = {"failed", "Workflow Trigger Failed", "Pipeline Completed with
 FIXED_USERS = {"admin": "admin", "operator": "operator"}
 
 
+class ReviewLockConflictError(ValueError):
+    """Raised when an active review lock is owned by another operator."""
+
+
 def _new_id() -> str:
     """Create a UUID string for database primary keys."""
     return str(uuid.uuid4())
@@ -655,18 +659,28 @@ class ReviewRepository:
             )
 
     def claim(self, review_item_id: str, locked_by: str, *, timeout_minutes: int = 60) -> dict[str, Any]:
+        """Atomically acquire, renew, or take over an expired review lock."""
         now_dt = datetime.now(timezone.utc)
         expires_at = (now_dt + timedelta(minutes=timeout_minutes)).isoformat()
         now = now_dt.isoformat()
         with transaction(self.conn):
-            self.conn.execute("DELETE FROM review_locks WHERE review_item_id = ?", (review_item_id,))
-            self.conn.execute(
+            cursor = self.conn.execute(
                 """
                 INSERT INTO review_locks(id, review_item_id, locked_by, locked_at, expires_at)
                 VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(review_item_id) DO UPDATE SET
+                    locked_by = excluded.locked_by,
+                    locked_at = excluded.locked_at,
+                    expires_at = excluded.expires_at
+                WHERE review_locks.locked_by = excluded.locked_by
+                   OR review_locks.expires_at <= excluded.locked_at
                 """,
                 (_new_id(), review_item_id, locked_by, now, expires_at),
             )
+            if cursor.rowcount != 1:
+                raise ReviewLockConflictError(
+                    "Review item is locked by another operator."
+                )
             self.conn.execute(
                 """
                 UPDATE review_items

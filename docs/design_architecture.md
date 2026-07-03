@@ -262,6 +262,10 @@ Human review is a persisted stop and new-flow restart:
 The original Prefect flow is not suspended. SQLite retains the business state
 needed for operator work and resume.
 
+Review lock acquisition is enforced atomically in SQLite. The current operator
+may renew a lock, an expired lock may be claimed by another operator, and an
+active lock cannot be overwritten by a competing claim.
+
 ## Split fan-out and fan-in
 
 ```mermaid
@@ -308,7 +312,10 @@ services coordinate cross-table behavior.
 
 Migrations currently apply an idempotent schema and record a coarse version.
 This is not a complete ordered migration chain with per-change upgrade and
-downgrade scripts.
+downgrade scripts. When enabled, migrations run during application process
+startup; HTTP request dependency resolution does not run schema migrations.
+Legacy or direct ingestion helpers may still perform defensive idempotent
+initialization before creating workflow state.
 
 SQLite stores artifact identity, role, path, and metadata. The filesystem
 stores contents. Canonical roles are:
@@ -327,7 +334,9 @@ Runtime directories such as `data/`, `files/`, `processing*/`,
 data and are not source code. Durable task outputs should use
 `register_document_artifact`; registered artifacts must survive cleanup.
 Registration is currently best-effort, so an unregistered successful file
-operation remains a traceability risk.
+operation remains a traceability risk. Database exceptions during registration
+produce a warning containing only the document identifier, artifact role, and
+exception type; the primary file-operation result remains unchanged.
 
 SQLite and local filesystem coupling suit a local or modest-volume
 installation. They do not provide a horizontally scaled worker architecture.

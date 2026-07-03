@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import (
@@ -9,6 +11,7 @@ from modules.db.repositories import (
     ConfigVersionRepository,
     DocumentRepository,
     ExtractionRepository,
+    ReviewLockConflictError,
     ReviewRepository,
     TaskRunRepository,
 )
@@ -21,6 +24,39 @@ class TempConfig:
 
     def get(self, key, default=None):
         return self._values.get(key, default)
+
+
+def test_review_repository_rejects_conflicting_active_claim(tmp_path):
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+
+    with connect(config) as conn:
+        batch = BatchRepository(conn).create(
+            source="web",
+            original_filename="invoice.pdf",
+        )
+        document = DocumentRepository(conn).create_root(
+            batch_id=batch["id"],
+            file_path=str(tmp_path / "invoice.pdf"),
+            original_filename="invoice.pdf",
+        )
+        review = ReviewRepository(conn).create_review_item(
+            batch_id=batch["id"],
+            document_id=document["id"],
+            queue_name="default_review",
+            reason="low_confidence",
+            scope="field",
+        )
+        ReviewRepository(conn).claim(review["id"], "alice")
+
+    with connect(config) as conn:
+        reviews = ReviewRepository(conn)
+        with pytest.raises(ReviewLockConflictError):
+            reviews.claim(review["id"], "bob")
+        lock = reviews.get_lock(review["id"])
+
+    assert lock is not None
+    assert lock["locked_by"] == "alice"
 
 
 def test_repositories_cover_core_state_models(tmp_path):

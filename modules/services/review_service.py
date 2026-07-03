@@ -9,7 +9,14 @@ from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import json_loads
-from modules.db.repositories import AuditRepository, DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
+from modules.db.repositories import (
+    AuditRepository,
+    DocumentRepository,
+    ExtractionRepository,
+    ReviewLockConflictError,
+    ReviewRepository,
+    TaskRunRepository,
+)
 from modules.services.schema_service import SchemaService
 
 
@@ -84,12 +91,15 @@ class ReviewService:
     def claim(self, review_item_id: str, user: str, *, timeout_minutes: int | None = None) -> dict[str, Any]:
         """Claim a review item if unlocked or locked by the same user/expired."""
         item = self._require_item(review_item_id)
-        self._release_expired_lock(review_item_id)
-        lock = self.reviews.get_lock(review_item_id)
-        if lock and lock.get("locked_by") != user:
-            raise ReviewServiceError("Review item is locked by another operator.")
         timeout = timeout_minutes or self._lock_timeout_minutes()
-        claimed = self.reviews.claim(review_item_id, user, timeout_minutes=timeout)
+        try:
+            claimed = self.reviews.claim(
+                review_item_id,
+                user,
+                timeout_minutes=timeout,
+            )
+        except ReviewLockConflictError as exc:
+            raise ReviewServiceError(str(exc)) from exc
         self.documents.update_status(str(item["document_id"]), "in_review")
         self.audit.append(
             event_type="review_claimed",

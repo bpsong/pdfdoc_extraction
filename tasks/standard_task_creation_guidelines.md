@@ -191,7 +191,10 @@ Do not encode artifact paths only in status details. Store durable files on disk
 Artifact registration is currently best-effort and may return `None` when
 there is no persisted document or when registration fails. A task should still
 report the primary file-operation outcome accurately, while logging enough
-non-sensitive information to diagnose missing artifact registration.
+non-sensitive information to diagnose missing artifact registration. The
+shared helper logs database failures centrally using the document identifier,
+artifact role, and exception type; do not add artifact paths, extracted values,
+or exception messages that may contain sensitive data to this warning.
 
 ### 5.4. Task Approval and Dynamic Imports
 

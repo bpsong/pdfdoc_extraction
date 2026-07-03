@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect
 from modules.db.repositories import DocumentRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 def register_document_artifact(
@@ -47,5 +51,12 @@ def register_document_artifact(
                 file_path=resolved_path,
                 metadata=metadata,
             )
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Artifact registration failed for document_id=%s file_type=%s "
+            "error_type=%s",
+            document_id,
+            file_type,
+            type(exc).__name__,
+        )
         return None

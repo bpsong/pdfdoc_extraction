@@ -604,7 +604,7 @@ The unified application uses SQLite as the primary source of workflow state.
 
 #### 4.5.1. Database Initialization
 
-The database location is configured by `database.path`, with a default of `data/app_state.sqlite3`. When `database.run_migrations_on_startup` is true, migrations run during startup for the web server and workflow ingestion paths.
+The database location is configured by `database.path`, with a default of `data/app_state.sqlite3`. When `database.run_migrations_on_startup` is true, migrations run during application process startup rather than during individual HTTP requests. Legacy or direct ingestion helpers may also perform defensive idempotent initialization before creating workflow state.
 
 Administrators should back up the SQLite database together with durable business artifacts. The database contains operational state and review decisions; exported CSV/JSON/PDF files remain filesystem artifacts.
 
@@ -1110,7 +1110,7 @@ pipeline:
   - Sets document state to `review_required` and pauses the workflow.
   - Operators use **Review Queue** to claim an item, save draft corrections, preview changes, and complete review.
   - Completed corrections are persisted in SQLite and the document resumes downstream workflow steps according to `resume_policy`.
-- **Locking:** Review claims use `review.lock_timeout_minutes`, defaulting to 60 minutes.
+- **Locking:** Review claims use `review.lock_timeout_minutes`, defaulting to 60 minutes. Claims are atomic: the current operator can renew a claim, another operator can take over an expired claim, and an active claim cannot be overwritten.
 
 For schema-driven review field types, validation behavior, and LlamaCloud date-format guidance, see the [review schema administrator guide](review_schema_admin_guide.md).
 
@@ -1667,7 +1667,7 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Validation | `/app/settings/validation` | Administrator only | Sign in as the administrator, then select **Validation** from the left navigation menu. |
 | Audit Log | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit Log** from the left navigation menu. |
 
-The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface.
+The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface. Their Singapore-time fields treat timestamps without an offset as UTC and preserve explicit source offsets before displaying GMT+8.
 
 ### Example Configuration Files
 

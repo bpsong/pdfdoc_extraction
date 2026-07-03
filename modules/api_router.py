@@ -189,31 +189,31 @@ class FileStatus(BaseModel):
 def convert_to_singapore_time(utc_time_str: Optional[str]) -> str:
     """Convert UTC time string to Singapore time format (dd-mm-yyyy hh:mm:ss GMT+8).
 
-    Accepts None and returns an empty string in that case.
+    Naive timestamps are treated as UTC. Offset-aware timestamps retain their
+    declared offset before conversion. Accepts None and returns an empty string.
     """
     if not utc_time_str:
         return ""
     try:
-        # Parse the UTC time string
-        if utc_time_str.endswith('Z'):
-            utc_time = datetime.fromisoformat(utc_time_str.replace('Z', '+00:00'))
-        else:
-            utc_time = datetime.fromisoformat(utc_time_str)
-        
-        # Convert to Singapore time (UTC+8)
-        singapore_time = utc_time.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=8)))
-        
-        # Format as dd-mm-yyyy hh:mm:ss GMT+8
+        normalized = (
+            f"{utc_time_str[:-1]}+00:00"
+            if utc_time_str.endswith("Z")
+            else utc_time_str
+        )
+        utc_time = datetime.fromisoformat(normalized)
+        if utc_time.tzinfo is None:
+            utc_time = utc_time.replace(tzinfo=timezone.utc)
+        singapore_time = utc_time.astimezone(timezone(timedelta(hours=8)))
         return singapore_time.strftime("%d-%m-%Y %H:%M:%S GMT+8")
-    except Exception:
-        # Return original string if parsing fails
+    except (AttributeError, TypeError, ValueError):
         return utc_time_str
 
 def get_dependencies() -> tuple:
     """Construct and return core application dependencies.
 
     This centralizes dependency creation to support test injection/mocking and
-    keeps route handlers concise.
+    keeps route handlers concise. Database migrations are handled by process
+    startup and are intentionally not run during request dependency resolution.
 
     Returns:
         Tuple[ConfigManager, AuthUtils, StatusManager, WorkflowManager, FileProcessor]:
@@ -226,8 +226,6 @@ def get_dependencies() -> tuple:
     cfg_env = os.getenv("CONFIG_PATH")
     cfg_path = Path(cfg_env) if cfg_env else Path("config.yaml")
     config = ConfigManager(config_path=cfg_path.resolve())
-    if bool(config.get("database.run_migrations_on_startup", True)):
-        initialize_database(config)
     auth = AuthUtils(config)
     status_mgr = StatusManager(config)
     # WorkflowManager signature expects config_manager
