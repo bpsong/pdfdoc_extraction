@@ -328,4 +328,14 @@ category-to-pipeline mappings, child-specific pinned versions, and resume/fan-in
 rules across those versions.
 
 That complexity should not be part of the initial multiple-pipeline-template
-implementation.
+implementation. The deferred design is documented in
+[Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md),
+which depends on the template and immutable-version model defined here.
+
+## Related Future Design
+
+- [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md)
+  extends this model with a split-and-route pipeline after multiple versioned
+  pipeline templates are available.
+- [Future Design Direction: Visual Pipeline Builder](future-design-visual-pipeline-builder.md)
+  describes the authoring experience for serial pipeline definitions.
