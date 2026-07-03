@@ -378,4 +378,9 @@ function prototypeConfigApi() {
 
 export default defineConfig({
   plugins: [react(), prototypeConfigApi()],
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.js"],
+    globals: true,
+  },
 });

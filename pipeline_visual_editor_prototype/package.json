@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest --run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.1",
@@ -19,7 +21,14 @@
     "vite": "^7.3.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@vitest/ui": "^4.1.9",
     "autoprefixer": "^10.4.22",
-    "playwright": "^1.60.0"
+    "fast-check": "^4.8.0",
+    "jsdom": "^29.1.1",
+    "playwright": "^1.60.0",
+    "vitest": "^4.1.9"
   }
 }

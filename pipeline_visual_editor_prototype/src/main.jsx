@@ -21,7 +21,6 @@ import {
   KeyRound,
   ListChecks,
   PanelRight,
-  Play,
   Plus,
   RefreshCw,
   Save,
@@ -613,7 +612,6 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [publishMessage, setPublishMessage] = useState("");
-  const [simulated, setSimulated] = useState(false);
   const [collapsedPalette, setCollapsedPalette] = useState(false);
   const [csvMetadata, setCsvMetadata] = useState({});
 
@@ -658,6 +656,13 @@ function App() {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    function handleBeforeUnload(e) { e.preventDefault(); e.returnValue = ""; }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
 
   function updateStep(index, patch) {
     setSteps((current) => current.map((step, stepIndex) => (stepIndex === index ? { ...step, ...patch } : step)));
@@ -778,16 +783,13 @@ function App() {
               <button className="btn btn-ghost btn-sm" onClick={loadConfig} disabled={loading || saving}>
                 <RefreshCw size={15} /> Reload file
               </button>
-              <button className="btn btn-outline btn-sm" onClick={() => setSimulated(true)}>
-                <Play size={15} /> Simulate run
-              </button>
               <button className="btn btn-primary btn-sm" onClick={publishDraft} disabled={hasErrors || saving || loading}>
                 <Save size={15} /> {saving ? "Publishing" : "Publish YAML"}
               </button>
             </div>
           </header>
 
-          <SourceBar source={source} dirty={dirty} loading={loading} hasErrors={hasErrors} publishMessage={publishMessage} loadError={loadError} />
+          <SourceBar source={source} dirty={dirty} loading={loading} hasErrors={hasErrors} publishMessage={publishMessage} loadError={loadError} enabledCount={enabledCount} totalCount={steps.length} />
 
           <PipelineActionBar
             activeView={pipelineView}
@@ -795,13 +797,6 @@ function App() {
             findings={findings}
             dirty={dirty}
           />
-
-          <section className="grid gap-3 border-b border-base-300 bg-base-100/70 px-5 py-3 md:grid-cols-4">
-            <StatusStat label="Enabled steps" value={`${enabledCount}/${steps.length}`} icon={ListChecks} />
-            <StatusStat label="Dirty state" value={dirty ? "Unsaved draft" : "Matches file"} icon={dirty ? AlertTriangle : CheckCircle2} tone={dirty ? "warning" : "success"} />
-            <StatusStat label="Validation" value={hasErrors ? "Needs fixes" : "Ready"} icon={hasErrors ? AlertTriangle : CheckCircle2} tone={hasErrors ? "warning" : "success"} />
-            <StatusStat label="Runtime model" value="tasks + pipeline" icon={FileText} />
-          </section>
 
           {loadError ? (
             <div className="m-4 alert alert-error">{loadError}</div>
@@ -824,8 +819,7 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <OrderedPipeline steps={steps} selectedIndex={selectedIndex} onSelect={(index) => setSelectedIndex(index)} onInsert={addTask} />
-                {simulated ? <RunSimulation steps={steps} close={() => setSimulated(false)} /> : null}
+                <OrderedPipeline steps={steps} selectedIndex={selectedIndex} onSelect={(index) => setSelectedIndex(index)} onInsert={addTask} findings={findings} />
               </section>
 
               <PropertiesPanel
@@ -880,7 +874,7 @@ async function preloadCsvMetadata(steps, setCsvMetadata) {
   setCsvMetadata((current) => ({ ...current, ...metadata }));
 }
 
-function SourceBar({ source, dirty, loading, hasErrors, publishMessage, loadError }) {
+function SourceBar({ source, dirty, loading, hasErrors, publishMessage, loadError, enabledCount, totalCount }) {
   return (
     <section className="source-bar">
       <div className="min-w-0">
@@ -889,6 +883,9 @@ function SourceBar({ source, dirty, loading, hasErrors, publishMessage, loadErro
       </div>
       <div className="source-pill">{loading ? "Loading" : dirty ? "Draft changed" : "Clean"}</div>
       <div className={`source-pill ${hasErrors ? "source-pill-warning" : "source-pill-success"}`}>{hasErrors ? "Publish blocked" : "Publish ready"}</div>
+      <span className={`source-pill ${enabledCount === 0 ? "source-pill-warning" : "source-pill-success"}`}>
+        {enabledCount}/{totalCount} enabled
+      </span>
       <div className="min-w-0 text-xs text-base-content/60">
         {loadError || publishMessage || (source?.modifiedTime ? `File modified ${new Date(source.modifiedTime).toLocaleString()}` : "Waiting for file")}
       </div>
@@ -896,22 +893,14 @@ function SourceBar({ source, dirty, loading, hasErrors, publishMessage, loadErro
   );
 }
 
-function StatusStat({ label, value, icon: Icon, tone }) {
-  return (
-    <div className="flex min-w-0 items-center gap-3 rounded-lg border border-base-300 bg-base-100 px-3 py-2">
-      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tone === "success" ? "bg-success/15 text-success" : tone === "warning" ? "bg-warning/15 text-warning" : "bg-primary/10 text-primary"}`}>
-        <Icon size={17} />
-      </span>
-      <div className="min-w-0">
-        <div className="text-xs font-semibold uppercase tracking-wide text-base-content/60">{label}</div>
-        <div className="truncate text-sm font-semibold">{value}</div>
-      </div>
-    </div>
-  );
-}
+const CATEGORY_ORDER = ["Split", "Extraction", "Context", "Storage", "Rules", "Review", "Archive"];
 
 function TaskPalette({ collapsed, setCollapsed, search, setSearch, steps, addTask }) {
   const filtered = taskTemplates.filter((task) => `${task.label} ${task.category} ${task.class}`.toLowerCase().includes(search.toLowerCase()));
+  const groups = CATEGORY_ORDER.map((cat) => ({
+    category: cat,
+    tasks: filtered.filter((t) => t.category === cat),
+  })).filter((g) => g.tasks.length > 0);
   return (
     <section className={`min-w-0 rounded-lg border border-base-300 bg-base-100 ${collapsed ? "xl:w-14" : ""}`}>
       <div className="flex items-center justify-between border-b border-base-300 p-3">
@@ -932,24 +921,30 @@ function TaskPalette({ collapsed, setCollapsed, search, setSearch, steps, addTas
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find task" />
           </label>
           <div className="space-y-2">
-            {filtered.map((task) => {
-              const Icon = task.icon;
-              const alreadyPresent = steps.some((step) => step.key === task.key);
-              return (
-                <button key={task.key} className="task-palette-item" onClick={() => addTask(task)}>
-                  <span className="flex h-9 w-9 items-center justify-center rounded-md bg-base-200 text-base-content/70">
-                    <Icon size={17} />
-                  </span>
-                  <span className="min-w-0 flex-1 text-left">
-                    <span className="block truncate text-sm font-medium">{task.label}</span>
-                    <span className="block truncate text-xs text-base-content/60">{task.category} - {task.class}</span>
-                  </span>
-                  <span className={`btn btn-square btn-xs ${alreadyPresent ? "btn-ghost" : "btn-outline"}`}>
-                    <Plus size={13} />
-                  </span>
-                </button>
-              );
-            })}
+            {groups.map(({ category, tasks }) => (
+              <div key={category}>
+                <div className="palette-category-heading">{category}</div>
+                {tasks.map((task) => {
+                  const Icon = task.icon;
+                  const alreadyPresent = steps.some((step) => step.key === task.key);
+                  return (
+                    <button key={task.key} className="task-palette-item" onClick={() => addTask(task)}>
+                      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-base-200 text-base-content/70">
+                        <Icon size={17} />
+                      </span>
+                      <span className="min-w-0 flex-1 text-left">
+                        <span className="block truncate text-sm font-medium">{task.label}</span>
+                        <span className="block truncate text-xs text-base-content/60">{task.category} - {task.class}</span>
+                      </span>
+                      <span className={`btn btn-square btn-xs ${alreadyPresent ? "btn-ghost" : "btn-outline"}`}>
+                        <Plus size={13} />
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+            {!groups.length && <div className="empty-panel">No matching tasks</div>}
           </div>
         </div>
       ) : null}
@@ -957,15 +952,23 @@ function TaskPalette({ collapsed, setCollapsed, search, setSearch, steps, addTas
   );
 }
 
-function OrderedPipeline({ steps, selectedIndex, onSelect, onInsert }) {
+function OrderedPipeline({ steps, selectedIndex, onSelect, onInsert, findings }) {
   return (
     <div className="ordered-canvas">
       {steps.map((step, index) => {
         const Icon = iconFor(step);
         const kind = taskKind(step);
+        const stepErrorCount = findings.filter(
+          (f) => f.severity === "error" && f.path.includes(step.key)
+        ).length;
         return (
           <React.Fragment key={`${step.key}-${index}`}>
             <button className={`ordered-node ${index === selectedIndex ? "selected" : ""} ${step.enabled === false ? "disabled" : ""}`} onClick={() => onSelect(index)}>
+              {stepErrorCount > 0 && (
+                <span className="badge badge-error badge-xs absolute -top-2 -right-2">
+                  {stepErrorCount}
+                </span>
+              )}
               <div className="flex items-start justify-between gap-3">
                 <span className="node-icon">
                   <Icon size={18} />
@@ -1988,39 +1991,45 @@ function PathBrowser({ label, value, onChange, mode, extensions = "", startPath,
       </label>
       {hint ? <div className="mt-2 text-xs text-base-content/55">{hint}</div> : null}
       {pickerStatus ? <div className="mt-2 text-xs text-base-content/55">{pickerStatus}</div> : null}
-      <details className="mt-2" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
-        <summary className="cursor-pointer text-sm font-semibold text-primary">
+      <div className="mt-2">
+        <button
+          type="button"
+          className="cursor-pointer text-sm font-semibold text-primary"
+          onClick={() => setOpen((v) => !v)}
+        >
           <FolderOpen className="mr-1 inline" size={14} /> {mode === "directory" ? "Browse project folders instead" : "Browse project files"}
-        </summary>
-        <div className="mt-2 rounded-md border border-base-300 bg-base-200/50 p-2">
-          {errorText ? <div className="alert alert-error py-2 text-xs">{errorText}</div> : null}
-          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-            <span className="font-mono">{listing?.current || current}</span>
-            {listing?.current && listing.current !== "." ? (
-              <button className="btn btn-ghost btn-xs" onClick={() => setCurrent(listing.parent || ".")}>Up</button>
-            ) : null}
-            {mode === "directory" ? <button className="btn btn-outline btn-xs" onClick={() => onChange(listing?.current || current)}>Use current</button> : null}
-          </div>
-          <div className="max-h-48 space-y-1 overflow-auto">
-            {(listing?.entries || listing?.directories || []).map((entry) => (
-              <button className="path-row" key={entry.path} onClick={() => setCurrent(entry.path)}>
-                <FolderOpen size={14} /> {entry.name}
-              </button>
-            ))}
-            {mode === "file" ? (listing?.files || []).map((file) => (
-              <button className="path-row" key={file.path} onClick={() => onChange(file.path)}>
-                <FileText size={14} /> {file.name}
-              </button>
-            )) : null}
-          </div>
-          {mode === "directory" ? (
-            <div className="mt-2 flex gap-2">
-              <input className="input input-bordered input-xs" value={newDir} onChange={(event) => setNewDir(event.target.value)} placeholder="New folder" />
-              <button className="btn btn-outline btn-xs" onClick={createDirectory}>Create</button>
+        </button>
+        {open && (
+          <div className="mt-2 rounded-md border border-base-300 bg-base-200/50 p-2">
+            {errorText ? <div className="alert alert-error py-2 text-xs">{errorText}</div> : null}
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-mono">{listing?.current || current}</span>
+              {listing?.current && listing.current !== "." ? (
+                <button className="btn btn-ghost btn-xs" onClick={() => setCurrent(listing.parent || ".")}>Up</button>
+              ) : null}
+              {mode === "directory" ? <button className="btn btn-outline btn-xs" onClick={() => onChange(listing?.current || current)}>Use current</button> : null}
             </div>
-          ) : null}
-        </div>
-      </details>
+            <div className="max-h-48 space-y-1 overflow-auto">
+              {(listing?.entries || listing?.directories || []).map((entry) => (
+                <button className="path-row" key={entry.path} onClick={() => setCurrent(entry.path)}>
+                  <FolderOpen size={14} /> {entry.name}
+                </button>
+              ))}
+              {mode === "file" ? (listing?.files || []).map((file) => (
+                <button className="path-row" key={file.path} onClick={() => onChange(file.path)}>
+                  <FileText size={14} /> {file.name}
+                </button>
+              )) : null}
+            </div>
+            {mode === "directory" ? (
+              <div className="mt-2 flex gap-2">
+                <input className="input input-bordered input-xs" value={newDir} onChange={(event) => setNewDir(event.target.value)} placeholder="New folder" />
+                <button className="btn btn-outline btn-xs" onClick={createDirectory}>Create</button>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2028,10 +2037,24 @@ function PathBrowser({ label, value, onChange, mode, extensions = "", startPath,
 function AdvancedParamsEditor({ step, index, replaceParams }) {
   const [text, setText] = useState(JSON.stringify(step.params || {}, null, 2));
   const [errorText, setErrorText] = useState("");
+  const [liveError, setLiveError] = useState("");
+  const debounceRef = useRef(null);
   useEffect(() => {
     setText(JSON.stringify(step.params || {}, null, 2));
     setErrorText("");
+    setLiveError("");
   }, [step.key, step.params]);
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  function handleTextChange(event) {
+    const next = event.target.value;
+    setText(next);
+    clearTimeout(debounceRef.current);
+    if (!next.trim()) { setLiveError(""); return; }
+    debounceRef.current = setTimeout(() => {
+      try { JSON.parse(next); setLiveError(""); }
+      catch (err) { setLiveError(err.message || "Invalid JSON"); }
+    }, 300);
+  }
   function applyJson() {
     try {
       const parsed = JSON.parse(text || "{}");
@@ -2046,7 +2069,12 @@ function AdvancedParamsEditor({ step, index, replaceParams }) {
     <details className="rounded-lg border border-base-300 bg-base-100">
       <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Advanced params JSON</summary>
       <div className="space-y-2 border-t border-base-300 p-3">
-        <textarea className="textarea textarea-bordered min-h-56 w-full font-mono text-xs" value={text} onChange={(event) => setText(event.target.value)} />
+        <textarea className="textarea textarea-bordered min-h-56 w-full font-mono text-xs" value={text} onChange={handleTextChange} />
+        {liveError && (
+          <div className="mt-1 flex items-center gap-1 text-xs text-error">
+            <AlertTriangle size={12} /> {liveError}
+          </div>
+        )}
         {errorText ? <div className="alert alert-error py-2 text-xs">{errorText}</div> : null}
         <button className="btn btn-outline btn-sm" onClick={applyJson}>Apply JSON params</button>
       </div>
@@ -2102,12 +2130,30 @@ function ValidationPanel({ findings }) {
         <div key={`${item.code}-${item.message}-${item.path}`} className={`alert text-sm ${item.severity === "error" ? "alert-error" : item.severity === "warning" ? "alert-warning" : "alert-success"}`}>
           {item.severity === "error" ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
           <div>
-            <div className="font-semibold">{item.code}</div>
-            <div className="text-xs">{item.path}: {item.message}</div>
+            <div className="font-semibold">{item.message}</div>
+            <div className="text-xs text-base-content/55">{item.path} · <span className="font-mono">{item.code}</span></div>
           </div>
         </div>
       ))}
     </div>
+  );
+}
+
+function CopyButton({ getText }) {
+  const [status, setStatus] = useState("idle"); // "idle" | "copied" | "error"
+  async function handleCopy() {
+    if (!navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(getText());
+      setStatus("copied");
+    } catch { setStatus("error"); }
+    setTimeout(() => setStatus("idle"), 1500);
+  }
+  return (
+    <button className="pipeline-action btn-xs" onClick={handleCopy} title="Copy to clipboard">
+      <Copy size={13} />
+      {status === "copied" ? "Copied" : status === "error" ? "Failed" : null}
+    </button>
   );
 }
 
@@ -2119,7 +2165,12 @@ function YamlPanel({ draftYaml, currentYaml }) {
           <span className="text-sm font-semibold">Draft YAML</span>
           <span className="badge badge-sm">will publish</span>
         </div>
-        <pre className="yaml-box">{draftYaml}</pre>
+        <div className="relative">
+          <div className="absolute right-2 top-2 z-10">
+            <CopyButton getText={() => draftYaml} />
+          </div>
+          <pre className="yaml-box">{draftYaml}</pre>
+        </div>
       </div>
       <details className="rounded-lg border border-base-300 bg-base-100">
         <summary className="cursor-pointer px-3 py-2 text-sm font-semibold">Current file YAML</summary>
@@ -2145,32 +2196,11 @@ function DiffPanel({ diffText, hasChanges = true }) {
         <span className="text-sm font-semibold">Current file vs draft</span>
         <span className="badge badge-sm">line diff</span>
       </div>
-      <pre className="yaml-box diff-box">{diffText || "No differences"}</pre>
-    </div>
-  );
-}
-
-function RunSimulation({ steps, close }) {
-  const enabled = steps.filter((step) => step.enabled !== false);
-  return (
-    <div className="rounded-lg border border-base-300 bg-base-100 p-3 shadow-sm">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">Run simulation</h3>
-          <p className="text-xs text-base-content/55">Source PDF follows the enabled YAML pipeline order.</p>
+      <div className="relative">
+        <div className="absolute right-2 top-2 z-10">
+          <CopyButton getText={() => diffText} />
         </div>
-        <button className="btn btn-ghost btn-square btn-sm" onClick={close}><X size={15} /></button>
-      </div>
-      <div className="grid gap-2 md:grid-cols-3">
-        {enabled.map((step, index) => (
-          <div className="rounded-lg border border-base-300 bg-base-200 p-3" key={`${step.key}-${index}`}>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="font-semibold">{index + 1}. {step.label}</span>
-              <span className={`badge badge-sm ${kindBadgeClass(taskKind(step))}`}>{taskKind(step)}</span>
-            </div>
-            <div className="truncate font-mono text-xs text-base-content/60">{step.key}</div>
-          </div>
-        ))}
+        <pre className="yaml-box diff-box">{diffText || "No differences"}</pre>
       </div>
     </div>
   );
@@ -2234,25 +2264,31 @@ function FieldTypeControl({ value, onChange, disableTableOption = false }) {
   const options = FIELD_TYPE_OPTIONS.map((option) => ({ ...option, disabled: option.value === TABLE_FIELD_TYPE && disableTableOption }));
   return (
     <div className="field-type-control">
-      <SelectControl
-        label="Type"
-        value={baseType}
-        onChange={(nextType) => onChange(withRequiredState(nextType, required))}
-        options={options}
-        hint={baseType === TABLE_FIELD_TYPE ? `Python type: ${withRequiredState(baseType, required)} · flat row objects` : `Python type: ${withRequiredState(baseType, required)}`}
-      />
-      <label className="field-required-control">
-        <input
-          type="checkbox"
-          className="checkbox checkbox-sm"
-          checked={required}
-          onChange={(event) => onChange(withRequiredState(baseType, event.target.checked))}
-        />
-        <span>
-          <span className="block text-xs font-medium">Required field</span>
-          <span className="block text-xs text-base-content/55">{required ? "Must be returned" : "May be omitted"}</span>
-        </span>
-      </label>
+      <span className="label-text mb-1 text-xs block">Type &amp; Required</span>
+      <div className="field-type-required-row">
+        <select
+          className="select select-bordered select-sm flex-1 min-w-0"
+          value={baseType}
+          onChange={(e) => onChange(withRequiredState(e.target.value, required))}
+        >
+          {options.map((o) => <option key={o.value} value={o.value} disabled={o.disabled}>{o.label}</option>)}
+        </select>
+        <div className="field-required-control">
+          <button
+            type="button"
+            className={`field-req-btn ${required ? "field-req-btn-active" : ""}`}
+            onClick={() => onChange(withRequiredState(baseType, true))}
+          >Required</button>
+          <button
+            type="button"
+            className={`field-req-btn ${!required ? "field-req-btn-active" : ""}`}
+            onClick={() => onChange(withRequiredState(baseType, false))}
+          >Optional</button>
+        </div>
+      </div>
+      <div className="mt-1 text-xs text-base-content/55">
+        Python type: {withRequiredState(baseType, required)}{baseType === TABLE_FIELD_TYPE ? " · flat row objects" : ""}
+      </div>
     </div>
   );
 }
@@ -2286,7 +2322,29 @@ function NumberControl({ label, value, onChange, ...props }) {
   );
 }
 
+// Named exports for testing
+export {
+  App,
+  SourceBar,
+  TaskPalette,
+  OrderedPipeline,
+  ValidationPanel,
+  YamlPanel,
+  DiffPanel,
+  CopyButton,
+  PathBrowser,
+  FieldTypeControl,
+  AdvancedParamsEditor,
+  CATEGORY_ORDER,
+  unwrapOptionalType,
+  isOptionalType,
+  withRequiredState,
+  FIELD_TYPE_VALUES,
+};
+
 const rootElement = document.getElementById("root");
-const appRoot = window.__pipelinePrototypeRoot || createRoot(rootElement);
-window.__pipelinePrototypeRoot = appRoot;
-appRoot.render(<App />);
+if (rootElement) {
+  const appRoot = window.__pipelinePrototypeRoot || createRoot(rootElement);
+  window.__pipelinePrototypeRoot = appRoot;
+  appRoot.render(<App />);
+}
