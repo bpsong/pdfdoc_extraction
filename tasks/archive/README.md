@@ -16,6 +16,8 @@ Active future proposals live directly under `tasks/`.
 
 Archive groups:
 
+- `future-design-visual-pipeline-builder.md`: superseded full node-canvas
+  direction; the production serial-list editor is the accepted implementation.
 - `unified-refactor/`: completed SQLite-backed unified application refactor.
 - `config-checker/`: completed config-check requirements and implementation
   task list.

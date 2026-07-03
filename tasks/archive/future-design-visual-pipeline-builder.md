@@ -1,5 +1,16 @@
 # Future Design Direction: Visual Pipeline Builder
 
+> **Status: Superseded and archived (2026-07-03).** The production serial-list
+> Pipeline editor is the accepted implementation for current product needs. Its
+> task forms, draft validation, YAML compilation, publishing, and audit behavior
+> satisfy the required authoring workflow without porting the prototype's full
+> node canvas. Optional lightweight canvas and split-visualization ideas now
+> live in
+> [Future Design: Lightweight Pipeline Visualization](../future-lightweight-pipeline-visualization.md).
+>
+> The proposal below is retained as historical context and may describe the
+> production editor as it existed before the task-specific forms were shipped.
+
 ## Background
 
 Today the application is configured primarily through `config.yaml`, with some UI support for safer edits. The admin pipeline page can add, remove, reorder, enable, validate, diff, and publish pipeline steps, but generic task parameters are still edited as raw JSON in a text area. The UI also still exposes YAML previews and the publish path writes generated YAML back to the active config file.
@@ -167,4 +178,3 @@ This should be treated as a separate PRD, not an incremental UI-only change.
 - Existing upload, split fan-out, review pause/resume, fan-in finalization, and reports keep working.
 - YAML/JSON editing is optional and clearly marked as advanced.
 - Tests prove visual model compilation preserves the expected `tasks` and `pipeline` output.
-

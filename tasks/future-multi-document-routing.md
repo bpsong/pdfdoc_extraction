@@ -337,5 +337,6 @@ which depends on the template and immutable-version model defined here.
 - [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md)
   extends this model with a split-and-route pipeline after multiple versioned
   pipeline templates are available.
-- [Future Design Direction: Visual Pipeline Builder](future-design-visual-pipeline-builder.md)
-  describes the authoring experience for serial pipeline definitions.
+- [Future Design: Lightweight Pipeline Visualization](future-lightweight-pipeline-visualization.md)
+  records optional split and serial-flow presentation improvements while the
+  production list editor remains the accepted authoring experience.

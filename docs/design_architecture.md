@@ -558,4 +558,4 @@ These are current constraints, not an approved target-state plan.
 - [Configuration checker troubleshooting](config_check_troubleshooting.md)
 - [Configuration checker reference](../tools/config_check/README.md)
 - [Standard task creation guidelines](../tasks/standard_task_creation_guidelines.md)
-- [Future visual pipeline builder](../tasks/future-design-visual-pipeline-builder.md)
+- [Future lightweight pipeline visualization](../tasks/future-lightweight-pipeline-visualization.md)

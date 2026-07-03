@@ -349,7 +349,7 @@ pdfdoc_extraction/
 │   └── review_schema_admin_guide.md
 └── 📁 tasks/                   # Engineering guidance and future designs
     ├── standard_task_creation_guidelines.md
-    ├── future-design-visual-pipeline-builder.md
+    ├── future-lightweight-pipeline-visualization.md
     ├── future-multi-document-routing.md
     └── archive/                # Historical PRDs, completed task lists, and audits
 ```

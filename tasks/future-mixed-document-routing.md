@@ -362,6 +362,6 @@ target pipeline definition.
 - [Future Design: Multiple Pipeline Templates](future-multi-document-routing.md)
   is the required foundation for template identity, publishing, version
   pinning, ingestion selection, and simple target extraction tasks.
-- [Future Design Direction: Visual Pipeline Builder](future-design-visual-pipeline-builder.md)
-  describes the serial authoring model that a future route-mapping editor would
-  extend.
+- [Future Design: Lightweight Pipeline Visualization](future-lightweight-pipeline-visualization.md)
+  records the conditions under which route mapping or graph complexity could
+  justify reconsidering a canvas.
