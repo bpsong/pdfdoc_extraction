@@ -160,7 +160,7 @@ def test_configured_workflow_uses_sqlite_state_without_status_text_files(
         extraction = conn.execute("SELECT * FROM extraction_results WHERE document_id = ?", (document_id,)).fetchone()
 
     assert document["status"] == "completed"
-    assert [run["task_key"] for run in task_runs] == config.get("pipeline")
+    assert [run["task_key"] for run in task_runs] == [*config.get("pipeline"), "cleanup_task"]
     assert {run["status"] for run in task_runs} == {"completed"}
     assert extraction is not None
     assert json_loads(task_runs[2]["output_json"])["data_keys"] == ["amount", "supplier", "update_reference"]
@@ -197,7 +197,7 @@ def test_configured_workflow_uses_sqlite_state_without_status_text_files(
     status_payload = status_response.json()
     assert status_payload["file_id"] == document_id
     assert status_payload["details"]["state_source"] == "sqlite"
-    assert len(status_payload["details"]["task_runs"]) == len(config.get("pipeline"))
+    assert len(status_payload["details"]["task_runs"]) == len(config.get("pipeline")) + 1
     assert {"export_json", "export_csv", "export_pdf"}.issubset(
         {record["file_type"] for record in status_payload["details"]["files"]}
     )

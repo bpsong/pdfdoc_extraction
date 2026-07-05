@@ -421,7 +421,7 @@ class StoreMetadataAsCsv(BaseTask):
             except Exception as e:
                 # capture error, but follow Railway pattern: return context with error info
                 context["error"] = str(e)
-                context["error_step"] = "StoreMetadataAsCsv"
+                context["error_step"] = self.task_key(context)
                 self.logger.exception("Failed writing CSV for %s", unique_id)
                 return context
 
@@ -444,11 +444,11 @@ class StoreMetadataAsCsv(BaseTask):
             # Known validation/task errors - ensure context populated and returned
             context["error"] = str(e)
             if "error_step" not in context:
-                context["error_step"] = "StoreMetadataAsCsv"
+                context["error_step"] = self.task_key(context)
             return context
         except Exception as e:
             # Unexpected exceptions: capture and return context
             context["error"] = str(e)
-            context["error_step"] = "StoreMetadataAsCsv"
+            context["error_step"] = self.task_key(context)
             self.logger.exception("Unhandled exception in StoreMetadataAsCsv")
             return context

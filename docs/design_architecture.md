@@ -184,7 +184,12 @@ the authoritative operational identity even when SQLite state is unavailable.
 
 Configured tasks and cleanup currently receive one Prefect retry. Individual
 provider tasks can add their own retries, so retry policy is not centralized.
-Cleanup runs after normal completion, failure, review pause, or split fan-out.
+After configured execution exhausts the pipeline or stops on an ordinary
+failure, cleanup runs as an internally managed task with the reserved key
+`cleanup_task` and index immediately after the configured pipeline. It has its
+own SQLite task run but does not move the document's configured pipeline
+cursor. Review pause and split fan-out return before cleanup; resumed and split
+child flows run cleanup when their configured work finishes.
 
 ### Task and context contract
 
@@ -255,8 +260,8 @@ Human review is a persisted stop and new-flow restart:
    and configured policy.
 3. If required, it creates a review item, marks the document
    `review_required`, and sets `pipeline_state` to `paused`.
-4. The loader marks the task run paused and stops downstream execution after
-   cleanup.
+4. The loader marks the task run paused and returns before downstream execution
+   or cleanup. Cleanup runs after the resumed flow finishes configured work.
 5. An operator claims the item, creating a time-limited lock and changing the
    document to `in_review`.
 6. Draft corrections, diffs, and completion are handled by `ReviewService`.
@@ -337,7 +342,9 @@ stores contents. Canonical roles are:
 
 Task-created artifact metadata records `task_key` from the workflow context
 when producer attribution is needed. Artifact role remains represented by
-`file_type`; a separate task slug is not part of the task contract.
+`file_type`; a separate task slug is not part of the task contract. Ingestion
+artifacts such as `source_original` have no producer task key. Split children
+and their `split_pdf` artifacts record the configured split task key.
 
 Runtime directories such as `data/`, `files/`, `processing*/`,
 `archive_folder/`, `web_upload/`, and `watch_folder/` may contain customer

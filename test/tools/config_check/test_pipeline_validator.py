@@ -94,6 +94,27 @@ def test_storage_before_extraction_reports_error():
     assert any("extraction task runs earlier" in issue.message for issue in result.errors)
 
 
+def test_cleanup_task_key_is_reserved_for_internal_housekeeping():
+    config = _base_config()
+    config["tasks"]["cleanup_task"] = {
+        "module": "standard_step.housekeeping.cleanup_task",
+        "class": "CleanupTask",
+        "params": {},
+    }
+    config["pipeline"].append("cleanup_task")
+
+    result = validate_pipeline(config)
+
+    reserved_errors = [
+        issue for issue in result.errors
+        if issue.code == "pipeline-reserved-internal-task-key"
+    ]
+    assert {issue.path for issue in reserved_errors} == {
+        "tasks.cleanup_task",
+        f"pipeline[{len(config['pipeline']) - 1}]",
+    }
+
+
 def test_storage_after_extraction_passes():
     config = _base_config()
 

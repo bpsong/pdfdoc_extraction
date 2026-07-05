@@ -154,7 +154,10 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
     assert all(context["parent_document_id"] == created["document"]["id"] for context in update_contexts)
     assert all(context["source_original_filename"] == "bundle.pdf" for context in update_contexts)
     assert all(context["split_pages"] for context in update_contexts)
-    assert [[run["task_key"] for run in runs] for runs in child_runs] == [["update_reference"], ["update_reference"]]
+    assert [[run["task_key"] for run in runs] for runs in child_runs] == [
+        ["update_reference", "cleanup_task"],
+        ["update_reference", "cleanup_task"],
+    ]
 
 
 def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, monkeypatch):

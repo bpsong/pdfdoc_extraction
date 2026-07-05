@@ -73,5 +73,5 @@ def test_resume_manager_resumes_next_task_and_guards_duplicate_resume(tmp_path, 
     assert first is True
     assert second is False
     assert seen_contexts[0]["data"]["supplier"] == "Corrected"
-    assert [run["task_key"] for run in task_runs] == ["store"]
-    assert task_runs[0]["status"] == "completed"
+    assert [run["task_key"] for run in task_runs] == ["store", "cleanup_task"]
+    assert [run["status"] for run in task_runs] == ["completed", "completed"]

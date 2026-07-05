@@ -204,7 +204,11 @@ def test_error_handling_updates_context_and_status_on_exception(tmp_path, sample
 
     monkeypatch.setattr(task, "_generate_unique_filepath", raise_err)
 
-    context = {"id": "test-5", "data": {"supplier_name": "X", "invoice_amount": 1.0}}
+    context = {
+        "id": "test-5",
+        "current_task_key": "custom_csv_export",
+        "data": {"supplier_name": "X", "invoice_amount": 1.0},
+    }
     result = task.run(context)
 
     # When task fails it should return the context updated with error fields
@@ -213,7 +217,7 @@ def test_error_handling_updates_context_and_status_on_exception(tmp_path, sample
     assert "disk error" in result["error"]
 
     # Ensure context indicates failure without requiring any text status side effect.
-    assert result.get("error_step") is not None
+    assert result["error_step"] == "custom_csv_export"
 
 
 def test_validation_missing_data_updates_context_with_error(tmp_path, sample_extraction_config):

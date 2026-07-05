@@ -106,5 +106,15 @@ def test_review_pause_and_completion_resumes_from_next_task(tmp_path, monkeypatc
     assert paused_context["pipeline_state"] == "paused"
     assert complete_result["resume_triggered"] is True
     assert stored_contexts[0]["data"]["supplier"] == "Acme Pte Ltd"
-    assert [run["task_key"] for run in task_runs] == ["extract", "review_gate", "store"]
-    assert [run["status"] for run in task_runs] == ["completed", "completed", "completed"]
+    assert [run["task_key"] for run in task_runs] == [
+        "extract",
+        "review_gate",
+        "store",
+        "cleanup_task",
+    ]
+    assert [run["status"] for run in task_runs] == [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+    ]

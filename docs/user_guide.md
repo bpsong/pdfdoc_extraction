@@ -501,6 +501,7 @@ Do not use `*` for this setting. Command-line tools, Python scripts, and same-or
 
 Workflows are defined by the ordered list under `pipeline:` and the task registry under `tasks:`. Each item in `pipeline` references a key in `tasks` which specifies `module`, `class`, and `params`. That referenced key is the task's authoritative operational identity in task-run state, errors, and artifact producer metadata.
 The legacy `task_slug` parameter is temporarily accepted for compatibility but is ignored and produces a deprecation warning. Remove it from existing task parameters; do not add it to new configurations.
+The runner reserves `cleanup_task` for automatic housekeeping. It is recorded as an internal task run after configured execution finishes, but it is not added to `tasks` or `pipeline` and does not replace the document's configured pipeline position.
 The current implementation runs the same pipeline for every file; dynamic workflow selection or matching by file metadata is not implemented.
 Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
@@ -516,7 +517,7 @@ Example task categories include:
 - `storage.store_file_to_localdrive`: Persist the processed PDF.
 - `archiver.archive_pdf`: Archive the original input PDF.
 
-The housekeeping cleanup step is appended automatically by the WorkflowLoader and runs last for every file. In the current implementation it only deletes the processed PDF in the processing directory; it does not archive files or remove status records.
+The housekeeping cleanup step is managed automatically by the WorkflowLoader and runs after configured execution finishes or stops on an ordinary failure. Review pauses and split fan-out return first; cleanup runs after resumed work or each split child's configured work finishes. It deletes transient processing files but does not archive files or remove status records.
 
 ### 4.4. Managing Application Accounts and Passwords
 
@@ -1200,9 +1201,10 @@ pipeline:
   - Deletes the processed file referenced in the context if it exists in `processing_dir`.
   - Logs successes and warnings for missing files and preserves registered business artifacts.
   - Raises exceptions on critical delete failures.
-  - Executes unconditionally as the final step, even if previous tasks failed, to keep the processing directory tidy.
+  - Executes after configured tasks finish or stop on an ordinary failure. Review pause and split fan-out return before cleanup.
+  - Records a completed or failed internal task run under the reserved `cleanup_task` key without changing the document's configured pipeline cursor.
 - **Notes:**
-  - This task is automatically invoked by the WorkflowLoader as a mandatory final step in every Prefect flow.
+  - This task is automatically invoked by the WorkflowLoader when a flow reaches its cleanup phase.
   - It does not require definition in the `tasks` section or inclusion in the `pipeline` list of `config.yaml`.
   - Ensures the processing directory remains clean by removing only the processed PDF.
 #### 4.8.11. Validation and Failure Behavior
@@ -1499,11 +1501,12 @@ pipeline:
   - archive_pdf
 ```
 
-Housekeeping runs automatically as the final step after the pipeline completes to remove the processed PDF from the processing directory. It is not included in the `tasks` registry or `pipeline` list.
+Housekeeping runs automatically after configured execution completes or stops on an ordinary task failure to remove the processed PDF from the processing directory. It is not included in the `tasks` registry or `pipeline` list. The operation is recorded in SQLite as an internally managed task run with the reserved key `cleanup_task` and an index immediately after the configured pipeline.
 
 Notes:
 - The pipeline is an ordered list of task names defined under `tasks:`.
-- Housekeeping runs automatically as the final step of the workflow, invoked directly by the WorkflowLoader. It deletes temporary processing-folder PDFs while preserving registered business artifacts.
+- Housekeeping is invoked directly by the WorkflowLoader. It deletes temporary processing-folder PDFs while preserving registered business artifacts and does not move the document's configured pipeline cursor.
+- Review pause and split fan-out return before housekeeping. Cleanup runs when resumed work or each split child's configured work finishes.
 - Each task references a Python module and class from the `standard_step` package and receives `params`.
 - Customer custom task modules can be used only after deployment approval in `custom_steps.registry`, and custom modules must use the `custom_step.` prefix.
 - The three storage-related tasks are separate:

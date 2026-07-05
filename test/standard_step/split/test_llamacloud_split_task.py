@@ -123,6 +123,7 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
         "file_path": str(source),
         "original_filename": "bundle.pdf",
         "source": "web",
+        "current_task_key": "split_documents",
         "current_task_index": 0,
     }
 
@@ -151,8 +152,13 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
 
     child_metadata = json_loads(children[0]["metadata_json"], {})
     assert child_metadata["root_document_id"] == created["document"]["id"]
+    assert child_metadata["task_key"] == "split_documents"
     assert child_metadata["source_original_filename"] == "bundle.pdf"
     assert child_metadata["split_pages"] == [1, 2]
+    assert all(
+        json_loads(file_record["metadata_json"], {}).get("task_key") == "split_documents"
+        for file_record in child_files
+    )
 
 
 def test_llamacloud_split_task_fails_on_low_confidence_without_children(tmp_path):

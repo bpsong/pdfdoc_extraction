@@ -40,6 +40,28 @@ class WorkflowStateService:
             input_data=input_data,
         )
 
+    def start_internal_task(
+        self,
+        *,
+        batch_id: str,
+        document_id: str,
+        task_key: str,
+        task_index: int,
+        module_name: str,
+        class_name: str,
+        input_data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record an internal task without moving the configured pipeline cursor."""
+        return self.task_runs.create_started(
+            batch_id=batch_id,
+            document_id=document_id,
+            task_key=task_key,
+            task_index=task_index,
+            module_name=module_name,
+            class_name=class_name,
+            input_data=input_data,
+        )
+
     def complete_task(self, task_run_id: str, output_data: dict[str, Any] | None = None) -> None:
         """Mark a task run completed."""
         self.task_runs.mark_completed(task_run_id, output_data)

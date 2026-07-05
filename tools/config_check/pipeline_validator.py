@@ -87,6 +87,7 @@ TABLE_STORAGE_SUFFIXES: Set[str] = {
     "store_metadata_as_json",
     "store_metadata_as_csv",
 }
+RESERVED_INTERNAL_TASK_KEYS: Set[str] = {"cleanup_task"}
 
 
 @dataclass(slots=True)
@@ -147,6 +148,33 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
             )
         )
         return PipelineValidationResult(errors=errors, warnings=warnings)
+
+    for reserved_key in RESERVED_INTERNAL_TASK_KEYS:
+        if reserved_key in tasks:
+            errors.append(
+                PipelineIssue(
+                    path=f"tasks.{reserved_key}",
+                    message=(
+                        f"Task key '{reserved_key}' is reserved for internally managed "
+                        "housekeeping and must not be defined in tasks"
+                    ),
+                    code="pipeline-reserved-internal-task-key",
+                    details={"task_key": reserved_key, "config_key": f"tasks.{reserved_key}"},
+                )
+            )
+        for index, task_key in enumerate(pipeline):
+            if task_key == reserved_key:
+                errors.append(
+                    PipelineIssue(
+                        path=f"pipeline[{index}]",
+                        message=(
+                            f"Task key '{reserved_key}' is reserved for internally managed "
+                            "housekeeping and must not be listed in pipeline"
+                        ),
+                        code="pipeline-reserved-internal-task-key",
+                        details={"task_key": reserved_key, "pipeline_index": index},
+                    )
+                )
 
     metadata = _build_task_metadata(tasks)
     known_field_tokens: Set[str] = metadata["known_fields"]

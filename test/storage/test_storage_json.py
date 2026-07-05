@@ -142,7 +142,11 @@ def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch, 
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
 
     # Prepare normal context
-    context = {"id": "err-1", "data": {"supplier_name": "Failing Co", "items": []}}
+    context = {
+        "id": "err-1",
+        "current_task_key": "custom_json_export",
+        "data": {"supplier_name": "Failing Co", "items": []},
+    }
 
     # Monkeypatch open to raise an IOError when attempting to write
     def fake_open(*args, **kwargs):
@@ -155,7 +159,7 @@ def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch, 
     # On failure the task returns context with error info
     assert "error" in result
     assert "error_step" in result
-    assert result["error_step"] == "StoreMetadataAsJson"
+    assert result["error_step"] == "custom_json_export"
     assert "disk full" in result["error"]
 
 

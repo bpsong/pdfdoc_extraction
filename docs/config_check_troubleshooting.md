@@ -231,10 +231,14 @@ custom_steps:
 ```
 
 **Fixes**
-- Confirm `tasks.<name>.module` points at `standard_step.housekeeping.cleanup_task` (or a compatible custom implementation).
+- For a legacy explicit housekeeping definition, confirm `tasks.<name>.module`
+  points at `standard_step.housekeeping.cleanup_task` before removing that
+  definition from deployment YAML.
 - The `processing_dir` parameter is optional but when provided must be:
   - A non-empty string value.
   - A valid directory path where temporary processing files are cleaned up. Workflow state is stored in SQLite, not status files.
+- Do not add the built-in cleanup task to `tasks` or `pipeline`. `WorkflowLoader`
+  runs it automatically and records the reserved `cleanup_task` task run.
 - If not provided, the task defaults to using `'processing'` as the directory name.
 - Ensure the directory exists and the service account has read/write permissions.
 

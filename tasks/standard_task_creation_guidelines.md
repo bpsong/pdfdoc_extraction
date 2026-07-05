@@ -129,6 +129,11 @@ The workflow runner records standardized task lifecycle events:
 - On start: a SQLite `task_runs` row is started for the configured task key.
 - On success: the task run is completed with output summary data from the returned context.
 - On failure: the task run is failed with error details, and document status is updated where appropriate.
+- After configured execution finishes or stops on an ordinary failure, the
+  runner records the internally managed cleanup operation under the reserved
+  `cleanup_task` key at the index immediately after the configured pipeline.
+  This internal run does not move the document's configured pipeline cursor
+  and must not be added to user-authored `tasks` or `pipeline` configuration.
 
 Task implementations should:
 
@@ -155,6 +160,9 @@ Common configured task-key examples:
 - `StoreMetadataAsJson` -> `store_metadata_json`
 - `StoreFileToLocaldrive` -> `store_file_to_localdrive`
 - `ArchivePdfTask` -> `archive_pdf`
+
+`cleanup_task` is reserved for the runner-managed `CleanupTask`; it is not a
+configured task-key example and must not be reused by another task.
 
 ### 5.2. Audit Events
 
@@ -282,4 +290,6 @@ This document should be updated as new standards emerge or improvements are made
 
 Note: Terminal tasks, for example housekeeping, may omit artifact registration
 when they only delete transient processing files, but they must return the
-context, log operations, and preserve registered business artifacts.
+context, log operations, and preserve registered business artifacts. The
+built-in housekeeping task is invoked and tracked by `WorkflowLoader`, not
+listed in deployment YAML.

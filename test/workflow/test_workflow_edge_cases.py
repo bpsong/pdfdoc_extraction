@@ -124,6 +124,20 @@ def test_load_workflow_rejects_invalid_unknown_and_incomplete_steps(tmp_path, mo
     assert flow is not None
     assert flow({"id": "doc"})["id"] == "doc"
 
+    reserved = _loader(
+        tmp_path,
+        {
+            "pipeline": ["cleanup_task"],
+            "tasks": {
+                "cleanup_task": {
+                    "module": "standard_step.housekeeping.cleanup_task",
+                    "class": "CleanupTask",
+                }
+            },
+        },
+    )
+    assert reserved.load_workflow() is None
+
 
 def test_workflow_handles_future_results_and_housekeeping_failure(tmp_path, monkeypatch):
     _patch_prefect(monkeypatch, future=True)
@@ -161,6 +175,8 @@ def test_workflow_handles_future_results_and_housekeeping_failure(tmp_path, monk
     assert flow is not None
     result = flow({"id": "doc"})
     assert result["error"] == "cleanup failed"
+    assert result["error_step"] == "cleanup_task"
+    assert result["fatal_failure"]["task_key"] == "cleanup_task"
 
 
 @pytest.mark.parametrize(

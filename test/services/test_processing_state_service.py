@@ -88,6 +88,51 @@ def test_snapshot_from_batch_falls_back_for_historical_batches(tmp_path):
     assert snapshot["steps"][0]["key"] == "assign_nanoid"
 
 
+def test_processing_state_exposes_internal_cleanup_without_adding_pipeline_step(tmp_path):
+    config = _config(tmp_path)
+    initialize_database(config)
+    snapshot = build_pipeline_snapshot(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch_with_documents(
+            source="web",
+            files=[{"file_path": str(tmp_path / "invoice.pdf"), "original_filename": "invoice.pdf"}],
+            metadata={"pipeline_snapshot": snapshot},
+            status="completed",
+        )
+        document_id = created["documents"][0]["id"]
+        documents = DocumentRepository(conn)
+        documents.update_current_task(document_id, 4, "store_json")
+        documents.update_status(document_id, "completed")
+        runs = TaskRunRepository(conn)
+        store_run = runs.create_started(
+            batch_id=created["batch"]["id"],
+            document_id=document_id,
+            task_key="store_json",
+            task_index=4,
+            module_name="standard_step.storage.store_metadata_as_json",
+            class_name="StoreMetadataAsJson",
+        )
+        runs.mark_completed(store_run["id"])
+        cleanup_run = runs.create_started(
+            batch_id=created["batch"]["id"],
+            document_id=document_id,
+            task_key="cleanup_task",
+            task_index=5,
+            module_name="standard_step.housekeeping.cleanup_task",
+            class_name="CleanupTask",
+        )
+        runs.mark_completed(cleanup_run["id"])
+        payload = ProcessingStateService(config, conn).get_batch_state(created["batch"]["id"])
+
+    assert payload is not None
+    assert [step["key"] for step in payload["pipeline_snapshot"]["steps"]] == config.get("pipeline")
+    document = payload["documents"][0]
+    assert document["current_step"]["key"] == "store_json"
+    assert [run["task_key"] for run in document["task_runs"]] == ["store_json", "cleanup_task"]
+    assert document["progress_percent"] == 100
+
+
 def test_batch_processing_state_keeps_original_snapshot_after_config_change(tmp_path):
     config = _config(tmp_path)
     initialize_database(config)

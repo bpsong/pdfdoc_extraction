@@ -56,7 +56,7 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 
 - Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
 - Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including typed `object_fields`, table `item_fields`, csv_match clause bounds (1-5), and required column/from_context fields.
-- Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and housekeeping ordering rules.
+- Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and reserved internal task keys.
 - UI/API validation adds active workflow business rules for split, review-gate, task approval, and schema references before administrators publish pipeline changes.
 - **New**: Enhanced schema validation for web server and watch folder configuration fields.
 - **New**: Import validation to verify task modules and classes are importable.
@@ -72,6 +72,8 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - The active `pipeline` must be a list of task identifiers and every entry must be a non-empty string.
 - The active `pipeline` must include at least one extraction task, because downstream metadata storage and rules depend on extracted data.
 - A configured task may appear more than once in `pipeline`, but this is reported as a warning because repeated execution is usually accidental.
+- `cleanup_task` is reserved for runner-managed housekeeping and must not appear
+  in the user-authored `tasks` mapping or `pipeline` list.
 - The active `pipeline` can include only one extract task. Extraction tasks are detected from `standard_step.extraction.*`, `custom_step.extraction.*`, or the `ExtractPdfTask` class.
 - The active `pipeline` can include only one split task. Split tasks are detected from `.split.` modules or `LlamaCloudSplitTask`.
 - The active `pipeline` can include only one review-gate task. Review-gate tasks are detected from `standard_step.review.review_gate` or `ReviewGateTask`.

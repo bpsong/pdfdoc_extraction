@@ -274,18 +274,18 @@ class StoreMetadataAsJson(BaseTask):
                 # On write failure, record and re-raise as TaskError
                 # Update context with error for Railway pattern
                 context["error"] = str(e)
-                context["error_step"] = "StoreMetadataAsJson"
+                context["error_step"] = self.task_key(context)
                 raise TaskError(f"Failed to write JSON to '{output_path}': {e}")
 
         except TaskError:
             # TaskError already meaningful; ensure context contains failure info and return
             if "error_step" not in context:
-                context["error_step"] = "StoreMetadataAsJson"
+                context["error_step"] = self.task_key(context)
             return context
         except Exception as e:
             # Unexpected exceptions: capture in context and update status manager
             context["error"] = str(e)
-            context["error_step"] = "StoreMetadataAsJson"
+            context["error_step"] = self.task_key(context)
             self.logger.exception("Unhandled exception in StoreMetadataAsJson")
             return context
 

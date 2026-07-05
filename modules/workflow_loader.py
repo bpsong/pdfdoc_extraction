@@ -28,6 +28,12 @@ from modules.services.task_registry_service import ApprovedTaskRegistry, TaskApp
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 
+
+INTERNAL_CLEANUP_TASK_KEY = "cleanup_task"
+INTERNAL_CLEANUP_MODULE = "standard_step.housekeeping.cleanup_task"
+INTERNAL_CLEANUP_CLASS = "CleanupTask"
+
+
 class WorkflowLoader:
     """Dynamically builds and runs a Prefect-based workflow from configuration.
 
@@ -179,6 +185,13 @@ class WorkflowLoader:
         pipeline_config = self.cfg.get("pipeline", [])
         if not isinstance(pipeline_config, list):
             self.logger.critical("Pipeline configuration must be a list of task names.")
+            self.shutdown_manager.shutdown()
+            return None
+        if INTERNAL_CLEANUP_TASK_KEY in self.task_defs or INTERNAL_CLEANUP_TASK_KEY in pipeline_config:
+            self.logger.critical(
+                "Task key '%s' is reserved for internally managed housekeeping.",
+                INTERNAL_CLEANUP_TASK_KEY,
+            )
             self.shutdown_manager.shutdown()
             return None
 
@@ -363,7 +376,30 @@ class WorkflowLoader:
             # Execute mandatory housekeeping task
             self.logger.info("Executing mandatory housekeeping task.")
             final_context = current_context
+            cleanup_state_service = None
+            cleanup_task_run_id = None
+            cleanup_task_index = len(pipeline_config)
+            previous_task_position = {
+                key: (key in current_context, current_context.get(key))
+                for key in ("current_task_key", "current_task_index", "task_run_id")
+            }
+            current_context["current_task_key"] = INTERNAL_CLEANUP_TASK_KEY
+            current_context["current_task_index"] = cleanup_task_index
             try:
+                cleanup_state_service = self._state_service(current_context)
+                if cleanup_state_service is not None:
+                    cleanup_task_run = cleanup_state_service.start_internal_task(
+                        batch_id=str(current_context["batch_id"]),
+                        document_id=str(current_context["document_id"]),
+                        task_key=INTERNAL_CLEANUP_TASK_KEY,
+                        task_index=cleanup_task_index,
+                        module_name=INTERNAL_CLEANUP_MODULE,
+                        class_name=INTERNAL_CLEANUP_CLASS,
+                        input_data=self._context_summary(current_context),
+                    )
+                    cleanup_task_run_id = cleanup_task_run["id"]
+                    current_context["task_run_id"] = cleanup_task_run_id
+
                 housekeeping_task_instance = CleanupTask(config_manager=self.config_manager)
                 housekeeping_task_instance.on_start(current_context)
 
@@ -382,14 +418,52 @@ class WorkflowLoader:
                 else:
                     final_context = current_context
 
+                if cleanup_state_service is not None and cleanup_task_run_id:
+                    cleanup_state_service.complete_task(
+                        cleanup_task_run_id,
+                        self._context_summary(final_context),
+                    )
+                self._restore_task_position(final_context, previous_task_position)
                 self._finalize_leaf(final_context)
                 return final_context
             except Exception as e:
                 self.logger.critical(f"Housekeeping task failed: {e}")
-                current_context["error"] = str(e)
-                self._finalize_leaf(current_context)
-                return final_context
+                failure_context = final_context if isinstance(final_context, dict) else current_context
+                failure_context["error"] = _redact_text(str(e))
+                failure_context["error_step"] = INTERNAL_CLEANUP_TASK_KEY
+                self._ensure_fatal_failure(
+                    failure_context,
+                    task_key=INTERNAL_CLEANUP_TASK_KEY,
+                    task_index=cleanup_task_index,
+                    module_name=INTERNAL_CLEANUP_MODULE,
+                    class_name=INTERNAL_CLEANUP_CLASS,
+                    error=e,
+                )
+                if cleanup_state_service is not None and cleanup_task_run_id:
+                    cleanup_state_service.fail_task(
+                        cleanup_task_run_id,
+                        str(failure_context["error"]),
+                        self._context_summary(failure_context),
+                    )
+                self._restore_task_position(failure_context, previous_task_position)
+                self._finalize_leaf(failure_context)
+                return failure_context
+            finally:
+                if cleanup_state_service is not None:
+                    cleanup_state_service.conn.close()
         return dynamic_flow
+
+    @staticmethod
+    def _restore_task_position(
+        context: Dict[str, Any],
+        previous: Dict[str, tuple[bool, Any]],
+    ) -> None:
+        """Restore configured pipeline position after an internal task finishes."""
+        for key, (was_present, value) in previous.items():
+            if was_present:
+                context[key] = value
+            else:
+                context.pop(key, None)
 
     def _finalize_leaf(self, context: Dict[str, Any]) -> None:
         """Run fan-in finalization for SQLite-backed leaf contexts."""

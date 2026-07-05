@@ -349,6 +349,7 @@ class LlamaCloudSplitTask(BaseTask):
 
             child_filename = output_path.name
             child_metadata: dict[str, Any] = {
+                "task_key": self.task_key(context),
                 "root_document_id": document["id"],
                 "source_original_filename": source_filename,
                 "source_file_path": str(Path(source_pdf_path).resolve()),

@@ -2,9 +2,10 @@ import pytest
 
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
-from modules.db.repositories import TaskRunRepository
+from modules.db.repositories import DocumentRepository, TaskRunRepository
+from modules.exceptions import TaskError
 from modules.services.batch_service import BatchService
-from modules.workflow_loader import WorkflowLoader
+from modules.workflow_loader import INTERNAL_CLEANUP_TASK_KEY, WorkflowLoader
 from test.helpers_sqlite import TempConfig
 
 
@@ -159,3 +160,132 @@ def test_workflow_loader_marks_task_run_failed_when_task_import_exits(tmp_path, 
     assert task_runs[0]["status"] == "failed"
     assert task_runs[0]["ended_at"]
     assert "Task setup failed" in task_runs[0]["error"]
+
+
+def test_workflow_loader_records_internal_cleanup_without_moving_pipeline_cursor(
+    tmp_path,
+    monkeypatch,
+):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "pipeline": ["configured_step"],
+            "tasks": {
+                "configured_step": {
+                    "module": "tests",
+                    "class": "ConfiguredTask",
+                    "params": {},
+                    "on_error": "stop",
+                },
+            },
+        },
+    )
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+
+    cleanup_context_keys = []
+
+    class ConfiguredTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            return context
+
+    class InternalCleanupTask(ConfiguredTask):
+        def run(self, context):
+            cleanup_context_keys.append(context["current_task_key"])
+            return context
+
+    _patch_prefect(monkeypatch)
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", InternalCleanupTask)
+    monkeypatch.setattr(WorkflowLoader, "_import_task_class", lambda *args: ConfiguredTask)
+    WorkflowLoader._instance = None
+
+    workflow = WorkflowLoader(config).load_workflow()
+    assert workflow is not None
+    result = workflow(
+        {
+            "id": created["document"]["id"],
+            "batch_id": created["batch"]["id"],
+            "document_id": created["document"]["id"],
+            "file_path": str(pdf_path),
+        }
+    )
+
+    with connect(config) as conn:
+        task_runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+        document = DocumentRepository(conn).get(created["document"]["id"])
+
+    assert cleanup_context_keys == [INTERNAL_CLEANUP_TASK_KEY]
+    assert [run["task_key"] for run in task_runs] == [
+        "configured_step",
+        INTERNAL_CLEANUP_TASK_KEY,
+    ]
+    assert [run["task_index"] for run in task_runs] == [0, 1]
+    assert [run["status"] for run in task_runs] == ["completed", "completed"]
+    assert task_runs[1]["module_name"] == "standard_step.housekeeping.cleanup_task"
+    assert document is not None
+    assert document["current_task_key"] == "configured_step"
+    assert document["current_task_index"] == 0
+    assert result["current_task_key"] == "configured_step"
+    assert result["current_task_index"] == 0
+
+
+def test_workflow_loader_records_failed_internal_cleanup(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    config = TempConfig(tmp_path / "app.sqlite3", {"pipeline": [], "tasks": {}})
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+
+    class FailingCleanupTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            raise TaskError("cleanup failed")
+
+    _patch_prefect(monkeypatch)
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", FailingCleanupTask)
+    WorkflowLoader._instance = None
+
+    workflow = WorkflowLoader(config).load_workflow()
+    assert workflow is not None
+    result = workflow(
+        {
+            "id": created["document"]["id"],
+            "batch_id": created["batch"]["id"],
+            "document_id": created["document"]["id"],
+            "file_path": str(pdf_path),
+        }
+    )
+
+    with connect(config) as conn:
+        task_runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+
+    assert len(task_runs) == 1
+    assert task_runs[0]["task_key"] == INTERNAL_CLEANUP_TASK_KEY
+    assert task_runs[0]["task_index"] == 0
+    assert task_runs[0]["status"] == "failed"
+    assert task_runs[0]["ended_at"]
+    assert result["error_step"] == INTERNAL_CLEANUP_TASK_KEY
+    assert result["fatal_failure"]["task_key"] == INTERNAL_CLEANUP_TASK_KEY
