@@ -499,7 +499,8 @@ Do not use `*` for this setting. Command-line tools, Python scripts, and same-or
 
 #### 4.3.3. Pipeline Configuration
 
-Workflows are defined by the ordered list under `pipeline:` and the task registry under `tasks:`. Each item in `pipeline` references a key in `tasks` which specifies `module`, `class`, and `params`.
+Workflows are defined by the ordered list under `pipeline:` and the task registry under `tasks:`. Each item in `pipeline` references a key in `tasks` which specifies `module`, `class`, and `params`. That referenced key is the task's authoritative operational identity in task-run state, errors, and artifact producer metadata.
+The legacy `task_slug` parameter is temporarily accepted for compatibility but is ignored and produces a deprecation warning. Remove it from existing task parameters; do not add it to new configurations.
 The current implementation runs the same pipeline for every file; dynamic workflow selection or matching by file metadata is not implemented.
 Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
@@ -926,7 +927,7 @@ After fan-out, each child document is a **leaf document** because it is processe
 - **params:**
   - `data_dir`: string (required). Destination folder for CSV.
   - `filename`: string (required). Base filename template; `.csv` is auto-added.
-  - Advanced compatibility parameters may use nested `storage.data_dir` / `storage.filename`, a task-specific `extraction.fields` mapping, and an operational `task_slug`. New configurations should normally use the top-level directory and filename with the extraction task's shared fields.
+  - Advanced compatibility parameters may use nested `storage.data_dir` / `storage.filename` and a task-specific `extraction.fields` mapping. New configurations should normally use the top-level directory and filename with the extraction task's shared fields.
 - **Behavior:**
   - Uses configured field aliases for column names.
   - If one extraction field has `is_table: true`, writes one row per item and repeats the document-level values.

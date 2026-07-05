@@ -145,6 +145,19 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
         class_name = task_config.get("class")
         classification = _classify_task(module_name, class_name, params)
 
+        if isinstance(params, dict) and "task_slug" in params:
+            warnings.append(
+                ParameterIssue(
+                    path=f"{params_path}.task_slug",
+                    message=(
+                        "Parameter 'task_slug' is deprecated and ignored; the key "
+                        "listed in pipeline is the authoritative task identity"
+                    ),
+                    code="param-deprecated-task-slug",
+                    details={"config_key": f"{params_path}.task_slug"},
+                )
+            )
+
         if classification == "extraction":
             _validate_extraction_params(
                 params,
@@ -608,14 +621,6 @@ def _validate_rules_params(
         "backup",
         errors,
         code="param-rules-invalid-backup",
-    )
-
-    _validate_optional_string_param(
-        params,
-        params_path,
-        "task_slug",
-        errors,
-        code="param-rules-invalid-task-slug",
     )
 
     csv_match = params.get("csv_match")

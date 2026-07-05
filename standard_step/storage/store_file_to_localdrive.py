@@ -198,7 +198,10 @@ class StoreFileToLocaldrive(BaseTask):
                 context,
                 file_type="export_pdf",
                 file_path=output_path,
-                metadata={"task_slug": "store_file_to_localdrive", "original_filename": original_filename},
+                metadata={
+                    "task_key": self.task_key(context),
+                    "original_filename": original_filename,
+                },
             )
         except Exception as e:
             raise TaskError(f"Failed to store file {original_filename} ({unique_id}): {e}")

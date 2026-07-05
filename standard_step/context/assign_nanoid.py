@@ -17,7 +17,7 @@ from modules.config_protocol import ConfigProvider as ConfigManager
 class AssignNanoidTask(BaseTask):
     """Generate a unique nanoid string and add it to the shared context."""
 
-    TASK_SLUG = "assign_nanoid"
+    TASK_NAME = "assign_nanoid"
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
         super().__init__(config_manager, **params)
@@ -26,13 +26,17 @@ class AssignNanoidTask(BaseTask):
         if length_param is None:
             length_param = self.config_manager.get("assign_nanoid.length", 10)
         if length_param is None:
-            raise TaskError(f"Length parameter for {self.TASK_SLUG} is missing")
+            raise TaskError(f"Length parameter for {self.TASK_NAME} is missing")
         try:
             self.length = int(length_param)
         except (ValueError, TypeError):
-            raise TaskError(f"Invalid length parameter for {self.TASK_SLUG}: must be an integer")
+            raise TaskError(
+                f"Invalid length parameter for {self.TASK_NAME}: must be an integer"
+            )
         if not (5 <= self.length <= 21):
-            raise TaskError(f"Length parameter for {self.TASK_SLUG} must be between 5 and 21 inclusive")
+            raise TaskError(
+                f"Length parameter for {self.TASK_NAME} must be between 5 and 21 inclusive"
+            )
 
     def on_start(self, context: Dict[str, Any]) -> None:
         self.initialize_context(context)
@@ -53,5 +57,5 @@ class AssignNanoidTask(BaseTask):
             return context
         except Exception as e:
             context["error"] = str(e)
-            context["error_step"] = self.TASK_SLUG
-            raise TaskError(f"Error in {self.TASK_SLUG}: {e}")
+            context["error_step"] = self.task_key(context)
+            raise TaskError(f"Error in {self.task_key(context)}: {e}")

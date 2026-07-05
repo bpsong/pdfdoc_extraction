@@ -31,9 +31,6 @@ from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import windows_long_path, sanitize_filename, preprocess_filename_value
 
-TASK_SLUG = "store_metadata_csv"
-
-
 class StoreMetadataAsCsv(BaseTask):
     """
     Task to store extraction metadata as CSV.
@@ -85,9 +82,6 @@ class StoreMetadataAsCsv(BaseTask):
                 )
                 extraction_params = extract_task_def.get("params", {}) if isinstance(extract_task_def, dict) else {}
                 self.extraction_fields = extraction_params.get("fields", {})
-
-        # task slug used in status updates
-        self.task_slug = self.params.get("task_slug", TASK_SLUG)
 
         # Initialize logger
         self.logger = logging.getLogger(__name__)
@@ -442,7 +436,7 @@ class StoreMetadataAsCsv(BaseTask):
                 context,
                 file_type="export_csv",
                 file_path=output_path,
-                metadata={"task_slug": self.task_slug, "rows": len(rows)},
+                metadata={"task_key": self.task_key(context), "rows": len(rows)},
             )
             return context
 

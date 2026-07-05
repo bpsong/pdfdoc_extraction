@@ -174,9 +174,13 @@ pipeline:
   - example_task
 ```
 
-For each task, `WorkflowLoader` verifies module/class approval, instantiates
-the task, starts a SQLite task run, invokes it through a Prefect task wrapper,
-and persists the result. `on_error` is `stop` or `continue`.
+For each task, `WorkflowLoader` verifies module/class approval, places the
+configured pipeline key and index in `current_task_key` and
+`current_task_index`, starts a SQLite task run when document state is
+available, instantiates the task with the resolved `params`, invokes it
+through a Prefect task wrapper, and persists the result. The pipeline key is
+the authoritative operational identity even when SQLite state is unavailable.
+`on_error` is `stop` or `continue`.
 
 Configured tasks and cleanup currently receive one Prefect retry. Individual
 provider tasks can add their own retries, so retry policy is not centralized.
@@ -187,7 +191,9 @@ Cleanup runs after normal completion, failure, review pause, or split fan-out.
 Standard tasks inherit from `BaseTask` and implement `on_start`, `run`, and
 `validate_required_fields`. Expected failures use `TaskError` and
 `register_error`. New tasks must not write workflow status through
-`StatusManager` or text files.
+`StatusManager` or text files. Tasks use their injected parameters and must not
+reload their own parameters from a fixed `tasks.<name>` configuration path,
+because one implementation may be configured under different pipeline keys.
 
 The mutable context is the internal task protocol:
 
@@ -328,6 +334,10 @@ stores contents. Canonical roles are:
 | `export_pdf` | Final PDF output |
 | `export_csv` | CSV metadata export |
 | `export_json` | JSON metadata export |
+
+Task-created artifact metadata records `task_key` from the workflow context
+when producer attribution is needed. Artifact role remains represented by
+`file_type`; a separate task slug is not part of the task contract.
 
 Runtime directories such as `data/`, `files/`, `processing*/`,
 `archive_folder/`, `web_upload/`, and `watch_folder/` may contain customer

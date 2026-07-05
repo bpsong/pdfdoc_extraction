@@ -8,7 +8,7 @@ value. The update is written atomically with an optional backup.
 
 Notes:
     - Reads parameters via injected BaseTask params:
-      reference_file, update_field, write_value, backup, task_slug, csv_match.
+      reference_file, update_field, write_value, backup, csv_match.
     - Reads/writes a CSV file on disk; atomic replace with optional .backup.
     - Follows Railway pattern: errors registered in context and surfaced as TaskError.
 """
@@ -130,7 +130,6 @@ class UpdateReferenceTask(BaseTask):
             - update_field (str): Column to write.
             - write_value (str): Value to write for matched rows.
             - backup (bool): Whether to write a .backup before replacement.
-            - task_slug (str): Slug used in context summaries.
             - csv_match (dict): With 'type' and 'clauses' definitions.
 
     Notes:
@@ -156,9 +155,6 @@ class UpdateReferenceTask(BaseTask):
         self.update_field: str = params.get("update_field", "") or ""
         self.write_value: str = params.get("write_value", "Updated")
         self.backup: bool = bool(params.get("backup", True))
-    
-        # Standardized task slug for status events (lowercase underscore)
-        self.task_slug: str = params.get("task_slug", "update_csv_reference")
     
         # csv_match: column_equals_all with up to 5 clauses
         csv_match: Dict[str, Any] = params.get("csv_match", {}) or {}

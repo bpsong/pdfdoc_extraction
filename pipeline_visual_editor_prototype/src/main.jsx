@@ -506,7 +506,6 @@ function validateRules(step, fields, csvInfo, findings) {
   if (!params.update_field) findings.push(finding("error", "rules-update-field-empty", `tasks.${step.key}.params.update_field`, "Rules task needs an update field."));
   if (params.write_value !== undefined && typeof params.write_value !== "string") findings.push(finding("error", "rules-write-value-type", `tasks.${step.key}.params.write_value`, "Write value must be text."));
   if (params.backup !== undefined && typeof params.backup !== "boolean") findings.push(finding("error", "rules-backup-type", `tasks.${step.key}.params.backup`, "Backup must be Yes or No."));
-  if (params.task_slug !== undefined && (typeof params.task_slug !== "string" || !params.task_slug.trim())) findings.push(finding("error", "rules-task-slug-type", `tasks.${step.key}.params.task_slug`, "Task status key must be non-empty text."));
   if (columns.length && params.update_field && !columns.includes(params.update_field)) {
     findings.push(finding("error", "rules-update-field-missing", `tasks.${step.key}.params.update_field`, "Update field is not present in the selected CSV."));
   }
@@ -1722,7 +1721,6 @@ function RulesControls({ step, index, updateParams, steps, csvMetadata, setCsvMe
       <SelectControl label="Update field" value={params.update_field || ""} onChange={(value) => updateParams(index, { update_field: value })} options={["", ...columns]} />
       <InlineFindings findings={findings} path={`tasks.${step.key}.params.update_field`} />
       <TextControl label="Write value" value={params.write_value || ""} onChange={(value) => updateParams(index, { write_value: value })} />
-      <TextControl label="Task status key (optional)" hint="Overrides the task slug written to status metadata." value={params.task_slug || ""} onChange={(value) => updateParams(index, { task_slug: value || undefined })} mono />
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3" aria-live="polite">
         <div className="text-xs font-semibold uppercase tracking-wide text-primary">Rule outcome</div>
         <p className="mt-1 text-sm">

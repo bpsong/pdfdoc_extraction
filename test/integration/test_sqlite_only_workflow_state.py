@@ -74,7 +74,6 @@ def _config(tmp_path: Path) -> TempConfig:
                         "update_field": "status",
                         "write_value": "processed",
                         "backup": False,
-                        "task_slug": "update_reference",
                         "csv_match": {
                             "type": "column_equals_all",
                             "clauses": [{"column": "supplier", "from_context": "supplier"}],
@@ -168,6 +167,14 @@ def test_configured_workflow_uses_sqlite_state_without_status_text_files(
 
     file_types = {file_record["file_type"] for file_record in files}
     assert {"source_original", "export_json", "export_csv", "export_pdf", "source_archive"}.issubset(file_types)
+    task_keys_by_file_type = {
+        file_record["file_type"]: json_loads(file_record["metadata_json"], {}).get("task_key")
+        for file_record in files
+    }
+    assert task_keys_by_file_type["export_json"] == "store_json"
+    assert task_keys_by_file_type["export_csv"] == "store_csv"
+    assert task_keys_by_file_type["export_pdf"] == "store_file"
+    assert task_keys_by_file_type["source_archive"] == "archive_pdf"
     assert "processed" in (tmp_path / "reference.csv").read_text(encoding="utf-8")
 
     app = FastAPI()

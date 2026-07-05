@@ -64,6 +64,11 @@ class TestExtractPdfTask:
 
         yield
 
+    def make_task(self) -> ExtractPdfTask:
+        """Build the task as WorkflowLoader does, with resolved parameters."""
+        params = self.config_manager.get("tasks.extract_document_data.params", {})
+        return ExtractPdfTask(config_manager=self.config_manager, **params)
+
     def test_successful_extraction_with_table(self, monkeypatch):
         """Test successful extraction with both scalar fields and table data."""
         # Sample LlamaCloud response as specified in requirements
@@ -96,7 +101,7 @@ class TestExtractPdfTask:
         }
 
         # Create and run task
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)  # Call on_start first like in V1 tests
         result_context = task.run(context)
 
@@ -177,7 +182,7 @@ class TestExtractPdfTask:
         monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -210,7 +215,7 @@ class TestExtractPdfTask:
         monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -237,7 +242,7 @@ class TestExtractPdfTask:
             "file_path": ""  # Empty file path should trigger validation error
         }
 
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
 
         with pytest.raises(TaskError) as exc_info:
@@ -258,7 +263,7 @@ class TestExtractPdfTask:
         )
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
 
         with pytest.raises(TaskError) as exc_info:
@@ -285,7 +290,7 @@ class TestExtractPdfTask:
         monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -325,7 +330,7 @@ class TestExtractPdfTask:
         monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -387,7 +392,7 @@ class TestExtractPdfTask:
         monkeypatch.setattr("standard_step.extraction.extract_pdf.run_extract_v2_job", MagicMock(return_value=sample_response))
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
 
         # Should raise TaskError due to multiple table fields during on_start
         with pytest.raises(TaskError) as exc_info:
@@ -456,7 +461,7 @@ class TestExtractPdfTask:
         self.config_manager.get.side_effect = custom_mock_get
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -516,7 +521,7 @@ class TestExtractPdfTask:
 
         # Re-run with updated config
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -597,7 +602,7 @@ class TestExtractPdfTask:
         self.config_manager.get.side_effect = bool_mock_get
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 
@@ -684,7 +689,7 @@ class TestExtractPdfTask:
         self.config_manager.get.side_effect = int_mock_get
 
         context = {"id": "test-uuid", "file_path": str(SAMPLE_PDF_SOURCE)}
-        task = ExtractPdfTask(config_manager=self.config_manager)
+        task = self.make_task()
         task.on_start(context)
         result_context = task.run(context)
 

@@ -196,7 +196,6 @@ custom_steps:
 [ERROR] tasks.update_reference.params.csv_match.clauses: csv_match.clauses must define between 1 and 5 entries
 [ERROR] tasks.update_reference.params.write_value: Parameter 'write_value' must be a string when provided
 [ERROR] tasks.update_reference.params.backup: Parameter 'backup' must be a boolean when provided
-[ERROR] tasks.update_reference.params.task_slug: Parameter 'task_slug' must be a string when provided
 ```
 
 **Fixes**
@@ -212,7 +211,17 @@ custom_steps:
 - Optional parameters must have correct types when provided:
   - `write_value`: string value to write to matched rows (optional, defaults to "Updated").
   - `backup`: boolean flag to create .backup files (optional, defaults to true).
-  - `task_slug`: string identifier for status tracking (optional, defaults to "update_csv_reference").
+
+## Deprecated Task Slug
+
+**Symptom**
+```
+[WARNING] tasks.update_reference.params.task_slug: Parameter 'task_slug' is deprecated and ignored; the key listed in pipeline is the authoritative task identity
+```
+
+**Fix**
+- Remove `task_slug` from the task's `params` mapping.
+- Keep the desired task identity as the key referenced by the top-level `pipeline` list. No replacement parameter is required.
 
 ## Housekeeping Task Configuration Errors
 

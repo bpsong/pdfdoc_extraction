@@ -185,7 +185,10 @@ class ArchivePdfTask(BaseTask):
                 context,
                 file_type="source_archive",
                 file_path=dst_path,
-                metadata={"task_slug": "archive_pdf", "original_filename": original_filename},
+                metadata={
+                    "task_key": self.task_key(context),
+                    "original_filename": original_filename,
+                },
             )
 
         except TaskError as e:

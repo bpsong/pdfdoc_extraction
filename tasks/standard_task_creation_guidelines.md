@@ -56,7 +56,9 @@ Each task is a self-contained Python module that implements a specific step in t
 
 - Read configuration through the injected configuration provider and task
   parameters captured by `BaseTask`; do not create another configuration
-  singleton inside the task.
+  singleton inside the task or reload the task's own parameters from a fixed
+  `tasks.<name>.params` path. The same implementation may be configured under
+  more than one task key.
 - Prefer `pathlib.Path` for filesystem operations. Use `windows_long_path` from
   `modules/utils.py` where an underlying Windows API or library needs a
   long-path-compatible string.
@@ -132,8 +134,14 @@ Task implementations should:
 
 - treat the key referenced by the YAML `pipeline` list as the authoritative
   configured task key used for task-run tracking;
-- keep any optional internal task slug stable, but do not assume it must equal
-  every deployment's configured task key;
+- read that identity from `context["current_task_key"]`; the workflow loader
+  sets the task key and index before task setup even when SQLite state is not
+  available;
+- do not define a separate `task_slug` parameter. Legacy `task_slug` values are
+  accepted temporarily, logged as deprecated, and ignored by built-in tasks;
+- use `self.task_key(context)` when error or artifact metadata needs producer
+  attribution. It returns the configured key and falls back to the task class
+  name only for direct execution outside the workflow loader;
 - return meaningful context changes so the workflow runner can summarize outputs;
 - call `self.register_error(context, TaskError(...))` before returning context
   with a handled error;
@@ -173,7 +181,7 @@ register_document_artifact(
     context=context,
     file_type="export_json",
     file_path=output_path,
-    metadata={"task": self.__class__.__name__},
+    metadata={"task_key": self.task_key(context)},
 )
 ```
 

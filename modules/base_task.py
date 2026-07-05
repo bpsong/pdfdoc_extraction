@@ -48,7 +48,20 @@ class BaseTask(ABC):
         self.config_manager = config_manager
         self.params = params
 
+        if "task_slug" in params:
+            self.logger.warning(
+                "Task parameter 'task_slug' is deprecated and ignored by built-in "
+                "tasks; use the configured pipeline task key instead."
+            )
+
         # Keep constructor side-effect free beyond basic field initialization.
+
+    def task_key(self, context: dict) -> str:
+        """Return the configured task key, falling back to the implementation name."""
+        value = context.get("current_task_key")
+        if isinstance(value, str) and value:
+            return value
+        return self.__class__.__name__
 
     @abstractmethod
     def on_start(self, context: dict):
@@ -106,8 +119,8 @@ class BaseTask(ABC):
         Side Effects:
             - Ensures context['data'] exists.
             - Sets context['error'] to the string representation of the error.
-            - Sets context['error_step'] to the current class name to indicate
-              the origin of the failure.
+            - Sets context['error_step'] to the configured task key, or the
+              current class name during direct execution, to indicate origin.
 
         Args:
             context: The mutable workflow context to update with error details.
@@ -115,7 +128,7 @@ class BaseTask(ABC):
         """
         context.setdefault('data', {})
         context['error'] = str(error)
-        context['error_step'] = self.__class__.__name__
+        context['error_step'] = self.task_key(context)
 
     def initialize_context(self, context: dict):
         """Ensure standard keys exist in the shared workflow context.
@@ -126,7 +139,8 @@ class BaseTask(ABC):
         Ensured Keys:
             - data: dict container for task outputs and shared state.
             - error: str | None, present even when no error occurred.
-            - error_step: str | None, indicates the class name that set error.
+            - error_step: str | None, identifies the configured task that set
+              the error, with a class-name fallback for direct execution.
 
         Args:
             context: The mutable workflow context to normalize.

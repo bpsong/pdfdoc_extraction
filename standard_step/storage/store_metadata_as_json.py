@@ -42,10 +42,6 @@ from modules.utils import (
     windows_long_path,
 )
 
-# Task slug used for status updates
-TASK_SLUG = "store_metadata_json"
-
-
 class StoreMetadataAsJson(BaseTask):
     """Write extracted metadata to JSON while preserving list-of-objects.
 
@@ -272,7 +268,7 @@ class StoreMetadataAsJson(BaseTask):
                     context,
                     file_type="export_json",
                     file_path=output_path,
-                    metadata={"task_slug": TASK_SLUG},
+                    metadata={"task_key": self.task_key(context)},
                 )
             except Exception as e:
                 # On write failure, record and re-raise as TaskError

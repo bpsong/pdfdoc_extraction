@@ -64,10 +64,8 @@ class ExtractPdfTask(BaseTask):
         fields (Dict[str, Any]): Scalar, object, and table field configuration.
         table_field_key (Optional[str]): Key of the table field (marked with is_table: true).
         item_fields (Dict[str, Any]): Subfield configuration for the table field.
-        task_slug (str): Task identifier for status tracking.
-
     Configuration:
-        The task loads configuration from the 'tasks.extract_document_data.params' section including:
+        The workflow loader injects the configured task parameters, including:
         - api_key: LlamaCloud API authentication key
         - configuration_id: Optional saved LlamaCloud Extract v2 configuration identifier
         - tier: Optional Extract v2 tier used for inline configuration
@@ -114,8 +112,6 @@ class ExtractPdfTask(BaseTask):
         """
         super().__init__(config_manager=config_manager, **params)
         self.config_manager = config_manager
-        self.params = params
-        self.task_slug = "extract_document_data"
         self.logger = get_logger(__name__)
         self.api_key: Optional[str] = None
         self.configuration_id: Optional[str] = None
@@ -153,14 +149,7 @@ class ExtractPdfTask(BaseTask):
             # Call parent on_start to initialize context
             super().on_start(context)
 
-            # Load params from config_manager with fallback to self.params
-            params = self.config_manager.get(f'tasks.{self.task_slug}.params', self.params)
-
-            if params is None:
-                params = {}
-
-            if not isinstance(params, dict):
-                params = {}
+            params = self.params
 
             # Extract required parameters with explicit types for static analysis.
             api_key = params.get('api_key')
@@ -383,7 +372,7 @@ class ExtractPdfTask(BaseTask):
             raise
         except Exception as e:
             # Handle unexpected exceptions
-            error_msg = _redact_text(f"Unexpected error in {self.task_slug}: {str(e)}")
+            error_msg = _redact_text(f"Unexpected error in {self.task_key(context)}: {str(e)}")
             self.logger.error(error_msg)
             task_error = TaskError(error_msg)
             context["fatal_failure"] = {

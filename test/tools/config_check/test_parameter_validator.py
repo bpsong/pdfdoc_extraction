@@ -640,13 +640,14 @@ def test_rules_task_optional_knobs_validation():
     result = validate_parameters({"tasks": tasks})
     assert any(issue.code == "param-rules-invalid-backup" for issue in result.errors)
 
-    # Test invalid task_slug type
+    # Deprecated task_slug values are ignored regardless of their old type.
     rules_task = _rules_task()
-    rules_task["params"]["task_slug"] = 123  # Should be string
+    rules_task["params"]["task_slug"] = 123
     tasks["update_reference"] = rules_task
 
     result = validate_parameters({"tasks": tasks})
-    assert any(issue.code == "param-rules-invalid-task-slug" for issue in result.errors)
+    assert not any("task_slug" in issue.path for issue in result.errors)
+    assert any(issue.code == "param-deprecated-task-slug" for issue in result.warnings)
 
     # Test valid optional knobs
     rules_task = _rules_task()
@@ -656,11 +657,12 @@ def test_rules_task_optional_knobs_validation():
     tasks["update_reference"] = rules_task
 
     result = validate_parameters({"tasks": tasks})
-    # Should not have errors for the optional knobs
+    # The supported optional knobs remain valid; task_slug produces a warning only.
     knob_errors = [issue for issue in result.errors if "invalid" in issue.code and any(
         knob in issue.path for knob in ["write_value", "backup", "task_slug"]
     )]
     assert len(knob_errors) == 0
+    assert any(issue.code == "param-deprecated-task-slug" for issue in result.warnings)
 
 
 def test_housekeeping_processing_dir_validation():

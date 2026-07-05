@@ -237,4 +237,4 @@ def test_run_handles_exception_and_registers_context_error(mock_generate):
         task.run(context)
 
     assert context["error"] == "Generation failed"
-    assert context["error_step"] == task.TASK_SLUG
+    assert context["error_step"] == task.__class__.__name__

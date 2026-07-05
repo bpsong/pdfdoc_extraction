@@ -55,7 +55,6 @@ def make_task(params=None):
         },
     )
     params.setdefault("backup", True)
-    params.setdefault("task_slug", "update_csv_reference")
     return UpdateReferenceTask(config_manager=MagicMock(), **params)
 
 
@@ -318,6 +317,26 @@ def test_deprecation_warning_for_data_prefix(caplog):
     assert task.clauses[0].from_context == "data.policy_number"
 
 
+def test_task_slug_is_accepted_with_deprecation_warning(caplog):
+    with caplog.at_level(logging.WARNING):
+        task = make_task({"task_slug": "legacy_rules_key"})
+
+    assert not hasattr(task, "task_slug")
+    assert any(
+        "'task_slug' is deprecated and ignored" in record.message
+        for record in caplog.records
+    )
+
+
+def test_register_error_uses_configured_task_key():
+    task = make_task()
+    context = {"current_task_key": "configured_rules_key"}
+
+    task.register_error(context, TaskError("failed"))
+
+    assert context["error_step"] == "configured_rules_key"
+
+
 def test_data_prefix_deprecation_warning_with_new_format(caplog):
     """Test that the new deprecation warning format is used for data. prefixed fields."""
     # Create task with data. prefixed field
@@ -400,7 +419,6 @@ def test_both_formats_resolve_equivalently(sample_context, sample_csv_data, capl
         update_field="status",
         write_value="MATCHED",
         backup=True,
-        task_slug="update_csv_reference",
         csv_match={
             "type": "column_equals_all",
             "clauses": [{"column": "policy_number", "from_context": "data.policy_number", "number": False}],
@@ -433,7 +451,6 @@ def test_nested_array_field_resolution(sample_context, sample_csv_data):
         update_field="status",
         write_value="MATCHED",
         backup=True,
-        task_slug="update_csv_reference",
         csv_match={
             "type": "column_equals_all",
             "clauses": [{"column": "sku", "from_context": "data.line_items.0.sku", "number": False}],

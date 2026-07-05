@@ -25,19 +25,26 @@ def _task(tmp_path: Path, params=None) -> ExtractPdfTask:
         "api_key": "key",
         "fields": {"value": {"alias": "Value", "type": "str"}},
     }
-    task = ExtractPdfTask(config_manager=Config(values))
+    task = ExtractPdfTask(config_manager=Config(values), **values)
     task.on_start({"id": "doc"})
     return task
 
 
-@pytest.mark.parametrize("params", [None, "invalid"])
-def test_on_start_normalizes_invalid_parameter_shapes(params):
-    task = ExtractPdfTask(config_manager=Config(params))
+def test_on_start_uses_injected_params_without_fixed_config_lookup():
+    class NoLookupConfig:
+        def get(self, key, default=None):
+            raise AssertionError(f"Unexpected task-specific config lookup: {key}")
 
-    task.on_start({"id": "doc"})
+    task = ExtractPdfTask(
+        config_manager=NoLookupConfig(),
+        api_key="injected-key",
+        fields={"value": {"alias": "Value", "type": "str"}},
+    )
 
-    assert task.api_key is None
-    assert task.fields == {}
+    task.on_start({"id": "doc", "current_task_key": "alternate_extract"})
+
+    assert task.api_key == "injected-key"
+    assert task.fields == {"value": {"alias": "Value", "type": "str"}}
 
 
 def test_require_api_key_and_required_field_validation(tmp_path):

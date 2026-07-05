@@ -212,6 +212,8 @@ class WorkflowLoader:
                 task_run_id = None
                 state_service = None
                 try:
+                    current_context["current_task_key"] = task_key
+                    current_context["current_task_index"] = task_index
                     state_service = self._state_service(current_context)
                     if state_service is not None:
                         task_run = state_service.start_task(
@@ -225,8 +227,6 @@ class WorkflowLoader:
                         )
                         task_run_id = task_run["id"]
                         current_context["task_run_id"] = task_run_id
-                        current_context["current_task_key"] = task_key
-                        current_context["current_task_index"] = task_index
 
                     # Import and instantiate the task class, passing config_manager and params
                     task_class = self._import_task_class(module_name, class_name)

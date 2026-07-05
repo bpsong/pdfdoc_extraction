@@ -209,6 +209,8 @@ def test_valid_flow_execution_param(initial_context, mock_all_dependencies, pipe
     assert flow is not None, "Flow should not be None for valid configuration"
 
     result_context = flow(initial_context)
+    assert result_context["current_task_key"] == test_config_data["pipeline"][-1]
+    assert result_context["current_task_index"] == len(test_config_data["pipeline"]) - 1
     assert result_context.get("data", {}).get("extracted") is True
     if len(test_config_data["pipeline"]) > 1:
         assert result_context.get("data", {}).get("stored") is True
