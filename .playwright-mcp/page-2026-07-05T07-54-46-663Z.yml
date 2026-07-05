@@ -1,0 +1,214 @@
+- generic [ref=f2e2]:
+  - complementary [ref=f2e3]:
+    - generic [ref=f2e4]:
+      - link "DocFlow AI" [ref=f2e5] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=f2e7]
+        - generic [ref=f2e9]: DocFlow AI
+      - button "Collapse navigation" [ref=f2e10] [cursor=pointer]:
+        - img [ref=f2e11]
+    - navigation "Primary navigation" [ref=f2e13]:
+      - link "Upload & Process" [ref=f2e14] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=f2e15]
+        - generic [ref=f2e17]: Upload & Process
+      - link "Review Queue" [ref=f2e18] [cursor=pointer]:
+        - /url: /app/review
+        - img [ref=f2e19]
+        - generic [ref=f2e21]: Review Queue
+      - link "Failures" [ref=f2e22] [cursor=pointer]:
+        - /url: /app/failures
+        - img [ref=f2e23]
+        - generic [ref=f2e25]: Failures
+      - link "Reports" [ref=f2e26] [cursor=pointer]:
+        - /url: /app/reports
+        - img [ref=f2e27]
+        - generic [ref=f2e29]: Reports
+      - link "Settings" [ref=f2e30] [cursor=pointer]:
+        - /url: /app/settings
+        - img [ref=f2e31]
+        - generic [ref=f2e34]: Settings
+    - generic [ref=f2e35]: Admin
+    - navigation "Admin navigation" [ref=f2e36]:
+      - link "Overview" [ref=f2e37] [cursor=pointer]:
+        - /url: /app/admin
+        - img [ref=f2e38]
+        - generic [ref=f2e40]: Overview
+      - link "Users" [ref=f2e41] [cursor=pointer]:
+        - /url: /app/admin/users
+        - generic [ref=f2e42]: Users
+      - heading "Configuration" [level=2] [ref=f2e43]
+      - group "Configuration" [ref=f2e44]:
+        - link "Pipeline" [ref=f2e45] [cursor=pointer]:
+          - /url: /app/admin/pipeline
+          - img [ref=f2e46]
+          - generic [ref=f2e48]: Pipeline
+        - link "Review Forms" [ref=f2e49] [cursor=pointer]:
+          - /url: /app/schemas
+          - img [ref=f2e50]
+          - generic [ref=f2e52]: Review Forms
+        - link "Task Catalog" [ref=f2e53] [cursor=pointer]:
+          - /url: /app/admin/tasks
+          - img [ref=f2e54]
+          - generic [ref=f2e56]: Task Catalog
+        - link "Validation" [ref=f2e57] [cursor=pointer]:
+          - /url: /app/settings/validation
+          - img [ref=f2e58]
+          - generic [ref=f2e60]: Validation
+      - heading "Compliance" [level=2] [ref=f2e61]
+      - group "Compliance" [ref=f2e62]:
+        - link "Audit Log" [ref=f2e63] [cursor=pointer]:
+          - /url: /app/admin/audit
+          - img [ref=f2e64]
+          - generic [ref=f2e66]: Audit Log
+    - generic [ref=f2e67]: Signed in as admin
+  - main [ref=f2e68]:
+    - generic [ref=f2e69]:
+      - generic [ref=f2e70]:
+        - heading "Processing Overview" [level=1] [ref=f2e71]
+        - paragraph [ref=f2e72]: Track splitting, extraction, review, and completion state.
+      - generic [ref=f2e73]:
+        - button "No fatal failure notifications" [disabled]:
+          - img
+        - button "admin" [ref=f2e75] [cursor=pointer]
+    - generic [ref=f2e77]:
+      - generic [ref=f2e79]:
+        - generic [ref=f2e80]:
+          - heading "Pipeline Status" [level=2] [ref=f2e81]
+          - generic [ref=f2e83]: 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a
+        - generic [ref=f2e558]:
+          - generic [ref=f2e559]:
+            - img [ref=f2e561]
+            - generic [ref=f2e563]:
+              - generic [ref=f2e564]: Uploaded
+              - generic [ref=f2e565]: ingestion
+              - generic [ref=f2e566]:
+                - generic [ref=f2e567]: Ingestion
+                - generic [ref=f2e568]: 1 source, 1 split document
+          - generic [ref=f2e570]:
+            - img [ref=f2e572]
+            - generic [ref=f2e574]:
+              - generic [ref=f2e575]: Llama Cloud Split
+              - generic [ref=f2e576]: split_documents
+              - generic [ref=f2e577]:
+                - generic [ref=f2e578]: Split
+                - generic [ref=f2e579]: 1 done
+          - generic [ref=f2e581]:
+            - img [ref=f2e583]
+            - generic [ref=f2e585]:
+              - generic [ref=f2e586]: Extract Pdf
+              - generic [ref=f2e587]: extract_document_data
+              - generic [ref=f2e588]:
+                - generic [ref=f2e589]: Extract
+                - generic [ref=f2e590]: 1 done
+          - generic [ref=f2e592]:
+            - img [ref=f2e594]
+            - generic [ref=f2e596]:
+              - generic [ref=f2e597]: Review Gate
+              - generic [ref=f2e598]: review_gate
+              - generic [ref=f2e599]:
+                - generic [ref=f2e600]: Review
+                - generic [ref=f2e601]: skipped
+          - generic [ref=f2e603]:
+            - img [ref=f2e605]
+            - generic [ref=f2e607]:
+              - generic [ref=f2e608]: Store Metadata As Csv
+              - generic [ref=f2e609]: store_metadata_csv
+              - generic [ref=f2e610]:
+                - generic [ref=f2e611]: Storage
+                - generic [ref=f2e612]: 1 done
+          - generic [ref=f2e614]:
+            - img [ref=f2e616]
+            - generic [ref=f2e618]:
+              - generic [ref=f2e619]: Store Metadata As Json
+              - generic [ref=f2e620]: store_metadata_json
+              - generic [ref=f2e621]:
+                - generic [ref=f2e622]: Storage
+                - generic [ref=f2e623]: 1 done
+          - generic [ref=f2e625]:
+            - img [ref=f2e627]
+            - generic [ref=f2e629]:
+              - generic [ref=f2e630]: Store File To Localdrive
+              - generic [ref=f2e631]: store_file_to_localdrive
+              - generic [ref=f2e632]:
+                - generic [ref=f2e633]: Storage
+                - generic [ref=f2e634]: 1 done
+          - generic [ref=f2e636]:
+            - img [ref=f2e638]
+            - generic [ref=f2e640]:
+              - generic [ref=f2e641]: Archive Pdf
+              - generic [ref=f2e642]: archive_pdf
+              - generic [ref=f2e643]:
+                - generic [ref=f2e644]: Archive
+                - generic [ref=f2e645]: 1 done
+        - generic [ref=f2e167]:
+          - generic [ref=f2e168]:
+            - generic [ref=f2e169]: Overall Progress
+            - generic [ref=f2e170]: 100%
+          - progressbar [ref=f2e171]
+          - paragraph [ref=f2e172]: Last updated 15:54:30
+      - generic [ref=f2e174]:
+        - generic [ref=f2e175]:
+          - heading "Processing Queue" [level=2] [ref=f2e176]
+          - link "View Split Results" [ref=f2e388] [cursor=pointer]:
+            - /url: /app/batches/23ab1fc3-97c3-49aa-b736-e61d8c9abe7a/split-results
+        - table [ref=f2e178]:
+          - rowgroup [ref=f2e179]:
+            - row "File Name Status Current Step Last Completed Progress Action" [ref=f2e180]:
+              - columnheader "File Name" [ref=f2e181]
+              - columnheader "Status" [ref=f2e182]
+              - columnheader "Current Step" [ref=f2e183]
+              - columnheader "Last Completed" [ref=f2e184]
+              - columnheader "Progress" [ref=f2e185]
+              - columnheader "Action" [ref=f2e186]
+          - rowgroup [ref=f2e187]:
+            - row "invoice_Aaron Bergman_36259.pdf 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a Completed Llama Cloud Split Split Completed Llama Cloud Split Split Completed 100 100% Extraction" [ref=f2e646]:
+              - cell "invoice_Aaron Bergman_36259.pdf 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a" [ref=f2e647]:
+                - generic [ref=f2e648]: invoice_Aaron Bergman_36259.pdf
+                - generic [ref=f2e649]: 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a
+              - cell "Completed" [ref=f2e650]:
+                - generic [ref=f2e651]: Completed
+              - cell "Llama Cloud Split Split Completed" [ref=f2e652]:
+                - generic [ref=f2e653]:
+                  - generic [ref=f2e654]: Llama Cloud Split
+                  - generic [ref=f2e655]:
+                    - generic [ref=f2e656]: Split
+                    - generic [ref=f2e657]: Completed
+              - cell "Llama Cloud Split Split Completed" [ref=f2e658]:
+                - generic [ref=f2e659]:
+                  - generic [ref=f2e660]: Llama Cloud Split
+                  - generic [ref=f2e661]:
+                    - generic [ref=f2e662]: Split
+                    - generic [ref=f2e663]: Completed
+              - cell "100 100%" [ref=f2e664]:
+                - generic [ref=f2e665]:
+                  - progressbar [ref=f2e666]
+                  - generic [ref=f2e667]: 100%
+              - cell "Extraction" [ref=f2e668]:
+                - link "Extraction" [ref=f2e669] [cursor=pointer]:
+                  - /url: /app/documents/43f4df7c-c398-4c60-95c6-0b5f9a773aa8/extraction
+            - row "invoice_Aaron Bergman_36259_segment_001_invoice_p1-1.pdf 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a Completed Archive Pdf Archive Completed Archive Pdf Archive Completed 100 100% Extraction" [ref=f2e670]:
+              - cell "invoice_Aaron Bergman_36259_segment_001_invoice_p1-1.pdf 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a" [ref=f2e671]:
+                - generic [ref=f2e672]: invoice_Aaron Bergman_36259_segment_001_invoice_p1-1.pdf
+                - generic [ref=f2e673]: 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a
+              - cell "Completed" [ref=f2e674]:
+                - generic [ref=f2e675]: Completed
+              - cell "Archive Pdf Archive Completed" [ref=f2e676]:
+                - generic [ref=f2e677]:
+                  - generic [ref=f2e678]: Archive Pdf
+                  - generic [ref=f2e679]:
+                    - generic [ref=f2e680]: Archive
+                    - generic [ref=f2e681]: Completed
+              - cell "Archive Pdf Archive Completed" [ref=f2e682]:
+                - generic [ref=f2e683]:
+                  - generic [ref=f2e684]: Archive Pdf
+                  - generic [ref=f2e685]:
+                    - generic [ref=f2e686]: Archive
+                    - generic [ref=f2e687]: Completed
+              - cell "100 100%" [ref=f2e688]:
+                - generic [ref=f2e689]:
+                  - progressbar [ref=f2e690]
+                  - generic [ref=f2e691]: 100%
+              - cell "Extraction" [ref=f2e692]:
+                - link "Extraction" [ref=f2e693] [cursor=pointer]:
+                  - /url: /app/documents/5549ca3d-e417-48db-9ede-278d345a72b7/extraction

@@ -1,0 +1,165 @@
+- generic [ref=f2e2]:
+  - complementary [ref=f2e3]:
+    - generic [ref=f2e4]:
+      - link "DocFlow AI" [ref=f2e5] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=f2e7]
+        - generic [ref=f2e9]: DocFlow AI
+      - button "Collapse navigation" [ref=f2e10] [cursor=pointer]:
+        - img [ref=f2e11]
+    - navigation "Primary navigation" [ref=f2e13]:
+      - link "Upload & Process" [ref=f2e14] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=f2e15]
+        - generic [ref=f2e17]: Upload & Process
+      - link "Review Queue" [ref=f2e18] [cursor=pointer]:
+        - /url: /app/review
+        - img [ref=f2e19]
+        - generic [ref=f2e21]: Review Queue
+      - link "Failures" [ref=f2e22] [cursor=pointer]:
+        - /url: /app/failures
+        - img [ref=f2e23]
+        - generic [ref=f2e25]: Failures
+      - link "Reports" [ref=f2e26] [cursor=pointer]:
+        - /url: /app/reports
+        - img [ref=f2e27]
+        - generic [ref=f2e29]: Reports
+      - link "Settings" [ref=f2e30] [cursor=pointer]:
+        - /url: /app/settings
+        - img [ref=f2e31]
+        - generic [ref=f2e34]: Settings
+    - generic [ref=f2e35]: Admin
+    - navigation "Admin navigation" [ref=f2e36]:
+      - link "Overview" [ref=f2e37] [cursor=pointer]:
+        - /url: /app/admin
+        - img [ref=f2e38]
+        - generic [ref=f2e40]: Overview
+      - link "Users" [ref=f2e41] [cursor=pointer]:
+        - /url: /app/admin/users
+        - generic [ref=f2e42]: Users
+      - heading "Configuration" [level=2] [ref=f2e43]
+      - group "Configuration" [ref=f2e44]:
+        - link "Pipeline" [ref=f2e45] [cursor=pointer]:
+          - /url: /app/admin/pipeline
+          - img [ref=f2e46]
+          - generic [ref=f2e48]: Pipeline
+        - link "Review Forms" [ref=f2e49] [cursor=pointer]:
+          - /url: /app/schemas
+          - img [ref=f2e50]
+          - generic [ref=f2e52]: Review Forms
+        - link "Task Catalog" [ref=f2e53] [cursor=pointer]:
+          - /url: /app/admin/tasks
+          - img [ref=f2e54]
+          - generic [ref=f2e56]: Task Catalog
+        - link "Validation" [ref=f2e57] [cursor=pointer]:
+          - /url: /app/settings/validation
+          - img [ref=f2e58]
+          - generic [ref=f2e60]: Validation
+      - heading "Compliance" [level=2] [ref=f2e61]
+      - group "Compliance" [ref=f2e62]:
+        - link "Audit Log" [ref=f2e63] [cursor=pointer]:
+          - /url: /app/admin/audit
+          - img [ref=f2e64]
+          - generic [ref=f2e66]: Audit Log
+    - generic [ref=f2e67]: Signed in as admin
+  - main [ref=f2e68]:
+    - generic [ref=f2e69]:
+      - generic [ref=f2e70]:
+        - heading "Processing Overview" [level=1] [ref=f2e71]
+        - paragraph [ref=f2e72]: Track splitting, extraction, review, and completion state.
+      - generic [ref=f2e73]:
+        - button "No fatal failure notifications" [disabled]:
+          - img
+        - button "admin" [ref=f2e75] [cursor=pointer]
+    - generic [ref=f2e77]:
+      - generic [ref=f2e79]:
+        - generic [ref=f2e80]:
+          - heading "Pipeline Status" [level=2] [ref=f2e81]
+          - generic [ref=f2e83]: 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a
+        - generic [ref=f2e86]:
+          - generic [ref=f2e87]:
+            - img [ref=f2e89]
+            - generic [ref=f2e91]:
+              - generic [ref=f2e92]: Uploaded
+              - generic [ref=f2e93]: ingestion
+              - generic [ref=f2e94]:
+                - generic [ref=f2e95]: Ingestion
+                - generic [ref=f2e96]: 1 files
+          - generic [ref=f2e101]:
+            - generic [ref=f2e102]: Llama Cloud Split
+            - generic [ref=f2e103]: split_documents
+            - generic [ref=f2e104]:
+              - generic [ref=f2e105]: Split
+              - generic [ref=f2e106]: 1 pending
+          - generic [ref=f2e111]:
+            - generic [ref=f2e112]: Extract Pdf
+            - generic [ref=f2e113]: extract_document_data
+            - generic [ref=f2e114]:
+              - generic [ref=f2e115]: Extract
+              - generic [ref=f2e116]: 1 pending
+          - generic [ref=f2e121]:
+            - generic [ref=f2e122]: Review Gate
+            - generic [ref=f2e123]: review_gate
+            - generic [ref=f2e124]:
+              - generic [ref=f2e125]: Review
+              - generic [ref=f2e126]: 1 pending
+          - generic [ref=f2e131]:
+            - generic [ref=f2e132]: Store Metadata As Csv
+            - generic [ref=f2e133]: store_metadata_csv
+            - generic [ref=f2e134]:
+              - generic [ref=f2e135]: Storage
+              - generic [ref=f2e136]: 1 pending
+          - generic [ref=f2e141]:
+            - generic [ref=f2e142]: Store Metadata As Json
+            - generic [ref=f2e143]: store_metadata_json
+            - generic [ref=f2e144]:
+              - generic [ref=f2e145]: Storage
+              - generic [ref=f2e146]: 1 pending
+          - generic [ref=f2e151]:
+            - generic [ref=f2e152]: Store File To Localdrive
+            - generic [ref=f2e153]: store_file_to_localdrive
+            - generic [ref=f2e154]:
+              - generic [ref=f2e155]: Storage
+              - generic [ref=f2e156]: 1 pending
+          - generic [ref=f2e161]:
+            - generic [ref=f2e162]: Archive Pdf
+            - generic [ref=f2e163]: archive_pdf
+            - generic [ref=f2e164]:
+              - generic [ref=f2e165]: Archive
+              - generic [ref=f2e166]: 1 pending
+        - generic [ref=f2e167]:
+          - generic [ref=f2e168]:
+            - generic [ref=f2e169]: Overall Progress
+            - generic [ref=f2e170]: 12%
+          - progressbar [ref=f2e171]
+          - paragraph [ref=f2e172]: Last updated 15:53:48
+      - generic [ref=f2e174]:
+        - heading "Processing Queue" [level=2] [ref=f2e176]
+        - table [ref=f2e178]:
+          - rowgroup [ref=f2e179]:
+            - row "File Name Status Current Step Last Completed Progress Action" [ref=f2e180]:
+              - columnheader "File Name" [ref=f2e181]
+              - columnheader "Status" [ref=f2e182]
+              - columnheader "Current Step" [ref=f2e183]
+              - columnheader "Last Completed" [ref=f2e184]
+              - columnheader "Progress" [ref=f2e185]
+              - columnheader "Action" [ref=f2e186]
+          - rowgroup [ref=f2e187]:
+            - row "invoice_Aaron Bergman_36259.pdf 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a Queued Llama Cloud Split Split Pending Pending 12 12% Pending" [ref=f2e188]:
+              - cell "invoice_Aaron Bergman_36259.pdf 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a" [ref=f2e189]:
+                - generic [ref=f2e190]: invoice_Aaron Bergman_36259.pdf
+                - generic [ref=f2e191]: 23ab1fc3-97c3-49aa-b736-e61d8c9abe7a
+              - cell "Queued" [ref=f2e192]:
+                - generic [ref=f2e193]: Queued
+              - cell "Llama Cloud Split Split Pending" [ref=f2e194]:
+                - generic [ref=f2e195]:
+                  - generic [ref=f2e196]: Llama Cloud Split
+                  - generic [ref=f2e197]:
+                    - generic [ref=f2e198]: Split
+                    - generic [ref=f2e199]: Pending
+              - cell "Pending" [ref=f2e200]
+              - cell "12 12%" [ref=f2e201]:
+                - generic [ref=f2e202]:
+                  - progressbar [ref=f2e203]
+                  - generic [ref=f2e204]: 12%
+              - cell "Pending" [ref=f2e205]

@@ -1,0 +1,98 @@
+- generic [ref=f1e2]:
+  - complementary [ref=f1e3]:
+    - generic [ref=f1e4]:
+      - link "DocFlow AI" [ref=f1e5] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=f1e7]
+        - generic [ref=f1e9]: DocFlow AI
+      - button "Collapse navigation" [ref=f1e10] [cursor=pointer]:
+        - img [ref=f1e11]
+    - navigation "Primary navigation" [ref=f1e13]:
+      - link "Upload & Process" [ref=f1e14] [cursor=pointer]:
+        - /url: /app/upload
+        - img [ref=f1e15]
+        - generic [ref=f1e17]: Upload & Process
+      - link "Review Queue" [ref=f1e18] [cursor=pointer]:
+        - /url: /app/review
+        - img [ref=f1e19]
+        - generic [ref=f1e21]: Review Queue
+      - link "Failures" [ref=f1e22] [cursor=pointer]:
+        - /url: /app/failures
+        - img [ref=f1e23]
+        - generic [ref=f1e25]: Failures
+      - link "Reports" [ref=f1e26] [cursor=pointer]:
+        - /url: /app/reports
+        - img [ref=f1e27]
+        - generic [ref=f1e29]: Reports
+      - link "Settings" [ref=f1e30] [cursor=pointer]:
+        - /url: /app/settings
+        - img [ref=f1e31]
+        - generic [ref=f1e34]: Settings
+    - generic [ref=f1e35]: Admin
+    - navigation "Admin navigation" [ref=f1e36]:
+      - link "Overview" [ref=f1e37] [cursor=pointer]:
+        - /url: /app/admin
+        - img [ref=f1e38]
+        - generic [ref=f1e40]: Overview
+      - link "Users" [ref=f1e41] [cursor=pointer]:
+        - /url: /app/admin/users
+        - generic [ref=f1e42]: Users
+      - heading "Configuration" [level=2] [ref=f1e43]
+      - group "Configuration" [ref=f1e44]:
+        - link "Pipeline" [ref=f1e45] [cursor=pointer]:
+          - /url: /app/admin/pipeline
+          - img [ref=f1e46]
+          - generic [ref=f1e48]: Pipeline
+        - link "Review Forms" [ref=f1e49] [cursor=pointer]:
+          - /url: /app/schemas
+          - img [ref=f1e50]
+          - generic [ref=f1e52]: Review Forms
+        - link "Task Catalog" [ref=f1e53] [cursor=pointer]:
+          - /url: /app/admin/tasks
+          - img [ref=f1e54]
+          - generic [ref=f1e56]: Task Catalog
+        - link "Validation" [ref=f1e57] [cursor=pointer]:
+          - /url: /app/settings/validation
+          - img [ref=f1e58]
+          - generic [ref=f1e60]: Validation
+      - heading "Compliance" [level=2] [ref=f1e61]
+      - group "Compliance" [ref=f1e62]:
+        - link "Audit Log" [ref=f1e63] [cursor=pointer]:
+          - /url: /app/admin/audit
+          - img [ref=f1e64]
+          - generic [ref=f1e66]: Audit Log
+    - generic [ref=f1e67]: Signed in as admin
+  - main [ref=f1e68]:
+    - generic [ref=f1e69]:
+      - generic [ref=f1e70]:
+        - heading "Upload & Process" [level=1] [ref=f1e71]
+        - paragraph [ref=f1e72]: Upload PDF files to split, extract data, and review results.
+      - generic [ref=f1e73]:
+        - button "No fatal failure notifications" [disabled]:
+          - img
+        - button "admin" [ref=f1e75] [cursor=pointer]
+    - generic [ref=f1e77]:
+      - generic [ref=f1e79]:
+        - img [ref=f1e81]
+        - paragraph [ref=f1e83]: Drag and drop PDF files here
+        - paragraph [ref=f1e84]: or
+        - generic [ref=f1e85] [cursor=pointer]:
+          - img [ref=f1e86]
+          - text: Choose Files
+        - paragraph [ref=f1e88]: PDF only, up to 50 MB per file
+      - generic [ref=f1e90]:
+        - generic [ref=f1e91]:
+          - heading "Selected Files" [level=2] [ref=f1e92]
+          - generic [ref=f1e93]: 1 file
+        - generic [ref=f1e100]:
+          - img [ref=f1e102]
+          - generic [ref=f1e104]:
+            - paragraph [ref=f1e105]: invoice_Aaron Bergman_36259.pdf
+            - paragraph [ref=f1e106]: 14 KB
+          - img [ref=f1e107]
+          - button "Remove invoice_Aaron Bergman_36259.pdf" [ref=f1e109] [cursor=pointer]:
+            - img [ref=f1e110]
+        - generic [ref=f1e98]: "Total files: 1 | Total size: 14 KB"
+        - button "Start Processing" [ref=f1e112] [cursor=pointer]:
+          - img [ref=f1e113]
+          - text: Start Processing
