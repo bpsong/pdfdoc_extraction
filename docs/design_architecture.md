@@ -530,6 +530,12 @@ Expected task failures use `TaskError`; unexpected exceptions become failed
 context and task-run state. `on_error` controls stop/continue behavior. Fatal
 failure summaries are redacted before persistence or API exposure.
 
+Runtime approval, import, class lookup, and `BaseTask` inheritance failures use
+`TaskSetupError`. They always stop and fail only the affected document, then
+continue through cleanup and fan-in; they do not invoke process shutdown or
+terminate the web server. Invalid configured implementations should still be
+caught by startup/config import validation before work is accepted.
+
 Current operational evidence consists of logs, task-run timelines, batch and
 document state, failure records, review/audit events, and artifact records.
 Supported metrics and distributed tracing are not currently emitted.

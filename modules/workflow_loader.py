@@ -21,7 +21,7 @@ from modules.config_protocol import ConfigProvider as ConfigManager, get_all_con
 from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect
-from modules.exceptions import TaskError
+from modules.exceptions import TaskError, TaskSetupError
 from modules.services.failure_service import _redact, _redact_text
 from modules.services.fan_in_service import FanInService
 from modules.services.task_registry_service import ApprovedTaskRegistry, TaskApprovalError
@@ -83,10 +83,8 @@ class WorkflowLoader:
             The imported class object, guaranteed to be a subclass of BaseTask.
 
         Raises:
-            TaskApprovalError: If the module/class pair is not approved for import.
-            TypeError: If the resolved class does not inherit from BaseTask.
-            SystemExit: If any error occurs during import or attribute access; the
-                error is logged, shutdown is triggered, and the process exits.
+            TaskSetupError: If approval, import, lookup, or inheritance
+                validation fails.
         """
         try:
             ApprovedTaskRegistry(self.config_manager).assert_approved(module_name, class_name)
@@ -95,14 +93,26 @@ class WorkflowLoader:
             if not issubclass(task_class, BaseTask):
                 raise TypeError(f"'{class_name}' in '{module_name}' is not a subclass of BaseTask.")
             return task_class
-        except TaskApprovalError as e:
-            self.logger.critical(str(e))
-            self.shutdown_manager.shutdown()
-            raise SystemExit(1)
-        except Exception as e:
-            self.logger.critical(f"Failed to import task class '{module_name}.{class_name}': {e}")
-            self.shutdown_manager.shutdown()
-            raise SystemExit(1)
+        except TaskApprovalError as exc:
+            self.logger.error(
+                "Configured task is not approved: %s.%s",
+                module_name,
+                class_name,
+                exc_info=True,
+            )
+            raise TaskSetupError(
+                f"Configured task '{module_name}.{class_name}' is not approved or available."
+            ) from exc
+        except Exception as exc:
+            self.logger.error(
+                "Failed to load configured task: %s.%s",
+                module_name,
+                class_name,
+                exc_info=True,
+            )
+            raise TaskSetupError(
+                f"Configured task '{module_name}.{class_name}' could not be loaded."
+            ) from exc
 
     @staticmethod
     def _context_summary(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -345,6 +355,29 @@ class WorkflowLoader:
                         if state_service is not None and task_run_id:
                             state_service.complete_task(task_run_id, output_summary)
 
+                except TaskSetupError as e:
+                    self.logger.error("Task '%s' setup failed: %s", task_name, e)
+                    current_context["error"] = _redact_text(str(e))
+                    current_context["error_step"] = task_name
+                    current_context["fatal_failure"] = {
+                        "failure_type": "task_setup_failed",
+                        "task_key": task_key,
+                        "task_index": task_index,
+                        "module_name": str(module_name),
+                        "class_name": str(class_name),
+                        "message": current_context["error"],
+                        "operator_action": (
+                            "Restore the configured task implementation or approval, restart the application, "
+                            "and re-ingest the source document."
+                        ),
+                    }
+                    if state_service is not None and task_run_id:
+                        state_service.fail_task(
+                            task_run_id,
+                            str(current_context["error"]),
+                            self._context_summary(current_context),
+                        )
+                    break
                 except TaskError as e:
                     self.logger.error(f"Task '{task_name}' failed with TaskError: {e}")
                     current_context["error"] = str(e)

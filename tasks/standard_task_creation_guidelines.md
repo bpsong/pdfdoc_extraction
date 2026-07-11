@@ -44,6 +44,10 @@ Each task is a self-contained Python module that implements a specific step in t
 - When execution cannot continue normally, raise `TaskError`. The workflow
   loader translates raised task errors into failed task-run state and applies
   the configured `on_error` policy.
+- Task implementation approval/import failures are runner-owned
+  `TaskSetupError` failures. They always stop the affected document regardless
+  of `on_error`, but must not terminate the application process. Task code
+  should not raise `SystemExit` or call `ShutdownManager`.
 - For `on_error: continue`, the workflow loader preserves the failure in its
   internal `continued_failures` history and clears transient error fields before
   invoking the next task. Tasks must not use or overwrite

@@ -3,7 +3,7 @@ import pytest
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.db.repositories import DocumentRepository, TaskRunRepository
-from modules.exceptions import TaskError
+from modules.exceptions import TaskError, TaskSetupError
 from modules.services.batch_service import BatchService
 from modules.workflow_loader import INTERNAL_CLEANUP_TASK_KEY, WorkflowLoader
 from test.helpers_sqlite import TempConfig
@@ -111,7 +111,7 @@ def test_workflow_loader_records_task_runs_and_stops_when_paused(tmp_path, monke
     assert "cleanup" not in result.get("data", {})
 
 
-def test_workflow_loader_marks_task_run_failed_when_task_import_exits(tmp_path, monkeypatch):
+def test_workflow_loader_contains_runtime_task_import_failure(tmp_path, monkeypatch):
     pdf_path = tmp_path / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4")
     config = TempConfig(
@@ -137,29 +137,35 @@ def test_workflow_loader_marks_task_run_failed_when_task_import_exits(tmp_path, 
     monkeypatch.setattr(
         WorkflowLoader,
         "_import_task_class",
-        lambda self, module_name, class_name: (_ for _ in ()).throw(SystemExit(1)),
+        lambda self, module_name, class_name: (_ for _ in ()).throw(
+            TaskSetupError("Configured task could not be loaded.")
+        ),
     )
     WorkflowLoader._instance = None
 
-    with pytest.raises(SystemExit):
-        workflow = WorkflowLoader(config).load_workflow()
-        assert workflow is not None
-        workflow(
-            {
-                "id": document["id"],
-                "batch_id": batch["id"],
-                "document_id": document["id"],
-                "file_path": str(pdf_path),
-            }
-        )
+    workflow = WorkflowLoader(config).load_workflow()
+    assert workflow is not None
+    result = workflow(
+        {
+            "id": document["id"],
+            "batch_id": batch["id"],
+            "document_id": document["id"],
+            "file_path": str(pdf_path),
+        }
+    )
 
     with connect(config) as conn:
         task_runs = TaskRunRepository(conn).list_by_document(document["id"])
+        persisted_document = DocumentRepository(conn).get(document["id"])
+        persisted_batch = BatchService(conn).get_batch(batch["id"])
 
-    assert [run["task_key"] for run in task_runs] == ["broken"]
-    assert task_runs[0]["status"] == "failed"
+    assert [run["task_key"] for run in task_runs] == ["broken", "cleanup_task"]
+    assert [run["status"] for run in task_runs] == ["failed", "completed"]
     assert task_runs[0]["ended_at"]
-    assert "Task setup failed" in task_runs[0]["error"]
+    assert "could not be loaded" in task_runs[0]["error"]
+    assert result["fatal_failure"]["failure_type"] == "task_setup_failed"
+    assert persisted_document is not None and persisted_document["status"] == "failed"
+    assert persisted_batch is not None and persisted_batch["status"] == "failed"
 
 
 def test_workflow_loader_records_internal_cleanup_without_moving_pipeline_cursor(

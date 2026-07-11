@@ -51,3 +51,7 @@ class TaskError(Exception):
             class name prefix followed by the original message.
         """
         return f"TaskError: {self.message}"
+
+
+class TaskSetupError(Exception):
+    """Raised when a configured task implementation cannot be loaded safely."""

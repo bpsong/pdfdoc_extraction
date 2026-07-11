@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from modules.base_task import BaseTask
-from modules.exceptions import TaskError
+from modules.exceptions import TaskError, TaskSetupError
 from modules.workflow_loader import WorkflowLoader
 from modules.workflow_manager import WorkflowManager
 from test.helpers_sqlite import TempConfig
@@ -70,14 +70,14 @@ def test_import_task_class_rejects_non_task_and_import_errors(tmp_path, monkeypa
         lambda name: SimpleNamespace(NotATask=object),
     )
 
-    with pytest.raises(SystemExit):
+    with pytest.raises(TaskSetupError):
         loader._import_task_class("approved.module", "NotATask")
 
     monkeypatch.setattr(
         "modules.workflow_loader.importlib.import_module",
         Mock(side_effect=ImportError("missing")),
     )
-    with pytest.raises(SystemExit):
+    with pytest.raises(TaskSetupError):
         loader._import_task_class("approved.module", "Missing")
 
 

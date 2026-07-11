@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from modules.exceptions import TaskSetupError
 from modules.workflow_loader import WorkflowLoader
 from test.helpers_sqlite import TempConfig
 
@@ -35,8 +36,7 @@ def test_workflow_loader_blocks_unapproved_task_before_import(tmp_path: Path, mo
 
     monkeypatch.setattr("modules.workflow_loader.importlib.import_module", fail_if_called)
 
-    with pytest.raises(SystemExit) as excinfo:
+    with pytest.raises(TaskSetupError, match="not approved or available"):
         loader._import_task_class("untrusted.module", "BadTask")
 
-    assert excinfo.value.code == 1
     assert calls == []
