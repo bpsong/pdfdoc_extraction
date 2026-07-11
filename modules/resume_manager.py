@@ -27,7 +27,7 @@ class ResumeManager:
             document = documents.get(document_id)
             if document is None:
                 return False
-            if document.get("status") not in {"review_completed", "resuming"}:
+            if document.get("status") != "review_completed":
                 return False
 
             next_task = workflow_state.next_task_after_current(document_id)
@@ -38,7 +38,8 @@ class ResumeManager:
             if workflow_state.has_completed_at_or_after(document_id, next_index):
                 return False
 
-            documents.update_status(document_id, "resuming")
+            if not documents.claim_review_resume(document_id):
+                return False
             context = self._build_resume_context(document, extractions)
             context["resumed_by"] = user
             context["start_task_index"] = next_index

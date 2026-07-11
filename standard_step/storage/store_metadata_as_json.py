@@ -36,9 +36,10 @@ from modules.config_protocol import ConfigProvider as ConfigManager, get_all_con
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import (
-    sanitize_filename,
-    generate_unique_filepath,
     preprocess_filename_value,
+    release_reserved_filepath,
+    reserve_unique_filepath,
+    sanitize_filename,
     windows_long_path,
 )
 
@@ -204,14 +205,7 @@ class StoreMetadataAsJson(BaseTask):
             except Exception as e:
                 raise TaskError(f"Failed to generate filename: {e}")
 
-            # Determine unique output path (use generate_unique_filepath helper)
             name_without_ext, _ = os.path.splitext(base_filename)
-            try:
-                output_path = generate_unique_filepath(self.data_dir, name_without_ext, ".json")
-                output_path = windows_long_path(str(output_path))
-            except Exception as e:
-                raise TaskError(f"Failed to create unique filepath in '{self.data_dir}': {e}")
-
             # Transform data according to extraction.fields config
             processed: Dict[str, Any] = {}
 
@@ -256,6 +250,12 @@ class StoreMetadataAsJson(BaseTask):
             except Exception as e:
                 raise TaskError(f"Failed to create data directory '{self.data_dir}': {e}")
 
+            try:
+                reserved_path = reserve_unique_filepath(self.data_dir, name_without_ext, ".json")
+                output_path = windows_long_path(str(reserved_path))
+            except Exception as e:
+                raise TaskError(f"Failed to reserve unique filepath in '{self.data_dir}': {e}")
+
             # Write JSON (use text write with utf-8)
             try:
                 with open(output_path, "w", encoding="utf-8") as fh:
@@ -271,6 +271,8 @@ class StoreMetadataAsJson(BaseTask):
                     metadata={"task_key": self.task_key(context)},
                 )
             except Exception as e:
+                if not release_reserved_filepath(reserved_path):
+                    self.logger.warning("Failed to remove JSON output after a failed write")
                 # On write failure, record and re-raise as TaskError
                 # Update context with error for Railway pattern
                 context["error"] = str(e)

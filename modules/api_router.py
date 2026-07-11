@@ -1874,8 +1874,8 @@ def build_router() -> APIRouter:
     async def claim_review_item(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
         """Claim a review item for the current user."""
         config, _, _, _, _ = get_dependencies()
-        payload = await _json_body(request)
-        operator = str(payload.get("user") or user)
+        await _json_body(request)
+        operator = user
         try:
             with connect(config) as conn:
                 return ReviewService(conn, config).claim(review_item_id, operator)
@@ -1886,8 +1886,8 @@ def build_router() -> APIRouter:
     async def release_review_item(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
         """Release a review item lock."""
         config, _, _, _, _ = get_dependencies()
-        payload = await _json_body(request)
-        operator = str(payload.get("user") or user)
+        await _json_body(request)
+        operator = user
         try:
             with connect(config) as conn:
                 ReviewService(conn, config).release(review_item_id, operator)
@@ -1900,7 +1900,7 @@ def build_router() -> APIRouter:
         """Save review draft corrections without resuming."""
         config, _, _, _, _ = get_dependencies()
         payload = await _json_body(request)
-        operator = str(payload.get("user") or user)
+        operator = user
         corrections = cast(dict[str, Any], payload.get("corrections") or {})
         try:
             with connect(config) as conn:
@@ -1922,7 +1922,7 @@ def build_router() -> APIRouter:
         """Complete review, persist corrections, and trigger resume."""
         config, _, _, _, _ = get_dependencies()
         payload = await _json_body(request)
-        operator = str(payload.get("user") or user)
+        operator = user
         corrections = cast(dict[str, Any], payload.get("corrections") or {})
         try:
             with connect(config) as conn:

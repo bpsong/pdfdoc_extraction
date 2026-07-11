@@ -192,15 +192,20 @@ def test_review_ui_actions_claim_draft_diff_and_release(tmp_path, monkeypatch) -
     client, state = _client(tmp_path, monkeypatch)
     review_id = state["review"]["id"]
 
-    claim = client.post(f"/api/review/items/{review_id}/claim", json={})
-    draft = client.post(f"/api/review/items/{review_id}/draft", json={"corrections": {"supplier": "Acme Pte Ltd"}})
+    claim = client.post(f"/api/review/items/{review_id}/claim", json={"user": "admin"})
+    draft = client.post(
+        f"/api/review/items/{review_id}/draft",
+        json={"user": "admin", "corrections": {"supplier": "Acme Pte Ltd"}},
+    )
     diff = client.post(f"/api/review/items/{review_id}/diff", json={"corrections": {"supplier": "Acme Pte Ltd"}})
-    release = client.post(f"/api/review/items/{review_id}/release", json={})
+    release = client.post(f"/api/review/items/{review_id}/release", json={"user": "admin"})
 
     assert claim.status_code == 200
     assert claim.json()["status"] == "in_review"
+    assert claim.json()["assigned_to"] == "operator"
     assert draft.status_code == 200
     assert draft.json()["metadata"]["draft"]["corrections"]["supplier"] == "Acme Pte Ltd"
+    assert draft.json()["metadata"]["draft"]["user"] == "operator"
     assert diff.status_code == 200
     assert diff.json()["change_count"] == 1
     assert release.status_code == 200

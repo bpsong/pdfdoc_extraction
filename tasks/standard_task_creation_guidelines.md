@@ -235,7 +235,14 @@ Dynamic task imports are allow-listed by exact module/class pair.
   transient operations, and avoid multiplying retries unintentionally.
 - **Idempotency:** Assume `run()` may execute more than once. Use unique-path,
   existence, transaction, or deduplication safeguards so retries do not create
-  duplicate database rows or corrupt durable files.
+  duplicate database rows or corrupt durable files. Overlapping workflows must
+  reserve generated output paths atomically (for example with
+  `reserve_unique_filepath`) rather than relying on a separate existence check.
+  Remove a reservation when the subsequent write fails.
+- **Compensation:** When a task creates multiple related files or database rows,
+  compensate already-created state if a later item fails. If compensation
+  cannot remove partial workflow records, mark those records terminal so fan-in
+  and operator views cannot remain indefinitely in a queued/processing state.
 - **Sanitization:** Sanitize all filenames and paths to remove invalid characters and prevent collisions.
 - **Logging:** Log useful task milestones, errors, and warnings without logging
   secrets, raw provider payloads, or unnecessary customer content.

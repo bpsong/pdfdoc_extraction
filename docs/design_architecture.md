@@ -300,6 +300,10 @@ relationships and split metadata, registers `split_pdf` artifacts, and sets
 split step. It can run extraction preflight validation and record one
 source-level failure affecting all children.
 
+Child creation compensates files and queued child rows if a later segment
+fails. If compensation cannot remove a partial child, the remaining partial
+records are marked failed so the source and batch do not remain non-terminal.
+
 `FanInService` calculates root and batch status from leaf documents. Parent
 containers are not double-counted. Paused children keep the aggregate in
 review; mixed terminal outcomes produce `completed_with_errors`.
@@ -345,6 +349,10 @@ when producer attribution is needed. Artifact role remains represented by
 `file_type`; a separate task slug is not part of the task contract. Ingestion
 artifacts such as `source_original` have no producer task key. Split children
 and their `split_pdf` artifacts record the configured split task key.
+
+Generated archive, export, and split paths are reserved with exclusive file
+creation before content is written. This prevents overlapping local workflows
+from selecting and overwriting the same nominally unique output path.
 
 Runtime directories such as `data/`, `files/`, `processing*/`,
 `archive_folder/`, `web_upload/`, and `watch_folder/` may contain customer

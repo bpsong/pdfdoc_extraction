@@ -6,6 +6,7 @@ from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import DocumentRepository
 from modules.services.batch_service import BatchService
+from modules.services.fan_in_service import FanInService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 from standard_step.split.llamacloud_split import LlamaCloudSplitTask, create_split_pdf
 from standard_step.split.llamacloud_split_adapter import SplitResult, SplitSegment
@@ -234,6 +235,60 @@ def test_llamacloud_split_task_fails_on_unknown_category_without_children(tmp_pa
     assert result["fatal_failure"]["segments"][0]["category"] == "other"
     with connect(config) as conn:
         assert DocumentRepository(conn).list_children(created["document"]["id"]) == []
+
+
+def test_llamacloud_split_task_rolls_back_partial_children(tmp_path, monkeypatch):
+    source = tmp_path / "bundle.pdf"
+    split_dir = tmp_path / "split"
+    _write_pdf(source, 4)
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(source),
+            original_filename="bundle.pdf",
+        )
+
+    calls = 0
+
+    def fail_second_child(source_path, output_path, pages):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("simulated split write failure")
+        create_split_pdf(source_path, output_path, pages)
+
+    monkeypatch.setattr("standard_step.split.llamacloud_split.create_split_pdf", fail_second_child)
+    task = LlamaCloudSplitTask(
+        config_manager=config,
+        enabled=True,
+        adapter=FakeSplitAdapter(),
+        categories=[{"name": "invoice"}, {"name": "delivery_order"}],
+        split_dir=str(split_dir),
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "file_path": str(source),
+        "original_filename": "bundle.pdf",
+        "current_task_key": "split_documents",
+        "current_task_index": 0,
+    }
+
+    result = task.run(context)
+
+    assert result["error_step"] == "split_documents"
+    with connect(config) as conn:
+        documents = DocumentRepository(conn)
+        assert documents.list_children(created["document"]["id"]) == []
+        finalized = FanInService(conn).finalize_leaf(result)
+        parent = documents.get(created["document"]["id"])
+
+    assert finalized is not None
+    assert parent is not None and parent["status"] == "failed"
+    assert not list(split_dir.glob("*.pdf"))
 
 
 def test_cleanup_preserves_registered_split_pdf(tmp_path):

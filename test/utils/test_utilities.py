@@ -1,12 +1,24 @@
 """Merged tests for utility helper functions (field path helpers + PDF header tests)."""
 
 import builtins
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 import pytest
 import logging
 from typing import Any, cast
 from modules import utils
 from modules.utils import normalize_field_path, resolve_field
+
+
+def test_reserve_unique_filepath_is_atomic_across_threads(tmp_path):
+    def reserve(_index):
+        return utils.reserve_unique_filepath(tmp_path, "invoice", ".json")
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        paths = list(executor.map(reserve, range(20)))
+
+    assert len(set(paths)) == 20
+    assert all(path.exists() for path in paths)
 
 
 def _make_open_mock(data: bytes):

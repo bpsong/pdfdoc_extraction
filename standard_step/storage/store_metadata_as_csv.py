@@ -29,7 +29,13 @@ from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
-from modules.utils import windows_long_path, sanitize_filename, preprocess_filename_value
+from modules.utils import (
+    preprocess_filename_value,
+    release_reserved_filepath,
+    reserve_unique_filepath,
+    sanitize_filename,
+    windows_long_path,
+)
 
 class StoreMetadataAsCsv(BaseTask):
     """
@@ -132,8 +138,7 @@ class StoreMetadataAsCsv(BaseTask):
         return None
 
     def _generate_unique_filepath(self, data_dir: Path, base_name: str, ext: str = ".csv") -> Path:
-        """
-        Generate a unique filepath in data_dir by appending numeric suffixes.
+        """Atomically reserve a unique filepath in ``data_dir``.
 
         Args:
             data_dir: target directory Path
@@ -141,14 +146,9 @@ class StoreMetadataAsCsv(BaseTask):
             ext: file extension (including dot)
 
         Returns:
-            Path to a non-existing file (unique).
+            Path to an exclusively created empty file.
         """
-        attempt = 0
-        candidate = data_dir / f"{base_name}{ext}"
-        while candidate.exists():
-            attempt += 1
-            candidate = data_dir / f"{base_name}_{attempt}{ext}"
-        return candidate
+        return reserve_unique_filepath(data_dir, base_name, ext)
 
     @staticmethod
     def _clean_value(val: Any) -> str:
@@ -419,6 +419,8 @@ class StoreMetadataAsCsv(BaseTask):
                     writer.writeheader()
                     writer.writerows(rows)
             except Exception as e:
+                if not release_reserved_filepath(output_path):
+                    self.logger.warning("Failed to remove CSV output after a failed write")
                 # capture error, but follow Railway pattern: return context with error info
                 context["error"] = str(e)
                 context["error_step"] = self.task_key(context)

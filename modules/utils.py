@@ -198,6 +198,36 @@ def generate_unique_filepath(directory: Path, base_filename: str, extension: str
     return output_path
 
 
+def reserve_unique_filepath(directory: Path, base_filename: str, extension: str) -> Path:
+    """Atomically reserve a unique output path with an empty file.
+
+    Callers must remove the reserved file if the subsequent write fails. Using
+    exclusive creation closes the race between checking a candidate path and
+    writing it from overlapping workflows.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    counter = 0
+    while True:
+        suffix = "" if counter == 0 else f"_{counter}"
+        output_path = directory / f"{base_filename}{suffix}{extension}"
+        try:
+            descriptor = os.open(output_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            counter += 1
+            continue
+        os.close(descriptor)
+        return output_path
+
+
+def release_reserved_filepath(path: Path) -> bool:
+    """Best-effort removal of a reserved path after a failed write."""
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
+
+
 from typing import Optional, List, Tuple, Any
 
 def is_pdf_header(file_path: str, read_size: int = 5, attempts: int = 1, delay: float = 0.0, logger: Optional[logging.Logger] = None) -> bool:

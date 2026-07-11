@@ -22,7 +22,13 @@ from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
-from modules.utils import windows_long_path, sanitize_filename, generate_unique_filepath, retry_io
+from modules.utils import (
+    release_reserved_filepath,
+    reserve_unique_filepath,
+    retry_io,
+    sanitize_filename,
+    windows_long_path,
+)
 
 
 class ArchivePdfTask(BaseTask):
@@ -149,6 +155,7 @@ class ArchivePdfTask(BaseTask):
             - Paths are normalized to Windows long path format.
         """
         self.initialize_context(context)
+        target_path: Path | None = None
         try:
             # Use 'file_path' key instead of 'processed_file_path'
             file_path = context.get("file_path")
@@ -167,7 +174,7 @@ class ArchivePdfTask(BaseTask):
 
             # Generate unique target filepath in archive_dir
             archive_dir_path = Path(self.archive_dir)
-            target_path = generate_unique_filepath(archive_dir_path, base_name, ext)
+            target_path = reserve_unique_filepath(archive_dir_path, base_name, ext)
 
             # Convert paths to Windows long path format
             src_path = windows_long_path(file_path)
@@ -192,10 +199,18 @@ class ArchivePdfTask(BaseTask):
             )
 
         except TaskError as e:
+            self._remove_failed_reservation(target_path)
             self.logger.error(f"TaskError in ArchivePdfTask: {e}")
             self.register_error(context, e)
         except Exception as e:
+            self._remove_failed_reservation(target_path)
             self.logger.error(f"Unexpected error in ArchivePdfTask: {e}", exc_info=True)
             self.register_error(context, TaskError(f"Unexpected error: {e}"))
 
         return context
+
+    @staticmethod
+    def _remove_failed_reservation(target_path: Path | None) -> None:
+        """Remove an output reservation after a failed archive copy."""
+        if target_path is not None and not release_reserved_filepath(target_path):
+            logging.getLogger(__name__).warning("Failed to remove archive output after a failed write")

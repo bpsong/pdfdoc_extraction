@@ -327,6 +327,38 @@ class DocumentRepository:
                 (status, utc_now(), document_id),
             )
 
+    def claim_review_resume(self, document_id: str) -> bool:
+        """Atomically move a reviewed document into the resuming state."""
+        with transaction(self.conn):
+            cursor = self.conn.execute(
+                """
+                UPDATE documents
+                SET status = 'resuming', updated_at = ?
+                WHERE id = ? AND status = 'review_completed'
+                """,
+                (utc_now(), document_id),
+            )
+        return cursor.rowcount == 1
+
+    def delete_pending_child(self, document_id: str) -> bool:
+        """Delete a newly created child that has not begun processing."""
+        with transaction(self.conn):
+            row = self.conn.execute(
+                """
+                SELECT 1 FROM documents
+                WHERE id = ? AND parent_document_id IS NOT NULL AND status = 'queued'
+                """,
+                (document_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            self.conn.execute("DELETE FROM document_files WHERE document_id = ?", (document_id,))
+            cursor = self.conn.execute(
+                "DELETE FROM documents WHERE id = ? AND status = 'queued'",
+                (document_id,),
+            )
+        return cursor.rowcount == 1
+
     def update_current_task(self, document_id: str, task_index: int, task_key: str | None) -> None:
         with transaction(self.conn):
             self.conn.execute(

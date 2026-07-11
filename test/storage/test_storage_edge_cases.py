@@ -123,7 +123,7 @@ def test_json_helpers_and_error_paths(tmp_path, monkeypatch):
     assert result["error_step"] == "StoreMetadataAsJson"
 
     monkeypatch.setattr(
-        "standard_step.storage.store_metadata_as_json.generate_unique_filepath",
+        "standard_step.storage.store_metadata_as_json.reserve_unique_filepath",
         Mock(side_effect=OSError("path failure")),
     )
     result = valid.run({"id": "doc", "data": {"id": "doc"}})

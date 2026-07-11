@@ -18,7 +18,12 @@ Notes:
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional
-from modules.utils import sanitize_filename, generate_unique_filepath, preprocess_filename_value
+from modules.utils import (
+    preprocess_filename_value,
+    release_reserved_filepath,
+    reserve_unique_filepath,
+    sanitize_filename,
+)
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.exceptions import TaskError
@@ -186,7 +191,7 @@ class StoreFileToLocaldrive(BaseTask):
             base_filename += ".pdf"
         
         # Generate unique filepath
-        output_path = generate_unique_filepath(self.files_dir, os.path.splitext(base_filename)[0], ".pdf")
+        output_path = reserve_unique_filepath(self.files_dir, os.path.splitext(base_filename)[0], ".pdf")
 
         try:
             # Copy the file to the new location
@@ -204,6 +209,8 @@ class StoreFileToLocaldrive(BaseTask):
                 },
             )
         except Exception as e:
+            if not release_reserved_filepath(output_path):
+                self.logger.warning("Failed to remove PDF output after a failed write")
             raise TaskError(f"Failed to store file {original_filename} ({unique_id}): {e}")
 
         return context

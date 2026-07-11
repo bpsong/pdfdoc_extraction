@@ -95,14 +95,14 @@ def test_validate_required_fields_not_a_dir(mock_isdir, mock_exists, config_mana
 
 @patch("standard_step.archiver.archive_pdf.windows_long_path", side_effect=lambda x: x)
 @patch("standard_step.archiver.archive_pdf.sanitize_filename", side_effect=lambda x: x.replace(" ", "_"))
-@patch("standard_step.archiver.archive_pdf.generate_unique_filepath")
+@patch("standard_step.archiver.archive_pdf.reserve_unique_filepath")
 @patch("standard_step.archiver.archive_pdf.ArchivePdfTask._copy_file")
-def test_run_success(mock_copy_file, mock_generate_unique_filepath, mock_sanitize_filename, mock_windows_long_path, config_manager_mock, context_success):
+def test_run_success(mock_copy_file, mock_reserve_unique_filepath, mock_sanitize_filename, mock_windows_long_path, config_manager_mock, context_success):
     archive_dir = Path(r"C:\archive_dir")
     task = ArchivePdfTask(config_manager_mock, archive_dir=str(archive_dir))
 
     # Setup mocks
-    mock_generate_unique_filepath.return_value = archive_dir / "original_file.pdf"
+    mock_reserve_unique_filepath.return_value = archive_dir / "original_file.pdf"
 
     # Run
     result_context = task.run(context_success)
@@ -110,9 +110,9 @@ def test_run_success(mock_copy_file, mock_generate_unique_filepath, mock_sanitiz
     # Check that sanitize_filename was called
     mock_sanitize_filename.assert_called_once_with("original file.pdf")
 
-    # Check that generate_unique_filepath was called with correct args
-    mock_generate_unique_filepath.assert_called_once()
-    args, kwargs = mock_generate_unique_filepath.call_args
+    # Check that reserve_unique_filepath was called with correct args
+    mock_reserve_unique_filepath.assert_called_once()
+    args, kwargs = mock_reserve_unique_filepath.call_args
     assert args[0] == archive_dir
     assert args[1] == "original_file"
     assert args[2] == ".pdf"

@@ -14,7 +14,7 @@ from modules.db.connection import connect, json_loads
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact_text
-from modules.utils import generate_unique_filepath, sanitize_filename
+from modules.utils import release_reserved_filepath, reserve_unique_filepath, sanitize_filename
 from standard_step.split.llamacloud_split_adapter import (
     LlamaCloudSplitAdapter,
     SplitResult,
@@ -334,55 +334,95 @@ class LlamaCloudSplitTask(BaseTask):
     ) -> list[str]:
         """Create child PDFs, child document records, and split artifacts."""
         child_ids: list[str] = []
+        reserved_paths: list[Path] = []
         source_pdf_path = str(context["file_path"])
         source_filename = str(context.get("original_filename") or document.get("original_filename") or "source.pdf")
         base_name = Path(sanitize_filename(source_filename)).stem
         inherited_context = context.get("metadata", {}).get("inherited_context") if isinstance(context.get("metadata"), dict) else None
 
-        for index, segment in enumerate(split_result.segments, start=1):
-            category = sanitize_filename(segment.category or "uncategorized")
-            output_base = f"{base_name}_segment_{index:03d}_{category}_p{segment.page_start}-{segment.page_end}"
-            if self.split_dir is None:
-                raise TaskError("LlamaCloudSplitTask requires split_dir.")
-            output_path = generate_unique_filepath(self.split_dir, output_base, ".pdf")
-            create_split_pdf(source_pdf_path, str(output_path), segment.pages)
+        try:
+            for index, segment in enumerate(split_result.segments, start=1):
+                category = sanitize_filename(segment.category or "uncategorized")
+                output_base = f"{base_name}_segment_{index:03d}_{category}_p{segment.page_start}-{segment.page_end}"
+                if self.split_dir is None:
+                    raise TaskError("LlamaCloudSplitTask requires split_dir.")
+                output_path = reserve_unique_filepath(self.split_dir, output_base, ".pdf")
+                reserved_paths.append(output_path)
+                create_split_pdf(source_pdf_path, str(output_path), segment.pages)
 
-            child_filename = output_path.name
-            child_metadata: dict[str, Any] = {
-                "task_key": self.task_key(context),
-                "root_document_id": document["id"],
-                "source_original_filename": source_filename,
-                "source_file_path": str(Path(source_pdf_path).resolve()),
-                "source_file_artifact_id": source_artifact.get("id"),
-                "split_provider_job_id": split_result.provider_job_id,
-                "split_segment_index": index - 1,
-                "split_pages": segment.pages,
-                "split_category": segment.category,
-                "split_confidence": segment.confidence,
-                "split_raw_segment": segment.metadata.get("raw_segment"),
-            }
-            if inherited_context is not None:
-                child_metadata["inherited_context"] = inherited_context
+                child_filename = output_path.name
+                child_metadata: dict[str, Any] = {
+                    "task_key": self.task_key(context),
+                    "root_document_id": document["id"],
+                    "source_original_filename": source_filename,
+                    "source_file_path": str(Path(source_pdf_path).resolve()),
+                    "source_file_artifact_id": source_artifact.get("id"),
+                    "split_provider_job_id": split_result.provider_job_id,
+                    "split_segment_index": index - 1,
+                    "split_pages": segment.pages,
+                    "split_category": segment.category,
+                    "split_confidence": segment.confidence,
+                    "split_raw_segment": segment.metadata.get("raw_segment"),
+                }
+                if inherited_context is not None:
+                    child_metadata["inherited_context"] = inherited_context
 
-            child = documents.create_child(
-                batch_id=str(document["batch_id"]),
-                parent_document_id=str(document["id"]),
-                file_path=str(output_path.resolve()),
-                original_filename=child_filename,
-                document_type=segment.category,
-                page_start=segment.page_start,
-                page_end=segment.page_end,
-                split_category=segment.category,
-                split_confidence=segment.confidence,
-                status="queued",
-                metadata=child_metadata,
+                child = documents.create_child(
+                    batch_id=str(document["batch_id"]),
+                    parent_document_id=str(document["id"]),
+                    file_path=str(output_path.resolve()),
+                    original_filename=child_filename,
+                    document_type=segment.category,
+                    page_start=segment.page_start,
+                    page_end=segment.page_end,
+                    split_category=segment.category,
+                    split_confidence=segment.confidence,
+                    status="queued",
+                    metadata=child_metadata,
+                )
+                child_ids.append(str(child["id"]))
+                documents.add_file(
+                    document_id=str(child["id"]),
+                    file_type="split_pdf",
+                    file_path=str(output_path.resolve()),
+                    metadata=child_metadata,
+                )
+        except Exception:
+            self._rollback_partial_children(
+                documents=documents,
+                document=document,
+                child_ids=child_ids,
+                reserved_paths=reserved_paths,
             )
-            documents.add_file(
-                document_id=str(child["id"]),
-                file_type="split_pdf",
-                file_path=str(output_path.resolve()),
-                metadata=child_metadata,
-            )
-            child_ids.append(str(child["id"]))
+            raise
 
         return child_ids
+
+    def _rollback_partial_children(
+        self,
+        *,
+        documents: DocumentRepository,
+        document: dict[str, Any],
+        child_ids: list[str],
+        reserved_paths: list[Path],
+    ) -> None:
+        """Compensate child rows and files created before a split failure."""
+        for child_id in reversed(child_ids):
+            try:
+                documents.delete_pending_child(child_id)
+            except Exception:
+                self.logger.exception("Failed to remove partial split child %s", child_id)
+
+        for output_path in reversed(reserved_paths):
+            if not release_reserved_filepath(output_path):
+                self.logger.warning("Failed to remove partial split output")
+
+        remaining_children = documents.list_children(str(document["id"]))
+        if not remaining_children:
+            return
+
+        for child in remaining_children:
+            if child.get("status") not in {"completed", "failed"}:
+                documents.update_status(str(child["id"]), "failed")
+        documents.update_status(str(document["id"]), "failed")
+        BatchRepository(documents.conn).recompute_counts(str(document["batch_id"]))
