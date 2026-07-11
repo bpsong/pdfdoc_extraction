@@ -91,6 +91,7 @@ class ReviewService:
     def claim(self, review_item_id: str, user: str, *, timeout_minutes: int | None = None) -> dict[str, Any]:
         """Claim a review item if unlocked or locked by the same user/expired."""
         item = self._require_item(review_item_id)
+        self._require_open_status(item)
         timeout = timeout_minutes or self._lock_timeout_minutes()
         try:
             claimed = self.reviews.claim(
@@ -114,6 +115,7 @@ class ReviewService:
     def release(self, review_item_id: str, user: str) -> None:
         """Release a review lock held by the requesting user."""
         item = self._require_item(review_item_id)
+        self._require_open_status(item)
         lock = self.reviews.get_lock(review_item_id)
         if lock and lock.get("locked_by") != user:
             raise ReviewServiceError("Review item is locked by another operator.")
@@ -229,6 +231,12 @@ class ReviewService:
         if item is None:
             raise ReviewServiceError("Review item not found.")
         return item
+
+    @staticmethod
+    def _require_open_status(item: dict[str, Any]) -> None:
+        """Reject review operations after an item reaches a terminal state."""
+        if item.get("status") not in {"pending", "in_review"}:
+            raise ReviewServiceError("Review item is no longer available for review.")
 
     def _require_lock_owner(self, review_item_id: str, user: str) -> None:
         self._release_expired_lock(review_item_id)

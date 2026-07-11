@@ -699,7 +699,9 @@ class ReviewRepository:
             cursor = self.conn.execute(
                 """
                 INSERT INTO review_locks(id, review_item_id, locked_by, locked_at, expires_at)
-                VALUES (?, ?, ?, ?, ?)
+                SELECT ?, ?, ?, ?, ?
+                FROM review_items
+                WHERE id = ? AND status IN ('pending', 'in_review')
                 ON CONFLICT(review_item_id) DO UPDATE SET
                     locked_by = excluded.locked_by,
                     locked_at = excluded.locked_at,
@@ -707,9 +709,15 @@ class ReviewRepository:
                 WHERE review_locks.locked_by = excluded.locked_by
                    OR review_locks.expires_at <= excluded.locked_at
                 """,
-                (_new_id(), review_item_id, locked_by, now, expires_at),
+                (_new_id(), review_item_id, locked_by, now, expires_at, review_item_id),
             )
             if cursor.rowcount != 1:
+                item = self.conn.execute(
+                    "SELECT status FROM review_items WHERE id = ?",
+                    (review_item_id,),
+                ).fetchone()
+                if item is None or item["status"] not in {"pending", "in_review"}:
+                    raise ReviewLockConflictError("Review item is no longer available for review.")
                 raise ReviewLockConflictError(
                     "Review item is locked by another operator."
                 )
@@ -727,7 +735,11 @@ class ReviewRepository:
         with transaction(self.conn):
             self.conn.execute("DELETE FROM review_locks WHERE review_item_id = ?", (review_item_id,))
             self.conn.execute(
-                "UPDATE review_items SET status = 'pending', assigned_to = NULL, updated_at = ? WHERE id = ?",
+                """
+                UPDATE review_items
+                SET status = 'pending', assigned_to = NULL, updated_at = ?
+                WHERE id = ? AND status IN ('pending', 'in_review')
+                """,
                 (utc_now(), review_item_id),
             )
 

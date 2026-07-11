@@ -48,6 +48,12 @@ class FakeWorkflowManager:
         self.calls.append(kwargs)
 
 
+class RetryWorkflowManager(FakeWorkflowManager):
+    def trigger_workflow_for_file(self, **kwargs):
+        super().trigger_workflow_for_file(**kwargs)
+        return len(self.calls) > 1
+
+
 def test_web_upload_creates_sqlite_batch_document_and_workflow_context(tmp_path):
     config = TempConfig(tmp_path)
     initialize_database(config)
@@ -90,6 +96,29 @@ def test_watch_folder_ingestion_creates_matching_sqlite_records(tmp_path):
     assert workflow.calls[0]["source"] == "watch_folder"
     assert workflow.calls[0]["batch_id"] == batch["id"]
     assert workflow.calls[0]["document_id"] == document["id"]
+
+
+def test_retried_watch_processing_reuses_sqlite_ingestion_state(tmp_path):
+    config = TempConfig(tmp_path)
+    initialize_database(config)
+    workflow = RetryWorkflowManager()
+    processor = FileProcessor(config, lambda func, *args, **kwargs: func(*args, **kwargs), workflow)
+    source = Path(config.get("watch_folder.processing_dir")) / "document.pdf"
+    source.write_bytes(b"%PDF-1.7")
+
+    first = processor.process_file(str(source), "document", "watch_folder", "invoice.pdf")
+    second = processor.process_file(str(source), "document", "watch_folder", "invoice.pdf")
+
+    with connect(config) as conn:
+        batch_count = conn.execute("SELECT COUNT(*) FROM batches").fetchone()[0]
+        document_count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+
+    assert first is False
+    assert second is True
+    assert batch_count == 1
+    assert document_count == 1
+    assert workflow.calls[0]["batch_id"] == workflow.calls[1]["batch_id"]
+    assert workflow.calls[0]["document_id"] == workflow.calls[1]["document_id"]
 
 
 def test_batch_api_endpoints_return_sqlite_state(tmp_path, monkeypatch):

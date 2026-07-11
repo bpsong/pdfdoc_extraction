@@ -6,7 +6,7 @@ from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
-from modules.db.repositories import DocumentRepository, ExtractionRepository
+from modules.db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.workflow_loader import WorkflowLoader
 
@@ -23,6 +23,7 @@ class ResumeManager:
         with connect(self.config_manager) as conn:
             documents = DocumentRepository(conn)
             extractions = ExtractionRepository(conn)
+            task_runs = TaskRunRepository(conn)
             workflow_state = WorkflowStateService(conn, pipeline=self.pipeline)
             document = documents.get(document_id)
             if document is None:
@@ -31,16 +32,13 @@ class ResumeManager:
                 return False
 
             next_task = workflow_state.next_task_after_current(document_id)
-            if next_task is None:
-                documents.update_status(document_id, "completed")
-                return False
-            next_index, _ = next_task
+            next_index = next_task[0] if next_task is not None else len(self.pipeline)
             if workflow_state.has_completed_at_or_after(document_id, next_index):
                 return False
 
             if not documents.claim_review_resume(document_id):
                 return False
-            context = self._build_resume_context(document, extractions)
+            context = self._build_resume_context(document, extractions, task_runs)
             context["resumed_by"] = user
             context["start_task_index"] = next_index
 
@@ -54,6 +52,7 @@ class ResumeManager:
         self,
         document: dict[str, Any],
         extractions: ExtractionRepository,
+        task_runs: TaskRunRepository,
     ) -> dict[str, Any]:
         """Build workflow context from document record and corrected final values."""
         document_id = str(document["id"])
@@ -61,7 +60,7 @@ class ResumeManager:
         data: dict[str, Any] = {}
         for field in extractions.get_fields(document_id):
             data[str(field["field_key"])] = json_loads(field.get("final_value_json"))
-        return {
+        context = {
             "id": document_id,
             "batch_id": document["batch_id"],
             "document_id": document_id,
@@ -74,3 +73,18 @@ class ResumeManager:
                 "latest_extraction_metadata": json_loads(latest_extraction.get("metadata_json"), {}),
             },
         }
+        continued_failures = []
+        for task_run in task_runs.list_by_document(document_id):
+            if task_run.get("status") != "failed":
+                continue
+            output = json_loads(task_run.get("output_json"), {})
+            continued_failures.append(
+                {
+                    "error": task_run.get("error"),
+                    "error_step": output.get("error_step") or task_run.get("task_key"),
+                    "fatal_failure": output.get("fatal_failure"),
+                }
+            )
+        if continued_failures:
+            context["continued_failures"] = continued_failures
+        return context

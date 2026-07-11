@@ -101,8 +101,15 @@ class WatchFolderMonitor:
         for attempt in range(1, attempts + 1):
             try:
                 self.logger.debug(f"Attempt {attempt} for {description} with args {args} and kwargs {kwargs}")
-                operation(*args, **kwargs)
-                return True
+                result = operation(*args, **kwargs)
+                if result is not False:
+                    return True
+                self.logger.warning("Attempt %s returned failure for %s", attempt, description)
+                if attempt == attempts:
+                    if cleanup_func:
+                        cleanup_func()
+                    return False
+                time.sleep(delay)
             except Exception as e:
                 self.logger.warning(f"Attempt {attempt} failed for {description}: {e}")
                 if attempt == attempts:

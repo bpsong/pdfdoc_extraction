@@ -44,6 +44,11 @@ Each task is a self-contained Python module that implements a specific step in t
 - When execution cannot continue normally, raise `TaskError`. The workflow
   loader translates raised task errors into failed task-run state and applies
   the configured `on_error` policy.
+- For `on_error: continue`, the workflow loader preserves the failure in its
+  internal `continued_failures` history and clears transient error fields before
+  invoking the next task. Tasks must not use or overwrite
+  `continued_failures`; finalization restores the earlier failure so it remains
+  visible in terminal document state.
 - Catch specific lower-level exceptions and translate them to useful
   `TaskError` messages. Do not include API keys, credentials, provider
   payloads, customer data, or other secrets in context, logs, or persisted
@@ -106,6 +111,8 @@ authoritative store for durable workflow state.
   - `error_step`: The name of the task where an error occurred.
   - `fatal_failure`: A redacted structured failure summary where a task has
     domain-specific operator guidance.
+  - `continued_failures`: Runner-owned history for failures whose configured
+    policy allowed later tasks to execute; tasks must preserve it unchanged.
   - control-flow keys such as `pipeline_state`, `review_item_id`,
     `split_children`, and `fan_out_start_task_index`.
 - Ensure that the context is passed unchanged if the task is skipped or

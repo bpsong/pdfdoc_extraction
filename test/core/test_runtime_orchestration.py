@@ -338,6 +338,15 @@ def test_file_processor_error_and_compatibility_paths(monkeypatch, tmp_path):
             create_sqlite_state=False,
         )
 
+    workflow.trigger_workflow_for_file.side_effect = None
+    workflow.trigger_workflow_for_file.return_value = False
+    assert processor.process_file(
+        "input.pdf",
+        "id",
+        "web",
+        create_sqlite_state=False,
+    ) is False
+
 
 def test_watch_monitor_retry_cleanup_and_loop_exceptions(monkeypatch, tmp_path):
     config = DictConfig(
@@ -353,6 +362,20 @@ def test_watch_monitor_retry_cleanup_and_loop_exceptions(monkeypatch, tmp_path):
 
     assert monitor._retry_file_operation(
         operation,
+        attempts=2,
+        delay=0.01,
+        cleanup_func=cleanup,
+    ) is False
+    cleanup.assert_called_once_with()
+
+    returned_failure = Mock(side_effect=[False, True])
+    assert monitor._retry_file_operation(returned_failure, attempts=2, delay=0.01) is True
+    assert returned_failure.call_count == 2
+
+    cleanup.reset_mock()
+    always_false = Mock(return_value=False)
+    assert monitor._retry_file_operation(
+        always_false,
         attempts=2,
         delay=0.01,
         cleanup_func=cleanup,

@@ -21,6 +21,7 @@ from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.utils import windows_long_path, is_pdf_header
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
+from modules.db.repositories import DocumentRepository
 from modules.services.batch_service import BatchService
 from modules.services.processing_state_service import build_pipeline_snapshot
 
@@ -123,6 +124,9 @@ class FileProcessor:
         try:
             initialize_database(self.config_manager)
             with connect(self.config_manager) as conn:
+                existing = DocumentRepository(conn).get(unique_id)
+                if existing is not None:
+                    return str(existing["batch_id"]), str(existing["id"])
                 service = BatchService(conn)
                 created = service.create_ingestion_batch(
                     source=source,
@@ -294,12 +298,12 @@ class FileProcessor:
         if document_id:
             workflow_kwargs["document_id"] = document_id
         try:
-            self.workflow_manager.trigger_workflow_for_file(**workflow_kwargs)
+            trigger_result = self.workflow_manager.trigger_workflow_for_file(**workflow_kwargs)
         except TypeError as exc:
             if "unexpected keyword argument" not in str(exc):
                 raise
             workflow_kwargs.pop("batch_id", None)
             workflow_kwargs.pop("document_id", None)
-            self.workflow_manager.trigger_workflow_for_file(**workflow_kwargs)
+            trigger_result = self.workflow_manager.trigger_workflow_for_file(**workflow_kwargs)
         
-        return True
+        return trigger_result is not False

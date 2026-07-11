@@ -122,3 +122,52 @@ def test_resume_manager_atomically_rejects_concurrent_resume(tmp_path, monkeypat
         assert first.result(timeout=5) is True
 
     assert second is False
+
+
+def test_resume_manager_finalizes_when_review_gate_is_last(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "pipeline": ["review_gate"],
+            "tasks": {
+                "review_gate": {"module": "tests", "class": "ReviewGate", "params": {}, "on_error": "stop"},
+            },
+        },
+    )
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+        DocumentRepository(conn).update_current_task(created["document"]["id"], 0, "review_gate")
+        DocumentRepository(conn).update_status(created["document"]["id"], "review_completed")
+
+    class CleanupTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            return context
+
+    _patch_prefect(monkeypatch)
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", CleanupTask)
+    WorkflowLoader._instance = None
+
+    resumed = ResumeManager(config).resume_document(created["document"]["id"], user="operator")
+
+    with connect(config) as conn:
+        document = DocumentRepository(conn).get(created["document"]["id"])
+        batch = BatchService(conn).get_batch(created["batch"]["id"])
+        task_runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+
+    assert resumed is True
+    assert document is not None and document["status"] == "completed"
+    assert batch is not None and batch["status"] == "completed"
+    assert [run["task_key"] for run in task_runs] == ["cleanup_task"]

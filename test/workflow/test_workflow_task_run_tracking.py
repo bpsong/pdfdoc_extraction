@@ -289,3 +289,79 @@ def test_workflow_loader_records_failed_internal_cleanup(tmp_path, monkeypatch):
     assert task_runs[0]["ended_at"]
     assert result["error_step"] == INTERNAL_CLEANUP_TASK_KEY
     assert result["fatal_failure"]["task_key"] == INTERNAL_CLEANUP_TASK_KEY
+
+
+def test_workflow_loader_continue_does_not_fail_downstream_task(tmp_path, monkeypatch):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "pipeline": ["broken", "after"],
+            "tasks": {
+                "broken": {"module": "tests", "class": "BrokenTask", "params": {}, "on_error": "continue"},
+                "after": {"module": "tests", "class": "AfterTask", "params": {}, "on_error": "stop"},
+            },
+        },
+    )
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename="invoice.pdf",
+        )
+
+    class BrokenTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            context["error"] = "broken task"
+            context["error_step"] = "broken"
+            return context
+
+    class AfterTask(BrokenTask):
+        def run(self, context):
+            context.setdefault("data", {})["after"] = True
+            return context
+
+    class CleanupTask(BrokenTask):
+        def run(self, context):
+            return context
+
+    _patch_prefect(monkeypatch)
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", CleanupTask)
+    monkeypatch.setattr(
+        WorkflowLoader,
+        "_import_task_class",
+        lambda self, module_name, class_name: {"BrokenTask": BrokenTask, "AfterTask": AfterTask}[class_name],
+    )
+    WorkflowLoader._instance = None
+
+    workflow = WorkflowLoader(config).load_workflow()
+    assert workflow is not None
+    result = workflow(
+        {
+            "id": created["document"]["id"],
+            "batch_id": created["batch"]["id"],
+            "document_id": created["document"]["id"],
+            "file_path": str(pdf_path),
+        }
+    )
+
+    with connect(config) as conn:
+        task_runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+        document = DocumentRepository(conn).get(created["document"]["id"])
+
+    assert result["data"]["after"] is True
+    assert result["error"] == "broken task"
+    assert [(run["task_key"], run["status"]) for run in task_runs] == [
+        ("broken", "failed"),
+        ("after", "completed"),
+        (INTERNAL_CLEANUP_TASK_KEY, "completed"),
+    ]
+    assert document is not None and document["status"] == "failed"

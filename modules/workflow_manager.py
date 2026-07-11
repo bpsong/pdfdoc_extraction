@@ -344,4 +344,6 @@ class WorkflowManager:
         }
         if "inherited_context" in metadata:
             context["metadata"]["inherited_context"] = metadata["inherited_context"]
+        if isinstance(metadata.get("continued_failures"), list):
+            context["continued_failures"] = metadata["continued_failures"]
         return context

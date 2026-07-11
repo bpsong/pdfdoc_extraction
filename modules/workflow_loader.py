@@ -153,6 +153,41 @@ class WorkflowLoader:
             ),
         }
 
+    @staticmethod
+    def _continue_after_failure(context: Dict[str, Any]) -> None:
+        """Preserve a failure without poisoning the next configured task run."""
+        failures = context.setdefault("continued_failures", [])
+        if not isinstance(failures, list):
+            failures = []
+            context["continued_failures"] = failures
+        failures.append(
+            {
+                "error": context.get("error"),
+                "error_step": context.get("error_step"),
+                "fatal_failure": context.get("fatal_failure"),
+            }
+        )
+        context["error"] = None
+        context["error_step"] = None
+        context.pop("fatal_failure", None)
+
+    @staticmethod
+    def _restore_continued_failure(context: Dict[str, Any]) -> None:
+        """Restore the latest continued failure before final leaf status is derived."""
+        if context.get("error"):
+            return
+        failures = context.get("continued_failures")
+        if not isinstance(failures, list) or not failures:
+            return
+        latest = failures[-1]
+        if not isinstance(latest, dict):
+            return
+        context["error"] = latest.get("error") or "Pipeline completed with an earlier task failure."
+        context["error_step"] = latest.get("error_step")
+        fatal_failure = latest.get("fatal_failure")
+        if isinstance(fatal_failure, dict):
+            context["fatal_failure"] = fatal_failure
+
     def _state_service(self, context: Dict[str, Any]) -> WorkflowStateService | None:
         """Create a workflow state service when SQLite document context exists."""
         if not context.get("batch_id") or not context.get("document_id"):
@@ -304,6 +339,7 @@ class WorkflowLoader:
                             break
                         else:
                             self.logger.warning(f"Continuing pipeline despite error in task '{task_name}'.")
+                            self._continue_after_failure(current_context)
                     else:
                         output_summary = self._context_summary(current_context)
                         if state_service is not None and task_run_id:
@@ -331,6 +367,7 @@ class WorkflowLoader:
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to TaskError in task '{task_name}'.")
                         break
+                    self._continue_after_failure(current_context)
                 except SystemExit as e:
                     self.logger.error(f"Task '{task_name}' setup failed: {e}")
                     current_context["error"] = f"Task setup failed: {e}"
@@ -369,6 +406,7 @@ class WorkflowLoader:
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to unexpected error in task '{task_name}'.")
                         break
+                    self._continue_after_failure(current_context)
                 finally:
                     if state_service is not None:
                         state_service.conn.close()
@@ -424,6 +462,7 @@ class WorkflowLoader:
                         self._context_summary(final_context),
                     )
                 self._restore_task_position(final_context, previous_task_position)
+                self._restore_continued_failure(final_context)
                 self._finalize_leaf(final_context)
                 return final_context
             except Exception as e:

@@ -366,6 +366,9 @@ class LlamaCloudSplitTask(BaseTask):
                 }
                 if inherited_context is not None:
                     child_metadata["inherited_context"] = inherited_context
+                continued_failures = context.get("continued_failures")
+                if isinstance(continued_failures, list) and continued_failures:
+                    child_metadata["continued_failures"] = continued_failures
 
                 child = documents.create_child(
                     batch_id=str(document["batch_id"]),

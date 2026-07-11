@@ -151,7 +151,9 @@ sequenceDiagram
 
 - **Watch folder:** validates the `%PDF-` signature, assigns a UUID, moves the
   file to the processing directory, creates a batch/document, and invokes the
-  workflow synchronously.
+  workflow synchronously. An explicit `False` workflow result is retried; the
+  retry reuses the existing UUID-backed batch/document state rather than
+  creating duplicate or orphan ingestion rows.
 - **Primary web upload:** `POST /api/batches/upload` creates one batch with a
   document per accepted PDF, records source artifacts, and schedules
   background processing.
@@ -180,7 +182,11 @@ configured pipeline key and index in `current_task_key` and
 available, instantiates the task with the resolved `params`, invokes it
 through a Prefect task wrapper, and persists the result. The pipeline key is
 the authoritative operational identity even when SQLite state is unavailable.
-`on_error` is `stop` or `continue`.
+`on_error` is `stop` or `continue`. A continued failure is recorded in
+`continued_failures` while the transient `error` fields are cleared for the
+next task, so a successful downstream task receives its own completed task-run
+state. The latest continued failure is restored before leaf finalization, so
+the document still finishes as failed rather than hiding the earlier error.
 
 Configured tasks and cleanup currently receive one Prefect retry. Individual
 provider tasks can add their own retries, so retry policy is not centralized.
@@ -208,7 +214,7 @@ The mutable context is the internal task protocol:
 | Input | `file_path`, `original_filename`, `source` |
 | Position | `current_task_index`, `current_task_key`, `task_run_id` |
 | Output | `data`, `metadata` |
-| Failure | `error`, `error_step`, `fatal_failure` |
+| Failure | `error`, `error_step`, `fatal_failure`, `continued_failures` |
 | Review | `review_required`, `review_item_id`, `pipeline_state` |
 | Split | `parent_document_id`, `split_children`, `fan_out_start_task_index` |
 
@@ -269,6 +275,12 @@ Human review is a persisted stop and new-flow restart:
    the document `review_completed`.
 8. `ResumeManager` reconstructs context from SQLite, prevents duplicate
    downstream work, and starts a new flow at the next task.
+
+Only pending or in-review items may be claimed or released. Resume acquisition
+uses an atomic `review_completed` to `resuming` transition, so overlapping
+requests cannot start the same downstream work twice. When the review gate is
+the final configured step, resume still starts the terminal runner path so
+cleanup and leaf-derived fan-in complete normally.
 
 The original Prefect flow is not suspended. SQLite retains the business state
 needed for operator work and resume.

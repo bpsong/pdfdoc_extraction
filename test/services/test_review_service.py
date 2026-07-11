@@ -2,7 +2,7 @@ import pytest
 
 from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
-from modules.db.repositories import ExtractionRepository, ReviewRepository
+from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository
 from modules.services.batch_service import BatchService
 from modules.services.review_service import ReviewService, ReviewServiceError
 from test.helpers_sqlite import TempConfig
@@ -47,12 +47,19 @@ def test_review_service_claim_draft_diff_complete_and_expired_lock(tmp_path):
         result = service.complete(review["id"], "alice", {"supplier": "Acme Pte Ltd"}, trigger_resume=False)
         fields = ExtractionRepository(conn).get_fields(created["document"]["id"])
         completed_review = ReviewRepository(conn).get(review["id"])
+        with pytest.raises(ReviewServiceError, match="no longer available"):
+            service.claim(review["id"], "alice")
+        with pytest.raises(ReviewServiceError, match="no longer available"):
+            service.release(review["id"], "alice")
+        completed_document = DocumentRepository(conn).get(created["document"]["id"])
 
     assert draft["metadata"]["draft"]["corrections"]["supplier"] == "Acme Pte Ltd"
     assert diff["change_count"] == 1
     assert result["status"] == "completed"
     assert completed_review is not None
     assert completed_review["status"] == "completed"
+    assert completed_document is not None
+    assert completed_document["status"] == "review_completed"
     assert json_loads(fields[0]["final_value_json"]) == "Acme Pte Ltd"
 
 
