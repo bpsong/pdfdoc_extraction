@@ -9,6 +9,8 @@ Responsibilities:
 - Register graceful shutdown hook via ShutdownManager.
 """
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 import os
 import logging
@@ -111,12 +113,22 @@ def create_app() -> FastAPI:
     config, _, _, _, _ = get_dependencies()
     production = _is_production()
     docs_enabled = not production or bool(config.get("web.production_docs_enabled", False))
+    shutdown_manager = ShutdownManager()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        """Run registered cleanup tasks when the ASGI application stops."""
+
+        yield
+        shutdown_manager.shutdown()
+
     app = FastAPI(
         title="PDF Processing Web Interface",
         version="1.0.0",
         docs_url="/docs" if docs_enabled else None,
         redoc_url="/redoc" if docs_enabled else None,
         openapi_url="/openapi.json" if docs_enabled else None,
+        lifespan=lifespan,
     )
     app.add_middleware(
         TrustedHostMiddleware,
@@ -271,6 +283,7 @@ def create_app() -> FastAPI:
             )
 
         response = templates.TemplateResponse(
+            request,
             template_name,
             {
                 "request": request,
@@ -325,6 +338,7 @@ def create_app() -> FastAPI:
         
         logger.info("/login GET: unauthenticated, rendering login page")
         response = templates.TemplateResponse(
+            request,
             "login.html",
             {"request": request, "error": None, "is_authenticated": False}
         )
@@ -379,6 +393,7 @@ def create_app() -> FastAPI:
         if not username or not password:
             logger.warning("Login attempt with missing credentials")
             response = templates.TemplateResponse(
+                request,
                 "login.html",
                 {"request": request, "error": "Invalid username or password", "is_authenticated": False}
             )
@@ -421,6 +436,7 @@ def create_app() -> FastAPI:
 
         except AuthenticationSetupRequired:
             response = templates.TemplateResponse(
+                request,
                 "login.html",
                 {"request": request, "error": "User accounts require administrator setup.", "is_authenticated": False},
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -430,6 +446,7 @@ def create_app() -> FastAPI:
         except LoginRateLimitError:
             logger.warning(f"Login rate limited for user: {username}")
             response = templates.TemplateResponse(
+                request,
                 "login.html",
                 {
                     "request": request,
@@ -446,6 +463,7 @@ def create_app() -> FastAPI:
         except AuthError:
             logger.warning(f"Login failed for user: {username}")
             response = templates.TemplateResponse(
+                request,
                 "login.html",
                 {
                     "request": request,
@@ -761,8 +779,6 @@ def create_app() -> FastAPI:
 
     # API Router
     app.include_router(build_router())
-    shutdown_manager = ShutdownManager()
-    app.add_event_handler("shutdown", shutdown_manager.shutdown)
 
     return app
 

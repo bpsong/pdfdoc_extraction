@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, cast
+from unittest.mock import Mock
 
 from fastapi import FastAPI, Response
 from fastapi.testclient import TestClient
@@ -101,6 +102,17 @@ def authenticate(client: TestClient) -> None:
     client.cookies.set("access_token", TOKEN)
 
 
+def test_app_lifespan_runs_shutdown_manager(monkeypatch) -> None:
+    shutdown_manager = Mock()
+    monkeypatch.setattr(web_server, "ShutdownManager", lambda: shutdown_manager)
+    client = build_client(monkeypatch)
+
+    with client:
+        pass
+
+    shutdown_manager.shutdown.assert_called_once_with()
+
+
 def test_security_headers_are_added(monkeypatch) -> None:
     client = build_client(monkeypatch)
 
@@ -118,6 +130,15 @@ def test_security_headers_are_added(monkeypatch) -> None:
     assert "cdn.tailwindcss.com" not in response.text
     assert "cdn.jsdelivr.net" not in response.text
     assert "/static/css/vendor.css" in response.text
+
+
+def test_static_assets_are_served_with_patched_starlette(monkeypatch) -> None:
+    client = build_client(monkeypatch)
+
+    response = client.get("/static/css/vendor.css")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/css")
 
 
 def test_pdf_security_headers_allow_same_origin_preview(monkeypatch) -> None:
