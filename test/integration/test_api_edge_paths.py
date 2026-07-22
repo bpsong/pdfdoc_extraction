@@ -15,10 +15,12 @@ from modules.auth_utils import (
     AuthError,
     LoginRateLimitError,
 )
+from modules.db.migrations import initialize_database
 from modules.services.review_service import ReviewServiceError
 from modules.services.admin_settings_service import AdminSettingsError
 from modules.services.pipeline_config_service import PipelineConfigError
 from modules.services.user_service import UserServiceError
+from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
 class Config:
@@ -204,8 +206,10 @@ def test_json_payload_validation_paths(monkeypatch):
     assert exc_info.value.status_code == 400
 
 
-def test_schema_endpoint_error_translation(monkeypatch):
-    config = Config()
+def test_schema_endpoint_error_translation(monkeypatch, tmp_path):
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+    initialize_test_users(config)
     service = Mock()
     service.normalize_schema.return_value = {}
     service.schema_hash.return_value = "hash"
