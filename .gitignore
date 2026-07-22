@@ -5,6 +5,24 @@ config copy.yaml
 test/third_party/test_config.yaml
 *.yaml
 
+# Configuration backups and generated copies can retain live credentials
+*.yaml.*
+*.yml.*
+*config*.bak
+*config*.backup
+*config*.safe-copy
+
+# Common local credential and private-key files
+.env.*
+!.env.example
+credentials*.json
+secrets*.json
+service-account*.json
+*.pem
+*.p12
+*.pfx
+*.key
+
 # Log files
 *.log
 
