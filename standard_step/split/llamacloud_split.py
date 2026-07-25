@@ -11,6 +11,7 @@ from pypdf import PdfReader, PdfWriter
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
+from modules.db.connection import transaction
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact_text
@@ -370,26 +371,29 @@ class LlamaCloudSplitTask(BaseTask):
                 if isinstance(continued_failures, list) and continued_failures:
                     child_metadata["continued_failures"] = continued_failures
 
-                child = documents.create_child(
-                    batch_id=str(document["batch_id"]),
-                    parent_document_id=str(document["id"]),
-                    file_path=str(output_path.resolve()),
-                    original_filename=child_filename,
-                    document_type=segment.category,
-                    page_start=segment.page_start,
-                    page_end=segment.page_end,
-                    split_category=segment.category,
-                    split_confidence=segment.confidence,
-                    status="queued",
-                    metadata=child_metadata,
-                )
-                child_ids.append(str(child["id"]))
-                documents.add_file(
-                    document_id=str(child["id"]),
-                    file_type="split_pdf",
-                    file_path=str(output_path.resolve()),
-                    metadata=child_metadata,
-                )
+                with transaction(documents.conn):
+                    child = documents.create_child(
+                        batch_id=str(document["batch_id"]),
+                        parent_document_id=str(document["id"]),
+                        file_path=str(output_path.resolve()),
+                        original_filename=child_filename,
+                        document_type=segment.category,
+                        page_start=segment.page_start,
+                        page_end=segment.page_end,
+                        split_category=segment.category,
+                        split_confidence=segment.confidence,
+                        status="queued",
+                        metadata=child_metadata,
+                        pipeline_template_id=document.get("pipeline_template_id"),
+                        pipeline_version_id=document.get("pipeline_version_id"),
+                    )
+                    documents.add_file(
+                        document_id=str(child["id"]),
+                        file_type="split_pdf",
+                        file_path=str(output_path.resolve()),
+                        metadata=child_metadata,
+                    )
+                    child_ids.append(str(child["id"]))
         except Exception:
             self._rollback_partial_children(
                 documents=documents,

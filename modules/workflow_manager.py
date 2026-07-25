@@ -19,6 +19,11 @@ from modules.db.connection import connect, json_loads
 from modules.db.repositories import BatchRepository, DocumentRepository, TaskRunRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact, _redact_text
+from modules.services.pipeline_definition_service import (
+    ExecutablePipeline,
+    PipelineDefinitionError,
+    PipelineDefinitionService,
+)
 from standard_step.extraction.llama_cloud_v2 import preflight_extract_v2_access
 
 class WorkflowManager:
@@ -82,8 +87,18 @@ class WorkflowManager:
             orchestration patterns, refer to docs/design_architecture.md.
         """
         try:
-            # Load the workflow
-            flow_func = self.workflow_loader.load_workflow()
+            executable = self._load_document_pipeline(document_id)
+            loader = (
+                WorkflowLoader(
+                    self.config_manager,
+                    definition=executable.definition,
+                    pipeline_version_id=executable.version_id,
+                    pipeline_template_id=executable.template_id,
+                )
+                if executable is not None
+                else self.workflow_loader
+            )
+            flow_func = loader.load_workflow()
             if not flow_func:
                 self.logger.error("Failed to load workflow")
                 self._mark_document_failed(document_id, "Workflow Load Failed")
@@ -100,6 +115,9 @@ class WorkflowManager:
                 initial_context["batch_id"] = batch_id
             if document_id:
                 initial_context["document_id"] = document_id
+            if executable is not None:
+                initial_context["pipeline_version_id"] = executable.version_id
+                initial_context["pipeline_template_id"] = executable.template_id
             
             # Start the flow (Prefect executes synchronously; log before and after for clarity)
             self.logger.info(
@@ -117,6 +135,22 @@ class WorkflowManager:
             self.logger.error(f"Failed to trigger workflow for {original_filename}: {e}")
             self._mark_document_failed(document_id, f"Workflow Trigger Failed: {e}")
             return False
+
+    def _load_document_pipeline(
+        self, document_id: str | None
+    ) -> ExecutablePipeline | None:
+        """Load a pinned definition, retaining legacy mode only for unassigned rows."""
+        if not document_id:
+            return None
+        with connect(self.config_manager) as conn:
+            document = DocumentRepository(conn).get(document_id)
+            if document is None:
+                raise PipelineDefinitionError("Document does not exist.")
+            if not document.get("pipeline_version_id"):
+                return None
+            return PipelineDefinitionService(conn, self.config_manager).load_for_document(
+                document_id
+            )
 
     def _mark_document_failed(self, document_id: str | None, reason: str) -> None:
         """Mark a SQLite document failed after workflow launch failures."""
@@ -141,14 +175,45 @@ class WorkflowManager:
             documents = DocumentRepository(conn)
             child_documents = [documents.get(child_id) for child_id in child_ids]
 
-        if self._fail_children_when_extract_preflight_fails(parent_context, child_documents, start_task_index):
+        first_child = next((child for child in child_documents if child is not None), None)
+        executable = (
+            self._load_document_pipeline(str(first_child["id"]))
+            if first_child is not None and first_child.get("pipeline_version_id")
+            else None
+        )
+        if self._fail_children_when_extract_preflight_fails(
+            parent_context,
+            child_documents,
+            start_task_index,
+            executable=executable,
+        ):
             return
 
         for child in child_documents:
             if child is None:
                 continue
             child_context = self._build_child_context(child, parent_context, start_task_index)
-            flow_func = self.workflow_loader.load_workflow(start_task_index=start_task_index)
+            child_executable = (
+                executable
+                if executable is not None
+                and executable.version_id == child.get("pipeline_version_id")
+                else (
+                    self._load_document_pipeline(str(child["id"]))
+                    if child.get("pipeline_version_id")
+                    else None
+                )
+            )
+            loader = (
+                WorkflowLoader(
+                    self.config_manager,
+                    definition=child_executable.definition,
+                    pipeline_version_id=child_executable.version_id,
+                    pipeline_template_id=child_executable.template_id,
+                )
+                if child_executable is not None
+                else self.workflow_loader
+            )
+            flow_func = loader.load_workflow(start_task_index=start_task_index)
             if not flow_func:
                 self.logger.error("Failed to load child workflow for %s", child["id"])
                 continue
@@ -164,9 +229,13 @@ class WorkflowManager:
         parent_context: Dict[str, Any],
         child_documents: list[dict[str, Any] | None],
         start_task_index: int,
+        executable: ExecutablePipeline | None = None,
     ) -> bool:
         """Return True when child workflows were stopped by extract preflight failure."""
-        task_key, task_config = self._task_at_index(start_task_index)
+        task_key, task_config = self._task_at_index(
+            start_task_index,
+            definition=executable.definition if executable is not None else None,
+        )
         if not task_key or not self._is_extract_task(task_key, task_config):
             return False
         raw_params = task_config.get("params")
@@ -188,6 +257,9 @@ class WorkflowManager:
                 task_config=task_config,
                 message=getattr(exc, "message", str(exc)),
                 params=params,
+                pipeline_version_id=(
+                    executable.version_id if executable is not None else None
+                ),
             )
             return True
 
@@ -201,6 +273,7 @@ class WorkflowManager:
         task_config: dict[str, Any],
         message: str,
         params: dict[str, Any],
+        pipeline_version_id: str | None = None,
     ) -> None:
         """Persist one source-level failure when downstream extract config is invalid."""
         root_document_id = str(parent_context.get("document_id") or parent_context.get("id") or "")
@@ -250,6 +323,7 @@ class WorkflowManager:
                     "configuration_id": configuration_id,
                     "affected_split_documents": len(child_documents),
                 },
+                pipeline_version_id=pipeline_version_id,
             )
             task_runs.mark_failed(run["id"], safe_message, output)
             self._merge_document_metadata(documents, root_document_id, fatal_failure, safe_message, task_key)
@@ -295,12 +369,25 @@ class WorkflowManager:
             "page_end": child.get("page_end"),
         }
 
-    def _task_at_index(self, task_index: int) -> tuple[str | None, dict[str, Any]]:
-        pipeline = self.config_manager.get("pipeline", [])
+    def _task_at_index(
+        self,
+        task_index: int,
+        *,
+        definition: Any | None = None,
+    ) -> tuple[str | None, dict[str, Any]]:
+        pipeline = (
+            definition.get("pipeline", [])
+            if definition is not None
+            else self.config_manager.get("pipeline", [])
+        )
         if not isinstance(pipeline, list) or task_index < 0 or task_index >= len(pipeline):
             return None, {}
         task_key = str(pipeline[task_index])
-        task_config = self.config_manager.get(f"tasks.{task_key}", {})
+        if definition is not None:
+            tasks = definition.get("tasks", {})
+            task_config = tasks.get(task_key, {}) if isinstance(tasks, dict) else {}
+        else:
+            task_config = self.config_manager.get(f"tasks.{task_key}", {})
         return task_key, task_config if isinstance(task_config, dict) else {}
 
     @staticmethod
@@ -336,6 +423,8 @@ class WorkflowManager:
             "page_start": child.get("page_start"),
             "page_end": child.get("page_end"),
             "start_task_index": start_task_index,
+            "pipeline_template_id": child.get("pipeline_template_id"),
+            "pipeline_version_id": child.get("pipeline_version_id"),
             "metadata": {
                 "split": metadata,
                 "parent_document_id": child.get("parent_document_id"),

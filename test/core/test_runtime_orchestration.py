@@ -106,15 +106,22 @@ def _patch_main_components(monkeypatch, *, no_web, monitor_start=None, process=N
     monitors = []
 
     class FakeMonitor:
-        def __init__(self, config_manager, callback, retry_func):
-            self.callback = callback
-            self._retry_file_operation = Mock()
+        def __init__(self, config_manager, processor):
+            self.file_processor = processor
             self.stop = Mock()
             monitors.append(self)
 
         def start(self):
-            if self.callback is not None:
-                self.callback("processing/a.pdf", "doc-1", "watch", "a.pdf")
+            if self.file_processor is not None:
+                self.file_processor.process_file(
+                    filepath="processing/a.pdf",
+                    unique_id="doc-1",
+                    source="watch_folder",
+                    original_filename="a.pdf",
+                    batch_id="batch-1",
+                    document_id="doc-1",
+                    create_sqlite_state=False,
+                )
             if monitor_start is not None:
                 return monitor_start()
             return None
@@ -128,7 +135,7 @@ def _patch_main_components(monkeypatch, *, no_web, monitor_start=None, process=N
     monkeypatch.setattr(main, "ShutdownManager", lambda: shutdown)
     monkeypatch.setattr(main, "WorkflowManager", lambda cfg: workflow)
     monkeypatch.setattr(main, "FileProcessor", lambda *args: file_processor)
-    monkeypatch.setattr(main, "WatchFolderMonitor", FakeMonitor)
+    monkeypatch.setattr(main, "WatchFolderCoordinator", FakeMonitor)
     if process is not None:
         monkeypatch.setattr(main, "start_web_server", lambda *args: (process, Mock()))
     return config, shutdown, file_processor, monitors
@@ -146,12 +153,15 @@ def test_main_no_web_processes_callback_and_exits(monkeypatch):
     assert exc_info.value.code == 0
     shutdown.shutdown.assert_called_once_with()
     file_processor.process_file.assert_called_once_with(
-        "processing/a.pdf",
-        "doc-1",
-        source="watch",
+        filepath="processing/a.pdf",
+        unique_id="doc-1",
+        source="watch_folder",
         original_filename="a.pdf",
+        batch_id="batch-1",
+        document_id="doc-1",
+        create_sqlite_state=False,
     )
-    assert len(monitors) == 2
+    assert len(monitors) == 1
 
 
 @pytest.mark.parametrize("return_code, expected_level", [(0, "info"), (3, "error")])
@@ -206,14 +216,14 @@ def test_main_handles_monitor_and_process_shutdown_failures(monkeypatch):
     monkeypatch.setattr(main, "start_web_server", lambda *args: (process, log_handle))
     monitors_stop_error = RuntimeError("stop failed")
 
-    original_init = main.WatchFolderMonitor.__init__
+    original_init = main.WatchFolderCoordinator.__init__
 
     def init_with_failing_stop(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
-        if self.callback is not None:
+        if self.file_processor is not None:
             self.stop.side_effect = monitors_stop_error
 
-    monkeypatch.setattr(main.WatchFolderMonitor, "__init__", init_with_failing_stop)
+    monkeypatch.setattr(main.WatchFolderCoordinator, "__init__", init_with_failing_stop)
 
     with pytest.raises(SystemExit) as exc_info:
         main.main()

@@ -64,7 +64,15 @@ from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.failure_service import FailureService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
-from .services.processing_state_service import ProcessingStateService, build_pipeline_snapshot
+from .services.ingestion_assignment_service import (
+    IngestionAssignmentError,
+    IngestionAssignmentService,
+)
+from .services.ingress_binding_service import (
+    IngressBindingConflictError,
+    IngressBindingService,
+)
+from .services.processing_state_service import ProcessingStateService
 from .services.reports_service import ReportsService
 from .services.review_service import ReviewService, ReviewServiceError
 from .services.runtime_settings_service import RuntimeSettingsService
@@ -666,6 +674,40 @@ def build_router() -> APIRouter:
 
         return (await _parse_multipart_uploads(request, field_names={"file"}, max_files=1))[0]
 
+    async def _multipart_scalar_values(
+        request: Request, field_name: str
+    ) -> list[str]:
+        """Return all scalar multipart values for one exact field name."""
+        content_type = request.headers.get("content-type", "")
+        if "multipart/form-data" not in content_type.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported content type",
+            )
+        body = await request.body()
+        header_bytes = (
+            f"Content-Type: {content_type}\r\n\r\n".encode(
+                "latin-1", errors="ignore"
+            )
+        )
+        message = cast(
+            EmailMessage,
+            BytesParser(policy=cast(Any, default)).parsebytes(header_bytes + body),
+        )
+        values: list[str] = []
+        for part in message.iter_parts():
+            if part.get_content_disposition() != "form-data":
+                continue
+            if part.get_param("name", header="content-disposition") != field_name:
+                continue
+            if part.get_filename() is not None:
+                continue
+            raw = part.get_payload(decode=True)
+            values.append(
+                bytes(raw or b"").decode("utf-8", errors="strict").strip()
+            )
+        return values
+
     async def _json_body(request: Request) -> dict[str, Any]:
         """Parse an optional JSON request body."""
         body = await request.body()
@@ -861,6 +903,104 @@ def build_router() -> APIRouter:
             logger.error(f"Error uploading file: {e}")
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+    @router.get("/api/pipelines/available")
+    def available_pipelines(
+        source: str = Query("upload"),
+        user: str = Depends(get_current_user),
+    ):
+        """List redacted exact pipeline versions eligible for ingestion."""
+        if source != "upload":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported pipeline selection source",
+            )
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            record = UserRepository(conn).get(user)
+            role = str(record["role"]) if record else "operator"
+            return {
+                "source": source,
+                "pipelines": IngestionAssignmentService(
+                    conn, config
+                ).available_versions(role=role),
+            }
+
+    @router.get("/api/admin/watch-folder-bindings")
+    def list_watch_folder_bindings(user: str = Depends(get_current_user)):
+        """List SQLite-backed watch-folder bindings for administrators."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            return {"bindings": IngressBindingService(conn, config).list()}
+
+    @router.post("/api/admin/watch-folder-bindings")
+    async def create_watch_folder_binding(
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        """Create a watch-folder binding to an exact pipeline version."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                binding = IngressBindingService(conn, config).create(
+                    folder_path=str(payload.get("folder_path") or ""),
+                    pipeline_version_id=str(
+                        payload.get("pipeline_version_id") or ""
+                    ),
+                    enabled=bool(payload.get("enabled", True)),
+                    user=user,
+                )
+            return binding
+        except IngressBindingConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.patch("/api/admin/watch-folder-bindings/{binding_id}")
+    async def update_watch_folder_binding(
+        binding_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        """Update path, version, or enabled state for one binding."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return IngressBindingService(conn, config).update(
+                    binding_id,
+                    folder_path=payload.get("folder_path"),
+                    pipeline_version_id=payload.get("pipeline_version_id"),
+                    enabled=(
+                        bool(payload["enabled"])
+                        if "enabled" in payload
+                        else None
+                    ),
+                    user=user,
+                )
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except IngressBindingConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.delete("/api/admin/watch-folder-bindings/{binding_id}")
+    def delete_watch_folder_binding(
+        binding_id: str,
+        user: str = Depends(get_current_user),
+    ):
+        """Delete an unreferenced watch-folder binding."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                IngressBindingService(conn, config).delete(binding_id, user=user)
+            return {"deleted": True, "binding_id": binding_id}
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        except IngressBindingConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
     @router.post("/api/batches/upload")
     async def upload_pdf_batch(
         request: Request,
@@ -869,6 +1009,29 @@ def build_router() -> APIRouter:
     ):
         """Upload one or more PDFs as a single SQLite-backed processing batch."""
         config, _, _, _, file_processor = get_dependencies()
+        selection_values = await _multipart_scalar_values(
+            request, "pipeline_version_id"
+        )
+        if len(selection_values) != 1 or not selection_values[0]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Exactly one pipeline_version_id is required",
+            )
+        pipeline_version_id = selection_values[0]
+        with connect(config) as conn:
+            user_record = UserRepository(conn).get(user)
+            role = str(user_record["role"]) if user_record else "operator"
+            try:
+                pipeline_summary = IngestionAssignmentService(
+                    conn, config
+                ).resolve_selection(pipeline_version_id, role=role)
+            except IngestionAssignmentError as exc:
+                response_status = (
+                    status.HTTP_403_FORBIDDEN
+                    if "operators" in str(exc)
+                    else status.HTTP_400_BAD_REQUEST
+                )
+                raise HTTPException(status_code=response_status, detail=str(exc))
         uploads = await _parse_multipart_uploads(request, field_names={"files", "file"})
         processing_dir = str(config.get("watch_folder.processing_dir") or "")
         if not processing_dir:
@@ -913,16 +1076,25 @@ def build_router() -> APIRouter:
                 )
 
             with connect(config) as conn:
-                created = BatchService(conn).create_ingestion_batch_with_documents(
-                    source="web",
-                    files=file_descriptors,
-                    metadata={
-                        "uploaded_by": user,
-                        "file_count": len(file_descriptors),
-                        "pipeline_snapshot": build_pipeline_snapshot(config),
-                    },
-                    status="queued",
-                )
+                try:
+                    created = IngestionAssignmentService(conn, config).create_batch(
+                        pipeline_version_id=pipeline_version_id,
+                        role=role,
+                        source="web",
+                        assignment_source="upload",
+                        files=file_descriptors,
+                        user=user,
+                        metadata={
+                            "uploaded_by": user,
+                            "file_count": len(file_descriptors),
+                        },
+                        status="queued",
+                    )
+                except IngestionAssignmentError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(exc),
+                    )
 
             batch = created["batch"]
             documents = created["documents"]
@@ -942,6 +1114,7 @@ def build_router() -> APIRouter:
                 "batch_id": batch["id"],
                 "document_ids": [document["id"] for document in documents],
                 "status": "queued",
+                "pipeline": created["pipeline"],
             }
         except HTTPException:
             for path in saved_paths:

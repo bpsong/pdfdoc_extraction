@@ -26,6 +26,10 @@ class BatchService:
         batch_id: str | None = None,
         document_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        pipeline_template_id: str | None = None,
+        pipeline_version_id: str | None = None,
+        pipeline_assignment_source: str | None = None,
+        ingress_binding_id: str | None = None,
     ) -> dict[str, Any]:
         """Create a batch with one root document for an ingested PDF."""
         created = self.create_ingestion_batch_with_documents(
@@ -42,6 +46,10 @@ class BatchService:
             batch_id=batch_id,
             metadata=metadata,
             status="processing",
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
+            pipeline_assignment_source=pipeline_assignment_source,
+            ingress_binding_id=ingress_binding_id,
         )
         return {"batch": created["batch"], "document": created["documents"][0]}
 
@@ -53,6 +61,10 @@ class BatchService:
         batch_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         status: str = "queued",
+        pipeline_template_id: str | None = None,
+        pipeline_version_id: str | None = None,
+        pipeline_assignment_source: str | None = None,
+        ingress_binding_id: str | None = None,
     ) -> dict[str, Any]:
         """Create one ingestion batch with one root document per PDF file.
 
@@ -79,6 +91,10 @@ class BatchService:
             status=status,
             metadata=batch_metadata,
             batch_id=batch_id,
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
+            pipeline_assignment_source=pipeline_assignment_source,
+            ingress_binding_id=ingress_binding_id,
         )
 
         documents: list[dict[str, Any]] = []
@@ -96,6 +112,8 @@ class BatchService:
                 original_filename=original_filename,
                 status=str(file_info.get("status") or status),
                 metadata=document_metadata,
+                pipeline_template_id=pipeline_template_id,
+                pipeline_version_id=pipeline_version_id,
             )
             self.documents.add_file(
                 document_id=document["id"],

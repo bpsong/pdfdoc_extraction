@@ -18,10 +18,16 @@ from modules.db.repositories import (
     TaskRunRepository,
 )
 from modules.services.schema_service import SchemaService
+from modules.services.review_schema_version_service import ReviewSchemaVersionService
 
 
 class ReviewServiceError(ValueError):
     """Raised when a review operation violates lock or validation rules."""
+
+
+class _NullConfig:
+    def get(self, key: str, default: Any = None) -> Any:
+        return default
 
 
 class ReviewService:
@@ -57,7 +63,10 @@ class ReviewService:
             "document": self._document_payload(document),
             "fields": [self._field_payload(field) for field in self.extractions.get_fields(document_id)],
             "lock": self.reviews.get_lock(review_item_id),
-            "schema": self._schema_payload(metadata.get("schema_file")),
+            "schema": self._schema_payload(
+                metadata.get("schema_file"),
+                item.get("review_schema_version_id"),
+            ),
         }
 
     def create_review_item(
@@ -70,6 +79,7 @@ class ReviewService:
         scope: str,
         created_by_task_run_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        review_schema_version_id: str | None = None,
     ) -> dict[str, Any]:
         """Create a review item unless the same task already has one open."""
         existing = self.reviews.find_open_for_document(
@@ -77,7 +87,61 @@ class ReviewService:
             created_by_task_run_id=created_by_task_run_id,
         )
         if existing:
+            if existing.get("review_schema_version_id") != review_schema_version_id:
+                raise ReviewServiceError(
+                    "Existing review item schema identity does not match the task."
+                )
             return existing
+        document = self.documents.get(document_id)
+        task_run = (
+            self.task_runs.get(str(created_by_task_run_id))
+            if created_by_task_run_id
+            else None
+        )
+        if document is None or str(document.get("batch_id")) != batch_id:
+            raise ReviewServiceError(
+                "Review item document identity does not match its batch."
+            )
+        if (
+            task_run is not None
+            and (
+                task_run.get("document_id") != document_id
+                or task_run.get("pipeline_version_id")
+                != document.get("pipeline_version_id")
+            )
+        ):
+            raise ReviewServiceError(
+                "Review task run does not match the document pipeline assignment."
+            )
+        pipeline_version_id = document.get("pipeline_version_id")
+        if pipeline_version_id:
+            if task_run is None or not review_schema_version_id:
+                raise ReviewServiceError(
+                    "Versioned review requires exact task and schema identity."
+                )
+            dependency = self.conn.execute(
+                """
+                SELECT schema_version_id
+                FROM pipeline_version_schema_dependencies
+                WHERE pipeline_version_id = ? AND task_key = ?
+                """,
+                (pipeline_version_id, task_run["task_key"]),
+            ).fetchone()
+            if (
+                dependency is None
+                or dependency["schema_version_id"]
+                != review_schema_version_id
+            ):
+                raise ReviewServiceError(
+                    "Review task schema does not match the pinned pipeline dependency."
+                )
+            schema_version = ReviewSchemaVersionService(self.conn).load_version(
+                review_schema_version_id
+            )
+            if (metadata or {}).get("schema_hash") != schema_version["content_hash"]:
+                raise ReviewServiceError(
+                    "Review item schema hash does not match the pinned dependency."
+                )
         return self.reviews.create_review_item(
             batch_id=batch_id,
             document_id=document_id,
@@ -86,6 +150,7 @@ class ReviewService:
             scope=scope,
             created_by_task_run_id=created_by_task_run_id,
             metadata=metadata,
+            review_schema_version_id=review_schema_version_id,
         )
 
     def claim(self, review_item_id: str, user: str, *, timeout_minutes: int | None = None) -> dict[str, Any]:
@@ -173,8 +238,21 @@ class ReviewService:
         document_id = str(item["document_id"])
         metadata = json_loads(item.get("metadata_json"), {})
         schema_name = metadata.get("schema_file")
+        schema_version_id = item.get("review_schema_version_id")
         validation_errors: list[dict[str, str]] = []
-        if schema_name and self.config_manager is not None:
+        if schema_version_id:
+            version = ReviewSchemaVersionService(self.conn).load_version(
+                str(schema_version_id)
+            )
+            if metadata.get("schema_hash") != version["content_hash"]:
+                raise ReviewServiceError("Review item schema identity is inconsistent.")
+            validation_errors = SchemaService(
+                self.config_manager or _NullConfig()
+            ).validate_payload(
+                {**self._final_values(document_id), **corrections},
+                schema=version["schema"],
+            )
+        elif schema_name and self.config_manager is not None:
             validation_errors = SchemaService(self.config_manager).validate_payload(
                 {**self._final_values(document_id), **corrections},
                 schema_name=str(schema_name),
@@ -335,8 +413,27 @@ class ReviewService:
         payload["confidence_band"] = ReviewService._confidence_band(field.get("confidence"))
         return payload
 
-    def _schema_payload(self, schema_name: Any) -> dict[str, Any] | None:
+    def _schema_payload(
+        self,
+        schema_name: Any,
+        schema_version_id: Any = None,
+    ) -> dict[str, Any] | None:
         """Load the normalized review schema referenced by the review metadata."""
+        if schema_version_id:
+            version = ReviewSchemaVersionService(self.conn).load_version(
+                str(schema_version_id)
+            )
+            schema = version["schema"]
+            return {
+                "name": str(schema_version_id),
+                "title": schema.get("title", "Review"),
+                "description": schema.get("description", ""),
+                "version": version["version_number"],
+                "hash": version["content_hash"],
+                "fields": SchemaService(
+                    self.config_manager or _NullConfig()
+                )._normalize_fields(schema.get("fields", {})),
+            }
         if not schema_name or self.config_manager is None:
             return None
         service = SchemaService(self.config_manager)
@@ -346,7 +443,6 @@ class ReviewService:
             if schema_path_name != str(schema_name):
                 schema = service.normalize_schema(schema_path_name)
         return schema
-
     @staticmethod
     def _confidence_band(confidence: Any) -> str:
         """Map numeric confidence values to UI bands."""

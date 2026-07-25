@@ -67,7 +67,6 @@ pipeline:
 import argparse
 import os
 import logging
-from typing import Optional
 import sys  # Import sys module
 from pathlib import Path
 import threading
@@ -105,9 +104,9 @@ from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
 from modules.config_protocol import ConfigProvider
 from modules.shutdown_manager import ShutdownManager
-from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.file_processor import FileProcessor
 from modules.workflow_manager import WorkflowManager
+from modules.services.watch_folder_coordinator import WatchFolderCoordinator
 from modules.db.migrations import initialize_database
 from modules.services.task_registry_service import validate_startup_task_registry
 
@@ -251,7 +250,13 @@ def main():
     # Initialize ConfigManager singleton with the resolved path
     config_manager = ConfigManager(config_path=resolved_config_path)
     if bool(config_manager.get("database.run_migrations_on_startup", True)):
-        initialize_database(config_manager)
+        try:
+            initialize_database(config_manager)
+        except Exception:
+            logger.critical(
+                "Database migration failed; startup is blocked before accepting work."
+            )
+            sys.exit(1)
     # Use centralized logging setup from modules.logging_config
     setup_logging(wrap_stdout_utf8=True)
     validate_startup_task_registry(config_manager)
@@ -259,21 +264,11 @@ def main():
     # Initialize ShutdownManager singleton
     shutdown_manager = ShutdownManager()
 
-    # Initialize WatchFolderMonitor (temporarily to get _retry_file_operation)
-    # This instance is temporary and will be re-initialized with the correct callback
-    temp_watch_folder_monitor = WatchFolderMonitor(config_manager, None, None)  # Pass None for callback and retry_func initially
-
     # Instantiate WorkflowManager
     workflow_manager = WorkflowManager(config_manager)
 
-    # Initialize FileProcessor with config_manager, the retry function, and workflow_manager
-    file_processor = FileProcessor(config_manager, temp_watch_folder_monitor._retry_file_operation, workflow_manager)
-
-    # Define a wrapper function to pass the source to process_file
-    def watch_folder_process_callback(filepath: str, unique_id: str, source: str, original_filename: Optional[str] = None):
-        logger.info("Watch folder callback received",
-                    extra={"unique_id": unique_id, "file_path": filepath, "source": source})
-        file_processor.process_file(filepath, unique_id, source=source, original_filename=original_filename)
+    # FileProcessor retains a legacy retry dependency but no longer uses it.
+    file_processor = FileProcessor(config_manager, None, workflow_manager)
 
     # Start web server FIRST unless disabled
     uvicorn_proc = None
@@ -287,8 +282,8 @@ def main():
     else:
         logger.info("Web server disabled via --no-web")
 
-    # Initialize and start the WatchFolderMonitor with the actual file processing callback
-    watch_folder_monitor = WatchFolderMonitor(config_manager, watch_folder_process_callback, temp_watch_folder_monitor._retry_file_operation)
+    # One coordinator reconciles all enabled SQLite watch-folder bindings.
+    watch_folder_monitor = WatchFolderCoordinator(config_manager, file_processor)
     # Do not return early on KeyboardInterrupt here; handle shutdown in unified block below
     try:
         logger.info("Watch folder monitoring has started. Press Ctrl+C to stop.")

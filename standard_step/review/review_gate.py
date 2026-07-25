@@ -26,6 +26,9 @@ class ReviewGateTask(BaseTask):
         self.require_missing_required = bool(params.get("require_review_for_missing_required_fields", True))
         self.always_review = bool(params.get("always_review", False))
         self.schema_file = params.get("schema_file")
+        self.schema_version_id = params.get("schema_version_id")
+        self.review_schema = params.get("_review_schema")
+        self.review_schema_hash = params.get("_review_schema_hash")
         self.queue_name = str(params.get("queue_name", "default_review"))
         self.review_scope = str(params.get("review_scope", "low_confidence_fields"))
         self.allow_edit_high_confidence = bool(params.get("allow_operator_to_edit_high_confidence_fields", True))
@@ -68,6 +71,9 @@ class ReviewGateTask(BaseTask):
                 scope=self.review_scope,
                 created_by_task_run_id=context.get("task_run_id"),
                 metadata=metadata,
+                review_schema_version_id=(
+                    str(self.schema_version_id) if self.schema_version_id else None
+                ),
             )
             document_repository.update_status(str(document_id), "review_required")
 
@@ -105,7 +111,7 @@ class ReviewGateTask(BaseTask):
         if split_confidence in self.split_confidence_levels:
             reasons.append({"reason": "split_confidence", "value": split_confidence})
 
-        schema = SchemaService(self.config_manager).load_schema(str(self.schema_file)) if self.schema_file else None
+        schema = self._schema()
         required_schema_fields = self._required_schema_fields(schema)
 
         for field in fields:
@@ -136,7 +142,7 @@ class ReviewGateTask(BaseTask):
         for flag in business_flags if isinstance(business_flags, list) else []:
             reasons.append({"reason": "business_rule", "flag": flag})
 
-        if self.schema_file:
+        if schema is not None:
             raw_payload = context.get("data")
             payload: dict[str, Any] = (
                 raw_payload if isinstance(raw_payload, dict) else self._fields_payload(fields)
@@ -171,11 +177,21 @@ class ReviewGateTask(BaseTask):
                 document,
             ):
                 high_confidence_fields.append(field_key)
-        schema_hash = SchemaService(self.config_manager).schema_hash(str(self.schema_file)) if self.schema_file else None
+        schema_hash = (
+            str(self.review_schema_hash)
+            if self.review_schema_hash
+            else (
+                SchemaService(self.config_manager).schema_hash(str(self.schema_file))
+                if self.schema_file
+                else None
+            )
+        )
         low_confidence_paths = self._low_confidence_paths(fields, reasons)
         return {
             "schema_file": self.schema_file,
             "schema_version": schema_hash,
+            "schema_version_id": self.schema_version_id,
+            "schema_hash": schema_hash,
             "review_scope": self.review_scope,
             "confidence_threshold": self.confidence_threshold,
             "per_document_type_thresholds": self.per_document_type_thresholds,
@@ -239,6 +255,16 @@ class ReviewGateTask(BaseTask):
         if not isinstance(value, dict):
             return {}
         return {str(key): float(item) for key, item in value.items() if str(key)}
+
+    def _schema(self) -> dict[str, Any] | None:
+        """Return injected immutable schema content or the explicit legacy file."""
+        if self.schema_version_id:
+            if not isinstance(self.review_schema, dict) or not self.review_schema_hash:
+                raise TaskError("Pinned review schema content is unavailable.")
+            return self.review_schema
+        if self.schema_file:
+            return SchemaService(self.config_manager).load_schema(str(self.schema_file))
+        return None
 
     @staticmethod
     def _required_schema_fields(schema: dict[str, Any] | None) -> set[str] | None:

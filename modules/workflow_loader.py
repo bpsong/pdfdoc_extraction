@@ -10,8 +10,7 @@ This module is responsible for:
 import importlib
 import logging
 import sys
-import threading
-from typing import Dict, Any, Callable, Type, cast, Union
+from typing import Dict, Any, Callable, Mapping, Type, cast, Union
 
 from prefect import flow, task, get_run_logger
 from prefect.futures import PrefectFuture
@@ -49,23 +48,22 @@ class WorkflowLoader:
     on-error behavior, then appends and executes a housekeeping step.
     """
 
-    _instance = None
-    _lock = threading.Lock()
+    _instance = None  # Legacy test compatibility; loaders are no longer singletons.
 
-    def __new__(cls, config_manager: ConfigManager):
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super().__new__(cls)
-                cls._instance._init(config_manager)
-            elif getattr(cls._instance, "config_manager", None) is not config_manager:
-                cls._instance._init(config_manager)
-        return cls._instance
-
-    def _init(self, config_manager: ConfigManager):
-        """Internal initializer for the singleton instance."""
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        *,
+        definition: Mapping[str, Any] | None = None,
+        pipeline_version_id: str | None = None,
+        pipeline_template_id: str | None = None,
+    ) -> None:
+        """Initialize an isolated loader for one explicit definition."""
         self.config_manager = config_manager
-        self.cfg = get_all_config(config_manager)
+        self.cfg = definition if definition is not None else get_all_config(config_manager)
         self.task_defs = self.cfg.get("tasks", {})
+        self.pipeline_version_id = pipeline_version_id
+        self.pipeline_template_id = pipeline_template_id
         self.logger = logging.getLogger(__name__)
         self.shutdown_manager = ShutdownManager()
 
@@ -203,7 +201,11 @@ class WorkflowLoader:
         if not context.get("batch_id") or not context.get("document_id"):
             return None
         conn = connect(self.config_manager)
-        return WorkflowStateService(conn, pipeline=self.cfg.get("pipeline", []))
+        return WorkflowStateService(
+            conn,
+            pipeline=self.cfg.get("pipeline", []),
+            pipeline_version_id=self.pipeline_version_id,
+        )
 
     def load_workflow(self, start_task_index: int = 0) -> Callable[[Dict[str, Any]], Any] | None:
         """Build and return a Prefect flow function for the configured pipeline.
@@ -243,6 +245,10 @@ class WorkflowLoader:
         @flow(name="Dynamic PDF Processing Flow")
         def dynamic_flow(initial_context: Dict[str, Any]):
             current_context = initial_context
+            if self.pipeline_version_id:
+                current_context["pipeline_version_id"] = self.pipeline_version_id
+            if self.pipeline_template_id:
+                current_context["pipeline_template_id"] = self.pipeline_template_id
             effective_start_index = int(current_context.pop("start_task_index", start_task_index) or 0)
 
             for task_index, task_key in enumerate(pipeline_config):

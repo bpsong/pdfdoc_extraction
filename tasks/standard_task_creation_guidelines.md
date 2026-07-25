@@ -68,6 +68,17 @@ Each task is a self-contained Python module that implements a specific step in t
   singleton inside the task or reload the task's own parameters from a fixed
   `tasks.<name>.params` path. The same implementation may be configured under
   more than one task key.
+- For versioned execution, constructor parameters are an immutable,
+  exact-version runtime copy assembled by the pipeline definition service.
+  Tasks must not replace them with the active YAML pipeline, a newest
+  published version, or mutable filesystem schema content.
+- Resolved secret values in constructor parameters are runtime-only. Never
+  copy task parameters wholesale into context, task-run summaries, audit
+  events, logs, errors, API payloads, or durable artifacts.
+- Schema-driven tasks may receive verified internal parameters such as
+  `_review_schema` and `_review_schema_hash`. Treat these as read-only runtime
+  dependencies. Published execution must fail closed when its required
+  injected schema is absent instead of consulting a filesystem fallback.
 - Prefer `pathlib.Path` for filesystem operations. Use `windows_long_path` from
   `modules/utils.py` where an underlying Windows API or library needs a
   long-path-compatible string.
@@ -106,6 +117,8 @@ authoritative store for durable workflow state.
 - Preserve existing context keys unless the task intentionally owns their
   transition. Representative keys include:
   - identity: `id`, `batch_id`, and `document_id`;
+  - version attribution: `pipeline_template_id` and `pipeline_version_id`
+    (cached execution identity only; SQLite remains authoritative);
   - input: `file_path`, `original_filename`, and `source`;
   - workflow position: `current_task_index`, `current_task_key`, and
     `task_run_id`;

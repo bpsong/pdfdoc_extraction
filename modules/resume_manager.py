@@ -8,6 +8,7 @@ from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
 from modules.services.workflow_state_service import WorkflowStateService
+from modules.services.pipeline_definition_service import PipelineDefinitionService
 from modules.workflow_loader import WorkflowLoader
 
 
@@ -24,15 +25,30 @@ class ResumeManager:
             documents = DocumentRepository(conn)
             extractions = ExtractionRepository(conn)
             task_runs = TaskRunRepository(conn)
-            workflow_state = WorkflowStateService(conn, pipeline=self.pipeline)
             document = documents.get(document_id)
             if document is None:
                 return False
             if document.get("status") != "review_completed":
                 return False
+            executable = None
+            if document.get("pipeline_version_id"):
+                try:
+                    executable = PipelineDefinitionService(
+                        conn, self.config_manager
+                    ).load_for_document(document_id)
+                except Exception:
+                    return False
+            pipeline = executable.pipeline if executable is not None else self.pipeline
+            workflow_state = WorkflowStateService(
+                conn,
+                pipeline=pipeline,
+                pipeline_version_id=(
+                    executable.version_id if executable is not None else None
+                ),
+            )
 
             next_task = workflow_state.next_task_after_current(document_id)
-            next_index = next_task[0] if next_task is not None else len(self.pipeline)
+            next_index = next_task[0] if next_task is not None else len(pipeline)
             if workflow_state.has_completed_at_or_after(document_id, next_index):
                 return False
 
@@ -41,8 +57,21 @@ class ResumeManager:
             context = self._build_resume_context(document, extractions, task_runs)
             context["resumed_by"] = user
             context["start_task_index"] = next_index
+            if executable is not None:
+                context["pipeline_version_id"] = executable.version_id
+                context["pipeline_template_id"] = executable.template_id
 
-        flow_func = WorkflowLoader(self.config_manager).load_workflow(start_task_index=next_index)
+        loader = (
+            WorkflowLoader(
+                self.config_manager,
+                definition=executable.definition,
+                pipeline_version_id=executable.version_id,
+                pipeline_template_id=executable.template_id,
+            )
+            if executable is not None
+            else WorkflowLoader(self.config_manager)
+        )
+        flow_func = loader.load_workflow(start_task_index=next_index)
         if flow_func is None:
             return False
         flow_func(context)

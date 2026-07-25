@@ -26,9 +26,14 @@ def test_initialize_database_creates_schema_and_is_idempotent(tmp_path):
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             ).fetchall()
         }
-        migration_count = conn.execute("SELECT COUNT(*) AS count FROM schema_migrations").fetchone()["count"]
+        migration_versions = {
+            row["version"]
+            for row in conn.execute(
+                "SELECT version FROM schema_migrations"
+            ).fetchall()
+        }
 
     assert "batches" in tables
     assert "documents" in tables
     assert "task_runs" in tables
-    assert migration_count == 1
+    assert migration_versions == {2, 3}

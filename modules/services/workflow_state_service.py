@@ -11,9 +11,15 @@ from modules.db.repositories import DocumentRepository, TaskRunRepository
 class WorkflowStateService:
     """Records task run lifecycle and current document pipeline position."""
 
-    def __init__(self, conn: sqlite3.Connection, pipeline: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        pipeline: list[str] | None = None,
+        pipeline_version_id: str | None = None,
+    ) -> None:
         self.conn = conn
         self.pipeline = pipeline or []
+        self.pipeline_version_id = pipeline_version_id
         self.documents = DocumentRepository(conn)
         self.task_runs = TaskRunRepository(conn)
 
@@ -29,6 +35,12 @@ class WorkflowStateService:
         input_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Record task start and update document current task pointer."""
+        document = self.documents.get(document_id)
+        if document is None:
+            raise ValueError("Document does not exist.")
+        assigned_version = document.get("pipeline_version_id")
+        if self.pipeline_version_id is not None and assigned_version != self.pipeline_version_id:
+            raise ValueError("Task run pipeline version does not match document assignment.")
         self.documents.update_current_task(document_id, task_index, task_key)
         return self.task_runs.create_started(
             batch_id=batch_id,
@@ -38,6 +50,7 @@ class WorkflowStateService:
             module_name=module_name,
             class_name=class_name,
             input_data=input_data,
+            pipeline_version_id=self.pipeline_version_id,
         )
 
     def start_internal_task(
@@ -52,6 +65,12 @@ class WorkflowStateService:
         input_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Record an internal task without moving the configured pipeline cursor."""
+        document = self.documents.get(document_id)
+        if document is None:
+            raise ValueError("Document does not exist.")
+        assigned_version = document.get("pipeline_version_id")
+        if self.pipeline_version_id is not None and assigned_version != self.pipeline_version_id:
+            raise ValueError("Internal task pipeline version does not match document assignment.")
         return self.task_runs.create_started(
             batch_id=batch_id,
             document_id=document_id,
@@ -60,6 +79,7 @@ class WorkflowStateService:
             module_name=module_name,
             class_name=class_name,
             input_data=input_data,
+            pipeline_version_id=self.pipeline_version_id,
         )
 
     def complete_task(self, task_run_id: str, output_data: dict[str, Any] | None = None) -> None:
@@ -95,4 +115,8 @@ class WorkflowStateService:
 
     def has_completed_at_or_after(self, document_id: str, task_index: int) -> bool:
         """Return True when resume would duplicate completed downstream work."""
-        return self.task_runs.has_completed_at_or_after(document_id, task_index)
+        return self.task_runs.has_completed_at_or_after(
+            document_id,
+            task_index,
+            pipeline_version_id=self.pipeline_version_id,
+        )

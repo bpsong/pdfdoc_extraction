@@ -92,6 +92,10 @@ class BatchRepository:
         status: str = "pending",
         metadata: dict[str, Any] | None = None,
         batch_id: str | None = None,
+        pipeline_template_id: str | None = None,
+        pipeline_version_id: str | None = None,
+        pipeline_assignment_source: str | None = None,
+        ingress_binding_id: str | None = None,
     ) -> dict[str, Any]:
         now = utc_now()
         batch_id = batch_id or _new_id()
@@ -99,10 +103,24 @@ class BatchRepository:
             self.conn.execute(
                 """
                 INSERT INTO batches(
-                    id, source, original_filename, status, created_at, updated_at, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    id, source, original_filename, status, pipeline_template_id,
+                    pipeline_version_id, pipeline_assignment_source, ingress_binding_id,
+                    created_at, updated_at, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (batch_id, source, original_filename, status, now, now, json_dumps(metadata)),
+                (
+                    batch_id,
+                    source,
+                    original_filename,
+                    status,
+                    pipeline_template_id,
+                    pipeline_version_id,
+                    pipeline_assignment_source,
+                    ingress_binding_id,
+                    now,
+                    now,
+                    json_dumps(metadata),
+                ),
             )
         return self.get(batch_id) or {}
 
@@ -178,6 +196,8 @@ class DocumentRepository:
         status: str = "pending",
         document_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        pipeline_template_id: str | None = None,
+        pipeline_version_id: str | None = None,
     ) -> dict[str, Any]:
         return self._create(
             batch_id=batch_id,
@@ -187,6 +207,8 @@ class DocumentRepository:
             status=status,
             document_id=document_id,
             metadata=metadata,
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
         )
 
     def create_child(
@@ -203,6 +225,8 @@ class DocumentRepository:
         split_confidence: str | None = None,
         status: str = "pending",
         metadata: dict[str, Any] | None = None,
+        pipeline_template_id: str | None = None,
+        pipeline_version_id: str | None = None,
     ) -> dict[str, Any]:
         return self._create(
             batch_id=batch_id,
@@ -216,6 +240,8 @@ class DocumentRepository:
             split_confidence=split_confidence,
             status=status,
             metadata=metadata,
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
         )
 
     def _create(self, **kwargs: Any) -> dict[str, Any]:
@@ -227,8 +253,9 @@ class DocumentRepository:
                 INSERT INTO documents(
                     id, batch_id, parent_document_id, original_filename, document_type, status,
                     current_task_index, current_task_key, file_path, page_start, page_end,
-                    split_category, split_confidence, created_at, updated_at, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    split_category, split_confidence, pipeline_template_id,
+                    pipeline_version_id, created_at, updated_at, metadata_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     document_id,
@@ -244,6 +271,8 @@ class DocumentRepository:
                     kwargs.get("page_end"),
                     kwargs.get("split_category"),
                     kwargs.get("split_confidence"),
+                    kwargs.get("pipeline_template_id"),
+                    kwargs.get("pipeline_version_id"),
                     now,
                     now,
                     json_dumps(kwargs.get("metadata")),
@@ -395,6 +424,7 @@ class TaskRunRepository:
         module_name: str,
         class_name: str,
         input_data: dict[str, Any] | None = None,
+        pipeline_version_id: str | None = None,
     ) -> dict[str, Any]:
         task_run_id = _new_id()
         with transaction(self.conn):
@@ -402,8 +432,8 @@ class TaskRunRepository:
                 """
                 INSERT INTO task_runs(
                     id, batch_id, document_id, task_key, task_index, module_name, class_name,
-                    status, started_at, input_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?)
+                    status, started_at, input_json, pipeline_version_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)
                 """,
                 (
                     task_run_id,
@@ -415,6 +445,7 @@ class TaskRunRepository:
                     class_name,
                     utc_now(),
                     json_dumps(input_data),
+                    pipeline_version_id,
                 ),
             )
         return self.get(task_run_id) or {}
@@ -455,16 +486,24 @@ class TaskRunRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def has_completed_at_or_after(self, document_id: str, task_index: int) -> bool:
+    def has_completed_at_or_after(
+        self,
+        document_id: str,
+        task_index: int,
+        *,
+        pipeline_version_id: str | None = None,
+    ) -> bool:
         """Return True when a downstream task has already completed."""
-        row = self.conn.execute(
-            """
+        sql = """
             SELECT 1 FROM task_runs
             WHERE document_id = ? AND task_index >= ? AND status = 'completed'
-            LIMIT 1
-            """,
-            (document_id, task_index),
-        ).fetchone()
+        """
+        params: list[Any] = [document_id, task_index]
+        if pipeline_version_id is not None:
+            sql += " AND pipeline_version_id = ?"
+            params.append(pipeline_version_id)
+        sql += " LIMIT 1"
+        row = self.conn.execute(sql, params).fetchone()
         return row is not None
 
 
@@ -622,6 +661,7 @@ class ReviewRepository:
         status: str = "pending",
         created_by_task_run_id: str | None = None,
         metadata: dict[str, Any] | None = None,
+        review_schema_version_id: str | None = None,
     ) -> dict[str, Any]:
         item_id = _new_id()
         now = utc_now()
@@ -630,8 +670,9 @@ class ReviewRepository:
                 """
                 INSERT INTO review_items(
                     id, batch_id, document_id, queue_name, status, reason, scope,
-                    created_by_task_run_id, created_at, updated_at, metadata_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_by_task_run_id, created_at, updated_at, metadata_json,
+                    review_schema_version_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     item_id,
@@ -645,6 +686,7 @@ class ReviewRepository:
                     now,
                     now,
                     json_dumps(metadata),
+                    review_schema_version_id,
                 ),
             )
         return self.get(item_id) or {}
@@ -782,16 +824,46 @@ class AuditRepository:
         review_item_id: str | None = None,
         user: str | None = None,
     ) -> dict[str, Any]:
-        event_id = _new_id()
         with transaction(self.conn):
-            self.conn.execute(
-                """
-                INSERT INTO audit_events(
-                    id, batch_id, document_id, review_item_id, user, event_type, event_json, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (event_id, batch_id, document_id, review_item_id, user, event_type, json_dumps(event), utc_now()),
+            return self.append_uncommitted(
+                event_type=event_type,
+                event=event,
+                batch_id=batch_id,
+                document_id=document_id,
+                review_item_id=review_item_id,
+                user=user,
             )
+
+    def append_uncommitted(
+        self,
+        *,
+        event_type: str,
+        event: dict[str, Any],
+        batch_id: str | None = None,
+        document_id: str | None = None,
+        review_item_id: str | None = None,
+        user: str | None = None,
+    ) -> dict[str, Any]:
+        """Append without committing so a caller can include it in its transaction."""
+        event_id = _new_id()
+        self.conn.execute(
+            """
+            INSERT INTO audit_events(
+                id, batch_id, document_id, review_item_id, user, event_type,
+                event_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event_id,
+                batch_id,
+                document_id,
+                review_item_id,
+                user,
+                event_type,
+                json_dumps(event),
+                utc_now(),
+            ),
+        )
         return dict(self.conn.execute("SELECT * FROM audit_events WHERE id = ?", (event_id,)).fetchone())
 
     def list_for_document(self, document_id: str) -> list[dict[str, Any]]:
@@ -992,3 +1064,613 @@ class ConfigVersionRepository:
             params.append(name)
         sql += " ORDER BY created_at DESC"
         return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
+
+
+class _VersionedDefinitionRepository:
+    """Shared read helpers for immutable definition version tables."""
+
+    table: str
+    owner_column: str
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def get(self, version_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                f"SELECT * FROM {self.table} WHERE id = ?", (version_id,)
+            ).fetchone()
+        )
+
+    def list_for_owner(self, owner_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            f"SELECT * FROM {self.table} WHERE {self.owner_column} = ? "
+            "ORDER BY version_number DESC",
+            (owner_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def next_version_number(self, owner_id: str) -> int:
+        row = self.conn.execute(
+            f"SELECT COALESCE(MAX(version_number), 0) + 1 FROM {self.table} "
+            f"WHERE {self.owner_column} = ?",
+            (owner_id,),
+        ).fetchone()
+        return int(row[0])
+
+
+class ReviewSchemaTemplateRepository:
+    """Persistence primitives for named review schema templates."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def create(
+        self,
+        *,
+        schema_key: str,
+        name: str,
+        description: str,
+        status: str,
+        user: str | None,
+        template_id: str | None = None,
+    ) -> dict[str, Any]:
+        template_id = template_id or _new_id()
+        now = utc_now()
+        self.conn.execute(
+            """
+            INSERT INTO review_schema_templates(
+                id, schema_key, name, description, status, created_by, created_at,
+                updated_by, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (template_id, schema_key, name, description, status, user, now, user, now),
+        )
+        return self.get(template_id) or {}
+
+    def get(self, template_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM review_schema_templates WHERE id = ?", (template_id,)
+            ).fetchone()
+        )
+
+    def get_by_key(self, schema_key: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM review_schema_templates WHERE schema_key = ?",
+                (schema_key,),
+            ).fetchone()
+        )
+
+    def list(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        where = "" if include_archived else " WHERE status <> 'archived'"
+        rows = self.conn.execute(
+            f"SELECT * FROM review_schema_templates{where} ORDER BY name, schema_key"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update(
+        self,
+        template_id: str,
+        *,
+        schema_key: str,
+        name: str,
+        description: str,
+        status: str,
+        user: str | None,
+        archived_at: str | None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            UPDATE review_schema_templates
+            SET schema_key = ?, name = ?, description = ?, status = ?,
+                updated_by = ?, updated_at = ?, archived_at = ?
+            WHERE id = ?
+            """,
+            (
+                schema_key,
+                name,
+                description,
+                status,
+                user,
+                utc_now(),
+                archived_at,
+                template_id,
+            ),
+        )
+        return self.get(template_id) or {}
+
+
+class ReviewSchemaDraftRepository:
+    """Persistence primitives for the single draft of each schema template."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def get(self, template_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM review_schema_drafts WHERE schema_template_id = ?",
+                (template_id,),
+            ).fetchone()
+        )
+
+    def create(
+        self,
+        *,
+        template_id: str,
+        schema_json: str,
+        content_hash: str,
+        user: str | None,
+        base_version_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            INSERT INTO review_schema_drafts(
+                schema_template_id, revision, base_version_id, schema_json,
+                content_hash, updated_by, updated_at
+            ) VALUES (?, 1, ?, ?, ?, ?, ?)
+            """,
+            (template_id, base_version_id, schema_json, content_hash, user, utc_now()),
+        )
+        return self.get(template_id) or {}
+
+    def update_if_revision(
+        self,
+        *,
+        template_id: str,
+        expected_revision: int,
+        schema_json: str,
+        content_hash: str,
+        user: str | None,
+    ) -> dict[str, Any] | None:
+        cursor = self.conn.execute(
+            """
+            UPDATE review_schema_drafts
+            SET revision = revision + 1, schema_json = ?, content_hash = ?,
+                updated_by = ?, updated_at = ?
+            WHERE schema_template_id = ? AND revision = ?
+            """,
+            (
+                schema_json,
+                content_hash,
+                user,
+                utc_now(),
+                template_id,
+                expected_revision,
+            ),
+        )
+        return self.get(template_id) if cursor.rowcount == 1 else None
+
+    def reset_to_version(
+        self,
+        *,
+        template_id: str,
+        version_id: str,
+        schema_json: str,
+        content_hash: str,
+        user: str | None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            UPDATE review_schema_drafts
+            SET revision = revision + 1, base_version_id = ?, schema_json = ?,
+                content_hash = ?, updated_by = ?, updated_at = ?
+            WHERE schema_template_id = ?
+            """,
+            (version_id, schema_json, content_hash, user, utc_now(), template_id),
+        )
+        return self.get(template_id) or {}
+
+
+class ReviewSchemaVersionRepository(_VersionedDefinitionRepository):
+    """Read and insert primitives for immutable review schema versions."""
+
+    table = "review_schema_versions"
+    owner_column = "schema_template_id"
+
+    def create(
+        self,
+        *,
+        template_id: str,
+        version_number: int,
+        format_version: int,
+        schema_json: str,
+        content_hash: str,
+        validation_summary_json: str,
+        user: str | None,
+        version_id: str | None = None,
+    ) -> dict[str, Any]:
+        version_id = version_id or _new_id()
+        self.conn.execute(
+            """
+            INSERT INTO review_schema_versions(
+                id, schema_template_id, version_number, format_version, schema_json,
+                content_hash, validation_summary_json, published_by, published_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                version_id,
+                template_id,
+                version_number,
+                format_version,
+                schema_json,
+                content_hash,
+                validation_summary_json,
+                user,
+                utc_now(),
+            ),
+        )
+        return self.get(version_id) or {}
+
+
+class PipelineTemplateRepository:
+    """Persistence primitives for named pipeline templates."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def create(
+        self,
+        *,
+        template_key: str,
+        name: str,
+        description: str,
+        document_type: str | None,
+        operator_instructions: str,
+        status: str,
+        operator_selectable: bool,
+        user: str | None,
+        template_id: str | None = None,
+    ) -> dict[str, Any]:
+        template_id = template_id or _new_id()
+        now = utc_now()
+        self.conn.execute(
+            """
+            INSERT INTO pipeline_templates(
+                id, template_key, name, description, document_type,
+                operator_instructions, status, operator_selectable, created_by,
+                created_at, updated_by, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                template_id,
+                template_key,
+                name,
+                description,
+                document_type,
+                operator_instructions,
+                status,
+                int(operator_selectable),
+                user,
+                now,
+                user,
+                now,
+            ),
+        )
+        return self.get(template_id) or {}
+
+    def get(self, template_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM pipeline_templates WHERE id = ?", (template_id,)
+            ).fetchone()
+        )
+
+    def get_by_key(self, template_key: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM pipeline_templates WHERE template_key = ?",
+                (template_key,),
+            ).fetchone()
+        )
+
+    def list(self, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        where = "" if include_archived else " WHERE status <> 'archived'"
+        rows = self.conn.execute(
+            f"SELECT * FROM pipeline_templates{where} ORDER BY name, template_key"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def update(self, template_id: str, **values: Any) -> dict[str, Any]:
+        allowed = {
+            "template_key",
+            "name",
+            "description",
+            "document_type",
+            "operator_instructions",
+            "status",
+            "operator_selectable",
+            "updated_by",
+            "archived_at",
+        }
+        unexpected = set(values) - allowed
+        if unexpected:
+            raise ValueError(f"Unsupported template fields: {sorted(unexpected)}")
+        values["updated_at"] = utc_now()
+        assignments = ", ".join(f"{key} = ?" for key in values)
+        params = [int(value) if key == "operator_selectable" else value for key, value in values.items()]
+        self.conn.execute(
+            f"UPDATE pipeline_templates SET {assignments} WHERE id = ?",
+            (*params, template_id),
+        )
+        return self.get(template_id) or {}
+
+
+class PipelineDraftRepository:
+    """Persistence primitives for the single draft of each pipeline template."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def get(self, template_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM pipeline_drafts WHERE template_id = ?", (template_id,)
+            ).fetchone()
+        )
+
+    def create(
+        self,
+        *,
+        template_id: str,
+        definition_json: str,
+        content_hash: str,
+        user: str | None,
+        base_version_id: str | None = None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            INSERT INTO pipeline_drafts(
+                template_id, revision, base_version_id, definition_json,
+                content_hash, updated_by, updated_at
+            ) VALUES (?, 1, ?, ?, ?, ?, ?)
+            """,
+            (template_id, base_version_id, definition_json, content_hash, user, utc_now()),
+        )
+        return self.get(template_id) or {}
+
+    def update_if_revision(
+        self,
+        *,
+        template_id: str,
+        expected_revision: int,
+        definition_json: str,
+        content_hash: str,
+        user: str | None,
+    ) -> dict[str, Any] | None:
+        cursor = self.conn.execute(
+            """
+            UPDATE pipeline_drafts
+            SET revision = revision + 1, definition_json = ?, content_hash = ?,
+                updated_by = ?, updated_at = ?
+            WHERE template_id = ? AND revision = ?
+            """,
+            (
+                definition_json,
+                content_hash,
+                user,
+                utc_now(),
+                template_id,
+                expected_revision,
+            ),
+        )
+        return self.get(template_id) if cursor.rowcount == 1 else None
+
+    def reset_to_version(
+        self,
+        *,
+        template_id: str,
+        version_id: str,
+        definition_json: str,
+        content_hash: str,
+        user: str | None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            UPDATE pipeline_drafts
+            SET revision = revision + 1, base_version_id = ?, definition_json = ?,
+                content_hash = ?, updated_by = ?, updated_at = ?
+            WHERE template_id = ?
+            """,
+            (
+                version_id,
+                definition_json,
+                content_hash,
+                user,
+                utc_now(),
+                template_id,
+            ),
+        )
+        return self.get(template_id) or {}
+
+
+class PipelineVersionRepository(_VersionedDefinitionRepository):
+    """Read and insert primitives for immutable pipeline versions."""
+
+    table = "pipeline_versions"
+    owner_column = "template_id"
+
+    def create(
+        self,
+        *,
+        template_id: str,
+        version_number: int,
+        schema_version: int,
+        definition_json: str,
+        content_hash: str,
+        display_snapshot_json: str,
+        validation_summary_json: str,
+        user: str | None,
+        version_id: str | None = None,
+    ) -> dict[str, Any]:
+        version_id = version_id or _new_id()
+        self.conn.execute(
+            """
+            INSERT INTO pipeline_versions(
+                id, template_id, version_number, schema_version, definition_json,
+                content_hash, display_snapshot_json, validation_summary_json,
+                published_by, published_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                version_id,
+                template_id,
+                version_number,
+                schema_version,
+                definition_json,
+                content_hash,
+                display_snapshot_json,
+                validation_summary_json,
+                user,
+                utc_now(),
+            ),
+        )
+        return self.get(version_id) or {}
+
+
+class PipelineSchemaDependencyRepository:
+    """Persistence primitives for exact pipeline-to-schema dependencies."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def create(
+        self, *, pipeline_version_id: str, task_key: str, schema_version_id: str
+    ) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO pipeline_version_schema_dependencies(
+                pipeline_version_id, task_key, schema_version_id
+            ) VALUES (?, ?, ?)
+            """,
+            (pipeline_version_id, task_key, schema_version_id),
+        )
+
+    def list_for_pipeline(self, pipeline_version_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT * FROM pipeline_version_schema_dependencies
+            WHERE pipeline_version_id = ? ORDER BY task_key
+            """,
+            (pipeline_version_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+class WatchFolderBindingRepository:
+    """Persistence primitives for watch-folder version bindings."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def create(
+        self,
+        *,
+        folder_path: str,
+        normalized_path: str,
+        pipeline_template_id: str,
+        pipeline_version_id: str,
+        enabled: bool,
+        user: str | None,
+        binding_id: str | None = None,
+    ) -> dict[str, Any]:
+        binding_id = binding_id or _new_id()
+        now = utc_now()
+        self.conn.execute(
+            """
+            INSERT INTO watch_folder_bindings(
+                id, folder_path, normalized_path, pipeline_template_id,
+                pipeline_version_id, enabled, created_by, created_at,
+                updated_by, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                binding_id,
+                folder_path,
+                normalized_path,
+                pipeline_template_id,
+                pipeline_version_id,
+                int(enabled),
+                user,
+                now,
+                user,
+                now,
+            ),
+        )
+        return self.get(binding_id) or {}
+
+    def get(self, binding_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM watch_folder_bindings WHERE id = ?", (binding_id,)
+            ).fetchone()
+        )
+
+    def list(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM watch_folder_bindings ORDER BY normalized_path"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def list_enabled(self) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM watch_folder_bindings WHERE enabled = 1 ORDER BY normalized_path"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def has_enabled_for_template(self, template_id: str) -> bool:
+        row = self.conn.execute(
+            """
+            SELECT 1 FROM watch_folder_bindings
+            WHERE pipeline_template_id = ? AND enabled = 1 LIMIT 1
+            """,
+            (template_id,),
+        ).fetchone()
+        return row is not None
+
+    def is_referenced(self, binding_id: str) -> bool:
+        row = self.conn.execute(
+            "SELECT 1 FROM batches WHERE ingress_binding_id = ? LIMIT 1",
+            (binding_id,),
+        ).fetchone()
+        return row is not None
+
+    def update(
+        self,
+        binding_id: str,
+        *,
+        folder_path: str,
+        normalized_path: str,
+        pipeline_template_id: str,
+        pipeline_version_id: str,
+        enabled: bool,
+        user: str | None,
+    ) -> dict[str, Any]:
+        self.conn.execute(
+            """
+            UPDATE watch_folder_bindings
+            SET folder_path = ?, normalized_path = ?, pipeline_template_id = ?,
+                pipeline_version_id = ?, enabled = ?, updated_by = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                folder_path,
+                normalized_path,
+                pipeline_template_id,
+                pipeline_version_id,
+                int(enabled),
+                user,
+                utc_now(),
+                binding_id,
+            ),
+        )
+        return self.get(binding_id) or {}
+
+    def delete(self, binding_id: str) -> bool:
+        cursor = self.conn.execute(
+            "DELETE FROM watch_folder_bindings WHERE id = ?", (binding_id,)
+        )
+        return cursor.rowcount == 1

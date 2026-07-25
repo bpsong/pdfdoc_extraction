@@ -11,6 +11,7 @@ from standard_step.housekeeping.cleanup_task import CleanupTask
 from standard_step.split.llamacloud_split import LlamaCloudSplitTask, create_split_pdf
 from standard_step.split.llamacloud_split_adapter import SplitResult, SplitSegment
 from test.helpers_sqlite import TempConfig
+from test.services.test_ingestion_assignment_service import publish_pipeline
 
 
 def _write_pdf(path: Path, page_count: int) -> None:
@@ -101,13 +102,20 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
     source = tmp_path / "bundle.pdf"
     split_dir = tmp_path / "split"
     _write_pdf(source, 4)
-    config = TempConfig(tmp_path / "app.sqlite3")
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {"pipeline_secrets": {"test-api": "runtime-secret"}},
+    )
     initialize_database(config)
     with connect(config) as conn:
+        template, version = publish_pipeline(conn, key="split-test")
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(source),
             original_filename="bundle.pdf",
+            pipeline_template_id=template["id"],
+            pipeline_version_id=version["id"],
+            pipeline_assignment_source="upload",
         )
 
     task = LlamaCloudSplitTask(
@@ -147,6 +155,8 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
     assert [child["page_start"] for child in children] == [1, 3]
     assert [child["page_end"] for child in children] == [2, 4]
     assert [child["split_category"] for child in children] == ["invoice", "delivery_order"]
+    assert all(child["pipeline_template_id"] == template["id"] for child in children)
+    assert all(child["pipeline_version_id"] == version["id"] for child in children)
     assert all(file_record["file_type"] == "split_pdf" for file_record in child_files)
     assert all(Path(file_record["file_path"]).exists() for file_record in child_files)
     assert all(len(PdfReader(file_record["file_path"]).pages) == 2 for file_record in child_files)

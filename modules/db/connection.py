@@ -56,9 +56,28 @@ def connect(config_manager: ConfigProvider) -> sqlite3.Connection:
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     """Run operations in a commit/rollback transaction."""
+    nested = conn.in_transaction
     try:
         yield conn
-        conn.commit()
+        if not nested:
+            conn.commit()
     except Exception:
-        conn.rollback()
+        if not nested:
+            conn.rollback()
+        raise
+
+
+@contextmanager
+def immediate_transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    """Reserve the SQLite write lock before a multi-row publication operation."""
+    nested = conn.in_transaction
+    if not nested:
+        conn.execute("BEGIN IMMEDIATE")
+    try:
+        yield conn
+        if not nested:
+            conn.commit()
+    except Exception:
+        if not nested:
+            conn.rollback()
         raise
