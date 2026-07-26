@@ -16,7 +16,12 @@
     const startButton = document.getElementById("start-processing-button");
     const uploadAlert = document.getElementById("upload-alert");
     const uploadStatus = document.getElementById("upload-status");
+    const pipelineList = document.getElementById("pipeline-version-list");
+    const pipelineAlert = document.getElementById("pipeline-selection-alert");
+    const pipelineRefresh = document.getElementById("pipeline-selection-refresh");
     let selectedFiles = [];
+    let availablePipelines = [];
+    let selectedPipelineVersionId = "";
     let uploading = false;
 
     function escapeHtml(value) {
@@ -64,6 +69,49 @@
         uploadAlert.classList.toggle("hidden", !message);
     }
 
+    function setPipelineAlert(message) {
+        pipelineAlert.textContent = message || "";
+        pipelineAlert.classList.toggle("hidden", !message);
+    }
+
+    function renderPipelines() {
+        if (!availablePipelines.length) {
+            pipelineList.innerHTML = '<div class="empty-panel md:col-span-2 xl:col-span-3">No active pipeline versions are available. Ask an administrator to publish and activate one.</div>';
+            setPipelineAlert("Processing is unavailable until an eligible pipeline version exists.");
+            return;
+        }
+        setPipelineAlert("");
+        pipelineList.innerHTML = availablePipelines.map((pipeline) => {
+            const selected = pipeline.pipeline_version_id === selectedPipelineVersionId;
+            return `
+                <label class="cursor-pointer rounded-lg border p-4 transition ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-base-300 hover:border-primary/50"}">
+                    <span class="flex items-start gap-3">
+                        <input class="radio radio-primary radio-sm mt-0.5" type="radio" name="pipeline-version" value="${escapeHtml(pipeline.pipeline_version_id)}" ${selected ? "checked" : ""}>
+                        <span class="min-w-0">
+                            <span class="block font-semibold">${escapeHtml(pipeline.name || pipeline.template_key)}</span>
+                            <span class="mt-0.5 block text-xs text-base-content/50">${escapeHtml(pipeline.template_key)} · Version ${escapeHtml(pipeline.version_number)} · ${escapeHtml(pipeline.step_count)} safe display step(s)</span>
+                            <span class="mt-0.5 block text-xs text-base-content/50">Published ${escapeHtml(window.DocFlow.formatDateTime(pipeline.published_at) || "—")}</span>
+                            ${pipeline.document_type ? `<span class="mt-2 inline-block badge badge-outline badge-sm">${escapeHtml(pipeline.document_type)}</span>` : ""}
+                            ${pipeline.description ? `<span class="mt-2 block text-sm text-base-content/70">${escapeHtml(pipeline.description)}</span>` : ""}
+                            ${pipeline.operator_instructions ? `<span class="mt-2 block rounded bg-base-200 p-2 text-xs">${escapeHtml(pipeline.operator_instructions)}</span>` : ""}
+                        </span>
+                    </span>
+                </label>
+            `;
+        }).join("");
+    }
+
+    async function loadPipelines() {
+        const payload = await window.DocFlow.apiGet("/api/pipelines/available?source=upload");
+        availablePipelines = payload.pipelines || [];
+        selectedPipelineVersionId = window.DocFlowOperatorPipeline.refreshSelection(
+            selectedPipelineVersionId,
+            availablePipelines
+        );
+        renderPipelines();
+        renderSelectedFiles();
+    }
+
     function handleFileSelection(files) {
         const existing = new Set(selectedFiles.map((entry) => entry.key));
         Array.from(files || []).forEach((file) => {
@@ -91,7 +139,11 @@
         const totalSize = selectedFiles.reduce((total, entry) => total + entry.file.size, 0);
         fileCount.textContent = `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"}`;
         fileSummary.textContent = `Total files: ${selectedFiles.length} | Total size: ${formatBytes(totalSize)}`;
-        startButton.disabled = uploading || validFiles.length === 0 || validFiles.length !== selectedFiles.length;
+        startButton.disabled = !window.DocFlowOperatorPipeline.canStart(
+            selectedFiles,
+            selectedPipelineVersionId,
+            uploading
+        );
 
         if (!selectedFiles.length) {
             fileList.innerHTML = '<div class="empty-panel">No files selected</div>';
@@ -128,11 +180,16 @@
 
     async function uploadBatch() {
         const validFiles = selectedFiles.filter((entry) => !entry.error);
-        if (!validFiles.length || validFiles.length !== selectedFiles.length || uploading) {
+        if (!window.DocFlowOperatorPipeline.canStart(
+            selectedFiles,
+            selectedPipelineVersionId,
+            uploading
+        )) {
             return;
         }
 
         const formData = new FormData();
+        formData.append("pipeline_version_id", selectedPipelineVersionId);
         validFiles.forEach((entry) => formData.append("files", entry.file, entry.file.name));
 
         uploading = true;
@@ -160,7 +217,9 @@
                 } catch (error) {
                     detail = response.statusText;
                 }
-                throw new Error(detail);
+                const requestError = new Error(typeof detail === "string" ? detail : detail.message || "Upload failed");
+                requestError.status = response.status;
+                throw requestError;
             }
             const payload = await response.json();
             window.location.href = `/app/batches/${encodeURIComponent(payload.batch_id)}`;
@@ -170,6 +229,11 @@
             startButton.disabled = false;
             uploadStatus.textContent = "";
             setAlert(error.message || "Upload failed");
+            if ([400, 403, 409].includes(error.status)) {
+                selectedPipelineVersionId = "";
+                await loadPipelines();
+                setPipelineAlert("The selected version is no longer eligible. Choose again from the refreshed list.");
+            }
             if (window.DocFlow) {
                 window.DocFlow.showToast(error.message || "Upload failed", "error");
             }
@@ -186,6 +250,17 @@
         if (button) {
             removeFile(button.dataset.removeFile);
         }
+    });
+
+    pipelineList.addEventListener("change", (event) => {
+        const input = event.target.closest("input[name='pipeline-version']");
+        if (!input) return;
+        selectedPipelineVersionId = input.value;
+        renderPipelines();
+        renderSelectedFiles();
+    });
+    pipelineRefresh.addEventListener("click", () => {
+        loadPipelines().catch((error) => setPipelineAlert(error.message));
     });
 
     ["dragenter", "dragover"].forEach((eventName) => {
@@ -212,5 +287,10 @@
         handleFileSelection,
         renderSelectedFiles,
         uploadBatch,
+        loadPipelines,
     };
+    loadPipelines().catch((error) => {
+        setPipelineAlert(error.message || "Unable to load available pipelines.");
+        renderSelectedFiles();
+    });
 })();

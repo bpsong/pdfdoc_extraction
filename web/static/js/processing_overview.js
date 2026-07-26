@@ -14,6 +14,7 @@
     const refreshNote = document.getElementById("processing-refresh-note");
     const splitResultsLink = document.getElementById("split-results-link");
     const clearFailureNotificationsButton = document.getElementById("clear-failure-notifications-button");
+    const assignmentSummary = document.getElementById("pipeline-assignment-summary");
     const terminalStatuses = new Set(["completed", "completed_with_errors", "failed", "cancelled", "review_completed"]);
     let pollTimer = null;
 
@@ -194,6 +195,7 @@
 
     function renderPipelineGroup(state, showTitle) {
         const batch = state.batch || {};
+        const pipeline = state.pipeline || batch.pipeline || {};
         const steps = [ingestionStep(state)].concat(state.aggregate_step_states || []);
         const compactClass = steps.length > 8 ? " compact" : "";
         const items = [];
@@ -209,7 +211,7 @@
             <div class="pipeline-group">
                 ${showTitle ? `
                     <div class="pipeline-group-header">
-                        <span class="font-medium truncate">${escapeHtml(batch.original_filename || batch.id || "Batch")}</span>
+                        <span class="font-medium truncate">${escapeHtml(batch.original_filename || batch.id || "Batch")} · ${escapeHtml(pipeline.name || pipeline.template_key || "Historical pipeline")} ${pipeline.version_number ? `v${escapeHtml(pipeline.version_number)}` : ""}</span>
                         <span class="badge badge-outline badge-xs">${escapeHtml(batch.id || "")}</span>
                     </div>
                 ` : ""}
@@ -226,6 +228,24 @@
             return;
         }
         pipelineStepList.innerHTML = states.map((state) => renderPipelineGroup(state, states.length > 1)).join("");
+    }
+
+    function renderAssignment(states) {
+        if (!states.length) {
+            assignmentSummary.textContent = "No pipeline assignment available.";
+            return;
+        }
+        if (states.length > 1) {
+            const versions = new Set(states.map((state) => state.pipeline && state.pipeline.pipeline_version_id || "historical"));
+            assignmentSummary.textContent = `${states.length} recent batches across ${versions.size} exact pipeline version(s). Each batch remains pinned independently.`;
+            return;
+        }
+        const pipeline = states[0].pipeline || states[0].batch && states[0].batch.pipeline || {};
+        if (pipeline.historical) {
+            assignmentSummary.innerHTML = `<strong>Historical migrated pipeline</strong><span class="ml-2 text-base-content/60">This identity is migration-derived because the legacy batch predates exact version assignment.</span>`;
+            return;
+        }
+        assignmentSummary.innerHTML = `<strong>${escapeHtml(pipeline.name || pipeline.template_key)}</strong><span class="ml-2 badge badge-outline badge-sm">${escapeHtml(pipeline.template_key)} · Version ${escapeHtml(pipeline.version_number)}</span><span class="ml-2 text-xs text-base-content/50">${escapeHtml(String(pipeline.content_hash || "").slice(0, 12))}</span>`;
     }
 
     function stepName(step) {
@@ -284,11 +304,13 @@
             (state.documents || []).forEach((document) => {
                 const filename = document.original_filename || document.file_path || document.id;
                 const progress = Number(document.progress_percent || 0);
+                const pipeline = state.pipeline || batch.pipeline || {};
                 rows.push(`
                     <tr>
                         <td>
                             <div class="text-sm font-medium truncate max-w-xs">${escapeHtml(filename)}</div>
                             <div class="text-xs text-base-content/40">${escapeHtml(batch.id || document.batch_id || "")}</div>
+                            <div class="text-xs text-base-content/40">${escapeHtml(pipeline.template_key || "historical")} ${pipeline.version_number ? `· v${escapeHtml(pipeline.version_number)}` : "· migrated"}</div>
                         </td>
                         <td>${statusBadge(document.status)}</td>
                         <td>${stepName(document.current_step)}</td>
@@ -354,6 +376,7 @@
         try {
             const states = await loadVisibleStates();
             renderPipeline(states);
+            renderAssignment(states);
             renderRows(states);
             updateSplitLink(states);
             await updateFailureNotificationControl();

@@ -54,7 +54,15 @@
             } catch (error) {
                 detail = response.statusText;
             }
-            throw new Error(detail || `Request failed with status ${response.status}`);
+            const message = typeof detail === "string"
+                ? detail
+                : detail && detail.message
+                    ? detail.message
+                    : `Request failed with status ${response.status}`;
+            const requestError = new Error(message);
+            requestError.detail = detail;
+            requestError.status = response.status;
+            throw requestError;
         }
 
         if (response.status === 204) {

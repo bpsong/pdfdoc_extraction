@@ -846,58 +846,58 @@ pass.
 **Exit criterion:** All designed admin/processing APIs use services, enforce
 authorization/CSRF/concurrency, redact output, and pass Phase 9 unit/API tests.
 
-- [ ] **9.0 Add review-schema APIs**
-  - [ ] 9.1 Add schema template list/create/get/update lifecycle endpoints.
-  - [ ] 9.2 Add draft get/save/import/export/validate endpoints.
-  - [ ] 9.3 Add publish, version list/get/export, and usage/dependency
+- [x] **9.0 Add review-schema APIs**
+  - [x] 9.1 Add schema template list/create/get/update lifecycle endpoints.
+  - [x] 9.2 Add draft get/save/import/export/validate endpoints.
+  - [x] 9.3 Add publish, version list/get/export, and usage/dependency
     endpoints.
-  - [ ] 9.4 Return revision/hash conflicts and structured findings without
+  - [x] 9.4 Return revision/hash conflicts and structured findings without
     schema content in error logs.
 
-- [ ] **9.5 Add pipeline-template APIs**
-  - [ ] 9.6 Add template list/create/get/update lifecycle and clone endpoints.
-  - [ ] 9.7 Add draft get/save/import/export/validate/publish endpoints.
-  - [ ] 9.8 Add version list/get/export and redacted version-to-version diff.
-  - [ ] 9.9 Include exact schema version summaries and dependency findings.
+- [x] **9.5 Add pipeline-template APIs**
+  - [x] 9.6 Add template list/create/get/update lifecycle and clone endpoints.
+  - [x] 9.7 Add draft get/save/import/export/validate/publish endpoints.
+  - [x] 9.8 Add version list/get/export and redacted version-to-version diff.
+  - [x] 9.9 Include exact schema version summaries and dependency findings.
 
-- [ ] **9.10 Update processing APIs**
-  - [ ] 9.11 Return pinned template/version identity and immutable display
+- [x] **9.10 Update processing APIs**
+  - [x] 9.11 Return pinned template/version identity and immutable display
     snapshot for batches/documents.
-  - [ ] 9.12 Group state by `pipeline_version_id`, not mutable config or only
+  - [x] 9.12 Group state by `pipeline_version_id`, not mutable config or only
     content hash.
-  - [ ] 9.13 Use legacy batch metadata snapshots only for migration diagnostics
+  - [x] 9.13 Use legacy batch metadata snapshots only for migration diagnostics
     and explicitly labelled historical fallback.
-  - [ ] 9.14 Preserve operator access without exposing admin definitions.
+  - [x] 9.14 Preserve operator access without exposing admin definitions.
 
-- [ ] **9.15 Cut over old internal admin endpoints**
-  - [ ] 9.16 Replace single `/api/admin/pipeline` mutations atomically with
+- [x] **9.15 Cut over old internal admin endpoints**
+  - [x] 9.16 Replace single `/api/admin/pipeline` mutations atomically with
     template-scoped endpoints.
-  - [ ] 9.17 Replace file-backed schema mutations with draft import/export.
-  - [ ] 9.18 Do not allow old endpoints to write active YAML or schema files.
-  - [ ] 9.19 Preserve only explicitly documented compatibility surfaces and
+  - [x] 9.17 Replace file-backed schema mutations with draft import/export.
+  - [x] 9.18 Do not allow old endpoints to write active YAML or schema files.
+  - [x] 9.19 Preserve only explicitly documented compatibility surfaces and
     return safe actionable responses for removed internal endpoints.
 
-- [ ] **9.20 Enforce security and audit**
-  - [ ] 9.21 Require admin role for all configuration/template/binding APIs.
-  - [ ] 9.22 Preserve router-wide CSRF behavior for cookie-authenticated
+- [x] **9.20 Enforce security and audit**
+  - [x] 9.21 Require admin role for all configuration/template/binding APIs.
+  - [x] 9.22 Preserve router-wide CSRF behavior for cookie-authenticated
     mutations and bearer-token rules.
-  - [ ] 9.23 Enforce request size, content type, filename/path containment, and
+  - [x] 9.23 Enforce request size, content type, filename/path containment, and
     import parsing limits.
-  - [ ] 9.24 Use shared redaction for definitions, diffs, findings, errors, and
+  - [x] 9.24 Use shared redaction for definitions, diffs, findings, errors, and
     audits.
-  - [ ] 9.25 Keep cross-table logic in services rather than route handlers.
+  - [x] 9.25 Keep cross-table logic in services rather than route handlers.
 
-- [ ] **9.26 Complete Phase 9 unit and API tests**
-  - [ ] 9.27 Test response serializers/view models for redaction, schema
+- [x] **9.26 Complete Phase 9 unit and API tests**
+  - [x] 9.27 Test response serializers/view models for redaction, schema
     dependency summaries, revisions, and pinned processing payloads.
-  - [ ] 9.28 Test every endpoint happy path, 400/401/403/404/409/422 behavior,
+  - [x] 9.28 Test every endpoint happy path, 400/401/403/404/409/422 behavior,
     CSRF, stale revision, and invalid lifecycle.
-  - [ ] 9.29 Test import/export content types, size/path protections, and no
+  - [x] 9.29 Test import/export content types, size/path protections, and no
     implicit publish.
-  - [ ] 9.30 Test operator cannot access admin endpoints or secret-bearing
+  - [x] 9.30 Test operator cannot access admin endpoints or secret-bearing
     fields.
-  - [ ] 9.31 Test old mutations no longer alter YAML/files.
-  - [ ] 9.32 Run:
+  - [x] 9.31 Test old mutations no longer alter YAML/files.
+  - [x] 9.32 Run:
 
     ```powershell
     .\.venv\Scripts\python.exe -m pytest -v `
@@ -917,53 +917,53 @@ authorization/CSRF/concurrency, redact output, and pass Phase 9 unit/API tests.
 mutable runtime files/global pipeline state, frontend-independent Phase 10 unit
 tests pass, and browser interaction is ready for final visual verification.
 
-- [ ] **10.0 Refactor Review Forms workspace**
-  - [ ] 10.1 List schema templates with status, draft revision, latest version,
+- [x] **10.0 Refactor Review Forms workspace**
+  - [x] 10.1 List schema templates with status, draft revision, latest version,
     hash, and usage.
-  - [ ] 10.2 Edit one server-backed draft through the existing typed field
+  - [x] 10.2 Edit one server-backed draft through the existing typed field
     editor.
-  - [ ] 10.3 Add create, activate/deactivate/archive, validate, publish,
+  - [x] 10.3 Add create, activate/deactivate/archive, validate, publish,
     history, import, and export actions.
-  - [ ] 10.4 Display immutable versions and pipeline dependencies.
-  - [ ] 10.5 Handle stale revision conflicts without overwriting either
+  - [x] 10.4 Display immutable versions and pipeline dependencies.
+  - [x] 10.5 Handle stale revision conflicts without overwriting either
     writer.
-  - [ ] 10.6 Make clear that schema publication does not update pipelines
+  - [x] 10.6 Make clear that schema publication does not update pipelines
     automatically.
 
-- [ ] **10.7 Refactor Pipeline administration workspace**
-  - [ ] 10.8 Add template selector/list, metadata, status, operator
+- [x] **10.7 Refactor Pipeline administration workspace**
+  - [x] 10.8 Add template selector/list, metadata, status, operator
     selectability, create, clone, activate/deactivate/archive, and version
     history.
-  - [ ] 10.9 Scope the ordered task editor to one template draft and show its
+  - [x] 10.9 Scope the ordered task editor to one template draft and show its
     revision/base version.
-  - [ ] 10.10 Replace review `schema_file` input with an exact active published
+  - [x] 10.10 Replace review `schema_file` input with an exact active published
     schema-version selector showing version/hash/compatibility.
-  - [ ] 10.11 Add validate, publish, canonical redacted preview, redacted diff,
+  - [x] 10.11 Add validate, publish, canonical redacted preview, redacted diff,
     import, and export actions.
-  - [ ] 10.12 Add binding management with normalized-path/version findings.
-  - [ ] 10.13 Warn before navigation with unsaved draft changes; browser
+  - [x] 10.12 Add binding management with normalized-path/version findings.
+  - [x] 10.13 Warn before navigation with unsaved draft changes; browser
     storage must not become authoritative.
 
-- [ ] **10.14 Preserve production frontend/security conventions**
-  - [ ] 10.15 Keep authenticated `/app/*` routes, shared `DocFlow` request/
+- [x] **10.14 Preserve production frontend/security conventions**
+  - [x] 10.15 Keep authenticated `/app/*` routes, shared `DocFlow` request/
     CSRF helpers, role-based navigation, server-side authorization, and
     same-origin rules.
-  - [ ] 10.16 Preserve keyboard access, labels, focus order, error summaries,
+  - [x] 10.16 Preserve keyboard access, labels, focus order, error summaries,
     loading states, empty states, and responsive behavior.
-  - [ ] 10.17 Never render resolved secrets, raw unredacted definitions, or
+  - [x] 10.17 Never render resolved secrets, raw unredacted definitions, or
     full schema content in audit/usage summaries.
-  - [ ] 10.18 Rebuild CSS if templates/JavaScript introduce new Tailwind
+  - [x] 10.18 Rebuild CSS if templates/JavaScript introduce new Tailwind
     utility classes.
 
-- [ ] **10.19 Complete Phase 10 unit and route tests**
-  - [ ] 10.20 Extract/test deterministic frontend-independent state/view-model
+- [x] **10.19 Complete Phase 10 unit and route tests**
+  - [x] 10.20 Extract/test deterministic frontend-independent state/view-model
     helpers for revision conflicts, lifecycle action availability, schema
     selectors, version labels, and validation grouping.
-  - [ ] 10.21 Test authenticated/admin page routes and operator redirects.
-  - [ ] 10.22 Test template/controller DOM ID contracts and required scripts.
-  - [ ] 10.23 Test API error mapping does not silently select a different
+  - [x] 10.21 Test authenticated/admin page routes and operator redirects.
+  - [x] 10.22 Test template/controller DOM ID contracts and required scripts.
+  - [x] 10.23 Test API error mapping does not silently select a different
     template/schema version.
-  - [ ] 10.24 Run:
+  - [x] 10.24 Run:
 
     ```powershell
     .\.venv\Scripts\python.exe -m pytest -v `
@@ -982,41 +982,41 @@ available.
 **Exit criterion:** Operators explicitly select a version and can see immutable
 assignment identity throughout processing; Phase 11 unit/route tests pass.
 
-- [ ] **11.0 Add required upload selection**
-  - [ ] 11.1 Fetch available versions before enabling processing.
-  - [ ] 11.2 Show name, description, document type, instructions, version
+- [x] **11.0 Add required upload selection**
+  - [x] 11.1 Fetch available versions before enabling processing.
+  - [x] 11.2 Show name, description, document type, instructions, version
     number, publication time, and safe step count.
-  - [ ] 11.3 Start with no implicit selection even when one version exists.
-  - [ ] 11.4 Require valid files and one current selection before enabling the
+  - [x] 11.3 Start with no implicit selection even when one version exists.
+  - [x] 11.4 Require valid files and one current selection before enabling the
     button.
-  - [ ] 11.5 Submit exactly one `pipeline_version_id` for the whole batch.
-  - [ ] 11.6 On stale/ineligible rejection, refresh the list without choosing a
+  - [x] 11.5 Submit exactly one `pipeline_version_id` for the whole batch.
+  - [x] 11.6 On stale/ineligible rejection, refresh the list without choosing a
     replacement silently.
 
-- [ ] **11.7 Update processing presentation**
-  - [ ] 11.8 Display template key/name and exact version on batch and document
+- [x] **11.7 Update processing presentation**
+  - [x] 11.8 Display template key/name and exact version on batch and document
     views.
-  - [ ] 11.9 Render immutable display-snapshot steps and task states.
-  - [ ] 11.10 Keep split/review/extraction actions based on document state.
-  - [ ] 11.11 Label migration-derived historical provenance honestly.
-  - [ ] 11.12 Preserve polling, terminal stop behavior, mobile layout, and long
+  - [x] 11.9 Render immutable display-snapshot steps and task states.
+  - [x] 11.10 Keep split/review/extraction actions based on document state.
+  - [x] 11.11 Label migration-derived historical provenance honestly.
+  - [x] 11.12 Preserve polling, terminal stop behavior, mobile layout, and long
     pipeline handling.
 
-- [ ] **11.13 Preserve operator security**
-  - [ ] 11.14 Do not expose task parameters, schema content, secret aliases not
+- [x] **11.13 Preserve operator security**
+  - [x] 11.14 Do not expose task parameters, schema content, secret aliases not
     needed for display, or admin-only metadata.
-  - [ ] 11.15 Preserve authentication redirect, CSRF, output escaping,
+  - [x] 11.15 Preserve authentication redirect, CSRF, output escaping,
     same-origin PDF preview, and role checks.
 
-- [ ] **11.16 Complete Phase 11 unit and route tests**
-  - [ ] 11.17 Test selection state, button eligibility, stale-list reset,
+- [x] **11.16 Complete Phase 11 unit and route tests**
+  - [x] 11.17 Test selection state, button eligibility, stale-list reset,
     multipart field construction, and error mapping through deterministic
     helpers/view models.
-  - [ ] 11.18 Test pinned pipeline labels/snapshots for current and
+  - [x] 11.18 Test pinned pipeline labels/snapshots for current and
     migration-derived batches.
-  - [ ] 11.19 Test operator page routes, empty available list, unauthenticated
+  - [x] 11.19 Test operator page routes, empty available list, unauthenticated
     redirect, and no secret-bearing DOM data.
-  - [ ] 11.20 Run:
+  - [x] 11.20 Run:
 
     ```powershell
     .\.venv\Scripts\python.exe -m pytest -v `
@@ -1036,63 +1036,63 @@ for stored-source resolution; Phase 8 migration semantics defined.
 bindings, and portable files read-only with compatible reporting, and Phase 12
 unit/CLI tests pass.
 
-- [ ] **12.0 Add explicit validation sources**
-  - [ ] 12.1 Make default `validate --config` validate deployment YAML,
+- [x] **12.0 Add explicit validation sources**
+  - [x] 12.1 Make default `validate --config` validate deployment YAML,
     database availability/version, secret aliases, active eligible pipeline
     versions, exact schema dependencies, and enabled bindings.
-  - [ ] 12.2 Add `--pipeline <key>` with exactly one of `--draft` or
+  - [x] 12.2 Add `--pipeline <key>` with exactly one of `--draft` or
     `--version <n>`.
-  - [ ] 12.3 Add `--review-schema <key>` with exactly one of `--draft` or
+  - [x] 12.3 Add `--review-schema <key>` with exactly one of `--draft` or
     `--version <n>`.
-  - [ ] 12.4 Add `--all-stored` and enforce selector mutual exclusion.
-  - [ ] 12.5 Resolve stable keys/version numbers, not caller-supplied UUIDs.
+  - [x] 12.4 Add `--all-stored` and enforce selector mutual exclusion.
+  - [x] 12.5 Resolve stable keys/version numbers, not caller-supplied UUIDs.
 
-- [ ] **12.6 Add read-only database adapter**
-  - [ ] 12.7 Open SQLite read-only and never initialize/migrate/write from
+- [x] **12.6 Add read-only database adapter**
+  - [x] 12.7 Open SQLite read-only and never initialize/migrate/write from
     validation.
-  - [ ] 12.8 Return a blocking finding for missing/outdated DB schema.
-  - [ ] 12.9 Load exact stored content/dependencies and qualify every finding
+  - [x] 12.8 Return a blocking finding for missing/outdated DB schema.
+  - [x] 12.9 Load exact stored content/dependencies and qualify every finding
     path by source.
-  - [ ] 12.10 Reuse the shared validation facade rather than duplicating UI/API
+  - [x] 12.10 Reuse the shared validation facade rather than duplicating UI/API
     rules.
 
-- [ ] **12.11 Add `validate-file`**
-  - [ ] 12.12 Support `--kind runtime|pipeline|review-schema`.
-  - [ ] 12.13 Validate deployment YAML without opening SQLite for runtime kind.
-  - [ ] 12.14 Resolve portable pipeline schema coordinates against the target
+- [x] **12.11 Add `validate-file`**
+  - [x] 12.12 Support `--kind runtime|pipeline|review-schema`.
+  - [x] 12.13 Validate deployment YAML without opening SQLite for runtime kind.
+  - [x] 12.14 Resolve portable pipeline schema coordinates against the target
     DB when `--config` is provided.
-  - [ ] 12.15 Require embedded dependency content for fully offline pipeline
+  - [x] 12.15 Require embedded dependency content for fully offline pipeline
     validation.
-  - [ ] 12.16 Never import, save, publish, migrate, or rewrite during
+  - [x] 12.16 Never import, save, publish, migrate, or rewrite during
     validation.
 
-- [ ] **12.17 Extend portable contract schema output**
-  - [ ] 12.18 Add `config-check schema --kind
+- [x] **12.17 Extend portable contract schema output**
+  - [x] 12.18 Add `config-check schema --kind
     runtime|pipeline|review-schema|pipeline-bundle`.
-  - [ ] 12.19 Keep machine-readable schemas deterministic for automation.
+  - [x] 12.19 Keep machine-readable schemas deterministic for automation.
 
-- [ ] **12.20 Preserve compatible CLI behavior**
-  - [ ] 12.21 Preserve text/JSON formats, strict/base-dir/import/file/
+- [x] **12.20 Preserve compatible CLI behavior**
+  - [x] 12.21 Preserve text/JSON formats, strict/base-dir/import/file/
     performance/security options where applicable.
-  - [ ] 12.22 Return usage code `64` for incompatible flags rather than
+  - [x] 12.22 Return usage code `64` for incompatible flags rather than
     ignoring them.
-  - [ ] 12.23 Preserve exit codes `0`, `1`, `2`, and `64`.
-  - [ ] 12.24 Report legacy root `pipeline`, `tasks`, and filesystem review
+  - [x] 12.23 Preserve exit codes `0`, `1`, `2`, and `64`.
+  - [x] 12.24 Report legacy root `pipeline`, `tasks`, and filesystem review
     schemas as migration/deprecation findings, not active runtime definitions.
-  - [ ] 12.25 Redact secrets consistently from arguments summary, findings,
+  - [x] 12.25 Redact secrets consistently from arguments summary, findings,
     suggestions, exceptions, JSON, and logs.
 
-- [ ] **12.26 Complete Phase 12 unit and CLI tests**
-  - [ ] 12.27 Test parser selector combinations, defaults, errors, and schema
+- [x] **12.26 Complete Phase 12 unit and CLI tests**
+  - [x] 12.27 Test parser selector combinations, defaults, errors, and schema
     kinds.
-  - [ ] 12.28 Test read-only DB behavior and outdated/missing database
+  - [x] 12.28 Test read-only DB behavior and outdated/missing database
     findings.
-  - [ ] 12.29 Test targeted drafts/versions, all-stored, active dependencies,
+  - [x] 12.29 Test targeted drafts/versions, all-stored, active dependencies,
     and binding checks.
-  - [ ] 12.30 Test portable online/offline resolution, hash mismatch, missing
+  - [x] 12.30 Test portable online/offline resolution, hash mismatch, missing
     dependency, and no writes.
-  - [ ] 12.31 Re-run all existing CLI validator/reporter/exit-code tests.
-  - [ ] 12.32 Run:
+  - [x] 12.31 Re-run all existing CLI validator/reporter/exit-code tests.
+  - [x] 12.32 Run:
 
     ```powershell
     .\.venv\Scripts\python.exe -m pytest -v test\tools\config_check
@@ -1107,50 +1107,50 @@ unit/CLI tests pass.
 **Exit criterion:** End-to-end behavior and broad regressions pass without live
 provider calls. No implementation coding phase remains incomplete.
 
-- [ ] **13.0 Run end-to-end multi-template scenarios**
-  - [ ] 13.1 Create/publish two schema versions and two independent pipeline
+- [x] **13.0 Run end-to-end multi-template scenarios**
+  - [x] 13.1 Create/publish two schema versions and two independent pipeline
     templates.
-  - [ ] 13.2 Upload separate batches to different versions and prove pinned
+  - [x] 13.2 Upload separate batches to different versions and prove pinned
     execution/task-run attribution.
-  - [ ] 13.3 Publish newer pipeline/schema versions during active work and
+  - [x] 13.3 Publish newer pipeline/schema versions during active work and
     prove existing work is unchanged.
-  - [ ] 13.4 Deactivate/archive templates and schemas and prove new work is
+  - [x] 13.4 Deactivate/archive templates and schemas and prove new work is
     rejected while pinned work resumes.
 
-- [ ] **13.5 Run split/review/fan-in scenarios**
-  - [ ] 13.6 Prove split children inherit assignments and do not duplicate on
+- [x] **13.5 Run split/review/fan-in scenarios**
+  - [x] 13.6 Prove split children inherit assignments and do not duplicate on
     retry.
-  - [ ] 13.7 Prove review item schema identity, correction, locking, completion,
+  - [x] 13.7 Prove review item schema identity, correction, locking, completion,
     and exactly-once resume.
-  - [ ] 13.8 Prove completed/failed/review-required child combinations retain
+  - [x] 13.8 Prove completed/failed/review-required child combinations retain
     current fan-in results.
-  - [ ] 13.9 Prove artifact registration and cleanup remain correct.
+  - [x] 13.9 Prove artifact registration and cleanup remain correct.
 
-- [ ] **13.10 Run ingestion/coordinator scenarios**
-  - [ ] 13.11 Prove one upload batch cannot mix versions.
-  - [ ] 13.12 Prove two folders use different versions and binding
+- [x] **13.10 Run ingestion/coordinator scenarios**
+  - [x] 13.11 Prove one upload batch cannot mix versions.
+  - [x] 13.12 Prove two folders use different versions and binding
     reconciliation changes only later claims.
-  - [ ] 13.13 Prove invalid selections/bindings create no partial records or
+  - [x] 13.13 Prove invalid selections/bindings create no partial records or
     orphan files.
 
-- [ ] **13.14 Run migration matrix**
-  - [ ] 13.15 Cover fresh, v2 terminal, v2 review-paused, v2 processing,
+- [x] **13.14 Run migration matrix**
+  - [x] 13.15 Cover fresh, v2 terminal, v2 review-paused, v2 processing,
     mismatch, missing schema, secret migration, partial failure, and idempotent
     rerun.
-  - [ ] 13.16 Verify startup cannot accept HTTP/watch work before migration
+  - [x] 13.16 Verify startup cannot accept HTTP/watch work before migration
     success.
-  - [ ] 13.17 Verify legacy history and original schema files remain intact.
+  - [x] 13.17 Verify legacy history and original schema files remain intact.
 
-- [ ] **13.18 Run security regression**
-  - [ ] 13.19 Test admin/operator separation and server-side authorization.
-  - [ ] 13.20 Test CSRF, cookie/bearer behavior, trusted paths, import
+- [x] **13.18 Run security regression**
+  - [x] 13.19 Test admin/operator separation and server-side authorization.
+  - [x] 13.20 Test CSRF, cookie/bearer behavior, trusted paths, import
     containment, protected PDFs, and output escaping.
-  - [ ] 13.21 Scan API, audit, task-run, log, diff, CLI, error, fixture, and
+  - [x] 13.21 Scan API, audit, task-run, log, diff, CLI, error, fixture, and
     rendered payloads for synthetic secret sentinels.
-  - [ ] 13.22 Verify arbitrary module/class, path, expression, draft, and
+  - [x] 13.22 Verify arbitrary module/class, path, expression, draft, and
     unpublished version inputs cannot execute.
 
-- [ ] **13.23 Run focused automated suites**
+- [x] **13.23 Run focused automated suites**
 
   ```powershell
   .\.venv\Scripts\python.exe -m pytest -v test\db
@@ -1162,18 +1162,18 @@ provider calls. No implementation coding phase remains incomplete.
   .\.venv\Scripts\python.exe -m pytest -v test\tools\config_check
   ```
 
-- [ ] **13.24 Run the full non-live pytest suite**
+- [x] **13.24 Run the full non-live pytest suite**
 
   ```powershell
   .\.venv\Scripts\python.exe -m pytest -v
   ```
 
-- [ ] **13.25 Review automated-test evidence**
-  - [ ] 13.26 Record exact commands, counts, pass/fail outcomes, skips, and
+- [x] **13.25 Review automated-test evidence**
+  - [x] 13.26 Record exact commands, counts, pass/fail outcomes, skips, and
     duration under **Implementation Notes**.
-  - [ ] 13.27 Investigate every unexpected skip, warning, flaky retry, or
+  - [x] 13.27 Investigate every unexpected skip, warning, flaky retry, or
     intermittent failure.
-  - [ ] 13.28 Do not proceed to visual testing until every required automated
+  - [x] 13.28 Do not proceed to visual testing until every required automated
     test is green or an explicitly documented external-only check is outside
     scope.
 
@@ -1480,3 +1480,128 @@ Add dated notes here during execution for:
 - `modules/db/migrations.py` records schema version 3 only after the importer,
   invariants, YAML replacement, and audit work succeed. `main.py` blocks
   startup before runtime construction on any migration failure.
+
+### 2026-07-26 — Phases 9-12
+
+- Before starting Phase 9, the combined Phase 1-8 focused verification passed:
+  `148 passed` with four existing framework deprecation warnings. All Phase 1-8
+  task checkboxes and prerequisite implementation files were present.
+- Phase 9 administration/API gate: `11 passed`.
+- Phase 10 administration UI route/view-model gate: `32 passed`; the production
+  Tailwind CSS build also completed successfully.
+- Phase 11 operator upload/processing UI gate: `11 passed`.
+- Phase 12 full `config-check` gate: `246 passed, 3 skipped`; the skips are the
+  existing Windows permission-behavior cases.
+- The first broad regression exposed 19 stale tests and visual fixtures that
+  still asserted removed file-backed schema/global-pipeline mutations. They
+  were updated to verify the actionable `410 Gone` migration contract and the
+  SQLite-backed versioned UI. The final full suite passed:
+  `849 passed, 4 skipped, 4 warnings` in 140.46 seconds.
+- `git diff --check` passed. Its only output was the repository's expected
+  LF-to-CRLF working-copy warnings.
+- Phase 9-12 relevant files:
+  - `modules/services/versioned_admin_service.py`,
+    `modules/services/versioned_admin_view_models.py`, and
+    `modules/api_router.py`: template-scoped review-schema/pipeline
+    administration, lifecycle, immutable versions, optimistic concurrency,
+    import/export, redaction, and actionable legacy mutation responses.
+  - `modules/services/operator_pipeline_view_models.py`,
+    `modules/services/ingestion_assignment_service.py`, and
+    `modules/services/processing_state_service.py`: safe operator selectors,
+    publication metadata, and exact/historical pipeline identity.
+  - `web/templates/schema_editor.html`,
+    `web/templates/pipeline_config.html`,
+    `web/templates/upload_process.html`, and
+    `web/templates/processing_overview.html`: production administration and
+    operator surfaces for versioned configuration.
+  - `web/static/js/versioned_admin_view_models.js`,
+    `web/static/js/operator_pipeline_view_models.js`,
+    `web/static/js/schema_editor.js`,
+    `web/static/js/pipeline_config.js`,
+    `web/static/js/upload_process.js`,
+    `web/static/js/processing_overview.js`, and `web/static/js/app.js`:
+    version-aware browser workflows, exact selection, conflict/error
+    presentation, and stale-selection handling.
+  - `web/static/css/vendor.css`: rebuilt committed production CSS.
+  - `tools/config_check/stored_validator.py` and
+    `tools/config_check/__main__.py`: read-only stored-source validation,
+    portable-file validation, source selection, and deprecation findings.
+  - `test/services/test_versioned_admin_serializers.py`,
+    `test/services/test_versioned_admin_view_models.py`,
+    `test/services/test_operator_pipeline_view_models.py`,
+    `test/integration/test_versioned_schema_api.py`,
+    `test/integration/test_versioned_pipeline_api.py`,
+    `test/integration/test_versioned_admin_pages.py`,
+    `test/integration/test_upload_pipeline_selection_ui.py`,
+    `test/tools/config_check/test_stored_source_cli.py`, and
+    `test/tools/config_check/test_portable_file_cli.py`: direct Phase 9-12
+    service, API, route, UI-contract, and CLI coverage.
+  - `test/integration/test_admin_pipeline_config_api.py`,
+    `test/integration/test_api_edge_paths.py`,
+    `test/integration/test_new_ui_routes.py`,
+    `test/integration/test_schema_api.py`,
+    `test/services/test_processing_state_service.py`,
+    `test/pipeline_visual_editor_prototype/test_production_parameter_parity.py`,
+    `test/visual/test_schema_editor_regressions.py`,
+    `test/visual/test_schema_review_visual.py`, and
+    `test/visual/test_ui_performance_assets.py`: regression expectations and
+    fixtures aligned with the versioned contracts.
+
+### 2026-07-26 — Phase 13
+
+- The cross-cutting Phase 13 scenario matrix passed: `144 passed` with five
+  warnings in 49.25 seconds. It covers independent templates and schemas,
+  pinned execution/publication/lifecycle behavior, split/review/fan-in,
+  ingestion/coordinator rules, the migration matrix, authorization, protected
+  paths/files, task approval, and secret redaction.
+- Phase 13 exposed one implementation gap: retrying an already completed split
+  task could create a second child set. `LlamaCloudSplitTask` now reconstructs
+  fan-out context from the existing assigned children when the parent is
+  already `split_completed`, validates their exact assignment, and does not
+  call the provider or create duplicate rows/artifacts.
+- Prescribed focused-suite results:
+  - `.\.venv\Scripts\python.exe -m pytest -v test\db`:
+    `29 passed` in 4.05 seconds.
+  - `.\.venv\Scripts\python.exe -m pytest -v test\services`:
+    `135 passed` in 15.02 seconds.
+  - `.\.venv\Scripts\python.exe -m pytest -v test\workflow`:
+    `33 passed` in 24.35 seconds.
+  - `.\.venv\Scripts\python.exe -m pytest -v test\standard_step\review`:
+    `7 passed` in 5.70 seconds.
+  - `.\.venv\Scripts\python.exe -m pytest -v test\integration`:
+    `146 passed, 4 warnings` in 95.38 seconds.
+  - `.\.venv\Scripts\python.exe -m pytest -v test\security`:
+    `6 passed, 2 warnings` in 14.12 seconds.
+  - `.\.venv\Scripts\python.exe -m pytest -v test\tools\config_check`:
+    `246 passed, 3 skipped` in 2.18 seconds.
+- The actionable Starlette warnings from deprecated 413/422 status aliases
+  were removed by using their current FastAPI names. The final full run has
+  only the dependency-level FastAPI TestClient warning recommending `httpx2`;
+  `httpx2` is not part of the supported dependency manifest, so Phase 13 did
+  not expand the toolchain solely to suppress it.
+- The Prefect temporary-server shutdown logger can emit an
+  `I/O operation on closed file` message after focused workflow/integration
+  pytest output has closed. Both affected pytest processes had already passed
+  and exited with code 0; the final full run did not report it as a test
+  failure or warning.
+- The final non-live command
+  `.\.venv\Scripts\python.exe -m pytest -v` passed:
+  `854 passed, 4 skipped, 1 warning` in 186.43 seconds. Three skips are the
+  documented Windows permission-semantics cases. The fourth is the explicitly
+  opt-in live LlamaCloud Split smoke test, which was not authorized and would
+  require credentials and an external provider call. No unexpected or flaky
+  skip/retry/failure remained.
+- Phase 13 relevant files:
+  - `standard_step/split/llamacloud_split.py`: idempotent reuse of completed,
+    exactly assigned split children.
+  - `test/standard_step/split/test_llamacloud_split_task.py`: retry
+    deduplication, assignment, provider-call, and artifact assertions.
+  - `test/integration/test_versioned_pipeline_phase13.py`: independent
+    multi-template execution, newer publication isolation, immutable schema
+    dependency, lifecycle rejection, archived resume, and task-run attribution.
+  - `test/services/test_fan_in_service.py`: combined completed, failed, and
+    review-required child-state recomputation through resume.
+  - `test/security/test_versioned_configuration_security.py`: runtime-only
+    secret sentinel scan plus draft/unpublished/arbitrary module and expression
+    rejection.
+  - `modules/api_router.py`: current non-deprecated 413/422 status aliases.

@@ -25,6 +25,13 @@
         paramsInvalid: false,
         providerModes: {},
         providerModeDrafts: {},
+        templates: [],
+        templateId: "",
+        template: null,
+        revision: 0,
+        baseVersionId: null,
+        versions: [],
+        schemaVersions: [],
     };
 
     const activeList = document.getElementById("pipeline-active-list");
@@ -43,6 +50,24 @@
     const saveDraftButton = document.getElementById("pipeline-save-draft-button");
     const validateButton = document.getElementById("pipeline-validate-button");
     const publishHelp = document.getElementById("pipeline-publish-help");
+    const templateSelect = document.getElementById("pipeline-template-select");
+    const templateName = document.getElementById("pipeline-template-name");
+    const templateDescription = document.getElementById("pipeline-template-description");
+    const templateDocumentType = document.getElementById("pipeline-template-document-type");
+    const templateStatus = document.getElementById("pipeline-template-status");
+    const templateCreate = document.getElementById("pipeline-template-create");
+    const templateClone = document.getElementById("pipeline-template-clone");
+    const revisionLabel = document.getElementById("pipeline-draft-revision");
+    const baseVersionLabel = document.getElementById("pipeline-base-version");
+    const versionHistoryLabel = document.getElementById("pipeline-version-history");
+    const importButton = document.getElementById("pipeline-import-button");
+    const importFile = document.getElementById("pipeline-import-file");
+    const exportButton = document.getElementById("pipeline-export-button");
+    const bindingPath = document.getElementById("pipeline-binding-path");
+    const bindingVersion = document.getElementById("pipeline-binding-version");
+    const bindingAdd = document.getElementById("pipeline-binding-add");
+    const bindingFindings = document.getElementById("pipeline-binding-findings");
+    const bindingList = document.getElementById("pipeline-binding-list");
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -55,6 +80,69 @@
 
     function clone(value) {
         return JSON.parse(JSON.stringify(value || {}));
+    }
+
+    function definitionToModel(definition) {
+        const pipeline = Array.isArray(definition && definition.pipeline) ? definition.pipeline : [];
+        const tasks = definition && typeof definition.tasks === "object" ? definition.tasks : {};
+        return {
+            steps: pipeline.map((key) => ({
+                key,
+                enabled: true,
+                ...(clone(tasks[key] || {})),
+            })),
+        };
+    }
+
+    function modelToDefinition(model) {
+        const steps = stepsOf(model);
+        const tasks = {};
+        const pipeline = [];
+        steps.forEach((step) => {
+            const copy = clone(step);
+            const key = copy.key;
+            delete copy.key;
+            const enabled = copy.enabled !== false;
+            delete copy.enabled;
+            tasks[key] = copy;
+            if (enabled) pipeline.push(key);
+        });
+        return { schema_version: 1, pipeline, tasks };
+    }
+
+    async function apiPatch(url, payload) {
+        const response = await fetch(url, {
+            method: "PATCH",
+            credentials: "same-origin",
+            headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                ...window.DocFlow.csrfHeaders("PATCH"),
+            },
+            body: JSON.stringify(payload || {}),
+        });
+        if (!response.ok) {
+            const body = await response.json();
+            const detail = body.detail || "Request failed";
+            const error = new Error(detail.message || detail);
+            error.detail = detail;
+            error.status = response.status;
+            throw error;
+        }
+        return response.json();
+    }
+
+    async function loadBindings() {
+        const payload = await window.DocFlow.apiGet("/api/admin/watch-folder-bindings");
+        const bindings = payload.bindings || [];
+        bindingVersion.innerHTML = '<option value="">Select version</option>' + state.versions.map((version) => `<option value="${escapeHtml(version.id)}">v${escapeHtml(version.version_number)} · ${escapeHtml(String(version.content_hash || "").slice(0, 10))}</option>`).join("");
+        bindingList.innerHTML = bindings.length ? bindings.map((binding) => `
+            <div class="flex flex-wrap items-center gap-2 rounded-lg border border-base-300 p-2 text-sm">
+                <span class="font-mono">${escapeHtml(binding.folder_path)}</span>
+                <span class="badge ${binding.enabled ? "badge-success" : "badge-ghost"} badge-sm">${binding.enabled ? "enabled" : "disabled"}</span>
+                <span class="text-base-content/60">${escapeHtml(binding.pipeline && binding.pipeline.name || "")} v${escapeHtml(binding.pipeline && binding.pipeline.version_number || "—")}</span>
+            </div>
+        `).join("") : '<div class="empty-panel py-3">No watch-folder bindings</div>';
     }
 
     function stepsOf(model) {
@@ -1027,7 +1115,20 @@
                 ${thresholdMapControl("Field threshold overrides", "Set a stricter or more permissive score for individual extraction fields.", ["field_threshold_overrides"], params.field_threshold_overrides, extractionFieldNames())}
                 ${thresholdMapControl("Document-type thresholds", "Applied when a field has no field-specific override.", ["per_document_type_thresholds"], params.per_document_type_thresholds, [])}
                 ${section("Review split confidence levels", `<p class="mb-3 text-xs text-base-content/55">Pause when the upstream split result reports a selected level.</p><div class="grid grid-cols-3 gap-2">${["high", "medium", "low"].map((level) => `<label class="flex cursor-pointer items-center gap-2 rounded-md border px-2 py-2 text-sm ${splitLevels.includes(level) ? "border-primary bg-primary/5" : "border-base-300"}"><input class="checkbox checkbox-sm" type="checkbox" data-param-action="review-split-level" value="${level}" ${splitLevels.includes(level) ? "checked" : ""}><span class="capitalize">${level}</span></label>`).join("")}</div>`)}
-                ${fileControl("Schema file (optional)", ["schema_file"], params.schema_file || "", ".yaml,.yml", { startPath: "schemas", findings: inlineFindings(step, "schema_file") })}
+                ${selectControl(
+                    "Published review form version",
+                    ["schema_version_id"],
+                    params.schema_version_id || "",
+                    [
+                        { value: "", label: "Select an exact published version" },
+                        ...state.schemaVersions.map((version) => ({
+                            value: version.id,
+                            label: window.DocFlowVersionedAdmin.versionLabel(version, "schema"),
+                        })),
+                    ],
+                    "Publishing a newer review form does not change this exact selection.",
+                    inlineFindings(step, "schema_version_id")
+                )}
                 ${textControl("Queue", ["queue_name"], params.queue_name || "default_review")}
                 ${selectControl("Reviewer editing scope", ["review_scope"], reviewScope, reviewScopeOptions, "Review conditions below determine when review is required.")}
                 ${checkboxControl("Review when confidence is missing", ["require_review_when_missing_confidence"], params.require_review_when_missing_confidence !== false)}
@@ -1326,10 +1427,45 @@
     }
 
     async function loadPipelineConfig() {
-        const payload = await window.DocFlow.apiGet("/api/admin/pipeline");
-        state.active = withoutHousekeeping(payload.active && payload.active.model);
-        state.draft = withoutHousekeeping(payload.draft ? payload.draft.model : payload.active && payload.active.model);
-        state.catalog = (payload.catalog && payload.catalog.tasks) || [];
+        const [listPayload, catalog] = await Promise.all([
+            window.DocFlow.apiGet("/api/admin/pipeline-templates?include_archived=true"),
+            window.DocFlow.apiGet("/api/admin/task-catalog"),
+        ]);
+        state.templates = listPayload.templates || [];
+        if (!state.templateId || !state.templates.some((item) => item.id === state.templateId)) {
+            state.templateId = state.templates.length ? state.templates[0].id : "";
+        }
+        templateSelect.innerHTML = '<option value="">Select a template</option>' + state.templates.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === state.templateId ? "selected" : ""}>${escapeHtml(item.name)} · ${escapeHtml(item.template_key)} · ${escapeHtml(item.status)}</option>`).join("");
+        state.catalog = catalog.tasks || [];
+        if (!state.templateId) {
+            state.template = null;
+            state.active = { steps: [] };
+            state.draft = { steps: [] };
+            render();
+            return;
+        }
+        const payload = await window.DocFlow.apiGet(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`);
+        state.template = payload.template;
+        state.revision = payload.draft.revision;
+        state.baseVersionId = payload.draft.base_version_id;
+        state.versions = payload.versions || [];
+        state.schemaVersions = payload.schema_versions || [];
+        state.draft = withoutHousekeeping(definitionToModel(payload.draft.definition));
+        state.active = { steps: [] };
+        if (state.baseVersionId) {
+            const base = await window.DocFlow.apiGet(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/versions/${encodeURIComponent(state.baseVersionId)}`);
+            state.active = withoutHousekeeping(definitionToModel(base.version.definition));
+        }
+        templateName.value = state.template.name || "";
+        templateDescription.value = state.template.description || "";
+        templateDocumentType.value = state.template.document_type || "";
+        templateStatus.value = state.template.status || "inactive";
+        templateStatus.disabled = false;
+        templateClone.disabled = !state.versions.length;
+        revisionLabel.textContent = `Draft revision ${state.revision}`;
+        baseVersionLabel.textContent = state.baseVersionId ? `Base version ${state.versions.find((item) => item.id === state.baseVersionId)?.version_number || "—"}` : "No published base";
+        versionHistoryLabel.textContent = state.versions.length ? `${state.versions.length} immutable version(s); latest v${state.versions[0].version_number}` : "No published versions";
+        exportButton.disabled = false;
         state.selectedIndex = stepsOf(state.draft).length ? 0 : -1;
         state.validation = null;
         state.dirty = false;
@@ -1338,6 +1474,7 @@
         state.providerModeDrafts = {};
         diffPreview.textContent = "No diff loaded";
         render();
+        await loadBindings();
     }
 
     async function saveDraft() {
@@ -1345,8 +1482,16 @@
             window.DocFlow.showToast("Fix invalid Params JSON before saving.", "warning");
             return;
         }
-        const payload = await window.DocFlow.apiPut("/api/admin/pipeline/draft", { model: state.draft });
-        state.draft = clone(payload.draft.model);
+        if (!state.templateId) {
+            window.DocFlow.showToast("Select a pipeline template first.", "warning");
+            return;
+        }
+        const payload = await window.DocFlow.apiPut(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/draft`, {
+            expected_revision: state.revision,
+            definition: modelToDefinition(state.draft),
+        });
+        state.revision = payload.draft.revision;
+        state.draft = withoutHousekeeping(definitionToModel(payload.draft.definition));
         state.dirty = false;
         state.validation = null;
         window.DocFlow.showToast("Draft saved", "success");
@@ -1358,13 +1503,15 @@
             window.DocFlow.showToast("Fix invalid Params JSON before validating.", "warning");
             return;
         }
-        const validation = await window.DocFlow.apiPost("/api/admin/pipeline/validate", { model: state.draft });
+        if (state.dirty) await saveDraft();
+        const validation = await window.DocFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/draft/validate`, {});
         state.validation = validation;
         render();
     }
 
     async function renderPipelineDiff() {
-        const diff = await window.DocFlow.apiPost("/api/admin/pipeline/diff", { model: state.draft });
+        if (state.dirty) await saveDraft();
+        const diff = await window.DocFlow.apiGet(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/diff`);
         diffPreview.textContent = diff.text || "No changes";
     }
 
@@ -1372,18 +1519,13 @@
         if (publishButton.disabled) {
             return;
         }
-        if (!window.confirm("Publish this draft pipeline as the live configuration?")) {
+        if (!window.confirm("Publish this immutable pipeline version? Existing batches keep their assigned version.")) {
             return;
         }
-        const payload = await window.DocFlow.apiPost("/api/admin/pipeline/publish", { model: state.draft });
-        state.active = clone(payload.active && payload.active.model);
-        state.draft = clone(payload.active && payload.active.model);
-        state.validation = payload.validation || null;
-        state.dirty = false;
-        state.providerModes = {};
-        state.providerModeDrafts = {};
-        window.DocFlow.showToast("Pipeline published", "success");
-        render();
+        if (state.dirty) await saveDraft();
+        await window.DocFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/publish`, { expected_revision: state.revision });
+        window.DocFlow.showToast("Immutable pipeline version published", "success");
+        await loadPipelineConfig();
     }
 
     function addTaskFromCatalog() {
@@ -2247,6 +2389,129 @@
     document.getElementById("pipeline-add-task-button").addEventListener("click", addTaskFromCatalog);
     publishButton.addEventListener("click", () => {
         publishDraftPipeline().catch((error) => window.DocFlow.showToast(error.message, "error"));
+    });
+    templateSelect.addEventListener("change", () => {
+        if (state.dirty && !window.confirm("Discard unsaved draft changes and switch templates?")) {
+            templateSelect.value = state.templateId;
+            return;
+        }
+        state.templateId = templateSelect.value;
+        loadPipelineConfig().catch((error) => window.DocFlow.showToast(error.message, "error"));
+    });
+    templateCreate.addEventListener("click", async () => {
+        const templateKey = window.prompt("Stable pipeline key", "new-pipeline");
+        if (!templateKey) return;
+        const name = window.prompt("Pipeline name", "New pipeline") || templateKey;
+        try {
+            const result = await window.DocFlow.apiPost("/api/admin/pipeline-templates", {
+                template_key: templateKey,
+                name,
+            });
+            state.templateId = result.template.id;
+            await loadPipelineConfig();
+        } catch (error) {
+            window.DocFlow.showToast(error.message, "error");
+        }
+    });
+    templateClone.addEventListener("click", async () => {
+        if (!state.templateId) return;
+        const templateKey = window.prompt("Stable key for the clone", `${state.template.template_key}-copy`);
+        if (!templateKey) return;
+        const name = window.prompt("Clone name", `${state.template.name} copy`) || templateKey;
+        try {
+            const result = await window.DocFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/clone`, {
+                template_key: templateKey,
+                name,
+            });
+            state.templateId = result.template.id;
+            await loadPipelineConfig();
+        } catch (error) {
+            window.DocFlow.showToast(error.message, "error");
+        }
+    });
+    templateStatus.addEventListener("change", async () => {
+        if (!state.templateId) return;
+        try {
+            await apiPatch(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`, {
+                status: templateStatus.value,
+                name: templateName.value.trim(),
+                description: templateDescription.value.trim(),
+                document_type: templateDocumentType.value.trim() || null,
+            });
+            await loadPipelineConfig();
+        } catch (error) {
+            templateStatus.value = state.template.status;
+            window.DocFlow.showToast(error.message, "error");
+        }
+    });
+    [templateName, templateDescription, templateDocumentType].forEach((input) => {
+        input.addEventListener("change", async () => {
+            if (!state.templateId) return;
+            try {
+                await apiPatch(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`, {
+                    name: templateName.value.trim(),
+                    description: templateDescription.value.trim(),
+                    document_type: templateDocumentType.value.trim() || null,
+                });
+                await loadPipelineConfig();
+            } catch (error) {
+                window.DocFlow.showToast(error.message, "error");
+            }
+        });
+    });
+    importButton.addEventListener("click", () => {
+        if (state.templateId) importFile.click();
+        else window.DocFlow.showToast("Select a pipeline template before importing.", "warning");
+    });
+    importFile.addEventListener("change", async () => {
+        const file = importFile.files && importFile.files[0];
+        if (!file || !state.templateId) return;
+        try {
+            const response = await fetch(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/draft/import?expected_revision=${state.revision}`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": file.name.endsWith(".json") ? "application/json" : "application/yaml",
+                    ...window.DocFlow.csrfHeaders("POST"),
+                },
+                body: await file.text(),
+            });
+            if (!response.ok) {
+                const payload = await response.json();
+                throw new Error(payload.detail && payload.detail.message || payload.detail || "Import failed");
+            }
+            await loadPipelineConfig();
+            window.DocFlow.showToast("Imported into the draft; nothing was published.", "success");
+        } catch (error) {
+            window.DocFlow.showToast(error.message, "error");
+        } finally {
+            importFile.value = "";
+        }
+    });
+    exportButton.addEventListener("click", () => {
+        if (state.templateId) {
+            window.location.href = `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/draft/export?format=yaml`;
+        }
+    });
+    bindingAdd.addEventListener("click", async () => {
+        bindingFindings.textContent = "";
+        if (!bindingPath.value.trim() || !bindingVersion.value) {
+            bindingFindings.textContent = "Choose a folder and exact published version.";
+            return;
+        }
+        try {
+            const binding = await window.DocFlow.apiPost("/api/admin/watch-folder-bindings", {
+                folder_path: bindingPath.value.trim(),
+                pipeline_version_id: bindingVersion.value,
+                enabled: true,
+            });
+            bindingFindings.textContent = (binding.validation_findings || []).map((item) => item.message).join(" ");
+            bindingPath.value = "";
+            await loadBindings();
+        } catch (error) {
+            bindingFindings.textContent = error.message;
+        }
     });
     window.addEventListener("beforeunload", (event) => {
         if (!state.dirty) {

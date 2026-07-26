@@ -39,20 +39,19 @@ def test_admin_dashboard_renders_independent_requests_as_they_complete() -> None
     assert "admin.js?v=ui-performance-independent-panels" in template
 
 
-def test_named_schema_route_loads_list_and_detail_in_parallel() -> None:
-    """Avoid serial list/detail requests when the route identifies a schema."""
+def test_named_schema_route_resolves_to_versioned_template_identity() -> None:
+    """Resolve a stable route key before loading the template-scoped draft."""
 
     source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(
         encoding="utf-8"
     )
 
-    assert "const listPromise = window.DocFlow.apiGet(\"/api/schemas\")" in source
-    assert "const detailPromise = requestedName" in source
-    assert "const [listResult, detailResult] = await Promise.allSettled([" in source
-    assert "rememberSchemaName(schemaName)" in source
+    assert 'window.DocFlow.apiGet("/api/admin/review-schemas?include_archived=true")' in source
+    assert "schemas.find((schema) => schema.schema_key === currentName)" in source
+    assert "await loadSchema(selected.id)" in source
+    assert "rememberSchemaName(currentName)" in source
     assert "function initialSchemaName()" in source
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
-    assert "function resolveSchemaName(requestedName)" in source
-    assert "applySchemaPayload(requestedName, detailResult.value)" in source
-    assert "schema_editor.js?v=schema-field-actions" in template
+    assert "/api/admin/review-schemas/${encodeURIComponent(templateId)}" in source
+    assert "schema_editor.js?v=versioned-review-forms" in template

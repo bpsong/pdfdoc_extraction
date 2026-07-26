@@ -2,6 +2,21 @@
 
 {% block content %}
 <div id="upload-workspace" class="app-workspace" data-max-upload-mb="{{ max_upload_mb|default(50) }}">
+    <section class="card bg-base-100 shadow-sm" aria-labelledby="pipeline-selection-heading">
+        <div class="card-body gap-3">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h2 id="pipeline-selection-heading" class="font-semibold">Choose a processing pipeline</h2>
+                    <p class="mt-1 text-sm text-base-content/60">One exact published version applies to every PDF in this batch. No pipeline is selected automatically.</p>
+                </div>
+                <button id="pipeline-selection-refresh" class="btn btn-ghost btn-sm" type="button">Refresh</button>
+            </div>
+            <div id="pipeline-selection-alert" class="alert alert-warning hidden text-sm" role="status" aria-live="polite"></div>
+            <div id="pipeline-version-list" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3" role="radiogroup" aria-label="Available pipeline versions">
+                <div class="empty-panel">Loading available pipelines</div>
+            </div>
+        </div>
+    </section>
     <section id="upload-drop-zone" class="card bg-base-100 shadow-sm upload-dropzone" tabindex="0">
         <div class="card-body items-center text-center py-12">
             <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -56,5 +71,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/upload_process.js" defer></script>
+<script src="/static/js/operator_pipeline_view_models.js?v=1" defer></script>
+<script src="/static/js/upload_process.js?v=version-selection" defer></script>
 {% endblock %}

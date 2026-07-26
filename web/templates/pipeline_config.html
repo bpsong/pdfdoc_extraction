@@ -1,12 +1,45 @@
 {% extends "app_base.html" %}
 
 {% block header_actions %}
+<button class="btn btn-outline btn-sm" id="pipeline-import-button" type="button">Import</button>
+<button class="btn btn-outline btn-sm" id="pipeline-export-button" type="button" disabled>Export</button>
 <button class="btn btn-outline btn-sm" id="pipeline-refresh-button" type="button">Refresh</button>
 <button class="btn btn-primary btn-sm" id="pipeline-publish-button" type="button" disabled title="Save and validate the draft before publishing">Publish</button>
 {% endblock %}
 
 {% block content %}
 <div class="pipeline-config-workspace" id="pipeline-config-workspace">
+    <section class="admin-panel pipeline-guide-panel" aria-labelledby="pipeline-template-heading">
+        <div class="p-4">
+            <div class="grid gap-3 lg:grid-cols-[minmax(14rem,1fr)_2fr_auto]">
+                <label class="form-control">
+                    <span class="label-text" id="pipeline-template-heading">Pipeline template</span>
+                    <select id="pipeline-template-select" class="select select-bordered select-sm">
+                        <option value="">Select a template</option>
+                    </select>
+                </label>
+                <div class="grid gap-2 sm:grid-cols-2">
+                    <label class="form-control"><span class="label-text">Name</span><input id="pipeline-template-name" class="input input-bordered input-sm"></label>
+                    <label class="form-control"><span class="label-text">Document type</span><input id="pipeline-template-document-type" class="input input-bordered input-sm"></label>
+                    <label class="form-control sm:col-span-2"><span class="label-text">Description</span><input id="pipeline-template-description" class="input input-bordered input-sm"></label>
+                </div>
+                <div class="flex flex-wrap content-end gap-2">
+                    <button id="pipeline-template-create" class="btn btn-outline btn-sm" type="button">New</button>
+                    <button id="pipeline-template-clone" class="btn btn-outline btn-sm" type="button" disabled>Clone</button>
+                    <select id="pipeline-template-status" class="select select-bordered select-sm" disabled>
+                        <option value="inactive">Inactive</option>
+                        <option value="active">Active</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-3 flex flex-wrap gap-3 text-xs text-base-content/60">
+                <span id="pipeline-draft-revision">Draft revision —</span>
+                <span id="pipeline-base-version">Base version —</span>
+                <span id="pipeline-version-history">No published versions</span>
+            </div>
+        </div>
+    </section>
     <section class="admin-panel pipeline-guide-panel">
         <div class="p-4">
             <div class="flex flex-wrap items-center gap-3 text-sm">
@@ -99,9 +132,28 @@
         </div>
         <pre class="pipeline-diff-preview" id="pipeline-diff-preview">No diff loaded</pre>
     </section>
+    <section class="admin-panel pipeline-validation-panel">
+        <div class="admin-panel-header">
+            <div class="admin-panel-heading">
+                <h2 class="admin-panel-title">Watch-folder bindings</h2>
+                <p class="admin-panel-subtitle">Each enabled folder pins one exact published version for later claims.</p>
+            </div>
+        </div>
+        <div class="p-4">
+            <div class="grid gap-2 md:grid-cols-[2fr_1fr_auto]">
+                <label class="form-control"><span class="label-text">Folder path</span><input id="pipeline-binding-path" class="input input-bordered input-sm" placeholder="D:\incoming\invoices"></label>
+                <label class="form-control"><span class="label-text">Published version</span><select id="pipeline-binding-version" class="select select-bordered select-sm"></select></label>
+                <button id="pipeline-binding-add" class="btn btn-outline btn-sm self-end" type="button">Add binding</button>
+            </div>
+            <div id="pipeline-binding-findings" class="mt-2 text-sm" role="status" aria-live="polite"></div>
+            <div id="pipeline-binding-list" class="mt-3 space-y-2"></div>
+        </div>
+    </section>
 </div>
+<input id="pipeline-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/pipeline_config.js?v=task34" defer></script>
+<script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
+<script src="/static/js/pipeline_config.js?v=versioned-templates" defer></script>
 {% endblock %}

@@ -133,6 +133,59 @@ def test_fan_in_preserves_review_required_leaf_as_non_terminal(tmp_path):
     assert batch["completed_documents"] == 0
 
 
+def test_fan_in_recomputes_mixed_complete_failed_and_review_leaf_states(tmp_path):
+    config, created, children = _create_batch_with_children(
+        tmp_path,
+        child_count=3,
+    )
+
+    with connect(config) as conn:
+        documents = DocumentRepository(conn)
+        service = FanInService(conn)
+        service.finalize_leaf(
+            {
+                "document_id": children[0]["id"],
+                "batch_id": created["batch"]["id"],
+            }
+        )
+        service.finalize_leaf(
+            {
+                "document_id": children[1]["id"],
+                "batch_id": created["batch"]["id"],
+                "error": "synthetic failure",
+            }
+        )
+        documents.update_status(children[2]["id"], "review_required")
+        paused = service.finalize_leaf(
+            {
+                "document_id": children[2]["id"],
+                "batch_id": created["batch"]["id"],
+                "pipeline_state": "paused",
+            }
+        )
+        root_while_paused = documents.get(created["document"]["id"])
+        batch_while_paused = BatchService(conn).get_batch(created["batch"]["id"])
+
+        documents.update_status(children[2]["id"], "review_completed")
+        resumed = service.finalize_leaf(
+            {
+                "document_id": children[2]["id"],
+                "batch_id": created["batch"]["id"],
+            }
+        )
+        root_after_resume = documents.get(created["document"]["id"])
+        batch_after_resume = BatchService(conn).get_batch(created["batch"]["id"])
+
+    assert paused and paused.root_status == "review_required"
+    assert root_while_paused and root_while_paused["status"] == "review_required"
+    assert batch_while_paused and batch_while_paused["status"] == "review_required"
+    assert resumed and resumed.root_status == "completed_with_errors"
+    assert root_after_resume and root_after_resume["status"] == "completed_with_errors"
+    assert batch_after_resume and batch_after_resume["status"] == "completed_with_errors"
+    assert batch_after_resume["completed_documents"] == 2
+    assert batch_after_resume["failed_documents"] == 1
+
+
 def test_fan_in_handles_unsplit_root_as_leaf(tmp_path):
     config = TempConfig(tmp_path / "app.sqlite3")
     initialize_database(config)

@@ -223,42 +223,23 @@ def test_schema_endpoint_error_translation(monkeypatch, tmp_path):
     duplicate = _route("duplicate_schema")
     update = _route("update_schema")
 
-    with pytest.raises(HTTPException, match="Schema name is required"):
-        _run(create(_request(b"{}"), user="admin"))
-
-    service.save_schema.side_effect = FileExistsError("exists")
-    with pytest.raises(HTTPException) as exc_info:
-        _run(create(_request(b'{"name":"schema","schema":{}}'), user="admin"))
-    assert exc_info.value.status_code == 409
-
-    service.save_schema.side_effect = ValueError("bad schema")
-    with pytest.raises(HTTPException) as exc_info:
-        _run(create(_request(b'{"name":"schema","schema":{}}'), user="admin"))
-    assert exc_info.value.status_code == 400
-
-    with pytest.raises(HTTPException, match="New schema name is required"):
-        _run(duplicate("schema", _request(b"{}"), user="admin"))
-
-    for error, status_code in [
-        (FileExistsError("exists"), 409),
-        (FileNotFoundError("missing"), 404),
-        (ValueError("bad"), 400),
+    for endpoint, args, replacement in [
+        (create, (_request(b"{}"),), "/api/admin/review-schemas"),
+        (
+            duplicate,
+            ("schema", _request(b"{}")),
+            "versioned review-schema template",
+        ),
+        (
+            update,
+            ("schema", _request(b"{}")),
+            "/api/admin/review-schemas/{template_id}/draft",
+        ),
     ]:
-        service.duplicate_schema.side_effect = error
         with pytest.raises(HTTPException) as exc_info:
-            _run(
-                duplicate(
-                    "schema",
-                    _request(b'{"new_name":"copy"}'),
-                    user="admin",
-                )
-            )
-        assert exc_info.value.status_code == status_code
-
-    service.load_schema.return_value = None
-    with pytest.raises(HTTPException) as exc_info:
-        _run(update("missing", _request(b"{}"), user="admin"))
-    assert exc_info.value.status_code == 404
+            _run(endpoint(*args, user="admin"))
+        assert exc_info.value.status_code == 410
+        assert replacement in str(exc_info.value.detail)
 
 
 def test_read_endpoints_translate_missing_records(monkeypatch):
@@ -403,7 +384,6 @@ def test_admin_pipeline_model_and_service_errors(monkeypatch):
         lambda: (config, None, None, None, None),
     )
 
-    service.save_draft.side_effect = PipelineConfigError("draft")
     with pytest.raises(HTTPException) as exc_info:
         _run(
             _route("save_admin_pipeline_draft")(
@@ -411,7 +391,8 @@ def test_admin_pipeline_model_and_service_errors(monkeypatch):
                 user="admin",
             )
         )
-    assert exc_info.value.status_code == 400
+    assert exc_info.value.status_code == 410
+    assert "/api/admin/pipeline-templates/{template_id}/draft" in str(exc_info.value.detail)
 
     for route_name, method_name in [
         ("diff_admin_pipeline", "diff"),

@@ -95,14 +95,17 @@ def classify_pipeline_step(module_name: str, class_name: str, task_key: str = ""
 
 
 def snapshot_from_batch(batch: dict[str, Any], config_manager: Any) -> dict[str, Any]:
-    """Return the persisted batch snapshot or a safe active-config fallback."""
+    """Return a legacy metadata snapshot for migration diagnostics only."""
     metadata = json_loads(batch.get("metadata_json"), {})
     if isinstance(metadata, dict):
         snapshot = metadata.get(SNAPSHOT_METADATA_KEY)
         if _valid_snapshot(snapshot):
             return snapshot
-    fallback = build_pipeline_snapshot(config_manager, source="active_config_fallback")
+    fallback = build_pipeline_snapshot(
+        config_manager, source="historical_legacy_config_fallback"
+    )
     fallback["fallback"] = True
+    fallback["historical"] = True
     return fallback
 
 
@@ -132,7 +135,7 @@ class ProcessingStateService:
 
     def _state_for_batch(self, batch: dict[str, Any]) -> dict[str, Any]:
         """Build one batch state payload."""
-        snapshot = snapshot_from_batch(batch, self.config_manager)
+        snapshot, identity = self._pinned_snapshot(batch)
         documents = self.documents.list_by_batch(str(batch["id"]))
         runs_by_document = {
             str(document["id"]): self.task_runs.list_by_document(str(document["id"])) for document in documents
@@ -145,13 +148,72 @@ class ProcessingStateService:
         ]
         aggregate_steps = self._aggregate_steps(snapshot, document_payloads)
         return {
-            "batch": _batch_payload(batch),
+            "batch": {**_batch_payload(batch), "pipeline": identity},
             "pipeline_snapshot": snapshot,
+            "pipeline": identity,
             "aggregate_step_states": aggregate_steps,
             "documents": document_payloads,
             "task_runs_by_document": runs_by_document,
             "progress_percent": _aggregate_progress(document_payloads, batch),
         }
+
+    def _pinned_snapshot(
+        self, batch: dict[str, Any]
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Load immutable display state for the batch's exact assignment."""
+        version_id = batch.get("pipeline_version_id")
+        if version_id:
+            row = self.conn.execute(
+                """
+                SELECT v.id, v.version_number, v.content_hash,
+                       v.display_snapshot_json, t.id AS template_id,
+                       t.template_key, t.name, t.status
+                FROM pipeline_versions v
+                JOIN pipeline_templates t ON t.id = v.template_id
+                WHERE v.id = ?
+                """,
+                (version_id,),
+            ).fetchone()
+            if row is not None:
+                snapshot = json_loads(row["display_snapshot_json"], {})
+                if _valid_snapshot(snapshot):
+                    snapshot = {
+                        **snapshot,
+                        "source": "pinned_pipeline_version",
+                        "steps": [
+                            {
+                                **step,
+                                "category": step.get("category")
+                                or classify_pipeline_step(
+                                    str(step.get("module") or ""),
+                                    str(step.get("class") or ""),
+                                    str(step.get("key") or ""),
+                                ),
+                            }
+                            for step in snapshot["steps"]
+                        ],
+                    }
+                    identity = {
+                        "pipeline_version_id": row["id"],
+                        "pipeline_template_id": row["template_id"],
+                        "template_key": row["template_key"],
+                        "name": row["name"],
+                        "version_number": row["version_number"],
+                        "content_hash": row["content_hash"],
+                        "historical": False,
+                    }
+                    return snapshot, identity
+        snapshot = snapshot_from_batch(batch, self.config_manager)
+        identity = {
+            "pipeline_version_id": version_id,
+            "pipeline_template_id": batch.get("pipeline_template_id"),
+            "template_key": "historical",
+            "name": "Historical migrated pipeline",
+            "version_number": None,
+            "content_hash": snapshot.get("content_hash"),
+            "historical": True,
+        }
+        return snapshot, identity
 
     def _document_payload(
         self,
@@ -432,15 +494,21 @@ def _aggregate_progress(document_payloads: list[dict[str, Any]], batch: dict[str
 
 
 def _pipeline_groups(states: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Group recent batch states by pipeline snapshot hash."""
+    """Group recent batch states by exact pipeline version identity."""
     groups: dict[str, dict[str, Any]] = {}
     for state in states:
         snapshot = state.get("pipeline_snapshot") or {}
-        content_hash = str(snapshot.get("content_hash") or "unknown")
+        identity = state.get("pipeline") or {}
+        version_id = str(
+            identity.get("pipeline_version_id")
+            or f"historical:{snapshot.get('content_hash') or 'unknown'}"
+        )
         group = groups.setdefault(
-            content_hash,
+            version_id,
             {
-                "content_hash": content_hash,
+                "pipeline_version_id": identity.get("pipeline_version_id"),
+                "content_hash": snapshot.get("content_hash"),
+                "pipeline": identity,
                 "pipeline_snapshot": snapshot,
                 "batch_ids": [],
                 "batch_count": 0,

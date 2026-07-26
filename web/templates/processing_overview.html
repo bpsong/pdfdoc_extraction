@@ -15,6 +15,9 @@
                     {% endif %}
                 </div>
             </div>
+            <div id="pipeline-assignment-summary" class="mb-4 rounded-lg border border-base-300 bg-base-200/50 p-3 text-sm" role="status" aria-live="polite">
+                Loading exact pipeline assignment
+            </div>
             <div id="pipeline-step-list" class="pipeline-groups">
                 <div class="empty-panel">Loading pipeline</div>
             </div>
@@ -61,5 +64,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/processing_overview.js" defer></script>
+<script src="/static/js/processing_overview.js?v=pinned-pipeline-identity" defer></script>
 {% endblock %}

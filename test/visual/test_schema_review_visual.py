@@ -15,6 +15,7 @@ from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, UserRepository
 from modules.services.batch_service import BatchService
+from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from test.helpers_sqlite import TempConfig
 
 
@@ -135,6 +136,20 @@ fields:
     initialize_database(config)
     with connect(config) as conn:
         UserRepository(conn).initialize({"admin": PASSWORD_HASH, "operator": bcrypt.hashpw(b"OperatorPass1!", bcrypt.gensalt()).decode()})
+        schema = yaml.safe_load((schema_dir / "invoice.yaml").read_text(encoding="utf-8"))
+        versioned_schemas = ReviewSchemaVersionService(conn)
+        created_schema = versioned_schemas.create_template(
+            schema_key="invoice",
+            name="Visual Invoice",
+            description="Visual test schema",
+            initial_schema=schema,
+            user="admin",
+        )
+        versioned_schemas.publish(
+            created_schema["template"]["id"],
+            expected_revision=1,
+            user="admin",
+        )
     pdf_path = tmp_path / "web_upload" / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n% visual test")
 
@@ -397,7 +412,7 @@ def test_admin_panel_styles_match_and_wrap_without_clipping(page: Page, visual_a
     pipeline_panel = _computed_style(page, ".pipeline-draft-panel", panel_properties)
     pipeline_header = _computed_style(page, ".pipeline-draft-panel .admin-panel-header", header_properties)
     pipeline_title = _computed_style(page, ".pipeline-draft-panel .admin-panel-title", title_properties)
-    assert page.locator(".pipeline-config-workspace > .admin-panel").count() == 7
+    assert page.locator(".pipeline-config-workspace > .admin-panel").count() == 9
     assert page.locator(".pipeline-config-workspace > .card").count() == 0
     assert page.locator("#pipeline-reset-button").count() == 1
     assert page.locator("#pipeline-save-draft-button").count() == 1
@@ -426,38 +441,38 @@ def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app
     def top_level_paths() -> list[str]:
         return rows.evaluate_all("nodes => nodes.map(node => node.dataset.rowPath)")
 
-    assert top_level_paths()[:2] == ["supplier", "invoice_amount"]
-    assert page.locator('[data-move-field="supplier"][data-move-direction="up"]').is_disabled()
-    assert page.locator('[data-move-field="line_items"][data-move-direction="down"]').is_disabled()
+    assert top_level_paths()[:2] == ["address", "approved"]
+    assert page.locator('[data-move-field="address"][data-move-direction="up"]').is_disabled()
+    assert page.locator('[data-move-field="tags"][data-move-direction="down"]').is_disabled()
     delete_supplier = page.locator('[data-delete-field="supplier"]')
     assert delete_supplier.text_content() == "Delete field"
     assert "btn-error" in (delete_supplier.get_attribute("class") or "")
 
-    page.locator('[data-move-field="supplier"][data-move-direction="down"]').click()
-    assert top_level_paths()[:2] == ["invoice_amount", "supplier"]
+    page.locator('[data-move-field="address"][data-move-direction="down"]').click()
+    assert top_level_paths()[:2] == ["approved", "address"]
     page.locator("#schema-field-status").wait_for()
-    assert page.locator("#schema-field-status").text_content() == "Moved Supplier down."
-    assert page.evaluate("document.activeElement?.dataset.moveField") == "supplier"
+    assert page.locator("#schema-field-status").text_content() == "Moved Address down."
+    assert page.evaluate("document.activeElement?.dataset.moveField") == "address"
     assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
     outline_paths = page.locator("#schema-field-outline [data-outline-path]").evaluate_all(
         "nodes => nodes.map(node => node.dataset.outlinePath)"
     )
-    assert outline_paths[:2] == ["invoice_amount", "supplier"]
+    assert outline_paths[:2] == ["approved", "address"]
     preview = page.locator("#schema-yaml-preview").text_content() or ""
-    assert preview.index("invoice_amount:") < preview.index("supplier:")
+    assert preview.index("approved:") < preview.index("address:")
 
-    page.locator('[data-move-field="supplier"][data-move-direction="up"]').click()
-    assert top_level_paths()[:2] == ["supplier", "invoice_amount"]
-    assert page.evaluate("document.activeElement?.dataset.moveField") == "supplier"
+    page.locator('[data-move-field="address"][data-move-direction="up"]').click()
+    assert top_level_paths()[:2] == ["address", "approved"]
+    assert page.evaluate("document.activeElement?.dataset.moveField") == "address"
     assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
 
-    page.locator('[data-move-field="line_items.quantity"][data-move-direction="up"]').click()
+    page.locator('[data-move-field="line_items.sku"][data-move-direction="up"]').click()
     nested_paths = page.locator(
         '[data-row-path="line_items"] .schema-field-children > .schema-field-row'
     ).evaluate_all("nodes => nodes.map(node => node.dataset.rowPath)")
-    assert nested_paths[:2] == ["line_items.quantity", "line_items.sku"]
-    assert top_level_paths()[-1] == "line_items"
-    assert page.evaluate("document.activeElement?.dataset.moveField") == "line_items.quantity"
+    assert nested_paths[:2] == ["line_items.sku", "line_items.quantity"]
+    assert "line_items" in top_level_paths()
+    assert page.evaluate("document.activeElement?.dataset.moveField") == "line_items.sku"
     assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
 
     dialog_messages: list[str] = []
@@ -479,7 +494,7 @@ def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app
     assert page.locator('[data-row-path="approved"]').count() == 0
     page.locator("#schema-field-status").wait_for()
     assert page.locator("#schema-field-status").text_content() == "Deleted Approved from the schema draft."
-    assert page.evaluate("document.activeElement?.dataset.fieldPath") == "reviewed_at"
+    assert page.evaluate("document.activeElement?.dataset.fieldPath") == "invoice_amount"
     assert (page.locator("#schema-detail-title").text_content() or "").startswith("* ")
     _assert_no_horizontal_overflow(page)
 

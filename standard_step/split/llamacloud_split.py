@@ -130,6 +130,40 @@ class LlamaCloudSplitTask(BaseTask):
                 if document.get("parent_document_id"):
                     context.setdefault("data", {})["split_result"] = {"status": "skipped_child"}
                     return context
+                existing_children = documents.list_children(str(document["id"]))
+                if document.get("status") == "split_completed":
+                    if not existing_children:
+                        raise TaskError(
+                            "Split document is marked complete but has no child documents."
+                        )
+                    child_ids = [str(child["id"]) for child in existing_children]
+                    if any(
+                        child.get("pipeline_template_id")
+                        != document.get("pipeline_template_id")
+                        or child.get("pipeline_version_id")
+                        != document.get("pipeline_version_id")
+                        for child in existing_children
+                    ):
+                        raise TaskError(
+                            "Existing split-child assignment does not match its source document."
+                        )
+                    split_metadata = json_loads(
+                        document.get("metadata_json"), {}
+                    ).get("split_result", {})
+                    provider_job_id = split_metadata.get("provider_job_id")
+                    context["split_children"] = child_ids
+                    context["split_provider_job_id"] = provider_job_id
+                    context["fan_out_start_task_index"] = (
+                        int(context.get("current_task_index") or 0) + 1
+                    )
+                    context["pipeline_state"] = "fan_out"
+                    context.setdefault("data", {})["split_result"] = {
+                        "status": "split_completed",
+                        "provider_job_id": provider_job_id,
+                        "children": child_ids,
+                        "reused": True,
+                    }
+                    return context
 
                 split_result = self._get_adapter().split_pdf(str(context["file_path"]), self.categories)
                 if not split_result.segments:

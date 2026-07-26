@@ -26,10 +26,23 @@
     const duplicateButton = document.getElementById("schema-duplicate-button");
     const saveButton = document.getElementById("schema-save-button");
     const validateButton = document.getElementById("schema-validate-button");
-    const LAST_SCHEMA_KEY = "docflow.lastSchemaName";
+    const importButton = document.getElementById("schema-import-button");
+    const importFile = document.getElementById("schema-import-file");
+    const exportButton = document.getElementById("schema-export-button");
+    const statusSelect = document.getElementById("schema-status-select");
+    const revisionLabel = document.getElementById("schema-draft-revision");
+    const latestVersionLabel = document.getElementById("schema-latest-version");
+    const versionHistory = document.getElementById("schema-version-history");
+    const dependencyUsage = document.getElementById("schema-dependency-usage");
+    const LAST_SCHEMA_KEY = "docflow.lastSchemaTemplate";
     const fieldTypes = ["string", "number", "integer", "float", "boolean", "date", "datetime", "enum", "object", "array"];
     let schemas = [];
+    let currentId = "";
     let currentName = initialSchemaName();
+    let currentRevision = 0;
+    let currentTemplate = null;
+    let currentVersions = [];
+    let currentUsage = { dependency_count: 0, dependencies: [] };
     let draft = emptySchema();
     let dirty = false;
     let schemaSearch = "";
@@ -218,9 +231,9 @@
             return;
         }
         schemaList.innerHTML = visibleSchemas.map((schema) => `
-            <button class="schema-list-item ${schema.name === currentName ? "active" : ""}" type="button" data-schema-name="${escapeHtml(schema.name)}">
-                <div class="font-medium text-sm truncate">${escapeHtml(schema.title || schema.name)}</div>
-                <div class="text-xs text-base-content/50 truncate">${escapeHtml(schema.name)}</div>
+            <button class="schema-list-item ${schema.id === currentId ? "active" : ""}" type="button" data-schema-id="${escapeHtml(schema.id)}">
+                <div class="flex items-center justify-between gap-2"><span class="font-medium text-sm truncate">${escapeHtml(schema.name)}</span><span class="badge badge-ghost badge-xs">${escapeHtml(schema.status)}</span></div>
+                <div class="text-xs text-base-content/50 truncate">${escapeHtml(schema.schema_key)} · r${escapeHtml(schema.draft_revision || "—")} · v${escapeHtml(schema.latest_version || "—")}</div>
             </button>
         `).join("");
     }
@@ -434,9 +447,9 @@
         const findings = [];
         const name = nameInput.value.trim();
         if (!name) {
-            findings.push({ path: "name", message: "Schema file name is required." });
-        } else if (!/^[^\\/]+\.(?:ya?ml|json)$/i.test(name)) {
-            findings.push({ path: "name", message: "Use a file name ending in .yaml, .yml, or .json." });
+            findings.push({ path: "name", message: "Stable schema key is required." });
+        } else if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
+            findings.push({ path: "name", message: "Use lowercase words separated by hyphens." });
         }
         if (!titleInput.value.trim()) {
             findings.push({ path: "title", message: "Schema title is required." });
@@ -638,23 +651,38 @@
         detailTitle.textContent = `${dirty ? "* " : ""}${displayName}`;
         localFindings = collectClientFindings();
         fieldTree.innerHTML = renderFieldRows(draft.fields || {}, []);
-        duplicateButton.disabled = !currentName;
+        duplicateButton.disabled = !currentId || !currentRevision || currentTemplate && currentTemplate.status === "archived";
+        exportButton.disabled = !currentId;
+        statusSelect.disabled = !currentId;
+        revisionLabel.textContent = currentRevision ? `Draft revision ${currentRevision}` : "Revision —";
+        latestVersionLabel.textContent = currentVersions.length ? `Latest version ${currentVersions[0].version_number}` : "No published version";
+        versionHistory.innerHTML = currentVersions.length
+            ? currentVersions.map((version) => `<div class="rounded-lg border border-base-300 p-2"><strong>Version ${escapeHtml(version.version_number)}</strong><div class="text-xs text-base-content/60">${escapeHtml(version.published_at || "")} · ${escapeHtml(String(version.content_hash || "").slice(0, 12))}</div></div>`).join("")
+            : '<div class="empty-panel py-3">No published versions</div>';
+        dependencyUsage.innerHTML = currentUsage.dependency_count
+            ? `<strong>Used by ${escapeHtml(currentUsage.dependency_count)} published pipeline task(s)</strong>${(currentUsage.dependencies || []).map((item) => `<div class="mt-1 text-xs">${escapeHtml(item.pipeline_name)} v${escapeHtml(item.pipeline_version_number)} · ${escapeHtml(item.task_key)}</div>`).join("")}`
+            : '<span class="text-base-content/60">No published pipeline dependencies.</span>';
         renderPreview();
         renderFieldOutline();
         renderActionState();
         renderValidationSummary();
     }
 
-    function applySchemaPayload(schemaName, payload) {
-        currentName = schemaName;
-        rememberSchemaName(schemaName);
-        draft = payload.raw_schema || emptySchema();
-        nameInput.value = schemaName;
+    function applySchemaPayload(payload) {
+        currentTemplate = payload.template;
+        currentId = payload.template.id;
+        currentName = payload.template.schema_key;
+        currentRevision = payload.draft.revision;
+        currentVersions = payload.versions || [];
+        currentUsage = payload.usage || { dependency_count: 0, dependencies: [] };
+        rememberSchemaName(currentName);
+        draft = payload.draft.schema || emptySchema();
+        nameInput.value = currentName;
         titleInput.value = draft.title || "";
-        descriptionInput.value = draft.description || "";
-        detailHash.textContent = payload.schema && payload.schema.hash ? payload.schema.hash : "";
-        const warning = payload.active_review_warning;
-        setBox(warningBox, warning ? `${warning.message} (${warning.active_review_count})` : "");
+        descriptionInput.value = draft.description || payload.template.description || "";
+        detailHash.textContent = payload.draft.content_hash || "";
+        statusSelect.value = payload.template.status || "inactive";
+        setBox(warningBox, currentVersions.length ? "Publishing this draft creates a new immutable version. Existing pipelines keep their exact schema version." : "Publish this draft before activating it or selecting it in a pipeline.");
         dirty = false;
         pendingFindings = [];
         localFindings = [];
@@ -667,40 +695,15 @@
     }
 
     async function loadSchemas() {
-        const requestedName = currentName;
-        const listPromise = window.DocFlow.apiGet("/api/schemas");
-        const detailPromise = requestedName && /\.(?:ya?ml|json)$/i.test(requestedName)
-            ? window.DocFlow.apiGet(`/api/schemas/${encodeURIComponent(requestedName)}`)
-            : null;
-        if (detailPromise) {
-            const [listResult, detailResult] = await Promise.allSettled([
-                listPromise,
-                detailPromise,
-            ]);
-            if (listResult.status === "rejected") {
-                throw listResult.reason;
-            }
-            schemas = listResult.value.schemas || [];
-            const resolvedName = resolveSchemaName(requestedName);
-            if (
-                detailResult.status === "fulfilled"
-                && resolvedName === requestedName
-            ) {
-                applySchemaPayload(requestedName, detailResult.value);
-                return;
-            }
-            currentName = resolvedName;
+        const listPayload = await window.DocFlow.apiGet("/api/admin/review-schemas?include_archived=true");
+        schemas = listPayload.templates || [];
+        let selected = schemas.find((schema) => schema.id === currentId)
+            || schemas.find((schema) => schema.schema_key === currentName)
+            || schemas[0];
+        if (selected) {
+            await loadSchema(selected.id);
         } else {
-            const listPayload = await listPromise;
-            schemas = listPayload.schemas || [];
-            currentName = resolveSchemaName(requestedName);
-        }
-        if (!currentName && schemas.length) {
-            currentName = schemas[0].name;
-        }
-        if (currentName) {
-            await loadSchema(currentName);
-        } else {
+            currentId = "";
             render();
         }
     }
@@ -720,10 +723,10 @@
         return stemMatch ? stemMatch.name : "";
     }
 
-    async function loadSchema(schemaName) {
+    async function loadSchema(templateId) {
         setBox(errorBox, "");
-        const payload = await window.DocFlow.apiGet(`/api/schemas/${encodeURIComponent(schemaName)}`);
-        applySchemaPayload(schemaName, payload);
+        const payload = await window.DocFlow.apiGet(`/api/admin/review-schemas/${encodeURIComponent(templateId)}`);
+        applySchemaPayload(payload);
     }
 
     async function saveSchema() {
@@ -735,27 +738,36 @@
             validationResults.focus();
             return;
         }
-        const name = nameInput.value.trim();
-        const validation = await window.DocFlow.apiPost(`/api/schemas/${encodeURIComponent(name || currentName || "draft.yaml")}/validate`, { schema: draft });
-        if (!validation.valid) {
-            serverFindings = validation.findings || [];
-            validationState = "invalid";
-            setBox(errorBox, "Fix validation findings before saving this schema.");
-            render();
-            validationResults.focus();
-            return;
+        if (!currentId) {
+            throw new Error("Create a review form template before saving.");
         }
-        const method = currentName ? window.DocFlow.apiPut : window.DocFlow.apiPost;
-        const url = currentName ? `/api/schemas/${encodeURIComponent(currentName)}` : "/api/schemas";
-        const payload = currentName ? { schema: draft } : { name, schema: draft };
-        const result = await method(url, payload);
-        const savedName = result.schema.name || name;
-        currentName = savedName;
+        const submittedKey = nameInput.value.trim();
+        if (submittedKey && submittedKey !== currentName) {
+            const metadataResponse = await fetch(`/api/admin/review-schemas/${encodeURIComponent(currentId)}`, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    ...window.DocFlow.csrfHeaders("PATCH"),
+                },
+                body: JSON.stringify({ schema_key: submittedKey }),
+            });
+            if (!metadataResponse.ok) {
+                const metadataError = await metadataResponse.json();
+                throw new Error(metadataError.detail && metadataError.detail.message || metadataError.detail || "Unable to update the schema key");
+            }
+            currentName = submittedKey;
+        }
+        const result = await window.DocFlow.apiPut(`/api/admin/review-schemas/${encodeURIComponent(currentId)}/draft`, {
+            expected_revision: currentRevision,
+            schema: draft,
+        });
+        currentRevision = result.draft.revision;
         dirty = false;
         await loadSchemas();
-        await loadSchema(savedName);
         if (window.DocFlow) {
-            window.DocFlow.showToast("Schema saved", "success");
+            window.DocFlow.showToast("Review form draft saved", "success");
         }
     }
 
@@ -769,14 +781,14 @@
             validationResults.focus();
             return;
         }
-        const name = nameInput.value.trim() || currentName || "draft.yaml";
-        const result = await window.DocFlow.apiPost(`/api/schemas/${encodeURIComponent(name)}/validate`, { schema: draft });
+        if (dirty) {
+            await saveSchema();
+        }
+        const result = await window.DocFlow.apiPost(`/api/admin/review-schemas/${encodeURIComponent(currentId)}/draft/validate`, {});
         serverFindings = result.findings || [];
         validationState = result.valid ? "valid" : "invalid";
         render();
         validationResults.focus();
-        const warning = result.active_review_warning;
-        setBox(warningBox, warning ? `${warning.message} (${warning.active_review_count})` : "");
     }
 
     function syncMeta() {
@@ -1062,9 +1074,9 @@
     }
 
     schemaList.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-schema-name]");
-        if (button && button.dataset.schemaName !== currentName && confirmDiscardChanges()) {
-            loadSchema(button.dataset.schemaName).catch((error) => setBox(errorBox, error.message));
+        const button = event.target.closest("[data-schema-id]");
+        if (button && button.dataset.schemaId !== currentId && confirmDiscardChanges()) {
+            loadSchema(button.dataset.schemaId).catch((error) => setBox(errorBox, error.message));
         }
     });
 
@@ -1151,40 +1163,90 @@
         if (!confirmDiscardChanges()) {
             return;
         }
-        currentName = "";
-        draft = emptySchema();
-        nameInput.value = "new_schema.yaml";
-        titleInput.value = "New Schema";
-        descriptionInput.value = "";
-        detailHash.textContent = "";
-        validationResults.innerHTML = "";
-        setBox(warningBox, "");
-        setBox(errorBox, "");
-        pendingFindings = [];
-        serverFindings = [];
-        validationState = "";
-        patternExamples.clear();
-        patternResults.clear();
-        fieldStatus.textContent = "";
-        dirty = true;
-        render();
+        const schemaKey = window.prompt("Stable review form key", "new-review-form");
+        if (!schemaKey) return;
+        const name = window.prompt("Review form name", "New review form") || schemaKey;
+        window.DocFlow.apiPost("/api/admin/review-schemas", {
+            schema_key: schemaKey,
+            name,
+            schema: emptySchema(),
+        }).then((result) => {
+            currentId = result.template.id;
+            currentName = result.template.schema_key;
+            return loadSchemas();
+        }).catch((error) => setBox(errorBox, error.message));
     });
     duplicateButton.addEventListener("click", async () => {
-        if (!currentName || !confirmDiscardChanges()) {
-            return;
-        }
-        const newName = window.prompt("Duplicate schema as", currentName.replace(/(\.ya?ml|\.json)$/i, "_copy$1"));
-        if (!newName) {
+        if (!currentId) {
             return;
         }
         try {
-            const result = await window.DocFlow.apiPost(`/api/schemas/${encodeURIComponent(currentName)}/duplicate`, { new_name: newName });
-            currentName = result.schema.name || newName;
+            if (dirty) await saveSchema();
+            const result = await window.DocFlow.apiPost(`/api/admin/review-schemas/${encodeURIComponent(currentId)}/publish`, { expected_revision: currentRevision });
+            currentRevision = result.draft.revision;
             await loadSchemas();
-            await loadSchema(currentName);
+            window.DocFlow.showToast("Immutable review form version published", "success");
+        } catch (error) {
+            const conflict = window.DocFlowVersionedAdmin.conflictMessage(error);
+            setBox(errorBox, `${conflict.message}${conflict.reloadRequired ? " Reload before continuing." : ""}`);
+        }
+    });
+    statusSelect.addEventListener("change", async () => {
+        if (!currentId) return;
+        try {
+            const response = await fetch(`/api/admin/review-schemas/${encodeURIComponent(currentId)}`, {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    ...window.DocFlow.csrfHeaders("PATCH"),
+                },
+                body: JSON.stringify({ status: statusSelect.value }),
+            });
+            if (!response.ok) {
+                const payload = await response.json();
+                throw new Error(payload.detail && payload.detail.message || payload.detail || "Lifecycle update failed");
+            }
+            await loadSchemas();
         } catch (error) {
             setBox(errorBox, error.message);
+            statusSelect.value = currentTemplate.status;
         }
+    });
+    importButton.addEventListener("click", () => {
+        if (currentId) importFile.click();
+        else window.DocFlow.showToast("Select a review form before importing.", "warning");
+    });
+    importFile.addEventListener("change", async () => {
+        const file = importFile.files && importFile.files[0];
+        if (!file || !currentId) return;
+        try {
+            const response = await fetch(`/api/admin/review-schemas/${encodeURIComponent(currentId)}/draft/import?expected_revision=${currentRevision}`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json",
+                    "Content-Type": file.name.endsWith(".json") ? "application/json" : "application/yaml",
+                    ...window.DocFlow.csrfHeaders("POST"),
+                },
+                body: await file.text(),
+            });
+            if (!response.ok) {
+                const payload = await response.json();
+                throw new Error(payload.detail && payload.detail.message || payload.detail || "Import failed");
+            }
+            await loadSchemas();
+            window.DocFlow.showToast("Imported into the draft; nothing was published.", "success");
+        } catch (error) {
+            setBox(errorBox, error.message);
+        } finally {
+            importFile.value = "";
+        }
+    });
+    exportButton.addEventListener("click", () => {
+        if (!currentId) return;
+        window.location.href = `/api/admin/review-schemas/${encodeURIComponent(currentId)}/draft/export?format=yaml`;
     });
     window.addEventListener("beforeunload", (event) => {
         if (!dirty) {

@@ -32,6 +32,7 @@ class IngestionAssignmentService:
         rows = self.conn.execute(
             f"""
             SELECT v.id, v.template_id, v.version_number, v.content_hash,
+                   v.published_at,
                    v.display_snapshot_json, t.template_key, t.name,
                    t.description, t.document_type, t.operator_instructions,
                    t.operator_selectable
@@ -60,6 +61,7 @@ class IngestionAssignmentService:
                     "operator_instructions": row["operator_instructions"],
                     "version_number": row["version_number"],
                     "content_hash": row["content_hash"],
+                    "published_at": row["published_at"],
                     "step_count": int(
                         executable.display_snapshot.get("step_count", 0)
                     ),

@@ -23,7 +23,11 @@ def _write_pdf(path: Path, page_count: int) -> None:
 
 
 class FakeSplitAdapter:
+    def __init__(self):
+        self.calls = 0
+
     def split_pdf(self, file_path, categories):
+        self.calls += 1
         return SplitResult(
             provider_job_id="spl-1",
             status="completed",
@@ -170,6 +174,64 @@ def test_llamacloud_split_task_creates_children_and_artifacts(tmp_path):
         json_loads(file_record["metadata_json"], {}).get("task_key") == "split_documents"
         for file_record in child_files
     )
+
+
+def test_llamacloud_split_task_retry_reuses_existing_assigned_children(tmp_path):
+    source = tmp_path / "bundle.pdf"
+    split_dir = tmp_path / "split"
+    _write_pdf(source, 4)
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {"pipeline_secrets": {"test-api": "runtime-secret"}},
+    )
+    initialize_database(config)
+    with connect(config) as conn:
+        template, version = publish_pipeline(conn, key="split-retry")
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(source),
+            original_filename="bundle.pdf",
+            pipeline_template_id=template["id"],
+            pipeline_version_id=version["id"],
+            pipeline_assignment_source="upload",
+        )
+
+    adapter = FakeSplitAdapter()
+    task = LlamaCloudSplitTask(
+        config_manager=config,
+        enabled=True,
+        adapter=adapter,
+        categories=[{"name": "invoice"}, {"name": "delivery_order"}],
+        split_dir=str(split_dir),
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "file_path": str(source),
+        "original_filename": "bundle.pdf",
+        "source": "web",
+        "current_task_key": "split_documents",
+        "current_task_index": 0,
+    }
+
+    first = task.run(dict(context))
+    retried = task.run(dict(context))
+
+    assert adapter.calls == 1
+    assert retried["split_children"] == first["split_children"]
+    assert retried["data"]["split_result"]["reused"] is True
+    with connect(config) as conn:
+        children = DocumentRepository(conn).list_children(
+            created["document"]["id"]
+        )
+        child_files = [
+            DocumentRepository(conn).list_files(child["id"]) for child in children
+        ]
+    assert len(children) == 2
+    assert all(child["pipeline_template_id"] == template["id"] for child in children)
+    assert all(child["pipeline_version_id"] == version["id"] for child in children)
+    assert all(len(files) == 1 and files[0]["file_type"] == "split_pdf" for files in child_files)
 
 
 def test_llamacloud_split_task_fails_on_low_confidence_without_children(tmp_path):

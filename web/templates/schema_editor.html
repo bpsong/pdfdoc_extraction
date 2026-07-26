@@ -1,11 +1,12 @@
 {% extends "app_base.html" %}
 
 {% block header_actions %}
-<button id="schema-create-button" class="btn btn-primary btn-sm" type="button">New Schema</button>
+<button id="schema-import-button" class="btn btn-outline btn-sm" type="button">Import</button>
+<button id="schema-create-button" class="btn btn-primary btn-sm" type="button">New Review Form</button>
 {% endblock %}
 
 {% block content %}
-<div id="schema-editor-workspace" class="schema-editor-workspace" data-schema-name="{{ schema_name|default('') }}">
+<div id="schema-editor-workspace" class="schema-editor-workspace" data-schema-name="{{ schema_name|default('') }}" data-versioned="true">
     <section class="admin-panel schema-list-panel">
         <div class="admin-panel-header">
             <div class="admin-panel-heading">
@@ -26,12 +27,13 @@
     <section class="admin-panel schema-detail-panel">
         <div class="admin-panel-header">
             <div class="admin-panel-heading">
-                <h2 id="schema-detail-title" class="admin-panel-title">Schema</h2>
+                <h2 id="schema-detail-title" class="admin-panel-title">Review form draft</h2>
                 <p id="schema-detail-hash" class="admin-panel-subtitle"></p>
             </div>
             <div class="admin-panel-actions">
-                <button id="schema-duplicate-button" class="btn btn-outline btn-sm" type="button" disabled>Duplicate</button>
-                <button id="schema-save-button" class="btn btn-primary btn-sm" type="button" disabled>Save</button>
+                <button id="schema-export-button" class="btn btn-ghost btn-sm" type="button" disabled>Export</button>
+                <button id="schema-duplicate-button" class="btn btn-outline btn-sm" type="button" disabled>Publish</button>
+                <button id="schema-save-button" class="btn btn-primary btn-sm" type="button" disabled>Save draft</button>
             </div>
         </div>
 
@@ -42,8 +44,8 @@
 
         <div class="schema-meta-grid">
             <label class="form-control">
-                <span class="label-text">Name</span>
-                <input id="schema-name-input" class="input input-bordered input-sm" type="text" placeholder="invoice.yaml" />
+                <span class="label-text">Stable key</span>
+                <input id="schema-name-input" class="input input-bordered input-sm" type="text" placeholder="invoice-review" />
             </label>
             <label class="form-control">
                 <span class="label-text">Title</span>
@@ -53,6 +55,19 @@
                 <span class="label-text">Description</span>
                 <input id="schema-description-input" class="input input-bordered input-sm" type="text" />
             </label>
+            <label class="form-control">
+                <span class="label-text">Lifecycle</span>
+                <select id="schema-status-select" class="select select-bordered select-sm">
+                    <option value="inactive">Inactive</option>
+                    <option value="active">Active</option>
+                    <option value="archived">Archived</option>
+                </select>
+            </label>
+            <div class="flex items-end gap-2 pb-1 text-xs text-base-content/60">
+                <span id="schema-draft-revision">Revision —</span>
+                <span aria-hidden="true">•</span>
+                <span id="schema-latest-version">No published version</span>
+            </div>
         </div>
 
         <div class="schema-toolbar">
@@ -75,18 +90,25 @@
     <section class="admin-panel schema-preview-panel">
         <div class="admin-panel-header">
             <div class="admin-panel-heading">
-                <h2 class="admin-panel-title">YAML Preview</h2>
+                <h2 class="admin-panel-title">Version history &amp; dependencies</h2>
             </div>
             <div class="admin-panel-actions">
                 <button id="schema-validate-button" class="btn btn-outline btn-sm" type="button" disabled>Validate</button>
             </div>
         </div>
         <div id="schema-validation-results" class="schema-validation-results text-sm" role="status" aria-live="polite" tabindex="-1"></div>
-        <pre id="schema-yaml-preview" class="schema-yaml-preview"></pre>
+        <div id="schema-version-history" class="space-y-2 p-3 text-sm"></div>
+        <div id="schema-dependency-usage" class="border-t border-base-300 p-3 text-sm"></div>
+        <details class="border-t border-base-300 p-3">
+            <summary class="cursor-pointer text-sm font-medium">Canonical draft preview</summary>
+            <pre id="schema-yaml-preview" class="schema-yaml-preview mt-2"></pre>
+        </details>
     </section>
 </div>
+<input id="schema-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/schema_editor.js?v=schema-field-actions" defer></script>
+<script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
+<script src="/static/js/schema_editor.js?v=versioned-review-forms" defer></script>
 {% endblock %}

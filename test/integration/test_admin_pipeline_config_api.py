@@ -9,9 +9,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
-from modules.db.connection import connect, json_loads
+from modules.db.connection import connect
 from modules.db.migrations import initialize_database
-from modules.db.repositories import AuditRepository, ConfigVersionRepository
+from modules.db.repositories import AuditRepository
 from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
@@ -166,7 +166,10 @@ def test_admin_pipeline_file_apis_reject_unsafe_paths_and_non_csv(monkeypatch, t
     assert non_csv.status_code == 400
 
 
-def test_admin_pipeline_api_draft_diff_validate_and_publish(monkeypatch, tmp_path: Path) -> None:
+def test_admin_pipeline_api_rejects_legacy_mutations_but_keeps_read_only_tools(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     config = _config(tmp_path)
     client = _client(monkeypatch, config)
 
@@ -183,8 +186,8 @@ def test_admin_pipeline_api_draft_diff_validate_and_publish(monkeypatch, tmp_pat
     model = _draft_model(payload)
     model["steps"][2]["enabled"] = False
     draft_response = client.put("/api/admin/pipeline/draft", json={"model": model})
-    assert draft_response.status_code == 200
-    assert draft_response.json()["draft"]["summary"]["enabled_steps"] == 3
+    assert draft_response.status_code == 410
+    assert "/api/admin/pipeline-templates/{template_id}/draft" in draft_response.json()["detail"]
 
     diff_response = client.post("/api/admin/pipeline/diff", json={"model": model})
     assert diff_response.status_code == 200
@@ -195,26 +198,24 @@ def test_admin_pipeline_api_draft_diff_validate_and_publish(monkeypatch, tmp_pat
     assert validation_response.json()["valid"] is True
 
     publish_response = client.post("/api/admin/pipeline/publish", json={"model": model})
-    assert publish_response.status_code == 200
+    assert publish_response.status_code == 410
+    assert "/api/admin/pipeline-templates/{template_id}/publish" in publish_response.json()["detail"]
     written = yaml.safe_load(config._config_path.read_text(encoding="utf-8"))
-    assert written["pipeline"] == ["split", "extract", "store_json"]
+    assert written["pipeline"] == ["split", "extract", "review", "store_json"]
     assert written["tasks"]["split"]["params"]["api_key"] == "split-secret"
     assert written["tasks"]["extract"]["params"]["api_key"] == "extract-secret"
 
     with connect(config) as conn:
-        active = ConfigVersionRepository(conn).get_active("pipeline", "default")
         events = AuditRepository(conn).list_admin_events()
-    assert active is not None
-    metadata = json_loads(active["metadata_json"])
-    assert metadata["summary"]["enabled_steps"] == 3
-    assert {event["event_type"] for event in events} >= {
-        "admin_pipeline_draft_saved",
-        "admin_pipeline_validated",
-        "admin_pipeline_published",
-    }
+    assert {event["event_type"] for event in events} >= {"admin_pipeline_validated"}
+    assert "admin_pipeline_draft_saved" not in {event["event_type"] for event in events}
+    assert "admin_pipeline_published" not in {event["event_type"] for event in events}
 
 
-def test_admin_pipeline_publish_rejects_blocking_findings(monkeypatch, tmp_path: Path) -> None:
+def test_admin_pipeline_legacy_publish_is_gone_even_for_invalid_models(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
     config = _config(tmp_path)
     client = _client(monkeypatch, config)
     model = client.get("/api/admin/pipeline").json()["active"]["model"]
@@ -222,10 +223,8 @@ def test_admin_pipeline_publish_rejects_blocking_findings(monkeypatch, tmp_path:
 
     response = client.post("/api/admin/pipeline/publish", json={"model": model})
 
-    assert response.status_code == 409
-    detail = response.json()["detail"]
-    assert detail["message"] == "Pipeline draft has blocking validation findings."
-    assert "pipeline-review-before-extract" in {finding["code"] for finding in detail["findings"]}
+    assert response.status_code == 410
+    assert "/api/admin/pipeline-templates/{template_id}/publish" in response.json()["detail"]
 
 
 def _invalid_publish_model(model: dict[str, Any], scenario: str) -> tuple[dict[str, Any], str]:
@@ -271,7 +270,7 @@ def _invalid_publish_model(model: dict[str, Any], scenario: str) -> tuple[dict[s
     "scenario",
     ["duplicate-extract", "duplicate-split", "duplicate-table", "invalid-nanoid"],
 )
-def test_admin_pipeline_publish_rejects_editor_constraints_without_writing_yaml(
+def test_admin_pipeline_legacy_publish_never_writes_yaml(
     monkeypatch,
     tmp_path: Path,
     scenario: str,
@@ -280,11 +279,9 @@ def test_admin_pipeline_publish_rejects_editor_constraints_without_writing_yaml(
     client = _client(monkeypatch, config)
     original_yaml = config._config_path.read_text(encoding="utf-8")
     model = client.get("/api/admin/pipeline").json()["active"]["model"]
-    invalid_model, expected_code = _invalid_publish_model(model, scenario)
+    invalid_model, _ = _invalid_publish_model(model, scenario)
 
     response = client.post("/api/admin/pipeline/publish", json={"model": invalid_model})
 
-    assert response.status_code == 409
-    findings = response.json()["detail"]["findings"]
-    assert expected_code in {finding["code"] for finding in findings}
+    assert response.status_code == 410
     assert config._config_path.read_text(encoding="utf-8") == original_yaml

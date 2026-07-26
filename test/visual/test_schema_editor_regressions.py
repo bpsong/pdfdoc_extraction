@@ -17,7 +17,7 @@ def test_schema_editor_unifies_validation_and_unsaved_change_guards() -> None:
     assert "Min length cannot be greater than max length." in source
     assert "Field key cannot be empty." in source
     assert "function confirmDiscardChanges()" in source
-    assert "button.dataset.schemaName !== currentName && confirmDiscardChanges()" in source
+    assert "button.dataset.schemaId !== currentId && confirmDiscardChanges()" in source
     assert 'if (!confirmDiscardChanges()) {' in source
     assert "Object.keys(found.container).forEach" in source
     assert "dirty = true;" in source
@@ -48,12 +48,12 @@ def test_schema_and_pipeline_editors_share_admin_panel_structure() -> None:
     assert schema_template.count('class="admin-panel ') == 3
     assert schema_template.count('class="admin-panel-header"') == 3
     assert "schema-panel-header" not in schema_template
-    assert pipeline_template.count('class="admin-panel ') == 7
-    assert pipeline_template.count('class="admin-panel-header"') == 6
+    assert pipeline_template.count('class="admin-panel ') == 9
+    assert pipeline_template.count('class="admin-panel-header"') == 7
     assert 'class="card ' not in pipeline_template
     assert 'class="panel-header"' not in pipeline_template
     assert schema_template.count("admin-panel-title") == 3
-    assert pipeline_template.count("admin-panel-title") == 6
+    assert pipeline_template.count("admin-panel-title") == 7
     assert ".admin-panel" in styles
     assert ".admin-panel-header" in styles
     assert ".admin-panel-heading" in styles
@@ -74,8 +74,8 @@ def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:
     assert "Example matches this pattern." in source
     assert "Example does not match this pattern." in source
     assert "function displayFindingPath(path)" in source
-    assert source.count("patternExamples.clear();") == 2
-    assert source.count("patternResults.clear();") == 2
+    assert source.count("patternExamples.clear();") == 1
+    assert source.count("patternResults.clear();") == 1
     assert template.index('id="schema-validation-results"') < template.index('id="schema-yaml-preview"')
     assert ".schema-pattern-tester" in styles
     assert ".schema-pattern-result-success" in styles

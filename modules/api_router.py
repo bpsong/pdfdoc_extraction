@@ -30,7 +30,9 @@ import json
 from pathlib import Path
 import logging
 import secrets
+import sqlite3
 import uuid
+import yaml
 from datetime import datetime, timezone, timedelta
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -39,7 +41,7 @@ from email.policy import default
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks, Query
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
@@ -64,6 +66,11 @@ from .services.batch_service import BatchService
 from .services.config_validation_service import ConfigValidationService
 from .services.failure_service import FailureService
 from .services.pipeline_config_service import PipelineConfigError, PipelineConfigService
+from .services.pipeline_template_service import (
+    PipelineTemplateConflictError,
+    PipelineTemplateService,
+    PipelineTemplateValidationError,
+)
 from .services.ingestion_assignment_service import (
     IngestionAssignmentError,
     IngestionAssignmentService,
@@ -77,8 +84,15 @@ from .services.reports_service import ReportsService
 from .services.review_service import ReviewService, ReviewServiceError
 from .services.runtime_settings_service import RuntimeSettingsService
 from .services.schema_service import SchemaService
+from .services.review_schema_version_service import (
+    ReviewSchemaConflictError,
+    ReviewSchemaValidationError,
+    ReviewSchemaVersionService,
+)
 from .services.task_catalog_service import TaskCatalogService
 from .services.user_service import UserService, UserServiceError
+from .services.versioned_admin_service import VersionedAdminService
+from .services.versioned_config_contracts import redact_sensitive
 from .resume_manager import ResumeManager
 
 
@@ -589,7 +603,7 @@ def build_router() -> APIRouter:
             )
         if length > limits.max_request_bytes:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=(
                     "Upload request is too large. "
                     f"Maximum request size is {limits.max_request_bytes // (1024 * 1024)} MB."
@@ -618,7 +632,7 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty upload payload")
         if len(body) > limits.max_request_bytes:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                 detail=(
                     "Upload request is too large. "
                     f"Maximum request size is {limits.max_request_bytes // (1024 * 1024)} MB."
@@ -651,12 +665,12 @@ def build_router() -> APIRouter:
                     file_bytes = b""
             if len(uploads) >= effective_max_files:
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=f"Too many files uploaded. Maximum file count is {effective_max_files}.",
                 )
             if len(file_bytes) > limits.max_file_bytes:
                 raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
                     detail=(
                         f"{filename} is too large. "
                         f"Maximum file size is {limits.max_file_bytes // (1024 * 1024)} MB."
@@ -720,6 +734,99 @@ def build_router() -> APIRouter:
         if not isinstance(payload, dict):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="JSON payload must be an object")
         return payload
+
+    async def _versioned_import_body(request: Request) -> str:
+        """Read a bounded YAML/JSON versioned-configuration import."""
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type not in {
+            "application/json",
+            "application/yaml",
+            "application/x-yaml",
+            "text/yaml",
+        }:
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Import content type must be JSON or YAML",
+            )
+        body = await request.body()
+        if len(body) > 1_048_576:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail="Configuration import exceeds 1 MiB",
+            )
+        try:
+            text = body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Configuration import must be UTF-8",
+            ) from exc
+        if media_type == "application/json":
+            try:
+                payload = json.loads(text)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid JSON import",
+                ) from exc
+            if isinstance(payload, dict) and isinstance(payload.get("content"), str):
+                return payload["content"]
+        return text
+
+    def _secret_aliases(config: Any) -> set[str]:
+        raw = config.get("pipeline_secrets", {}) or {}
+        return set(raw) if isinstance(raw, dict) else set()
+
+    def _versioned_admin_service(config: Any, conn: Any) -> VersionedAdminService:
+        return VersionedAdminService(
+            conn,
+            configured_secret_aliases=_secret_aliases(config),
+        )
+
+    def _required_revision(payload: dict[str, Any]) -> int:
+        revision = payload.get("expected_revision")
+        if isinstance(revision, bool) or not isinstance(revision, int) or revision < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="expected_revision must be a positive integer",
+            )
+        return revision
+
+    def _raise_versioned_error(exc: Exception) -> None:
+        """Translate domain failures into stable API responses."""
+        if isinstance(exc, KeyError):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc.args[0] if exc.args else exc),
+            ) from exc
+        if isinstance(
+            exc, (ReviewSchemaConflictError, PipelineTemplateConflictError)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": str(exc),
+                    "current": redact_sensitive(exc.current),
+                },
+            ) from exc
+        if isinstance(
+            exc, (ReviewSchemaValidationError, PipelineTemplateValidationError)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=redact_sensitive(exc.result),
+            ) from exc
+        if isinstance(exc, sqlite3.IntegrityError):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A template with that key already exists",
+            ) from exc
+        if isinstance(exc, (ValueError, TypeError)):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+        raise exc
 
     def _schema_active_review_warning(schema_name: str, config: ConfigManager) -> dict[str, Any] | None:
         """Return a warning when open review items reference a schema."""
@@ -1385,6 +1492,602 @@ def build_router() -> APIRouter:
         }
         return {"summary": summary, "tasks": tasks}
 
+    # Versioned review-schema administration
+
+    @router.get("/api/admin/review-schemas")
+    def list_versioned_review_schemas(
+        include_archived: bool = False,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            templates = _versioned_admin_service(
+                config, conn
+            ).list_schema_templates(include_archived=include_archived)
+        return {"templates": templates}
+
+    @router.post("/api/admin/review-schemas")
+    async def create_versioned_review_schema(
+        request: Request, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return ReviewSchemaVersionService(conn).create_template(
+                    schema_key=str(payload.get("schema_key") or ""),
+                    name=str(payload.get("name") or ""),
+                    description=str(payload.get("description") or ""),
+                    initial_schema=payload.get("schema"),
+                    user=user,
+                )
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/review-schemas/{template_id}")
+    def get_versioned_review_schema(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                return _versioned_admin_service(
+                    config, conn
+                ).get_schema_template(template_id)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.patch("/api/admin/review-schemas/{template_id}")
+    async def update_versioned_review_schema(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        allowed = {"schema_key", "name", "description", "status"}
+        try:
+            with connect(config) as conn:
+                service = ReviewSchemaVersionService(conn)
+                return {
+                    "template": service.update_template(
+                        template_id,
+                        **{key: payload[key] for key in allowed if key in payload},
+                        user=user,
+                    )
+                }
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/review-schemas/{template_id}/draft")
+    def get_versioned_review_schema_draft(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                service = ReviewSchemaVersionService(conn)
+                service._require_template(template_id)
+                return {
+                    "draft": service._decode_draft(
+                        service._require_draft(template_id)
+                    )
+                }
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.put("/api/admin/review-schemas/{template_id}/draft")
+    async def save_versioned_review_schema_draft(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        schema = payload.get("schema")
+        if not isinstance(schema, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="schema must be an object",
+            )
+        try:
+            with connect(config) as conn:
+                draft = ReviewSchemaVersionService(conn).save_draft(
+                    template_id,
+                    expected_revision=_required_revision(payload),
+                    schema=schema,
+                    user=user,
+                )
+            return {"draft": draft}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/review-schemas/{template_id}/draft/validate")
+    async def validate_versioned_review_schema_draft(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return redact_sensitive(
+                    ReviewSchemaVersionService(conn).validate_draft(
+                        template_id, user=user
+                    )
+                )
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/review-schemas/{template_id}/draft/import")
+    async def import_versioned_review_schema_draft(
+        template_id: str,
+        request: Request,
+        expected_revision: int = Query(..., ge=1),
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        text = await _versioned_import_body(request)
+        try:
+            with connect(config) as conn:
+                draft = ReviewSchemaVersionService(conn).import_draft(
+                    template_id,
+                    expected_revision=expected_revision,
+                    text=text,
+                    user=user,
+                )
+            return {"draft": draft, "published": False}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/review-schemas/{template_id}/draft/export")
+    def export_versioned_review_schema_draft(
+        template_id: str,
+        format: str = Query("yaml", pattern="^(yaml|json)$"),
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                content = ReviewSchemaVersionService(conn).export_draft(
+                    template_id, format=format, user=user
+                )
+            media_type = "application/json" if format == "json" else "application/yaml"
+            return Response(content=content, media_type=media_type)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/review-schemas/{template_id}/publish")
+    async def publish_versioned_review_schema(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return ReviewSchemaVersionService(conn).publish(
+                    template_id,
+                    expected_revision=_required_revision(payload),
+                    user=user,
+                )
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/review-schemas/{template_id}/versions")
+    def list_versioned_review_schema_versions(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                versions = _versioned_admin_service(
+                    config, conn
+                ).list_schema_versions(template_id)
+            return {"versions": versions}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get(
+        "/api/admin/review-schemas/{template_id}/versions/{version_id}"
+    )
+    def get_versioned_review_schema_version(
+        template_id: str,
+        version_id: str,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                return {
+                    "version": _versioned_admin_service(
+                        config, conn
+                    ).get_schema_version(template_id, version_id)
+                }
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get(
+        "/api/admin/review-schemas/{template_id}/versions/{version_id}/export"
+    )
+    def export_versioned_review_schema_version(
+        template_id: str,
+        version_id: str,
+        format: str = Query("yaml", pattern="^(yaml|json)$"),
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                admin = _versioned_admin_service(config, conn)
+                admin.get_schema_version(template_id, version_id)
+                content = admin.schemas.export_version(
+                    version_id, format=format, user=user
+                )
+            media_type = "application/json" if format == "json" else "application/yaml"
+            return Response(content=content, media_type=media_type)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/review-schemas/{template_id}/usage")
+    def get_versioned_review_schema_usage(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                return _versioned_admin_service(
+                    config, conn
+                ).schema_usage(template_id)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    # Versioned pipeline-template administration
+
+    @router.get("/api/admin/pipeline-templates")
+    def list_versioned_pipeline_templates(
+        include_archived: bool = False,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            templates = _versioned_admin_service(
+                config, conn
+            ).list_pipeline_templates(include_archived=include_archived)
+        return {"templates": templates}
+
+    @router.post("/api/admin/pipeline-templates")
+    async def create_versioned_pipeline_template(
+        request: Request, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                service = PipelineTemplateService(
+                    conn, configured_secret_aliases=_secret_aliases(config)
+                )
+                return service.create_template(
+                    template_key=str(payload.get("template_key") or ""),
+                    name=str(payload.get("name") or ""),
+                    description=str(payload.get("description") or ""),
+                    document_type=payload.get("document_type"),
+                    operator_instructions=str(
+                        payload.get("operator_instructions") or ""
+                    ),
+                    operator_selectable=bool(
+                        payload.get("operator_selectable", True)
+                    ),
+                    initial_definition=payload.get("definition"),
+                    user=user,
+                )
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/pipeline-templates/schema-versions")
+    def list_pipeline_schema_selector_versions(
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            versions = _versioned_admin_service(
+                config, conn
+            ).schema_selector_options()
+        return {"versions": versions}
+
+    @router.get("/api/admin/pipeline-templates/{template_id}")
+    def get_versioned_pipeline_template(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                return _versioned_admin_service(
+                    config, conn
+                ).get_pipeline_template(template_id)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.patch("/api/admin/pipeline-templates/{template_id}")
+    async def update_versioned_pipeline_template(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        allowed = {
+            "template_key",
+            "name",
+            "description",
+            "document_type",
+            "operator_instructions",
+            "operator_selectable",
+            "status",
+        }
+        try:
+            with connect(config) as conn:
+                service = PipelineTemplateService(
+                    conn, configured_secret_aliases=_secret_aliases(config)
+                )
+                template = service.update_template(
+                    template_id,
+                    **{key: payload[key] for key in allowed if key in payload},
+                    user=user,
+                )
+            return {"template": template}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/clone")
+    async def clone_versioned_pipeline_template(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return PipelineTemplateService(
+                    conn, configured_secret_aliases=_secret_aliases(config)
+                ).clone(
+                    template_id,
+                    template_key=str(payload.get("template_key") or ""),
+                    name=str(payload.get("name") or ""),
+                    user=user,
+                )
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/pipeline-templates/{template_id}/draft")
+    def get_versioned_pipeline_draft(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                admin = _versioned_admin_service(config, conn)
+                workspace = admin.get_pipeline_template(template_id)
+            return {
+                "draft": workspace["draft"],
+                "schema_versions": workspace["schema_versions"],
+            }
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.put("/api/admin/pipeline-templates/{template_id}/draft")
+    async def save_versioned_pipeline_draft(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        definition = payload.get("definition")
+        if not isinstance(definition, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="definition must be an object",
+            )
+        try:
+            with connect(config) as conn:
+                draft = PipelineTemplateService(
+                    conn, configured_secret_aliases=_secret_aliases(config)
+                ).save_draft(
+                    template_id,
+                    expected_revision=_required_revision(payload),
+                    definition=definition,
+                    user=user,
+                )
+            return {"draft": redact_sensitive(draft)}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/draft/validate")
+    async def validate_versioned_pipeline_draft(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        await _json_body(request)
+        try:
+            with connect(config) as conn:
+                result = PipelineTemplateService(
+                    conn, configured_secret_aliases=_secret_aliases(config)
+                ).validate_draft(template_id, user=user)
+            return redact_sensitive(result)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/draft/import")
+    async def import_versioned_pipeline_draft(
+        template_id: str,
+        request: Request,
+        expected_revision: int = Query(..., ge=1),
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        text = await _versioned_import_body(request)
+        try:
+            document = yaml.safe_load(text)
+            if not isinstance(document, dict):
+                raise ValueError("Pipeline import must contain an object.")
+            with connect(config) as conn:
+                admin = _versioned_admin_service(config, conn)
+                definition = admin.import_pipeline_document(document)
+                draft = admin.pipelines.import_draft(
+                    template_id,
+                    expected_revision=expected_revision,
+                    definition=definition,
+                    user=user,
+                )
+            return {"draft": redact_sensitive(draft), "published": False}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/pipeline-templates/{template_id}/draft/export")
+    def export_versioned_pipeline_draft(
+        template_id: str,
+        format: str = Query("yaml", pattern="^(yaml|json)$"),
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                content = _versioned_admin_service(
+                    config, conn
+                ).export_pipeline_draft(template_id, format=format)
+            media_type = "application/json" if format == "json" else "application/yaml"
+            return Response(content=content, media_type=media_type)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/pipeline-templates/{template_id}/diff")
+    def diff_versioned_pipeline_draft(
+        template_id: str,
+        version_id: str | None = None,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                return PipelineTemplateService(
+                    conn, configured_secret_aliases=_secret_aliases(config)
+                ).diff(template_id, version_id=version_id)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/publish")
+    async def publish_versioned_pipeline(
+        template_id: str,
+        request: Request,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with connect(config) as conn:
+                return redact_sensitive(
+                    PipelineTemplateService(
+                        conn,
+                        configured_secret_aliases=_secret_aliases(config),
+                    ).publish(
+                        template_id,
+                        expected_revision=_required_revision(payload),
+                        user=user,
+                    )
+                )
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get("/api/admin/pipeline-templates/{template_id}/versions")
+    def list_versioned_pipeline_versions(
+        template_id: str, user: str = Depends(get_current_user)
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                versions = _versioned_admin_service(
+                    config, conn
+                ).list_pipeline_versions(template_id)
+            return {"versions": versions}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get(
+        "/api/admin/pipeline-templates/{template_id}/versions/{version_id}"
+    )
+    def get_versioned_pipeline_version(
+        template_id: str,
+        version_id: str,
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                version = _versioned_admin_service(
+                    config, conn
+                ).get_pipeline_version(template_id, version_id)
+            return {"version": version}
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
+    @router.get(
+        "/api/admin/pipeline-templates/{template_id}/versions/{version_id}/export"
+    )
+    def export_versioned_pipeline_version(
+        template_id: str,
+        version_id: str,
+        format: str = Query("yaml", pattern="^(yaml|json)$"),
+        user: str = Depends(get_current_user),
+    ):
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with connect(config) as conn:
+                content = _versioned_admin_service(
+                    config, conn
+                ).export_pipeline_version(
+                    template_id, version_id, format=format
+                )
+            media_type = "application/json" if format == "json" else "application/yaml"
+            return Response(content=content, media_type=media_type)
+        except Exception as exc:
+            _raise_versioned_error(exc)
+
     @router.get("/api/admin/pipeline")
     def get_admin_pipeline(user: str = Depends(get_current_user)):
         """Return active and draft pipeline configuration for admin editing."""
@@ -1440,18 +2143,17 @@ def build_router() -> APIRouter:
 
     @router.put("/api/admin/pipeline/draft")
     async def save_admin_pipeline_draft(request: Request, user: str = Depends(get_current_user)):
-        """Create or update a pipeline draft."""
+        """Reject the removed single-pipeline mutation surface."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        payload = await _json_body(request)
-        model = _pipeline_model_payload(payload)
-        try:
-            with connect(config) as conn:
-                service = PipelineConfigService(config, conn)
-                draft = service.create_draft(user=user) if model is None else service.save_draft(model, user=user)
-                return {"draft": draft}
-        except PipelineConfigError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        await _json_body(request)
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "The single-pipeline draft endpoint was removed. "
+                "Use /api/admin/pipeline-templates/{template_id}/draft."
+            ),
+        )
 
     @router.post("/api/admin/pipeline/diff")
     async def diff_admin_pipeline(request: Request, user: str = Depends(get_current_user)):
@@ -1481,19 +2183,17 @@ def build_router() -> APIRouter:
 
     @router.post("/api/admin/pipeline/publish")
     async def publish_admin_pipeline(request: Request, user: str = Depends(get_current_user)):
-        """Publish a validated pipeline draft."""
+        """Reject publication through the removed single-pipeline surface."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        payload = await _json_body(request)
-        model = _pipeline_model_payload(payload)
-        try:
-            with connect(config) as conn:
-                return PipelineConfigService(config, conn).publish(model, user=user)
-        except PipelineConfigError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail={"message": str(exc), "findings": exc.findings},
-            )
+        await _json_body(request)
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "The single-pipeline publish endpoint was removed. "
+                "Use /api/admin/pipeline-templates/{template_id}/publish."
+            ),
+        )
 
     @router.get("/api/admin/review-gate-rules")
     def get_admin_review_gate_rules(user: str = Depends(get_current_user)):
@@ -1604,27 +2304,17 @@ def build_router() -> APIRouter:
 
     @router.post("/api/schemas")
     async def create_schema(request: Request, user: str = Depends(get_current_user)):
-        """Create a new review schema file."""
+        """Reject file-backed schema creation."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        payload = await _json_body(request)
-        schema_name = str(payload.get("name") or "").strip()
-        if not schema_name:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Schema name is required")
-        service = SchemaService(config)
-        try:
-            schema = service.save_schema(schema_name, _schema_payload(payload), overwrite=False)
-        except FileExistsError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        _append_admin_audit(
-            config,
-            event_type="admin_schema_created",
-            user=user,
-            after=_schema_audit_payload(schema_name, service),
+        await _json_body(request)
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "File-backed schema creation was removed. "
+                "Use /api/admin/review-schemas."
+            ),
         )
-        return {"schema": schema, "content": service.schema_content(schema_name)}
 
     @router.post("/api/schemas/{schema_name}/validate")
     async def validate_schema_payload(schema_name: str, request: Request, user: str = Depends(get_current_user)):
@@ -1651,32 +2341,17 @@ def build_router() -> APIRouter:
 
     @router.post("/api/schemas/{schema_name}/duplicate")
     async def duplicate_schema(schema_name: str, request: Request, user: str = Depends(get_current_user)):
-        """Duplicate an existing review schema."""
+        """Reject file-backed schema duplication."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        payload = await _json_body(request)
-        new_name = str(payload.get("new_name") or payload.get("name") or "").strip()
-        if not new_name:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New schema name is required")
-        service = SchemaService(config)
-        before = _schema_audit_payload(schema_name, service)
-        try:
-            schema = service.duplicate_schema(schema_name, new_name)
-        except FileExistsError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        _append_admin_audit(
-            config,
-            event_type="admin_schema_duplicated",
-            user=user,
-            before=before,
-            after=_schema_audit_payload(new_name, service),
-            metadata={"source_schema_name": schema_name},
+        await _json_body(request)
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "File-backed schema duplication was removed. "
+                "Create a versioned review-schema template instead."
+            ),
         )
-        return {"schema": schema, "content": service.schema_content(new_name)}
 
     @router.get("/api/schemas/{schema_name}")
     def get_schema(schema_name: str, user: str = Depends(get_current_user)):
@@ -1696,32 +2371,17 @@ def build_router() -> APIRouter:
 
     @router.put("/api/schemas/{schema_name}")
     async def update_schema(schema_name: str, request: Request, user: str = Depends(get_current_user)):
-        """Update an existing review schema file."""
+        """Reject file-backed schema updates."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        service = SchemaService(config)
-        if service.load_schema(schema_name) is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Schema not found")
-        before = _schema_audit_payload(schema_name, service)
-        payload = await _json_body(request)
-        try:
-            schema = service.save_schema(schema_name, _schema_payload(payload), overwrite=True)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-        after = _schema_audit_payload(schema_name, service)
-        _append_admin_audit(
-            config,
-            event_type="admin_schema_updated",
-            user=user,
-            before=before,
-            after=after,
-            metadata={"active_review_warning": _schema_active_review_warning(schema_name, config)},
+        await _json_body(request)
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "File-backed schema updates were removed. "
+                "Use /api/admin/review-schemas/{template_id}/draft."
+            ),
         )
-        return {
-            "schema": schema,
-            "content": service.schema_content(schema_name),
-            "active_review_warning": _schema_active_review_warning(schema_name, config),
-        }
 
     @router.get("/api/status/{file_id}")
     def get_status(file_id: str, user: str = Depends(get_current_user)):

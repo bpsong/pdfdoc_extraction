@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 from urllib.parse import quote
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
-from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
-from modules.db.repositories import AuditRepository, ReviewRepository, TaskRunRepository
-from modules.services.batch_service import BatchService
 from test.helpers_sqlite import TempConfig, initialize_test_users
 
 
@@ -44,7 +40,10 @@ def _client(tmp_path: Path, monkeypatch, *, user: str = "admin") -> tuple[TestCl
     return TestClient(app), config
 
 
-def test_schema_api_create_get_validate_update_and_duplicate(tmp_path, monkeypatch) -> None:
+def test_schema_api_reads_and_validates_files_but_rejects_legacy_mutations(
+    tmp_path,
+    monkeypatch,
+) -> None:
     client, config = _client(tmp_path, monkeypatch)
     schema = {
         "title": "Invoice",
@@ -55,9 +54,26 @@ def test_schema_api_create_get_validate_update_and_duplicate(tmp_path, monkeypat
         },
     }
 
-    create_response = client.post("/api/schemas", json={"name": "invoice.yaml", "schema": schema})
-    assert create_response.status_code == 200
-    assert create_response.json()["schema"]["name"] == "invoice.yaml"
+    schema_path = Path(config.get("schema.directories")[0]) / "invoice.yaml"
+    schema_path.write_text(
+        """
+title: Invoice
+description: Invoice review schema
+fields:
+  supplier:
+    type: string
+    label: Supplier
+    required: true
+  total:
+    type: number
+    required: true
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    create_response = client.post("/api/schemas", json={"name": "copy.yaml", "schema": schema})
+    assert create_response.status_code == 410
+    assert "/api/admin/review-schemas" in create_response.json()["detail"]
 
     list_response = client.get("/api/schemas")
     assert list_response.status_code == 200
@@ -78,27 +94,14 @@ def test_schema_api_create_get_validate_update_and_duplicate(tmp_path, monkeypat
 
     updated = {**schema, "fields": {**schema["fields"], "approved": {"type": "boolean"}}}
     update_response = client.put("/api/schemas/invoice.yaml", json={"schema": updated})
-    assert update_response.status_code == 200
-    assert any(field["key"] == "approved" for field in update_response.json()["schema"]["fields"])
+    assert update_response.status_code == 410
+    assert "/api/admin/review-schemas/{template_id}/draft" in update_response.json()["detail"]
 
     duplicate_response = client.post("/api/schemas/invoice.yaml/duplicate", json={"new_name": "invoice_copy.yaml"})
-    assert duplicate_response.status_code == 200
-    assert duplicate_response.json()["schema"]["name"] == "invoice_copy.yaml"
-
-    assert (Path(config.get("schema.directories")[0]) / "invoice_copy.yaml").exists()
-    with connect(config) as conn:
-        events = AuditRepository(conn).list_admin_events()
-    event_types = {event["event_type"] for event in events}
-    assert {
-        "admin_schema_created",
-        "admin_schema_validated",
-        "admin_schema_updated",
-        "admin_schema_duplicated",
-    }.issubset(event_types)
-    update_event = next(event for event in events if event["event_type"] == "admin_schema_updated")
-    update_payload = json_loads(update_event["event_json"])
-    assert update_payload["before"]["schema_name"] == "invoice.yaml"
-    assert update_payload["after"]["field_count"] == 3
+    assert duplicate_response.status_code == 410
+    assert "versioned review-schema template" in duplicate_response.json()["detail"]
+    assert schema_path.exists()
+    assert not (schema_path.parent / "invoice_copy.yaml").exists()
 
 
 def test_schema_api_requires_admin_user(tmp_path, monkeypatch) -> None:
@@ -177,43 +180,16 @@ fields:
     assert response.json()["detail"] == "Schema not found"
 
 
-def test_schema_update_reports_active_review_warning(tmp_path, monkeypatch) -> None:
-    client, config = _client(tmp_path, monkeypatch)
+def test_legacy_schema_update_returns_actionable_versioned_endpoint(tmp_path, monkeypatch) -> None:
+    client, _ = _client(tmp_path, monkeypatch)
     schema = {
         "title": "Invoice",
         "fields": {"supplier": {"type": "string", "required": True}},
     }
-    assert client.post("/api/schemas", json={"name": "invoice.yaml", "schema": schema}).status_code == 200
-
-    pdf_path = tmp_path / "invoice.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4")
-    with connect(config) as conn:
-        created = BatchService(conn).create_ingestion_batch(
-            source="web",
-            file_path=str(pdf_path),
-            original_filename="invoice.pdf",
-        )
-        task_run = TaskRunRepository(conn).create_started(
-            batch_id=created["batch"]["id"],
-            document_id=created["document"]["id"],
-            task_key="review_gate",
-            task_index=1,
-            module_name="standard_step.review.review_gate",
-            class_name="ReviewGateTask",
-        )
-        ReviewRepository(conn).create_review_item(
-            batch_id=created["batch"]["id"],
-            document_id=created["document"]["id"],
-            queue_name="default",
-            reason="low_confidence",
-            scope="low_confidence_fields",
-            created_by_task_run_id=task_run["id"],
-            metadata={"schema_file": "invoice.yaml"},
-        )
 
     response = client.put("/api/schemas/invoice.yaml", json={"schema": schema})
 
-    assert response.status_code == 200
-    warning: dict[str, Any] = response.json()["active_review_warning"]
-    assert warning["active_review_count"] == 1
-    assert "Schema changes may affect active review items" in warning["message"]
+    assert response.status_code == 410
+    assert response.json()["detail"].endswith(
+        "Use /api/admin/review-schemas/{template_id}/draft."
+    )

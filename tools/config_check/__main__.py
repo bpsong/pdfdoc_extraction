@@ -15,13 +15,25 @@ The module exposes the CLI entry point used by the integration tests and packagi
 import argparse
 import logging
 import os
+import sqlite3
 import sys
+import yaml
 from pathlib import Path
 from typing import Optional
 
 from .schema import load_config_schema
 from .validator import ConfigValidator
 from .reporter import ValidationReporter
+from .stored_validator import (
+    StoredSourceValidator,
+    configured_database_path,
+    load_document,
+    open_readonly_database,
+    portable_contract_schema,
+    validate_database_schema,
+    validate_portable_file,
+)
+from .validator import ValidationMessage, ValidationResult
 
 def setup_logging(verbose: bool = False) -> logging.Logger:
     """
@@ -205,6 +217,57 @@ Exit Codes:
         help='Enable security analysis (check for potential security vulnerabilities)'
     )
 
+    validate_parser.add_argument(
+        '--pipeline',
+        metavar='KEY',
+        help='Validate one stored pipeline template by stable key',
+    )
+    validate_parser.add_argument(
+        '--review-schema',
+        metavar='KEY',
+        help='Validate one stored review-schema template by stable key',
+    )
+    validate_parser.add_argument(
+        '--draft',
+        action='store_true',
+        help='Validate the selected stored template draft',
+    )
+    validate_parser.add_argument(
+        '--version',
+        type=int,
+        metavar='N',
+        help='Validate the selected stored template version number',
+    )
+    validate_parser.add_argument(
+        '--all-stored',
+        action='store_true',
+        help='Validate every stored draft/version and enabled binding',
+    )
+
+    validate_file_parser = subparsers.add_parser(
+        'validate-file',
+        help='Validate a runtime or portable YAML/JSON file without importing it',
+    )
+    validate_file_parser.add_argument('path', nargs='?')
+    validate_file_parser.add_argument('--file', dest='file_option')
+    validate_file_parser.add_argument(
+        '--kind',
+        required=True,
+        choices=['runtime', 'pipeline', 'review-schema'],
+    )
+    validate_file_parser.add_argument('--config')
+    validate_file_parser.add_argument(
+        '--format', '-f', choices=['text', 'json'], default='text'
+    )
+    validate_file_parser.add_argument('--strict', '-s', action='store_true')
+    validate_file_parser.add_argument('--base-dir')
+    validate_file_parser.add_argument('--import-checks', action='store_true')
+    validate_file_parser.add_argument('--check-files', action='store_true')
+    validate_file_parser.add_argument(
+        '--performance-analysis', action='store_true'
+    )
+    validate_file_parser.add_argument('--security-analysis', action='store_true')
+
     # Schema subcommand
     schema_parser = subparsers.add_parser(
         'schema',
@@ -226,6 +289,12 @@ Exit Codes:
         choices=['json'],
         default='json',
         help='Output format for schema (only json supported)'
+    )
+    schema_parser.add_argument(
+        '--kind',
+        choices=['runtime', 'pipeline', 'review-schema', 'pipeline-bundle'],
+        default='runtime',
+        help='Contract schema to emit (default: runtime)',
     )
 
     return parser
@@ -268,7 +337,12 @@ def run_validate_command(args, logger: logging.Logger) -> int:
         f"import_checks={args.import_checks}",
         f"check_files={args.check_files}",
         f"performance_analysis={args.performance_analysis}",
-        f"security_analysis={args.security_analysis}"
+        f"security_analysis={args.security_analysis}",
+        f"pipeline={args.pipeline}" if args.pipeline else None,
+        f"review_schema={args.review_schema}" if args.review_schema else None,
+        f"draft={args.draft}",
+        f"version={args.version}" if args.version is not None else None,
+        f"all_stored={args.all_stored}",
     ]
     # Filter out None values and join with spaces for one-line format
     valid_args = [arg for arg in args_summary if arg is not None]
@@ -277,6 +351,11 @@ def run_validate_command(args, logger: logging.Logger) -> int:
     if not config_exists:
         logger.error(f"Configuration file not found: {resolved_config_path}")
         return 64  # Exit code 64: Usage error for unreadable or missing config
+
+    selector_error = _validate_stored_selectors(args)
+    if selector_error:
+        print(f"Error: {selector_error}")
+        return 64
 
     validator = ConfigValidator(
         strict_mode=args.strict,
@@ -287,6 +366,114 @@ def run_validate_command(args, logger: logging.Logger) -> int:
         security_analysis=args.security_analysis,
     )
     validation_result = validator.validate(resolved_config_path)
+
+    try:
+        runtime_config = load_document(Path(resolved_config_path))
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        runtime_config = {}
+        validation_result.errors.append(
+            ValidationMessage(
+                path="config",
+                message=str(exc),
+                code="runtime-config-invalid",
+            )
+        )
+    database_path = configured_database_path(
+        Path(resolved_config_path), runtime_config
+    )
+    stored_requested = bool(
+        args.pipeline or args.review_schema or args.all_stored
+    )
+    if database_path is None and stored_requested:
+        print(
+            "Error: Stored-source validation requires database.path in --config."
+        )
+        return 64
+    if database_path is not None:
+        try:
+            with open_readonly_database(database_path) as conn:
+                schema_result = validate_database_schema(conn)
+                _merge_results(validation_result, schema_result)
+                if schema_result.is_valid:
+                    stored = StoredSourceValidator(
+                        conn, runtime_config=runtime_config
+                    )
+                    if args.pipeline:
+                        stored_result = stored.validate_pipeline(
+                            args.pipeline,
+                            draft=args.draft,
+                            version_number=args.version,
+                        )
+                    elif args.review_schema:
+                        stored_result = stored.validate_review_schema(
+                            args.review_schema,
+                            draft=args.draft,
+                            version_number=args.version,
+                        )
+                    elif args.all_stored:
+                        stored_result = stored.validate_all()
+                    else:
+                        stored_result = stored.validate_default()
+                    _merge_results(validation_result, stored_result)
+                    for legacy_key in ("pipeline", "tasks"):
+                        if legacy_key in runtime_config:
+                            validation_result.warnings.append(
+                                ValidationMessage(
+                                    path=f"deployment_yaml.{legacy_key}",
+                                    message=(
+                                        f"Legacy root {legacy_key} is migration-only "
+                                        "and is not an active runtime definition."
+                                    ),
+                                    code="legacy-runtime-definition-deprecated",
+                                )
+                            )
+                    schema_config = runtime_config.get("schema")
+                    configured_schema_dirs = (
+                        schema_config.get("directories")
+                        if isinstance(schema_config, dict)
+                        else None
+                    )
+                    schema_roots = []
+                    if isinstance(configured_schema_dirs, list):
+                        schema_roots.extend(
+                            Path(item)
+                            if Path(item).is_absolute()
+                            else Path(resolved_config_path).parent / item
+                            for item in configured_schema_dirs
+                            if isinstance(item, str)
+                        )
+                    default_schema_root = (
+                        Path(resolved_config_path).parent / "schemas"
+                    )
+                    if default_schema_root.exists():
+                        schema_roots.append(default_schema_root)
+                    if any(
+                        root.exists()
+                        and any(
+                            path.suffix.lower() in {".yaml", ".yml", ".json"}
+                            for path in root.iterdir()
+                            if path.is_file()
+                        )
+                        for root in schema_roots
+                    ):
+                        validation_result.warnings.append(
+                            ValidationMessage(
+                                path="deployment_yaml.schema.directories",
+                                message=(
+                                    "Filesystem review schemas are migration/import-only "
+                                    "and are not active runtime definitions."
+                                ),
+                                code="legacy-filesystem-schema-deprecated",
+                            )
+                        )
+        except (FileNotFoundError, sqlite3.DatabaseError) as exc:
+            validation_result.errors.append(
+                ValidationMessage(
+                    path="database",
+                    message=str(exc),
+                    code="database-unavailable",
+                )
+            )
 
     if args.base_dir:
         logger.debug(f"Base directory override: {args.base_dir}")
@@ -337,11 +524,103 @@ def run_schema_command(args, logger: logging.Logger) -> int:
 
     from json import dumps
 
-    schema_definition = load_config_schema()
+    schema_definition = portable_contract_schema(args.kind)
     print(dumps(schema_definition, indent=2))
 
     logger.info(f"Generated schema in {args.format} format")
     return 0
+
+
+def _validate_stored_selectors(args) -> str | None:
+    """Return a usage error for incompatible stored-source flags."""
+    selected = int(bool(args.pipeline)) + int(bool(args.review_schema))
+    if args.all_stored and (
+        selected or args.draft or args.version is not None
+    ):
+        return "--all-stored cannot be combined with a template selector."
+    if selected > 1:
+        return "--pipeline and --review-schema are mutually exclusive."
+    if selected == 0 and (args.draft or args.version is not None):
+        return "--draft/--version requires --pipeline or --review-schema."
+    if selected == 1 and args.draft == (args.version is not None):
+        return "A stored template selector requires exactly one of --draft or --version."
+    if args.version is not None and args.version < 1:
+        return "--version must be a positive integer."
+    return None
+
+
+def _merge_results(target: ValidationResult, source: ValidationResult) -> None:
+    target.errors.extend(source.errors)
+    target.warnings.extend(source.warnings)
+
+
+def run_validate_file_command(args, logger: logging.Logger) -> int:
+    """Validate a standalone file without importing or writing state."""
+    raw_path = args.file_option or args.path
+    if not raw_path or (args.file_option and args.path):
+        print("Error: validate-file requires exactly one path or --file.")
+        return 64
+    path = Path(raw_path).resolve()
+    if not path.exists() or not path.is_file():
+        print(f"Error: Validation file not found: {path}")
+        return 64
+    runtime_config: dict = {}
+    conn = None
+    try:
+        if args.kind == "runtime":
+            validator = ConfigValidator(
+                strict_mode=args.strict,
+                base_dir=args.base_dir or path.parent,
+                import_checks=args.import_checks,
+                check_files=args.check_files,
+                performance_analysis=args.performance_analysis,
+                security_analysis=args.security_analysis,
+            )
+            result = validator.validate(path)
+        else:
+            context = None
+            if args.config:
+                config_path = Path(args.config).resolve()
+                if not config_path.exists():
+                    print(f"Error: Configuration file not found: {config_path}")
+                    return 64
+                runtime_config = load_document(config_path)
+                database_path = configured_database_path(
+                    config_path, runtime_config
+                )
+                if database_path is None:
+                    print("Error: --config does not define database.path.")
+                    return 64
+                context = open_readonly_database(database_path)
+                conn = context.__enter__()
+                schema_result = validate_database_schema(conn)
+                if not schema_result.is_valid:
+                    result = schema_result
+                else:
+                    result = validate_portable_file(
+                        path,
+                        kind=args.kind,
+                        runtime_config=runtime_config,
+                        conn=conn,
+                    )
+            else:
+                result = validate_portable_file(
+                    path,
+                    kind=args.kind,
+                    runtime_config=runtime_config,
+                )
+        reporter = ValidationReporter(
+            output_format=args.format, show_suggestions=True
+        )
+        reporter.add_validation_result(result, config_path=str(path))
+        reporter.print_report()
+        return reporter.determine_exit_code()
+    except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+        logger.error("Validation failed: %s", exc)
+        return 1
+    finally:
+        if 'context' in locals() and context is not None:
+            context.__exit__(None, None, None)
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -386,6 +665,8 @@ def main(argv: Optional[list] = None) -> int:
     # Execute appropriate command
     if args.command == 'validate':
         return run_validate_command(args, logger)
+    elif args.command == 'validate-file':
+        return run_validate_file_command(args, logger)
     elif args.command == 'schema':
         return run_schema_command(args, logger)
     else:
