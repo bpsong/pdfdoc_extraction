@@ -156,7 +156,8 @@ def test_workflow_handles_future_results_and_housekeeping_failure(tmp_path, monk
     )
     monkeypatch.setattr(loader, "_import_task_class", lambda *args: SuccessfulTask)
     monkeypatch.setattr("modules.workflow_loader.CleanupTask", SuccessfulCleanup)
-    monkeypatch.setattr(loader, "_finalize_leaf", Mock())
+    finalize_leaf = Mock()
+    monkeypatch.setattr(loader, "_finalize_leaf", finalize_leaf)
 
     flow = loader.load_workflow()
     assert flow is not None
@@ -164,7 +165,7 @@ def test_workflow_handles_future_results_and_housekeeping_failure(tmp_path, monk
 
     assert result["ran"] is True
     assert result["cleaned"] is True
-    loader._finalize_leaf.assert_called_once_with(result)
+    finalize_leaf.assert_called_once_with(result)
 
     class FailingCleanup(SuccessfulCleanup):
         def run(self, context):

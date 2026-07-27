@@ -1,17 +1,21 @@
-# Future Design: Multiple Pipeline Templates
+# Implemented Direction: Multiple Pipeline Templates
 
 ## Purpose
 
-Define the future implementation direction for supporting multiple published
-pipeline templates. Administrators will configure pipelines for different
+Record the product direction now implemented for supporting multiple published
+pipeline templates. Administrators configure pipelines for different
 document-processing use cases, and the application will select a complete
 pipeline when a document enters the system.
 
-This is a future design proposal, not current runtime behavior.
+This baseline is current runtime behavior. The implementation-ready design and
+completed work are recorded in
+[Design: Multiple Versioned Pipeline Templates](design-multiple-pipeline-templates.md)
+and [its implementation task plan](archive/tasks-multiple-versioned-pipeline-templates.md).
+Classification-driven mixed-document routing remains deferred.
 
 ## Decision
 
-The first implementation will use explicit ingestion-time pipeline selection,
+The implemented release uses explicit ingestion-time pipeline selection,
 not document classification or dynamic routing between downstream tasks.
 
 - For browser uploads, the operator selects a published pipeline before
@@ -276,9 +280,9 @@ detect at least:
 
 Publishing one template must not overwrite or change another template.
 
-## Migration Direction
+## Migration Behavior
 
-The existing single configured pipeline becomes the first template and its
+The legacy single configured pipeline can be imported as the first template and its
 initial published version. Existing behavior can remain compatible by treating
 that migrated template as the configured ingress binding for the current watch
 folder.
@@ -287,7 +291,7 @@ Migration must not rely on the mutable current configuration when resuming
 documents already in review or processing. The implementation plan must define
 how pre-migration runs retain or reconstruct a safe executable definition.
 
-## Non-Goals for the First Release
+## Deferred Scope
 
 - Automatic document-type classification for pipeline selection.
 - Dynamic post-split routing to different pipelines.
@@ -334,6 +338,10 @@ which depends on the template and immutable-version model defined here.
 
 ## Related Future Design
 
+- [Design: Multiple Versioned Pipeline Templates](design-multiple-pipeline-templates.md)
+  is the authoritative detailed design for the implemented baseline.
+- [Implementation task plan](archive/tasks-multiple-versioned-pipeline-templates.md)
+  contains phase-by-phase verification evidence.
 - [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md)
   extends this model with a split-and-route pipeline after multiple versioned
   pipeline templates are available.

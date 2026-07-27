@@ -2,6 +2,40 @@
 
 This guide summarizes the most common validation failures and provides corrective actions. Each section includes the typical error signature printed by the CLI and concrete steps to resolve the issue.
 
+## Stored Configuration And Database Findings
+
+The default `validate` command reads `database.path` in read-only mode and
+checks active published pipeline versions plus watch-folder bindings. It never
+runs migrations or repairs data.
+
+- `database-unavailable`: confirm the configured SQLite path exists and the
+  account can read it.
+- `database-schema-unavailable`, `database-schema-outdated`, or
+  `database-schema-incomplete`: stop using stored selectors, back up the
+  database, and start the application with approved migrations enabled. Do not
+  ask the validator to migrate production state.
+- `stored-active-pipeline-missing`: publish and activate at least one valid
+  pipeline and bind every enabled ingress path.
+- `stored-pipeline-not-found` or `stored-review-schema-not-found`: check the
+  stable key and `--draft`/`--version` selector.
+- A stored content-hash mismatch indicates corruption or unsupported direct
+  database modification. Restore a verified backup; do not edit an immutable
+  row.
+- Dependency or binding findings mean an exact referenced version is missing,
+  ineligible, or mismatched with its template. Correct the draft/binding
+  through the administrator UI and publish where required.
+
+Use `--all-stored --format json` to collect the full set. JSON output and
+redacted diffs must not contain resolved secrets. Exit code `0` is clean, `1`
+has errors, `2` is warning-only, and `64` indicates bad command usage.
+
+## Portable Definition Findings
+
+Use `validate-file --file PATH --kind pipeline` or `--kind review-schema`
+before import. A portable file is not active configuration: import updates a
+draft only, and an explicit publish is still required. Stable keys and version
+metadata are portable; database UUIDs and resolved secret values are not.
+
 ## Missing Directories Or Files
 
 **Symptom**
@@ -142,7 +176,9 @@ custom_steps:
 - Keep only one table field in the extraction task. A field is treated as a table when `is_table: true` or its type is `List[Any]`, including `Optional[List[Any]]`.
 - Change additional collection fields to a typed scalar list such as `List[str]`, or redesign the extraction schema so the single table contains the required structured rows.
 - Do not add another extraction task as a workaround. The active pipeline permits at most one extraction task, and both violations are blocking errors.
-- The administrator Pipeline editor and publish endpoint use the same validation. A rejected publish does not write the active `config.yaml`.
+- The administrator Pipeline editor and publish endpoint use the same
+  validation. A rejected publish creates no immutable SQLite version and
+  leaves the editable draft unchanged.
 
 ## Structured Object Extraction Fields
 
@@ -491,7 +527,8 @@ custom_steps:
 
 **Fixes**
 - **Missing pandas (`rules-csv-pandas-missing`)**:
-  - Install pandas: `C:\Python313\python.exe -m pip install pandas`
+  - Install pandas through the project environment:
+    `.\.venv\Scripts\python.exe -m pip install pandas`
   - Verify pandas is available in the current Python environment
   - Check that the correct Python environment is being used
 

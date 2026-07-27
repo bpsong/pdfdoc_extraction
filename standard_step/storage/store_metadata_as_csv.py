@@ -196,16 +196,20 @@ class StoreMetadataAsCsv(BaseTask):
         try:
             self.validate_required_fields(context)
             unique_id = str(context.get("id", "unknown"))
-            data = context.get("data", {})
-            self.logger.debug(f"Starting CSV task for {unique_id}, data keys: {list(data.keys()) if data else 'None'}")
-            if data is None:
+            data_value = context.get("data", {})
+            self.logger.debug(
+                f"Starting CSV task for {unique_id}, "
+                f"data keys: {list(data_value.keys()) if isinstance(data_value, dict) else 'None'}"
+            )
+            if data_value is None:
                 self.logger.warning("No extracted data found for %s. Skipping CSV storage.", unique_id)
                 return context
 
-            if data is not None and not isinstance(data, dict):
+            if not isinstance(data_value, dict):
                 raise TaskError("Extracted data must be a dict for CSV storage (v2).")
 
-            if isinstance(data, dict) and not data:  # Empty dict
+            data: Dict[str, Any] = data_value
+            if not data:  # Empty dict
                 self.logger.warning(f"Empty data dict found for {unique_id}. Creating minimal CSV file.")
                 # Handle empty dict case by creating a minimal row
                 data = {"_message": "No data extracted"}
@@ -227,16 +231,15 @@ class StoreMetadataAsCsv(BaseTask):
             )
             # Prepare format mapping with preprocessing and sanitization for consistency
             format_map: Dict[str, Any] = {}
-            if isinstance(data, dict):
-                # Use the same preprocessing and sanitization as JSON storage for consistency.
-                format_map = {
-                    k: sanitize_filename(preprocess_filename_value(v))
-                    if not isinstance(v, list)
-                    else sanitize_filename(
-                        ",".join(map(preprocess_filename_value, v))
-                    )
-                    for k, v in data.items()
-                }
+            # Use the same preprocessing and sanitization as JSON storage for consistency.
+            format_map = {
+                k: sanitize_filename(preprocess_filename_value(v))
+                if not isinstance(v, list)
+                else sanitize_filename(
+                    ",".join(map(preprocess_filename_value, v))
+                )
+                for k, v in data.items()
+            }
             # Add the unique_id to format_map for fallback templates
             format_map["id"] = unique_id
             try:
@@ -257,7 +260,7 @@ class StoreMetadataAsCsv(BaseTask):
             headers: List[str] = []
 
             # Validate table field structure
-            table_items = None
+            table_items: List[Dict[str, Any]] | None = None
             if table_field:
                 table_value = data.get(table_field)
                 if not isinstance(table_value, list):
@@ -313,21 +316,20 @@ class StoreMetadataAsCsv(BaseTask):
                 # table_items is already validated above
                 # scalar top-level fields are those not equal to table_field and not lists-of-dicts
                 scalar_fields: List[str] = []
-                if isinstance(data, dict):
-                    for k, v in data.items():
-                        if k == table_field:
-                            continue
-                        # treat list-of-primitives as scalar to be repeated
-                        if isinstance(v, list) and v and all(not isinstance(it, dict) for it in v):
-                            scalar_fields.append(k)
-                        elif isinstance(v, dict):
-                            # nested dict as scalar: stringify and repeat
-                            scalar_fields.append(k)
-                        elif isinstance(v, list) and not v:
-                            # empty list -> include
-                            scalar_fields.append(k)
-                        else:
-                            scalar_fields.append(k)
+                for k, v in data.items():
+                    if k == table_field:
+                        continue
+                    # treat list-of-primitives as scalar to be repeated
+                    if isinstance(v, list) and v and all(not isinstance(it, dict) for it in v):
+                        scalar_fields.append(k)
+                    elif isinstance(v, dict):
+                        # nested dict as scalar: stringify and repeat
+                        scalar_fields.append(k)
+                    elif isinstance(v, list) and not v:
+                        # empty list -> include
+                        scalar_fields.append(k)
+                    else:
+                        scalar_fields.append(k)
 
                 # item fields: union of keys in all items (preserve order from first item)
                 item_fields_ordered: List[str] = []

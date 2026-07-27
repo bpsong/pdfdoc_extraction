@@ -1,13 +1,16 @@
 # Config Check CLI Tool
 
-A Windows-friendly command-line utility that validates configuration YAML files for the PDF document processing platform. The validator runs the same structural, path, parameter, and dependency checks used by the main service so administrators can catch mistakes before jobs execute.
+A Windows-friendly command-line utility that validates deployment YAML,
+SQLite-backed pipeline/review-schema drafts and immutable versions, ingress
+bindings, and portable YAML/JSON definitions. The validator runs the same
+structural, path, parameter, and dependency checks used by the service.
 
 ## Installation
 
-1. Ensure Python 3.10+ is available (the project tooling uses `C:\Python313\python.exe` by default).
+1. Use the repository Python 3.13 virtual environment.
 2. Install the tool and its dependencies:
    ```powershell
-   C:\Python313\python.exe -m pip install -e .
+   .\.venv\Scripts\python.exe -m pip install -e .
    ```
    The editable install registers a `config-check` console script and makes the `tools.config_check` package importable.
 
@@ -28,11 +31,47 @@ config-check validate --config ..\configs\staging.yaml --base-dir ..\configs --s
 # Perform import checks to ensure task modules/classes resolve
 config-check validate --config .\config\tasks.yaml --import-checks
 
+# Validate one stored pipeline draft or immutable version
+config-check validate --config .\config.yaml --pipeline invoice --draft
+config-check validate --config .\config.yaml --pipeline invoice --version 3
+
+# Validate all stored drafts, versions, schema definitions, and bindings
+config-check validate --config .\config.yaml --all-stored
+
+# Validate a portable file without importing it
+config-check validate-file --file .\exports\invoice-pipeline.yaml --kind pipeline
+config-check validate-file --file .\exports\invoice-schema.yaml --kind review-schema
+
 # Print the JSON schema describing the configuration contract
 config-check schema --format json
 ```
 
-All commands are also available by invoking the module directly (`C:\Python313\python.exe -m tools.config_check ...`).
+All commands are also available through
+`.\.venv\Scripts\python.exe -m tools.config_check ...`.
+
+## Configuration Sources And Read-Only Behavior
+
+`config.yaml` remains authoritative for deployment concerns such as
+`database.path`, folders, web settings, logging, and secret aliases. SQLite is
+authoritative for pipeline templates/drafts/versions, review-schema
+templates/drafts/versions, exact dependencies, and watch-folder bindings.
+Legacy top-level YAML `tasks`, `pipeline`, and filesystem `schema_file`
+definitions are accepted for validation and migration only.
+
+When `database.path` is available, `validate` opens SQLite with `mode=ro` and
+`PRAGMA query_only=ON`; validation never migrates or writes the database.
+Without a selector, it validates the database-backed default set (active
+pipeline versions and ingress bindings). Select stored content with:
+
+- `--pipeline KEY` or `--review-schema KEY`;
+- exactly one of `--draft` or `--version N` for a targeted selector; or
+- `--all-stored` for every stored draft, version, dependency, and binding.
+
+`validate-file` checks a portable definition without importing or publishing
+it. Required `--kind` values are `runtime`, `pipeline`, or `review-schema`.
+The `schema` command can print the `runtime`, `pipeline`, `review-schema`, or
+`pipeline-bundle` JSON contract. Import/export itself is performed through the
+administrator UI/API, not this CLI.
 
 ## UI Validation
 
@@ -57,7 +96,9 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 - Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
 - Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including typed `object_fields`, table `item_fields`, csv_match clause bounds (1-5), and required column/from_context fields.
 - Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and reserved internal task keys.
-- UI/API validation adds active workflow business rules for split, review-gate, task approval, and schema references before administrators publish pipeline changes.
+- UI/API and stored-definition validation add active workflow business rules
+  for split, review gate, task approval, exact schema-version dependencies,
+  immutable version hashes, and ingress bindings.
 - **New**: Enhanced schema validation for web server and watch folder configuration fields.
 - **New**: Import validation to verify task modules and classes are importable.
 - **New**: Comprehensive rules task validation for CSV file processing and field references.
@@ -110,7 +151,9 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - `confidence_threshold`, when provided, must be a number from 0 through 1.
 - `resume_policy`, when provided, currently supports only `next_task`.
 - `split_confidence_levels_requiring_review`, when provided, must be a list containing only `high`, `medium`, or `low`.
-- `schema_file`, when provided, must resolve to a configured schema file, and that schema must pass schema validation.
+- Stored pipeline drafts use `schema_version_id`, which must identify an exact
+  published version belonging to an eligible review-schema template.
+- `schema_file` is validated only on legacy YAML/file migration surfaces.
 
 ### Split Rules
 
@@ -865,13 +908,13 @@ For detailed troubleshooting of all validation issues including rules task valid
 Run the focused test suite before committing changes:
 
 ```powershell
-C:\Python313\python.exe -m pytest test\tools\config_check -q
+.\.venv\Scripts\python.exe -m pytest test\tools\config_check -q
 ```
 
 A tagged performance test verifies the validator completes within 300 ms on representative configs:
 
 ```powershell
-C:\Python313\python.exe -m pytest test\tools\config_check -k performance -q
+.\.venv\Scripts\python.exe -m pytest test\tools\config_check -k performance -q
 ```
 
 When packaging updates are made, `pyproject.toml` drives builds via setuptools. The `config-check` entry point is defined there so CI/CD pipelines can install and execute the tool with `pip install .`.

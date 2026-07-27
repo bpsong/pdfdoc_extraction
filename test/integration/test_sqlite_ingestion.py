@@ -81,7 +81,9 @@ def test_watch_folder_ingestion_creates_matching_sqlite_records(tmp_path):
     workflow = FakeWorkflowManager()
     processor = FileProcessor(config, lambda func, *args, **kwargs: func(*args, **kwargs), workflow)
 
-    sample = Path(config.get("watch_folder.dir")) / "watched.pdf"
+    watch_dir = config.get("watch_folder.dir")
+    assert isinstance(watch_dir, str)
+    sample = Path(watch_dir) / "watched.pdf"
     sample.write_bytes(b"%PDF-1.7")
     monitor = WatchFolderMonitor(config, processor.process_file, None)
     monitor._process_existing_files()
@@ -103,7 +105,9 @@ def test_retried_watch_processing_reuses_sqlite_ingestion_state(tmp_path):
     initialize_database(config)
     workflow = RetryWorkflowManager()
     processor = FileProcessor(config, lambda func, *args, **kwargs: func(*args, **kwargs), workflow)
-    source = Path(config.get("watch_folder.processing_dir")) / "document.pdf"
+    processing_dir = config.get("watch_folder.processing_dir")
+    assert isinstance(processing_dir, str)
+    source = Path(processing_dir) / "document.pdf"
     source.write_bytes(b"%PDF-1.7")
 
     first = processor.process_file(str(source), "document", "watch_folder", "invoice.pdf")

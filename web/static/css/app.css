@@ -814,7 +814,8 @@
         "guide guide guide"
         "active draft editor"
         "yaml yaml validation"
-        "yaml yaml diff";
+        "yaml yaml diff"
+        "bindings bindings bindings";
     gap: 1rem;
     align-items: start;
 }
@@ -849,6 +850,10 @@
 
 .pipeline-diff-panel {
     grid-area: diff;
+}
+
+.pipeline-bindings-panel {
+    grid-area: bindings;
 }
 
 .pipeline-active-list,
@@ -2069,7 +2074,8 @@
             "active draft"
             "editor editor"
             "validation diff"
-            "yaml yaml";
+            "yaml yaml"
+            "bindings bindings";
     }
 }
 
@@ -2198,11 +2204,28 @@
             "editor"
             "validation"
             "diff"
+            "bindings"
             "yaml";
     }
 
     .pipeline-form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .pipeline-config-workspace .form-control,
+    .pipeline-config-workspace .input,
+    .pipeline-config-workspace .select,
+    .pipeline-config-workspace .textarea,
+    .pipeline-config-workspace fieldset {
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .pipeline-config-workspace .font-mono,
+    .pipeline-config-workspace pre {
+        overflow-wrap: anywhere;
+        word-break: break-word;
     }
 
     .admin-panel-header {

@@ -1,5 +1,9 @@
 """API coverage for SQLite-backed versioned review schemas."""
 
+from typing import cast
+
+from fastapi import FastAPI
+
 import modules.api_router as api_router
 from modules.db.connection import connect
 from modules.db.repositories import UserRepository
@@ -12,7 +16,9 @@ def _admin_client(tmp_path, monkeypatch):
         UserRepository(conn).initialize(
             {"admin": "test-only", "operator": "test-only"}
         )
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
+    cast(FastAPI, client.app).dependency_overrides[
+        api_router.get_current_user
+    ] = lambda: "admin"
     return client, config
 
 

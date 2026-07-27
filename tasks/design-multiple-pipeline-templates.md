@@ -6,7 +6,7 @@
 | --- | --- |
 | Purpose | Implementation-ready design for multiple named, versioned processing pipelines and their review schemas |
 | Audience | Engineers, architects, administrators, and test owners |
-| Status | Proposed |
+| Status | Implemented through Phase 15; maintained as the authoritative design |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, `tools/config_check/`, and `web/` |
 | Prerequisite | Current SQLite-backed batch, document, task-run, review, split, and audit model |
 | Source direction | [Future Design: Multiple Pipeline Templates](future-multi-document-routing.md) |
@@ -14,9 +14,17 @@
 
 ## Summary
 
+Implementation is tracked in
+[Multiple Versioned Pipeline Templates Implementation Tasks](archive/tasks-multiple-versioned-pipeline-templates.md).
+The architecture and operator behavior are maintained in
+[Design Architecture](../docs/design_architecture.md),
+[User Guide](../docs/user_guide.md), and
+[Review Schema Administrator Guide](../docs/review_schema_admin_guide.md).
+
 The application currently loads one mutable `pipeline` and `tasks` definition
 from runtime YAML. This design replaces that global execution definition with
-multiple named pipeline templates whose published versions are immutable and
+The implemented application supports multiple named pipeline templates whose
+published versions are immutable and
 stored in SQLite. Review-form schemas follow the same model: the Review Forms
 UI edits a schema draft in SQLite, publication creates an immutable schema
 version, and a published pipeline references an exact schema version.

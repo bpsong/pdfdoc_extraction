@@ -98,7 +98,8 @@ Keep this list updated throughout implementation.
 
 - `tasks/design-multiple-pipeline-templates.md` — authoritative behavior and
   target architecture.
-- `tasks/tasks-multiple-versioned-pipeline-templates.md` — this checklist.
+- `tasks/archive/tasks-multiple-versioned-pipeline-templates.md` — this
+  completed checklist.
 - `tasks/future-multi-document-routing.md` — original multiple-template
   direction.
 - `tasks/future-mixed-document-routing.md` — explicitly deferred routing
@@ -115,8 +116,8 @@ Keep this list updated throughout implementation.
   cross-repository ingestion and split operations.
 - `modules/services/schema_service.py` — transition from filesystem runtime
   schemas to stored draft/version access and import/export support.
-- `modules/services/pipeline_config_service.py` — current single-pipeline
-  service to replace with template-scoped behavior.
+- `modules/services/pipeline_config_service.py` — legacy compatibility service;
+  new administration uses template-scoped version services.
 - `modules/services/pipeline_validation_service.py` — shared explicit-source
   validation.
 - `modules/services/workflow_state_service.py` — pinned task-run attribution.
@@ -148,8 +149,8 @@ Keep this list updated throughout implementation.
 - `modules/workflow_manager.py` — pinned root/child workflow orchestration.
 - `modules/resume_manager.py` — pinned review resume.
 - `modules/file_processor.py` — assignment-aware ingestion handoff.
-- `modules/watch_folder_monitor.py` — current single-folder implementation to
-  adapt or replace.
+- `modules/watch_folder_monitor.py` — one binding-scoped monitor coordinated
+  by `WatchFolderCoordinator`.
 - `main.py` — migration ordering, coordinator startup, and runtime composition.
 - `standard_step/split/llamacloud_split.py` — atomic inherited assignment for
   split children and artifacts.
@@ -179,7 +180,8 @@ Keep this list updated throughout implementation.
 - `docs/review_schema_admin_guide.md` — versioned Review Forms workflow.
 - `docs/config_check_troubleshooting.md` — stored-source and portable-file
   findings.
-- `tools/config_check/README.md` — future CLI commands and compatibility.
+- `tools/config_check/README.md` — implemented stored-source/portable CLI
+  commands, read-only guarantees, and compatibility.
 - `tasks/standard_task_creation_guidelines.md` — shared task contract changes
   only where the implementation requires them.
 
@@ -1187,65 +1189,65 @@ automated testing complete.
 **Exit criterion:** Production UI flows are visually and interactively verified
 at required viewports with no secret/customer data in evidence.
 
-- [ ] **14.0 Prepare safe visual fixtures**
-  - [ ] 14.1 Use temporary database/configuration, synthetic pipeline/schema
+- [x] **14.0 Prepare safe visual fixtures**
+  - [x] 14.1 Use temporary database/configuration, synthetic pipeline/schema
     names, fake secret aliases, and synthetic PDFs.
-  - [ ] 14.2 Seed empty, one-version, multi-version, inactive, archived,
+  - [x] 14.2 Seed empty, one-version, multi-version, inactive, archived,
     validation-error, stale-draft, long-pipeline, split, review, failed, and
     migration-derived states.
-  - [ ] 14.3 Confirm screenshots cannot include real credentials, customer
+  - [x] 14.3 Confirm screenshots cannot include real credentials, customer
     files, local sensitive paths, or raw extraction output.
 
-- [ ] **14.4 Verify Review Forms visually**
-  - [ ] 14.5 Capture/list-check empty, populated, draft-edit, validation,
+- [x] **14.4 Verify Review Forms visually**
+  - [x] 14.5 Capture/list-check empty, populated, draft-edit, validation,
     publish, version-history, import/export, dependency-usage, conflict, and
     archived states.
-  - [ ] 14.6 Verify long labels, nested fields, enums, arrays, objects, error
+  - [x] 14.6 Verify long labels, nested fields, enums, arrays, objects, error
     summaries, focus, keyboard flow, and responsive layouts.
 
-- [ ] **14.7 Verify Pipeline administration visually**
-  - [ ] 14.8 Capture/list-check template selection, metadata, task ordering,
+- [x] **14.7 Verify Pipeline administration visually**
+  - [x] 14.8 Capture/list-check template selection, metadata, task ordering,
     exact schema version selector, validation, redacted preview/diff,
     publication, history, clone, lifecycle, and bindings.
-  - [ ] 14.9 Verify stale conflicts, unavailable schema versions, long
+  - [x] 14.9 Verify stale conflicts, unavailable schema versions, long
     pipelines, path findings, empty states, loading, and server errors.
 
-- [ ] **14.10 Verify upload and processing visually**
-  - [ ] 14.11 Verify no implicit pipeline choice, guidance/version display,
+- [x] **14.10 Verify upload and processing visually**
+  - [x] 14.11 Verify no implicit pipeline choice, guidance/version display,
     file validation, button eligibility, stale selection recovery, and upload
     success.
-  - [ ] 14.12 Verify processing identity, dynamic steps, split parent/children,
+  - [x] 14.12 Verify processing identity, dynamic steps, split parent/children,
     paused review, failed/completed states, and migration provenance.
-  - [ ] 14.13 Verify desktop, narrow desktop/tablet, and mobile layouts; include
+  - [x] 14.13 Verify desktop, narrow desktop/tablet, and mobile layouts; include
     long pipeline labels and horizontal/vertical overflow.
 
-- [ ] **14.14 Verify accessibility and security presentation**
-  - [ ] 14.15 Check keyboard-only completion of primary actions, visible focus,
+- [x] **14.14 Verify accessibility and security presentation**
+  - [x] 14.15 Check keyboard-only completion of primary actions, visible focus,
     labels, headings, landmarks, modal focus/escape, and live error messaging.
-  - [ ] 14.16 Check text contrast, non-color status cues, zoom/reflow, and
+  - [x] 14.16 Check text contrast, non-color status cues, zoom/reflow, and
     reduced-motion behavior where used.
-  - [ ] 14.17 Inspect DOM/network/screenshot evidence for secret values,
+  - [x] 14.17 Inspect DOM/network/screenshot evidence for secret values,
     unescaped content, admin data on operator pages, and unsafe PDF framing.
 
-- [ ] **14.18 Run browser visual tests**
-  - [ ] 14.19 Install Playwright Chromium only if the environment reports it
+- [x] **14.18 Run browser visual tests**
+  - [x] 14.19 Install Playwright Chromium only if the environment reports it
     missing:
 
     ```powershell
     .\.venv\Scripts\python.exe -m playwright install chromium
     ```
 
-  - [ ] 14.20 Run:
+  - [x] 14.20 Run:
 
     ```powershell
     .\.venv\Scripts\python.exe -m pytest -v test\visual
     ```
 
-  - [ ] 14.21 Review every captured screenshot at full resolution; passing
+  - [x] 14.21 Review every captured screenshot at full resolution; passing
     pixel/DOM assertions alone is not sufficient.
-  - [ ] 14.22 Fix visual defects, rerun affected unit/integration tests, rebuild
+  - [x] 14.22 Fix visual defects, rerun affected unit/integration tests, rebuild
     CSS if needed, then rerun the complete visual suite.
-  - [ ] 14.23 Record viewports, scenarios, screenshots, and results under
+  - [x] 14.23 Record viewports, scenarios, screenshots, and results under
     **Implementation Notes**.
 
 ---
@@ -1258,78 +1260,78 @@ at required viewports with no secret/customer data in evidence.
 runtime instructions are carefully corrected without removing still-relevant
 content, the diff is clean, and every requirement is evidenced.
 
-- [ ] **15.0 Update architecture documentation narrowly**
-  - [ ] 15.1 Update `docs/design_architecture.md` sections for SQLite
+- [x] **15.0 Update architecture documentation narrowly**
+  - [x] 15.1 Update `docs/design_architecture.md` sections for SQLite
     configuration authority, versioned schema/pipeline entities, ingestion,
     execution pinning, resume, watch coordinator, and CLI validation.
-  - [ ] 15.2 Preserve unrelated architecture, artifact, security, review,
+  - [x] 15.2 Preserve unrelated architecture, artifact, security, review,
     split, and compatibility content.
-  - [ ] 15.3 Update document verification date/revision only according to the
+  - [x] 15.3 Update document verification date/revision only according to the
     repository's established convention.
 
-- [ ] **15.4 Update administrator/operator documentation**
-  - [ ] 15.5 Update `docs/user_guide.md` for schema publish-before-use,
+- [x] **15.4 Update administrator/operator documentation**
+  - [x] 15.5 Update `docs/user_guide.md` for schema publish-before-use,
     template lifecycle, upload selection, bindings, version display,
     migration, and recovery limitations.
-  - [ ] 15.6 Update `docs/review_schema_admin_guide.md` for SQLite drafts/
+  - [x] 15.6 Update `docs/review_schema_admin_guide.md` for SQLite drafts/
     versions, import/export, dependencies, and exact-version pipeline
     selection.
-  - [ ] 15.7 Retain still-valid field type, validation, review correction,
+  - [x] 15.7 Retain still-valid field type, validation, review correction,
     security, and troubleshooting guidance.
-  - [ ] 15.8 Clearly label any remaining legacy YAML/file instructions as
+  - [x] 15.8 Clearly label any remaining legacy YAML/file instructions as
     migration/import-only rather than deleting useful examples.
 
-- [ ] **15.9 Update CLI and operator documentation**
-  - [ ] 15.10 Update `tools/config_check/README.md` with stored-source
+- [x] **15.9 Update CLI and operator documentation**
+  - [x] 15.10 Update `tools/config_check/README.md` with stored-source
     selectors, default DB-backed behavior, `validate-file`, portable bundles,
     flags, exit codes, examples, and read-only guarantees.
-  - [ ] 15.11 Update `docs/config_check_troubleshooting.md` only for new
+  - [x] 15.11 Update `docs/config_check_troubleshooting.md` only for new
     source, migration, dependency, database-version, and redaction findings.
-  - [ ] 15.12 Update packaged/help examples and error-code references that are
+  - [x] 15.12 Update packaged/help examples and error-code references that are
     now inaccurate.
 
-- [ ] **15.13 Update task standards only where behavior changed**
-  - [ ] 15.14 Review `tasks/standard_task_creation_guidelines.md`.
-  - [ ] 15.15 Add narrowly scoped guidance for immutable definition injection,
+- [x] **15.13 Update task standards only where behavior changed**
+  - [x] 15.14 Review `tasks/standard_task_creation_guidelines.md`.
+  - [x] 15.15 Add narrowly scoped guidance for immutable definition injection,
     `pipeline_version_id`, exact review-schema dependencies, and prohibition
     on task-local global config/schema reload only if implementation changed
     those shared contracts.
-  - [ ] 15.16 Do not rewrite unrelated task creation guidance.
+  - [x] 15.16 Do not rewrite unrelated task creation guidance.
 
-- [ ] **15.17 Reconcile design and future documents**
-  - [ ] 15.18 Update the design document's status and any implementation
+- [x] **15.17 Reconcile design and future documents**
+  - [x] 15.18 Update the design document's status and any implementation
     details that legitimately changed, without weakening acceptance criteria.
-  - [ ] 15.19 Add cross-links between design, this completed plan, maintained
+  - [x] 15.19 Add cross-links between design, this completed plan, maintained
     docs, and the deferred mixed-document routing design.
-  - [ ] 15.20 Keep mixed-document routing, `workflow_runs`, classification,
+  - [x] 15.20 Keep mixed-document routing, `workflow_runs`, classification,
     and graph execution explicitly deferred.
-  - [ ] 15.21 Move/archive this task plan only under the repository's normal
+  - [x] 15.21 Move/archive this task plan only under the repository's normal
     completed-plan convention and only after every checkbox is complete.
 
-- [ ] **15.22 Perform final diff and content review**
-  - [ ] 15.23 Update **Relevant Files** with every created/materially changed
+- [x] **15.22 Perform final diff and content review**
+  - [x] 15.23 Update **Relevant Files** with every created/materially changed
     file and a concise purpose.
-  - [ ] 15.24 Review `git diff --check`, `git status --short`, and the full diff
+  - [x] 15.24 Review `git diff --check`, `git status --short`, and the full diff
     for accidental edits, generated runtime data, databases, PDFs, logs,
     credentials, customer content, and unrelated formatting.
-  - [ ] 15.25 Search changed source, tests, docs, API fixtures, and screenshots
+  - [x] 15.25 Search changed source, tests, docs, API fixtures, and screenshots
     for secret sentinels and legacy runtime `schema_file`/global pipeline
     fallbacks.
-  - [ ] 15.26 Verify no implementation-only behavior exists in
+  - [x] 15.26 Verify no implementation-only behavior exists in
     `pipeline_visual_editor_prototype/`.
 
-- [ ] **15.27 Perform requirement-by-requirement completion audit**
-  - [ ] 15.28 Map every design heading and acceptance criterion to checked
+- [x] **15.27 Perform requirement-by-requirement completion audit**
+  - [x] 15.28 Map every design heading and acceptance criterion to checked
     tasks and authoritative evidence.
-  - [ ] 15.29 Confirm every implementation phase unit-test command passed.
-  - [ ] 15.30 Confirm Phase 13 focused/full suites and Phase 14 visual suite
+  - [x] 15.29 Confirm every implementation phase unit-test command passed.
+  - [x] 15.30 Confirm Phase 13 focused/full suites and Phase 14 visual suite
     passed after the final code/CSS change.
-  - [ ] 15.31 Confirm migration rollback/idempotency, authorization/CSRF,
+  - [x] 15.31 Confirm migration rollback/idempotency, authorization/CSRF,
     secret redaction, assignment immutability, exact schema dependency, split,
     review resume, fan-in, CLI read-only behavior, and documentation evidence.
-  - [ ] 15.32 Treat missing, indirect, stale, or partial evidence as incomplete
+  - [x] 15.32 Treat missing, indirect, stale, or partial evidence as incomplete
     and add/reopen tasks until proven.
-  - [ ] 15.33 Mark this plan complete only when no required task or unresolved
+  - [x] 15.33 Mark this plan complete only when no required task or unresolved
     finding remains.
 
 ## Design-to-phase coverage matrix
@@ -1605,3 +1607,86 @@ Add dated notes here during execution for:
     secret sentinel scan plus draft/unpublished/arbitrary module and expression
     rejection.
   - `modules/api_router.py`: current non-deprecated 413/422 status aliases.
+
+### 2026-07-26 — Phase 14
+
+- Pylance/Pyright cleanup was verified first with
+  `npx --yes pyright --project pyrightconfig.json`: `0 errors, 0 warnings,
+  0 informations`. The 43 directly affected integration, security, service,
+  and workflow tests passed in 10.94 seconds.
+- Visual fixtures use a temporary SQLite database and configuration, generated
+  PDF headers, synthetic users, fake pipeline/schema names, a fake secret
+  alias, and a sentinel value that is asserted absent from rendered DOM and
+  screenshots. Seeded states include multi-version active definitions,
+  inactive and archived templates, an invalid draft, exact schema dependency,
+  watch binding, review-required and failed split children, and empty/loading
+  UI states.
+- Evidence was captured under ignored `output/playwright/phase14/` at
+  1440x1000 desktop, 1366x900 desktop, 1024x768 tablet, and 390x900 mobile.
+  The 13 screenshots cover review-form history and validation, pipeline
+  metadata/order/exact schema selection/diff/bindings/errors, upload invalid
+  and ready states, mixed processing states, and keyboard focus with reduced
+  motion.
+- Full-resolution review found and fixed two production defects:
+  watch-folder bindings shared the validation grid area and intercepted the
+  Diff button; mobile pipeline controls and long paths exceeded the available
+  width. Bindings now have a dedicated grid area and mobile controls shrink and
+  wrap without page-level horizontal overflow.
+- `.\.venv\Scripts\python.exe -m pytest -v test\visual` passed:
+  `23 passed` in 60.16 seconds. Chromium was already installed, so no browser
+  installation was needed. No Tailwind input or utility-class change was made,
+  so a CSS rebuild was not required.
+- Phase 14 relevant files:
+  - `test/visual/test_schema_review_visual.py`: isolated versioned UI fixtures,
+    interaction/accessibility/security assertions, viewport checks, and safe
+    screenshot capture.
+  - `web/templates/pipeline_config.html`: distinct watch-folder bindings panel.
+  - `web/static/css/app.css`: non-overlapping bindings grid placement and
+    mobile control/path containment.
+
+### 2026-07-26 — Phase 15
+
+- Maintained architecture, user, review-schema, CLI, and troubleshooting
+  documentation now describes SQLite configuration authority, immutable
+  versions, exact ingestion assignments/dependencies, resume/recovery,
+  publish-before-use, portable import/export, and migration-only legacy files.
+- `tasks/standard_task_creation_guidelines.md` was reviewed. It already
+  contains the implemented immutable constructor-parameter contract,
+  `pipeline_version_id` attribution, injected exact review schema, fail-closed
+  behavior, and prohibition on task-local global configuration/schema reload;
+  no unrelated rewrite was needed.
+- The design status and source-direction document were reconciled and linked
+  to maintained guidance. Mixed-document routing, `workflow_runs`,
+  classification, and graph execution remain explicitly deferred.
+- Packaged CLI help was corrected to document stored selectors,
+  `validate-file`, `--all-stored`, and the actual `0`/`1`/`2`/`64` exit
+  semantics. `test/tools/config_check/test_cli_help.py` protects that contract.
+- Verification after the final source change:
+  - `npx --yes pyright --project pyrightconfig.json`: `0 errors, 0 warnings,
+    0 informations`.
+  - Targeted current-help/stored/portable CLI tests: `9 passed`.
+  - Full Config Check suite: `246 passed, 3 skipped`.
+  - Final full repository suite:
+    `862 passed, 4 skipped, 1 warning` in 241.68 seconds. The skips and
+    FastAPI TestClient dependency warning are the previously documented ones.
+  - Phase 14's final-CSS visual suite remains `23 passed`; the final full suite
+    also executed all visual tests after the last source/document changes.
+- Final audit found no unexpected untracked runtime output, database, PDF, log,
+  credential, customer data, or prototype implementation diff.
+  `git diff --check` passed. Added provider values are synthetic secret aliases
+  in isolated visual fixtures, and legacy `schema_file` reads are confined to
+  the migration service. The ignored screenshots contain only synthetic data.
+- No live LlamaCloud provider check was run: Phase 15 did not request an
+  external call, and the repository requires explicit authorization and
+  credentials for resource-consuming live checks.
+- Phase 15 material files:
+  - `docs/design_architecture.md`, `docs/user_guide.md`,
+    `docs/review_schema_admin_guide.md`, and
+    `docs/config_check_troubleshooting.md`: maintained behavior and recovery
+    guidance.
+  - `tools/config_check/README.md` and `tools/config_check/__main__.py`:
+    current stored/portable/read-only CLI documentation and help.
+  - `test/tools/config_check/test_cli_help.py`: CLI documentation contract.
+  - `tasks/design-multiple-pipeline-templates.md` and
+    `tasks/future-multi-document-routing.md`: implemented status, cross-links,
+    and deferred-scope boundary.

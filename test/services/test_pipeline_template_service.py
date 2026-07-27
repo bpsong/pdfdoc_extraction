@@ -133,6 +133,7 @@ def test_pipeline_draft_conflict_monotonic_publish_and_unchanged_rejection(conte
             definition=extraction_definition("stale"),
             user="admin",
         )
+    assert error.value.current is not None
     assert error.value.current["revision"] == saved["revision"]
 
     second = service.publish(

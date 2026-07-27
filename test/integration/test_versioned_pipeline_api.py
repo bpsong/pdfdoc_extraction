@@ -1,5 +1,9 @@
 """API coverage for versioned pipeline-template administration."""
 
+from typing import cast
+
+from fastapi import FastAPI
+
 import modules.api_router as api_router
 from modules.db.connection import connect
 from modules.db.repositories import UserRepository
@@ -12,7 +16,9 @@ def _admin_client(tmp_path, monkeypatch):
         UserRepository(conn).initialize(
             {"admin": "test-only", "operator": "test-only"}
         )
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
+    cast(FastAPI, client.app).dependency_overrides[
+        api_router.get_current_user
+    ] = lambda: "admin"
     return client, config
 
 
@@ -105,7 +111,7 @@ def test_pipeline_stale_revision_operator_forbidden_and_legacy_writes_gone(
     assert client.put("/api/admin/pipeline/draft", json={}).status_code == 410
     assert client.post("/api/admin/pipeline/publish", json={}).status_code == 410
 
-    client.app.dependency_overrides[api_router.get_current_user] = (
+    cast(FastAPI, client.app).dependency_overrides[api_router.get_current_user] = (
         lambda: "operator"
     )
     assert client.get("/api/admin/pipeline-templates").status_code == 403

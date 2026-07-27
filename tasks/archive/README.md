@@ -16,6 +16,9 @@ Active future proposals live directly under `tasks/`.
 
 Archive groups:
 
+- `tasks-multiple-versioned-pipeline-templates.md`: completed implementation
+  and verification record for immutable SQLite-backed pipelines and review
+  schemas.
 - `admin-panel-style-consistency-plan.md`: completed shared panel and header
   styling for the production Schema and Pipeline editors.
 - `future-design-visual-pipeline-builder.md`: superseded full node-canvas

@@ -118,17 +118,23 @@ def create_parser() -> argparse.ArgumentParser:
     """
     parser = argparse.ArgumentParser(
         prog='config-check',
-        description='Validate configuration YAML files for PDF processing system',
+        description=(
+            'Validate deployment, stored, and portable configuration for the '
+            'PDF processing system'
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Usage Examples:
  python -m tools.config_check validate --config config.yaml --verbose
  python -m tools.config_check validate --config ./config.yaml --format json --strict
+ python -m tools.config_check validate --config config.yaml --pipeline invoices --version 3
+ python -m tools.config_check validate --config config.yaml --all-stored
+ python -m tools.config_check validate-file --file pipeline.yaml --kind pipeline
  python -m tools.config_check schema --format json
  python -m tools.config_check validate --config config.yaml --base-dir /app/config --import-checks
 
 Exit Codes:
- 0 = Valid (no errors; warnings allowed)
+ 0 = Valid (no errors or warnings)
  1 = One or more errors found
  2 = Only warnings found (no errors)
  64 = Usage error (bad flags, invalid paths)
@@ -152,15 +158,18 @@ Exit Codes:
     # Validate subcommand
     validate_parser = subparsers.add_parser(
         'validate',
-        help='Validate configuration file against schema and requirements',
+        help='Validate deployment YAML and optional read-only stored definitions',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
  python -m tools.config_check validate --config config.yaml
  python -m tools.config_check validate --config ./config.yaml --format json --strict --base-dir /app
+ python -m tools.config_check validate --config config.yaml --pipeline invoices --draft
+ python -m tools.config_check validate --config config.yaml --review-schema invoice --version 2
+ python -m tools.config_check validate --config config.yaml --all-stored
 
 Exit Codes:
- 0 = Valid (no errors; warnings allowed)
+ 0 = Valid (no errors or warnings)
  1 = One or more errors found
  2 = Only warnings found (no errors)
  64 = Usage error (bad arguments, invalid paths)

@@ -878,6 +878,8 @@ class LegacyVersionedConfigMigration:
         if self._snapshot_signature(snapshot) != expected_signature:
             return False
         steps = snapshot.get("steps")
+        if not isinstance(steps, list):
+            return False
         legacy_basis = "|".join(
             f"{step.get('position')}:{step.get('key')}:{step.get('module')}:"
             f"{step.get('class')}:{step.get('on_error') or ''}"

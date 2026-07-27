@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import cast
+
+from fastapi import FastAPI
+
 from modules.db.connection import connect
 from modules.db.repositories import UserRepository
 import modules.api_router as api_router
@@ -14,7 +18,9 @@ def _admin_client(tmp_path, monkeypatch):
         UserRepository(conn).initialize(
             {"admin": "test-only", "operator": "test-only"}
         )
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
+    cast(FastAPI, client.app).dependency_overrides[
+        api_router.get_current_user
+    ] = lambda: "admin"
     return client, config
 
 
@@ -70,10 +76,11 @@ def test_binding_api_enforces_admin_role_and_cookie_csrf(tmp_path, monkeypatch):
         "enabled": True,
     }
 
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "operator"
+    app = cast(FastAPI, client.app)
+    app.dependency_overrides[api_router.get_current_user] = lambda: "operator"
     assert client.post("/api/admin/watch-folder-bindings", json=body).status_code == 403
 
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
+    app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
     client.cookies.set("access_token", "browser-token")
     client.cookies.set("csrf_token", "csrf-test-token")
     missing = client.post("/api/admin/watch-folder-bindings", json=body)

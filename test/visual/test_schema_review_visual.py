@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -13,8 +14,16 @@ import bcrypt
 
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
-from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, UserRepository
+from modules.db.repositories import (
+    DocumentRepository,
+    ExtractionRepository,
+    ReviewRepository,
+    TaskRunRepository,
+    UserRepository,
+)
 from modules.services.batch_service import BatchService
+from modules.services.ingress_binding_service import IngressBindingService
+from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from test.helpers_sqlite import TempConfig
 
@@ -24,6 +33,8 @@ from playwright.sync_api import Page, sync_playwright
 
 
 PASSWORD_HASH = "$2b$12$uG.SmnQ76mGiPy0wyztZkO4e/hoV3lo/3J8PEXITLC9ckfF3B3qAm"
+PHASE14_SECRET_SENTINEL = "PHASE14_SYNTHETIC_SECRET_MUST_NOT_RENDER"
+EVIDENCE_DIR = Path(__file__).resolve().parents[2] / "output" / "playwright" / "phase14"
 
 
 def _free_port() -> int:
@@ -46,6 +57,7 @@ def _write_config(tmp_path: Path, port: int, schema_dir: Path) -> Path:
         "watch_folder": {"dir": str(tmp_path / "watch"), "processing_dir": str(tmp_path / "processing")},
         "logging": {"log_file": str(tmp_path / "app.log"), "log_level": "INFO"},
         "schema": {"directories": [str(schema_dir)]},
+        "pipeline_secrets": {"phase14-provider": PHASE14_SECRET_SENTINEL},
         "tasks": {},
         "pipeline": [],
     }
@@ -54,7 +66,83 @@ def _write_config(tmp_path: Path, port: int, schema_dir: Path) -> Path:
     return config_path
 
 
-def _seed_visual_state(tmp_path: Path, config_path: Path, schema_dir: Path) -> str:
+def _phase14_pipeline_definition(
+    schema_version_id: str, tmp_path: Path
+) -> dict[str, Any]:
+    """Return a long synthetic pipeline with an exact review-schema dependency."""
+    fields = {
+        "supplier": {"alias": "Supplier", "type": "str"},
+        "invoice_amount": {"alias": "Invoice amount", "type": "float"},
+        "approved": {"alias": "Approved", "type": "bool"},
+        "reviewed_at": {"alias": "Reviewed at", "type": "str"},
+        "address": {"alias": "Address", "type": "Any"},
+        "tags": {"alias": "Tags", "type": "List[str]"},
+        "line_items": {
+            "alias": "Line items",
+            "type": "List[Any]",
+            "item_fields": {
+                "sku": {"alias": "SKU", "type": "str"},
+                "quantity": {"alias": "Quantity", "type": "int"},
+                "unit_price": {"alias": "Unit price", "type": "float"},
+            },
+        },
+    }
+    return {
+        "schema_version": 1,
+        "pipeline": [
+            "split_documents",
+            "extract_invoice_fields",
+            "review_low_confidence_fields",
+            "store_structured_metadata",
+        ],
+        "tasks": {
+            "split_documents": {
+                "label": "Split multi-document package into synthetic child documents",
+                "module": "standard_step.split.llamacloud_split",
+                "class": "LlamaCloudSplitTask",
+                "params": {
+                    "enabled": True,
+                    "api_key": {"$secret": "phase14-provider"},
+                    "categories": [{"name": "invoice"}, {"name": "receipt"}],
+                    "split_dir": str(tmp_path / "synthetic_split"),
+                },
+            },
+            "extract_invoice_fields": {
+                "label": "Extract every configured invoice field with confidence",
+                "module": "standard_step.extraction.extract_pdf",
+                "class": "ExtractPdfTask",
+                "params": {
+                    "api_key": {"$secret": "phase14-provider"},
+                    "fields": fields,
+                },
+            },
+            "review_low_confidence_fields": {
+                "label": "Review low-confidence fields using the exact published form",
+                "module": "standard_step.review.review_gate",
+                "class": "ReviewGateTask",
+                "params": {
+                    "confidence_threshold": 0.9,
+                    "review_scope": "low_confidence_fields",
+                    "schema_version_id": schema_version_id,
+                },
+            },
+            "store_structured_metadata": {
+                "label": "Store approved structured metadata as JSON",
+                "module": "standard_step.storage.store_metadata_as_json",
+                "class": "StoreMetadataAsJson",
+                "params": {
+                    "data_dir": str(tmp_path / "synthetic_output"),
+                    "filename": "{supplier}",
+                },
+                "on_error": "continue",
+            },
+        },
+    }
+
+
+def _seed_visual_state(
+    tmp_path: Path, config_path: Path, schema_dir: Path
+) -> dict[str, str]:
     schema_dir.mkdir()
     (schema_dir / "invoice.yaml").write_text(
         """
@@ -130,7 +218,13 @@ fields:
     )
     config = TempConfig(
         tmp_path / "app_state.sqlite3",
-        {"schema": {"directories": [str(schema_dir)]}, "database": {"path": str(tmp_path / "app_state.sqlite3")}},
+        {
+            "schema": {"directories": [str(schema_dir)]},
+            "database": {"path": str(tmp_path / "app_state.sqlite3")},
+            "pipeline_secrets": {
+                "phase14-provider": PHASE14_SECRET_SENTINEL
+            },
+        },
     )
     config._config_path = config_path
     initialize_database(config)
@@ -145,9 +239,108 @@ fields:
             initial_schema=schema,
             user="admin",
         )
-        versioned_schemas.publish(
+        first_schema = versioned_schemas.publish(
             created_schema["template"]["id"],
             expected_revision=1,
+            user="admin",
+        )
+        versioned_schemas.update_template(
+            created_schema["template"]["id"], status="active", user="admin"
+        )
+        schema_v2 = dict(schema)
+        schema_v2["description"] = (
+            "Synthetic multi-version review form with long labels and nested fields."
+        )
+        saved_schema = versioned_schemas.save_draft(
+            created_schema["template"]["id"],
+            expected_revision=first_schema["draft"]["revision"],
+            schema=schema_v2,
+            user="admin",
+        )
+        published_schema = versioned_schemas.publish(
+            created_schema["template"]["id"],
+            expected_revision=saved_schema["revision"],
+            user="admin",
+        )
+
+        pipelines = PipelineTemplateService(
+            conn, configured_secret_aliases={"phase14-provider"}
+        )
+        definition = _phase14_pipeline_definition(
+            published_schema["version"]["id"], tmp_path
+        )
+        active = pipelines.create_template(
+            template_key="phase14-long-invoice-processing",
+            name="Phase 14 Long Invoice Processing Pipeline",
+            description="Synthetic active multi-version pipeline for visual testing.",
+            document_type="invoice",
+            operator_instructions="Choose this exact version for synthetic invoices.",
+            operator_selectable=True,
+            initial_definition=definition,
+            user="admin",
+        )
+        first_pipeline = pipelines.publish(
+            active["template"]["id"], expected_revision=1, user="admin"
+        )
+        changed_definition = dict(definition)
+        changed_definition["tasks"] = dict(definition["tasks"])
+        changed_definition["tasks"]["store_structured_metadata"] = {
+            **changed_definition["tasks"]["store_structured_metadata"],
+            "label": "Store approved structured metadata as JSON (version two)",
+        }
+        saved_pipeline = pipelines.save_draft(
+            active["template"]["id"],
+            expected_revision=first_pipeline["draft"]["revision"],
+            definition=changed_definition,
+            user="admin",
+        )
+        published_pipeline = pipelines.publish(
+            active["template"]["id"],
+            expected_revision=saved_pipeline["revision"],
+            user="admin",
+        )
+        pipelines.update_template(
+            active["template"]["id"], status="active", user="admin"
+        )
+
+        inactive = pipelines.create_template(
+            template_key="phase14-inactive-draft",
+            name="Phase 14 Inactive Validation Draft",
+            description="Synthetic inactive draft used for empty and validation states.",
+            initial_definition={
+                **definition,
+                "tasks": {
+                    **definition["tasks"],
+                    "extract_invoice_fields": {
+                        **definition["tasks"]["extract_invoice_fields"],
+                        "params": {
+                            **definition["tasks"]["extract_invoice_fields"]["params"],
+                            "api_key": {"$secret": "missing-synthetic-alias"},
+                        },
+                    },
+                },
+            },
+            user="admin",
+        )
+        archived = pipelines.clone(
+            active["template"]["id"],
+            template_key="phase14-archived-copy",
+            name="Phase 14 Archived Copy",
+            user="admin",
+        )
+        archived_published = pipelines.publish(
+            archived["template"]["id"], expected_revision=1, user="admin"
+        )
+        pipelines.update_template(
+            archived["template"]["id"], status="archived", user="admin"
+        )
+
+        incoming = tmp_path / "synthetic_incoming"
+        incoming.mkdir()
+        IngressBindingService(conn, config).create(
+            folder_path=str(incoming),
+            pipeline_version_id=published_pipeline["version"]["id"],
+            enabled=True,
             user="admin",
         )
     pdf_path = tmp_path / "web_upload" / "invoice.pdf"
@@ -204,7 +397,94 @@ fields:
                 "editable_fields": ["supplier", "invoice_amount", "approved", "reviewed_at", "address", "tags", "line_items"],
             },
         )
-    return str(review["id"])
+    source_pdf = tmp_path / "web_upload" / "phase14-source-package.pdf"
+    child_review_pdf = tmp_path / "web_upload" / "phase14-child-review.pdf"
+    child_failed_pdf = tmp_path / "web_upload" / "phase14-child-failed.pdf"
+    for path in (source_pdf, child_review_pdf, child_failed_pdf):
+        path.write_bytes(b"%PDF-1.4\n% synthetic phase 14 evidence")
+
+    with connect(config) as conn:
+        pipeline_template_id = active["template"]["id"]
+        pipeline_version_id = published_pipeline["version"]["id"]
+        batch = BatchService(conn).create_ingestion_batch(
+            source="visual",
+            file_path=str(source_pdf),
+            original_filename=(
+                "phase14-source-package-with-a-deliberately-long-filename.pdf"
+            ),
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
+            pipeline_assignment_source="upload",
+        )
+        documents = DocumentRepository(conn)
+        source_id = batch["document"]["id"]
+        documents.update_status(source_id, "split_completed")
+        review_child = documents.create_child(
+            batch_id=batch["batch"]["id"],
+            parent_document_id=source_id,
+            file_path=str(child_review_pdf),
+            original_filename="phase14-child-requires-review.pdf",
+            page_start=1,
+            page_end=2,
+            split_category="invoice",
+            split_confidence="medium",
+            status="review_required",
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
+        )
+        failed_child = documents.create_child(
+            batch_id=batch["batch"]["id"],
+            parent_document_id=source_id,
+            file_path=str(child_failed_pdf),
+            original_filename="phase14-child-failed.pdf",
+            page_start=3,
+            page_end=4,
+            split_category="receipt",
+            split_confidence="low",
+            status="failed",
+            pipeline_template_id=pipeline_template_id,
+            pipeline_version_id=pipeline_version_id,
+        )
+        runs = TaskRunRepository(conn)
+        split_run = runs.create_started(
+            batch_id=batch["batch"]["id"],
+            document_id=source_id,
+            task_key="split_documents",
+            task_index=0,
+            module_name="standard_step.split.llamacloud_split",
+            class_name="LlamaCloudSplitTask",
+            pipeline_version_id=pipeline_version_id,
+        )
+        runs.mark_completed(split_run["id"])
+        review_run = runs.create_started(
+            batch_id=batch["batch"]["id"],
+            document_id=review_child["id"],
+            task_key="review_low_confidence_fields",
+            task_index=2,
+            module_name="standard_step.review.review_gate",
+            class_name="ReviewGateTask",
+            pipeline_version_id=pipeline_version_id,
+        )
+        runs.mark_paused(review_run["id"])
+        failed_run = runs.create_started(
+            batch_id=batch["batch"]["id"],
+            document_id=failed_child["id"],
+            task_key="extract_invoice_fields",
+            task_index=1,
+            module_name="standard_step.extraction.extract_pdf",
+            class_name="ExtractPdfTask",
+            pipeline_version_id=pipeline_version_id,
+        )
+        runs.mark_failed(failed_run["id"], "Synthetic phase 14 provider failure")
+
+    return {
+        "review_id": str(review["id"]),
+        "batch_id": str(batch["batch"]["id"]),
+        "active_template_id": str(active["template"]["id"]),
+        "pipeline_version_id": str(published_pipeline["version"]["id"]),
+        "inactive_template_id": str(inactive["template"]["id"]),
+        "archived_version_id": str(archived_published["version"]["id"]),
+    }
 
 
 @pytest.fixture(scope="module")
@@ -213,7 +493,7 @@ def visual_app(tmp_path_factory: pytest.TempPathFactory):
     port = _free_port()
     schema_dir = tmp_path / "schemas"
     config_path = _write_config(tmp_path, port, schema_dir)
-    review_id = _seed_visual_state(tmp_path, config_path, schema_dir)
+    state = _seed_visual_state(tmp_path, config_path, schema_dir)
     env = os.environ.copy()
     env["CONFIG_PATH"] = str(config_path)
     env["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
@@ -240,7 +520,7 @@ def visual_app(tmp_path_factory: pytest.TempPathFactory):
         process.terminate()
         raise RuntimeError("Visual test server did not start")
 
-    yield {"base_url": base_url, "review_id": review_id}
+    yield {"base_url": base_url, **state}
 
     process.terminate()
     try:
@@ -288,6 +568,16 @@ def _computed_style(page: Page, selector: str, properties: list[str]) -> dict[st
     )
 
 
+def _capture_phase14(page: Page, name: str) -> Path:
+    """Save synthetic evidence and reject blank or secret-bearing captures."""
+    EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
+    target = EVIDENCE_DIR / f"{name}.png"
+    screenshot = page.screenshot(path=str(target), full_page=True)
+    assert len(screenshot) > 10_000
+    assert PHASE14_SECRET_SENTINEL not in page.content()
+    return target
+
+
 def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visual_app: dict[str, str]) -> None:
     page.set_viewport_size({"width": 1366, "height": 768})
     page.goto(f"{visual_app['base_url']}/app/review/{visual_app['review_id']}")
@@ -331,6 +621,188 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     page.set_viewport_size({"width": 390, "height": 900})
     page.locator("#review-fields-container").wait_for()
     _assert_nonblank_screenshot(page)
+
+
+def test_phase14_review_form_history_validation_and_responsive_evidence(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Capture versioned review-form administration with safe synthetic data."""
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
+    page.locator("#schema-field-tree .schema-field-row").first.wait_for()
+    assert page.locator("#schema-version-history").get_by_text("Version 2").count() == 1
+    assert page.locator('[data-field-prop="array_item_type"]').first.is_visible()
+    assert page.locator("#schema-field-outline [data-outline-path]").count() >= 7
+    _capture_phase14(page, "01-review-form-desktop")
+    _assert_no_horizontal_overflow(page)
+
+    maximum_length = page.locator(
+        '[data-field-path="supplier"][data-field-prop="max_length"]'
+    )
+    maximum_length.fill("1")
+    maximum_length.press("Tab")
+    assert page.get_by_text(
+        "Min length cannot be greater than max length."
+    ).count() >= 1
+    assert page.locator("#schema-validation-results").get_attribute("aria-live") in {
+        "polite",
+        None,
+    }
+    _capture_phase14(page, "02-review-form-validation-error")
+
+    page.set_viewport_size({"width": 390, "height": 900})
+    page.locator("#schema-field-tree").wait_for()
+    _capture_phase14(page, "03-review-form-mobile")
+    _assert_no_horizontal_overflow(page)
+
+
+def test_phase14_pipeline_admin_versioning_diff_bindings_and_errors(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Capture the multi-template pipeline workspace and defensive states."""
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{visual_app['base_url']}/app/admin/pipeline")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#pipeline-template-select option').length >= 4"
+    )
+    assert page.locator("#pipeline-template-select option").count() >= 4
+    page.locator("#pipeline-template-select").select_option(
+        visual_app["active_template_id"]
+    )
+    page.wait_for_function(
+        "() => document.querySelector('#pipeline-version-history')?.textContent.includes('2 immutable')"
+    )
+    page.locator("#pipeline-draft-list .pipeline-step-main").first.wait_for()
+    assert page.locator("#pipeline-draft-list .pipeline-step-main").count() == 4
+    assert "2 immutable version" in (
+        page.locator("#pipeline-version-history").text_content() or ""
+    )
+    assert page.locator("#pipeline-binding-list").get_by_text(
+        "Phase 14 Long Invoice Processing Pipeline"
+    ).count() >= 1
+
+    page.locator("#pipeline-draft-list .pipeline-step-main").nth(2).click()
+    exact_schema = page.get_by_label("Published review form version")
+    exact_schema.wait_for()
+    assert exact_schema.input_value()
+    page.locator("#pipeline-diff-button").click()
+    page.locator("#pipeline-diff-preview").get_by_text("No changes").wait_for()
+    _capture_phase14(page, "04-pipeline-admin-desktop")
+    _assert_no_horizontal_overflow(page)
+
+    page.set_viewport_size({"width": 1024, "height": 768})
+    _capture_phase14(page, "05-pipeline-admin-tablet")
+    _assert_no_horizontal_overflow(page)
+
+    page.set_viewport_size({"width": 390, "height": 900})
+    _capture_phase14(page, "06-pipeline-admin-mobile")
+    _assert_no_horizontal_overflow(page)
+
+    page.evaluate(
+        """() => {
+            const target = document.querySelector('#pipeline-validation-results');
+            target.innerHTML = '<div class="alert alert-error" role="alert">Synthetic server error</div>';
+        }"""
+    )
+    page.get_by_text("Synthetic server error").wait_for()
+    _capture_phase14(page, "07-pipeline-admin-server-error")
+
+
+def test_phase14_upload_selection_validation_and_success(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Verify explicit version selection, file eligibility, and success routing."""
+    page.set_viewport_size({"width": 1366, "height": 900})
+    page.goto(f"{visual_app['base_url']}/app/upload")
+    page.locator('input[name="pipeline-version"]').first.wait_for()
+    assert page.locator('input[name="pipeline-version"]:checked').count() == 0
+    assert page.locator("#start-processing-button").is_disabled()
+
+    page.locator("#pdf-file-input").set_input_files(
+        {
+            "name": "unsafe.txt",
+            "mimeType": "text/plain",
+            "buffer": b"synthetic invalid file",
+        }
+    )
+    assert page.get_by_text("Only PDF files are accepted").count() >= 1
+    _capture_phase14(page, "08-upload-invalid-file")
+    page.get_by_role("button", name="Remove unsafe.txt").click()
+
+    page.locator("#pdf-file-input").set_input_files(
+        {
+            "name": "phase14-synthetic-upload.pdf",
+            "mimeType": "application/pdf",
+            "buffer": b"%PDF-1.4\n% synthetic upload",
+        }
+    )
+    page.locator('input[name="pipeline-version"]').first.check()
+    assert page.locator("#start-processing-button").is_enabled()
+    _capture_phase14(page, "09-upload-ready")
+
+    page.route(
+        "**/api/batches/upload",
+        lambda route: route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=(
+                '{"status":"queued","batch_id":"'
+                + visual_app["batch_id"]
+                + '","document_ids":[]}'
+            ),
+        ),
+    )
+    page.locator("#start-processing-button").click()
+    page.wait_for_url(f"**/app/batches/{visual_app['batch_id']}")
+    page.locator("#pipeline-assignment-summary strong").wait_for()
+
+
+def test_phase14_processing_identity_split_failure_review_and_reflow(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Capture exact identity and mixed split-child processing states."""
+    page.set_viewport_size({"width": 1440, "height": 1000})
+    page.goto(f"{visual_app['base_url']}/app/batches/{visual_app['batch_id']}")
+    page.locator("#pipeline-assignment-summary strong").wait_for()
+    assert "Phase 14 Long Invoice Processing Pipeline" in (
+        page.locator("#pipeline-assignment-summary").text_content() or ""
+    )
+    assert page.locator("#pipeline-step-list [data-step]").count() >= 5
+    assert page.get_by_text("Review Required").count() >= 1
+    assert page.get_by_text("Failed", exact=True).count() >= 1
+    assert page.locator("#split-results-link").is_visible()
+    _capture_phase14(page, "10-processing-mixed-states-desktop")
+    _assert_no_horizontal_overflow(page)
+
+    page.set_viewport_size({"width": 1024, "height": 768})
+    _capture_phase14(page, "11-processing-mixed-states-tablet")
+
+    page.set_viewport_size({"width": 390, "height": 900})
+    _capture_phase14(page, "12-processing-mixed-states-mobile")
+    assert page.locator(".overflow-x-auto").count() >= 1
+
+
+def test_phase14_keyboard_focus_reduced_motion_and_secret_presentation(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Exercise keyboard focus and scan operator surfaces for secret leakage."""
+    page.emulate_media(reduced_motion="reduce")
+    page.set_viewport_size({"width": 390, "height": 900})
+    page.goto(f"{visual_app['base_url']}/app/upload")
+    page.locator("#pipeline-version-list").wait_for()
+    page.keyboard.press("Tab")
+    page.keyboard.press("Tab")
+    focused = page.locator(":focus")
+    assert focused.count() == 1
+    assert focused.evaluate(
+        "node => { const s = getComputedStyle(node); return s.outlineStyle !== 'none' || s.boxShadow !== 'none'; }"
+    )
+    assert page.locator("main").count() == 1
+    assert page.locator("h1, h2").count() >= 1
+    assert page.locator('[role="radiogroup"][aria-label]').count() == 1
+    assert PHASE14_SECRET_SENTINEL not in page.content()
+    assert "missing-synthetic-alias" not in page.content()
+    _capture_phase14(page, "13-accessibility-keyboard-mobile")
 
 
 def test_review_visual_source_toggle_and_sidebar_preference(page: Page, visual_app: dict[str, str]) -> None:

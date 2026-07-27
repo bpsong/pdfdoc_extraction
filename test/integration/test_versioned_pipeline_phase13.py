@@ -228,12 +228,14 @@ def test_independent_templates_stay_pinned_across_publication_and_archival(
                 conn,
                 config,
             ).load_for_document(document["id"])
-        WorkflowLoader(
+        workflow = WorkflowLoader(
             config,
             definition=executable.definition,
             pipeline_version_id=executable.version_id,
             pipeline_template_id=executable.template_id,
-        ).load_workflow()(
+        ).load_workflow()
+        assert workflow is not None
+        workflow(
             {
                 "id": document["id"],
                 "batch_id": created["batch"]["id"],

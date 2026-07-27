@@ -2,16 +2,18 @@
 
 This guide explains how an application administrator creates and maintains the
 form that operators use to check extracted document data in the **Review
-Queue**. You can use either:
+Queue**. SQLite stores the editable draft and immutable published versions.
+You can use either:
 
 - the **Review Form Editor** at `http://localhost:8000/app/schemas`; or
-- a plain-text editor to create or change a schema file directly.
+- a YAML or JSON file as a portable import/export or legacy migration format.
 
 Use the Review Form Editor for routine changes. It shows the available settings,
 checks the schema before saving, and reduces the risk of formatting errors.
-Direct file editing is useful for copying a known schema, making several
-changes at once, or maintaining configuration through an established
-administrative process.
+Direct file editing does not change runtime behavior. Import creates or updates
+a draft; an administrator must validate and publish it, then select that exact
+published schema version in a pipeline draft and publish a new pipeline
+version.
 
 ## Contents
 
@@ -78,12 +80,12 @@ before asking operators to continue.
 1. Start the application and sign in as an administrator.
 2. Open `http://localhost:8000/app/schemas`, or select **Review Forms** from the
    administrator navigation.
-3. Select an existing schema from the left panel, or select **New Schema**.
+3. Select an existing schema template from the list, or select **New Schema**.
 
 The page contains three areas:
 
-- **Review Forms** lists the available schema files and provides a search box.
-- The center panel contains the schema name, description, and fields.
+- **Review Forms** lists schema templates and lifecycle/version information.
+- The center panel contains the editable draft metadata and fields.
 - **YAML Preview** shows the current draft in YAML form. The preview is read
   only; use the center-panel controls to make changes. When the selected file
   ends in `.json`, the application saves the equivalent JSON content.
@@ -91,19 +93,19 @@ The page contains three areas:
 ### Create a schema
 
 1. Select **New Schema**.
-2. In **Name**, enter a unique file name ending in `.yaml`, `.yml`, or `.json`,
-   such as `invoice.yaml`. YAML is recommended for files maintained by people.
+2. Enter a unique stable key and a clear display name.
 3. Enter a clear **Title**, such as `Invoice Review`.
 4. Enter a short **Description** explaining when the form is used.
 5. Add and configure the fields as described below.
 6. Select **Validate**.
 7. Correct every reported error. Selecting an error moves to the affected
    control.
-8. Select **Save**. A confirmation message appears when the schema is saved.
+8. Select **Save Draft**. Saving does not make the schema available to a
+   pipeline.
+9. Select **Publish** after validation. Publication creates immutable version
+   1; later publications increment that template's version number.
 
-The application will not overwrite another schema when creating a new one. If
-the name is already in use, choose a different name or edit the existing
-schema.
+The application will not overwrite another template with the same key.
 
 ### Edit an existing schema
 
@@ -113,12 +115,13 @@ schema.
 3. Change the metadata or fields. An asterisk beside the schema title indicates
    that the draft has unsaved changes.
 4. Select **Validate** and resolve all findings.
-5. Select **Save**.
-6. Test the resulting form with a representative document.
+5. Select **Save Draft**, validate, and publish a new immutable version.
+6. Select that exact schema version in the relevant pipeline draft, validate
+   and publish a new pipeline version.
+7. Test the resulting form with a representative document.
 
-The **Name** control identifies a new schema while it is being created. Saving
-changes to an existing schema updates the selected file; it does not rename
-that file. To create a similar schema with another name, use **Duplicate**.
+Published content is immutable. Editing always changes the draft, not an
+existing version. Use clone/duplicate to create a separate template.
 
 ### Add and configure a field
 
@@ -205,12 +208,16 @@ For example, a `serial_numbers` array contains repeated text values, while a
 `line_items` array normally contains objects with child fields such as
 `description`, `quantity`, and `unit_price`.
 
-### Validate, save, and duplicate
+### Validate, save, publish, clone, import, and export
 
 - **Validate** checks the current draft without saving it.
-- **Save** validates again and then writes the schema file.
-- **Duplicate** copies the selected saved schema under a new file name. Use it
-  when a new document type is similar to an existing one.
+- **Save Draft** persists editable content in SQLite.
+- **Publish** repeats validation and creates the next immutable version.
+- **Clone/Duplicate** creates a separate template and editable draft.
+- **Import** accepts a portable YAML/JSON definition into a draft; it never
+  publishes automatically.
+- **Export** emits a portable, redacted definition with stable key, version
+  metadata, and content hash rather than database UUIDs.
 
 Save remains unavailable while the editor detects a blocking error. Common
 errors include a missing title, an empty or duplicate key, an invalid file
@@ -221,19 +228,20 @@ The editor warns before discarding unsaved changes when you select another
 schema, create or duplicate a schema, follow another link, refresh, or close
 the page.
 
-The editor can delete fields but does not provide a button to delete an entire
-schema file. Remove a schema file only through your approved file-management
-process, and first confirm that no review gate refers to it.
+Before deactivating or archiving a template, inspect its dependencies. Published
+pipeline versions and in-progress reviews retain access to the exact immutable
+schema version they already reference.
 
-## Method 2: Create or Edit a Schema File Directly
+## Method 2: Import or Export a Schema File
 
-Review schemas are stored as YAML or JSON files. Unless the application is
-configured differently, they are in the `schemas` folder beside `config.yaml`.
-YAML examples in this guide use spaces to show which settings belong together.
+YAML and JSON files are portable interchange and legacy migration formats; they
+are not the authoritative runtime store. Import a file into a schema draft,
+validate it, and explicitly publish it. The application then stores the
+canonical definition and immutable versions in SQLite.
 
-### Find the schema file in use
+### Legacy `schema_file` migration
 
-The review gate identifies its schema with `schema_file` in `config.yaml`:
+Older deployment YAML identifies a filesystem schema with `schema_file`:
 
 ```yaml
 tasks:
@@ -244,8 +252,10 @@ tasks:
       schema_file: "schemas/invoice.yaml"
 ```
 
-In this example, edit `schemas\invoice.yaml`. Do not assume that every schema
-shown in the Review Form Editor is currently used by a workflow.
+Treat this as migration input only. Import `schemas\invoice.yaml` into a schema
+draft, publish it, replace the review-gate parameter in the pipeline draft with
+the selected exact `schema_version_id`, then publish the pipeline. Do not assume
+that a file or schema draft is currently used by a workflow.
 
 The schema folders can be configured explicitly:
 
@@ -259,23 +269,22 @@ Relative folder names are resolved from the folder containing `config.yaml`.
 If several schema folders are configured, the Review Form Editor saves new schemas
 in the first folder. Ask the application owner before changing these folders.
 
-### Safe direct-editing procedure
+### Safe import procedure
 
-1. Confirm the exact schema file referenced by the review gate.
-2. Copy the file to a backup name outside the active schema folders. A backup
-   ending in `.yaml`, `.yml`, or `.json` inside an active schema folder will
-   also appear as a selectable schema.
-3. Open the active file in a plain-text editor.
+1. Confirm the legacy file or portable export to import.
+2. Preserve an unchanged backup outside runtime and source-control secrets.
+3. Open the file in a plain-text editor if changes are required.
 4. Make the required changes. Use spaces, not tabs, for indentation.
 5. Save the file as UTF-8 text and keep its existing `.yaml`, `.yml`, or
    `.json` extension.
-6. Open or refresh `/app/schemas`, select the file, and choose **Validate**.
-7. Correct all findings and save the file again if necessary.
-8. Test a representative document in the Review Queue.
+6. Open `/app/schemas`, choose **Import**, and target an editable draft.
+7. Validate and correct every blocking finding.
+8. Publish the schema version, select it in the pipeline draft, and publish the
+   pipeline version.
+9. Test a representative document in the Review Queue.
 
-If the file does not appear in the Review Form Editor, check its folder and file
-extension. If the editor cannot load it after a change, restore the backup and
-validate the restored file.
+If import fails, restore the backup and validate the portable file with the CLI
+described under Advanced Validation.
 
 ### YAML formatting rules
 
@@ -324,12 +333,11 @@ fields:
 | --- | --- | --- |
 | `title` | Yes | Friendly name of the schema |
 | `description` | Recommended | Short explanation of when the form is used |
-| `version` | Recommended | Administrator-controlled version label, such as `"1.1"` |
+| `version` | Optional in portable files | Descriptive source label; SQLite assigns the authoritative immutable version number |
 | `fields` | Yes | Collection of fields displayed on the review form |
 
-The Review Form Editor preserves a version already present in a file, but it does
-not provide a separate Version control. Change `version` through direct file
-editing when your administrative process requires it.
+The Review Form Editor displays authoritative version history. A version label
+inside imported content does not select or overwrite an SQLite version.
 
 ### Field settings
 
@@ -501,8 +509,9 @@ correspond to the schema's child keys.
 
 ## Connect the Schema to the Review Gate
 
-Creating a schema does not automatically assign it to a workflow. The review
-gate must reference the file through `schema_file`.
+Creating or publishing a schema does not automatically assign it to a workflow.
+In the pipeline draft, select the exact published schema version for the review
+gate. The persisted dependency and runtime parameter use `schema_version_id`.
 
 ```yaml
 tasks:
@@ -511,7 +520,7 @@ tasks:
     class: ReviewGateTask
     params:
       confidence_threshold: 0.90
-      schema_file: "schemas/invoice.yaml"
+      schema_version_id: "selected-by-the-admin-editor"
       queue_name: "default_review"
       review_scope: "low_confidence_fields"
       require_review_when_missing_confidence: true
@@ -520,10 +529,9 @@ tasks:
     on_error: stop
 ```
 
-If you use the application's pipeline administration page, select the schema
-file in the review gate settings and validate the pipeline. If you edit
-`config.yaml` directly, preserve its indentation and run the configuration
-check described under Advanced Validation.
+Select only a published version belonging to an active schema template, then
+validate and publish the pipeline draft. Existing pipeline versions and review
+resumes keep their prior schema version when a newer schema is published.
 
 ## Test the Operator's Form
 
@@ -563,7 +571,9 @@ Consider the effect on extraction and active reviews before changing a schema:
 
 Schema changes do not automatically update the extraction provider, convert
 historical values, or recalculate historical confidence information. Coordinate
-key and type changes with the extraction configuration owner.
+key and type changes with the extraction configuration owner. They also do not
+update existing pipeline versions: publish the schema, select it in a pipeline
+draft, and publish a new pipeline version.
 
 ## Troubleshooting
 
@@ -575,8 +585,8 @@ key and type changes with the extraction configuration owner.
 | **Save** is unavailable | Read the validation findings and correct every blocking error. |
 | An operator cannot edit a field | Clear **Read only** unless editing is intentionally prohibited. |
 | A document enters review unexpectedly | Check required fields and the review gate's confidence and business rules. Optional fields can still appear without being required. |
-| A new schema is not used | Confirm that the review gate's `schema_file` points to the new file and that the pipeline change was saved. |
-| A schema is missing from the list | Confirm that it is in a configured schema folder and ends in `.yaml`, `.yml`, or `.json`; then refresh the page. |
+| A new schema is not used | Confirm that it was published, that the exact version is selected in the pipeline draft, and that a new pipeline version was published. |
+| An imported schema is missing | Confirm the import succeeded into the intended draft and that the template is not archived. |
 | Validation reports a path such as `line_items[].unit_price` | Open that nested field. `[]` means the problem applies to an item in a repeating array. |
 | Direct editing caused the schema to stop loading | Restore the backup, then check YAML indentation, tabs, repeated keys, and unquoted special characters. |
 
@@ -656,13 +666,13 @@ both configurations when their shared structure changes.
 
 ## Advanced Validation
 
-The Review Form Editor is the primary validation method for administrators. After
-changing `config.yaml` or schema files directly, an administrator who has
-terminal access can also run the application configuration check from the
-repository root:
+The Review Form Editor is the primary validation method for administrators. A
+terminal user can validate a stored draft/version without changing SQLite:
 
 ```powershell
-.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --review-schema invoice --draft
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --review-schema invoice --version 2
+.\.venv\Scripts\python.exe -m tools.config_check validate-file --file .\schemas\invoice.yaml --kind review-schema
 ```
 
 Exit code `2` means that validation completed with warnings only. Review the

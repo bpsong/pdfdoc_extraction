@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 2.8
-Release Date: 2026-06-28
+Version: 2.9
+Release Date: 2026-07-26
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 2.8
-Release Date: 2026-06-28
+Version: 2.9
+Release Date: 2026-07-26
 Author: [Your Organization/Name]
 
 ---
@@ -74,6 +74,7 @@ Author: [Your Organization/Name]
 | 2.6     | 2026-06-20 | [Your Organization] | Updated role guidance, UI-led operator procedures, account recovery, failure handling, split policy explanations, v2 task examples, upload limits, and recovery guidance |
 | 2.7     | 2026-06-21 | [Your Organization] | Consolidated extraction and metadata storage under canonical module and class names while retaining Extract v2 array-of-objects behavior |
 | 2.8     | 2026-06-28 | [Your Organization] | Added typed scalar-list options and flat structured-object extraction with Pipeline editor, validation, review-schema mapping, and operator documentation |
+| 2.9     | 2026-07-26 | [Your Organization] | Documented SQLite-backed, immutable pipeline and review-schema versions, explicit upload selection, watch-folder bindings, exact-version execution, migration, recovery, and stored-definition validation |
 
 ---
 
@@ -87,13 +88,13 @@ This quick start separates administrator setup from normal operator work.
 2. Initialize the fixed administrator and operator accounts:
 
     ```powershell
-    C:\Python313\python.exe tools\setup_users.py --config config.yaml
+    .\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml
     ```
 
 3. Start the system from the project folder:
 
     ```
-    C:\Python313\python.exe main.py
+    .\.venv\Scripts\python.exe main.py
     ```
 
 4. Open the configured web address and test both accounts.
@@ -103,7 +104,8 @@ This quick start separates administrator setup from normal operator work.
 
 1. Open the web address provided by your administrator and sign in with the operator account.
 2. Select **Upload & Process** from the left navigation menu.
-3. Select the PDF files and choose **Start Processing**.
+3. Select the PDF files, choose an eligible published pipeline version, and
+   choose **Start Processing**. One selection applies to the entire batch.
 4. Follow the batch progress shown after upload.
 5. Use **Review Queue** for documents requiring correction and **Failures** for documents that could not be processed.
 6. Ask an administrator for help when a failure requires configuration or provider changes.
@@ -117,8 +119,12 @@ To stop the service, the administrator presses `Ctrl+C` in the terminal and then
 The PDF Processing System automates extracting information from PDF documents. This version introduces:
 
 Key features:  
-- Configurable workflows via YAML “workflows” and “tasks”  
-  *(YAML is a human-readable configuration file format that uses indentation to organize settings.)*  
+- Multiple named pipeline templates with editable drafts and immutable
+  published versions stored in SQLite.
+- Explicit pipeline-version selection for uploads and exact version bindings
+  for watch folders.
+- YAML and JSON for deployment settings, validation, migration, and portable
+  import/export rather than mutable runtime pipeline authority.
 - Extensible standard steps: split, extraction, review, rules, storage, archiving, housekeeping
   *(Standard steps are predefined operations that the system performs on each file.)*  
 - Centralized configuration and logging  
@@ -137,7 +143,9 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
 ### Components
 
 - **Watch Folder Monitor:** Detects new PDFs in the configured `watch_folder.dir` (the folder the system watches for new files). This directory must pre-exist; it is not auto-created.
-- **Workflow Manager and Loader:** Loads `config.yaml` and runs the single configured pipeline order for every file.  
+- **Workflow Manager and Loader:** Loads the exact immutable pipeline version
+  assigned at ingestion and carries that version through split, review resume,
+  retry, and recovery.
 - **Standard Steps:** Executes ordered tasks for each file (split, extraction, review, rules, storage, archiver, housekeeping).
 - **SQLite State Services:** Record ingestion batches, documents, task runs, extracted fields, review queues, artifacts, settings, and audit events.
 - **Storage:** Writes extracted data to CSV/JSON and moves PDFs to their final destination.  
@@ -182,7 +190,8 @@ When document splitting is enabled, this guide uses two workflow terms:
 ### What happens to your document?
 
 1. Submission: You place a PDF in the watch folder.  
-2. Detection: The system sees the new file and starts the single pipeline configured in `config.yaml`.
+2. Assignment: An upload uses the operator-selected published version; a
+   watched file uses the exact published version in its folder binding.
 3. State record: The system creates SQLite batch/document records and a task-run record for each configured step.
 4. Extraction: Information is extracted through LlamaCloud Extract v2 and field values/confidence are persisted.
 5. Review gate: Optional rules decide whether the document needs human review.
@@ -373,7 +382,7 @@ This section covers setup, configuration, and troubleshooting for administrators
 3. Run the following command to start the system:
 
     ```
-    C:\Python313\python.exe main.py
+    .\.venv\Scripts\python.exe main.py
     ```
 
 4. The system will begin monitoring the watch folder and processing files. By default, this command also starts the web interface, which will be accessible at `http://localhost:8000` (or the host/port configured in `config.yaml`).
@@ -383,7 +392,7 @@ This section covers setup, configuration, and troubleshooting for administrators
 If you only need the watch folder functionality and do not wish to run the web interface, use the `--no-web` argument:
 
     ```
-    C:\Python313\python.exe main.py --no-web
+    .\.venv\Scripts\python.exe main.py --no-web
     ```
 
 **Stopping the service:**
@@ -499,10 +508,25 @@ Do not use `*` for this setting. Command-line tools, Python scripts, and same-or
 
 #### 4.3.3. Pipeline Configuration
 
-Workflows are defined by the ordered list under `pipeline:` and the task registry under `tasks:`. Each item in `pipeline` references a key in `tasks` which specifies `module`, `class`, and `params`. That referenced key is the task's authoritative operational identity in task-run state, errors, and artifact producer metadata.
+SQLite is authoritative for pipeline templates, their editable drafts,
+immutable published versions, exact review-schema dependencies, and
+watch-folder bindings. Use **Pipeline** to create or clone a named template,
+edit and save its draft, validate it, and publish a numbered version. A
+published version cannot be edited or deleted. To change behavior, update the
+draft and publish a new version; existing documents continue with the version
+already assigned to them.
+
+Each definition contains an ordered `pipeline` list and a `tasks` registry.
+Each pipeline entry references a task key with `module`, `class`, and `params`.
+That key is the task's authoritative identity in task-run state, errors, and
+artifact producer metadata.
 The legacy `task_slug` parameter is temporarily accepted for compatibility but is ignored and produces a deprecation warning. Remove it from existing task parameters; do not add it to new configurations.
 The runner reserves `cleanup_task` for automatic housekeeping. It is recorded as an internal task run after configured execution finishes, but it is not added to `tasks` or `pipeline` and does not replace the document's configured pipeline position.
-The current implementation runs the same pipeline for every file; dynamic workflow selection or matching by file metadata is not implemented.
+The upload page requires one eligible published version before it creates a
+batch. Each enabled watch folder likewise requires an exact version binding.
+There is no silent default or “latest” fallback. Automatic classification,
+mixed-document routing to different child pipelines, and conditional workflow
+graphs remain deferred.
 Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
 The active `pipeline` may contain at most one split task, one extraction task, and one review-gate task. Alternate task definitions may remain under `tasks`, but listing more than one task of any singleton type in the active pipeline is a blocking validation error. When used, split must precede extraction and review gate must follow extraction.
@@ -533,7 +557,7 @@ The account names and roles cannot be changed. Passwords are stored in the SQLit
 Before the first login, open PowerShell in the project folder and run:
 
 ```powershell
-C:\Python313\python.exe tools\setup_users.py --config config.yaml
+.\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml
 ```
 
 The tool asks for an administrator password and an operator password, then asks you to confirm each one. Setup stops if the accounts already exist; do not use the reset option for routine setup.
@@ -541,7 +565,7 @@ The tool asks for an administrator password and an operator password, then asks 
 For an upgrade from an older installation, an administrator may import the existing administrator bcrypt hash while setting a new operator password:
 
 ```powershell
-C:\Python313\python.exe tools\setup_users.py --config config.yaml --legacy-config config.yaml
+.\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml --legacy-config config.yaml
 ```
 
 After a successful migration, remove the obsolete `authentication` section from the runtime YAML.
@@ -564,7 +588,7 @@ Changing a password this way signs out existing sessions for the changed account
 Use the setup tool's reset option only when the administrator password is unavailable:
 
 ```powershell
-C:\Python313\python.exe tools\setup_users.py --config config.yaml --reset
+.\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml --reset
 ```
 
 The tool asks for new passwords and replaces the credentials for **both** fixed accounts. Run it against the same configuration file, and therefore the same `database.path`, used by the application. After the reset, test both accounts before returning the system to normal use.
@@ -653,8 +677,18 @@ The administrator menu provides these workflows:
 
 - **Overview:** review configuration health, pipeline and review summaries, split status, and recent audit events.
 - **Users:** change the administrator or operator password after confirming the current administrator password.
-- **Pipeline:** prepare a draft, maintain task order and task parameters including review thresholds and split behavior, compare it with the active configuration, and use the required **Save Draft** -> **Validate** -> **Publish** sequence. Editing or saving invalid parameters cannot enable Publish. Publish repeats the authoritative server-side validation and does not write `config.yaml` when any blocking finding remains.
-- **Review Forms:** configure the fields and controls operators use to review extracted document data.
+- **Pipeline:** create or clone templates, manage lifecycle state, maintain task
+  order and parameters, select exact published review-schema versions, compare
+  versions with redacted diffs, and use **Save Draft** -> **Validate** ->
+  **Publish**. Publishing creates the next immutable version in SQLite and
+  never writes `config.yaml`.
+- **Review Forms:** create or import a schema draft, configure its fields,
+  validate it, publish immutable versions, inspect version history and
+  dependencies, and export a portable definition. A schema must be published
+  before it can be selected in a pipeline draft.
+- **Watch Folders:** create and change bindings from normalized watch-folder
+  paths to exact published pipeline versions. Changing a binding affects only
+  future ingestion.
 - **Task Catalog:** inspect the workflow task classes available to the pipeline.
 - **Validation:** review active configuration, schema, and pipeline findings.
 - **Audit Log:** inspect relevant configuration and governance events.
@@ -716,11 +750,20 @@ Administrator access is determined by the immutable SQLite role. The fixed `admi
 
 For a complete operational backup, include:
 
-- the SQLite database file configured at `database.path`
+- the SQLite database file configured at `database.path` (including templates,
+  drafts, immutable versions, dependencies, and ingress bindings)
 - task-owned output folders such as `files/`, `data/`, `archive_folder/`, and any split task `split_dir` used by configured tasks
-- reference CSVs and schema/config files
+- reference CSVs, deployment configuration, and any portable configuration
+  exports retained by your organization
 
-If the database is restored without the files, the UI may show registered artifacts whose paths no longer exist. If files are restored without the database, the system may still have exports on disk, but batch/task/review history will be incomplete.
+Restore the database and durable artifacts from the same backup point. If the
+database is restored without the files, the UI may show registered artifacts
+whose paths no longer exist. If files are restored without the database,
+batch/task/review history and the exact executable versions needed for resume
+will be incomplete. Do not reconstruct an interrupted run from the newest
+draft or version. A legacy deployment YAML can be imported as a draft during
+migration, but import never publishes and never replaces an already pinned
+definition.
 
 ### 4.6. Log Files and Troubleshooting
 
@@ -1100,7 +1143,13 @@ pipeline:
   - `require_review_when_missing_confidence`: boolean. Default is `true`. When `schema_file` is configured, missing-confidence review gating applies to fields marked `required: true` in the schema and to fields explicitly listed in `field_threshold_overrides`; optional schema fields do not force review solely because confidence is missing.
   - `require_review_for_missing_required_fields`: boolean. Default is `true` when schema validation is used.
   - `always_review`: boolean. If `true`, every document entering this task requires review.
-  - `schema_file`: optional schema name or path used to validate corrected/final field values. It must resolve under a configured schema directory such as `schema.directories`; by default this is `schemas` relative to the config file.
+  - `schema_version_id`: exact published review-schema version selected in the
+    pipeline editor. The runtime injects its immutable definition into the
+    task. The task never reloads a schema draft, newest version, or filesystem
+    file.
+  - `schema_file`: accepted only by legacy YAML/file migration and validation
+    surfaces. Import it into a review-schema draft, publish the schema, and
+    select the resulting exact version before production use.
   - `queue_name`: review queue name. Defaults to `review.default_queue_name` or `default_review`.
   - `review_scope`: controls the reviewer editing scope. Use `"document"` or `"low_confidence_fields"`; it does not decide which review conditions trigger the gate.
   - `allow_operator_to_edit_high_confidence_fields`: boolean. Default is `true`.
@@ -1213,7 +1262,9 @@ pipeline:
   - The active pipeline may contain at most one split task, one extraction task, and one review-gate task.
   - Extract tasks support at most one table field. A field is a table when `is_table: true` or its type is `List[Any]`, including the optional form.
   - Task parameter constraints, including the Nanoid length range of 5-21, are blocking findings.
-  - Publish performs server-side validation again before writing YAML. A rejected publish returns an error and leaves the active `config.yaml` unchanged.
+  - Publish performs server-side validation again and atomically creates the
+    next immutable SQLite version. A rejected publish creates no version and
+    leaves the draft unchanged.
 - Config validation happens at startup via the `ConfigManager`:
   - Validates that `web.upload_dir` exists and is a directory.
   - Validates that `watch_folder.dir` exists and is a directory; if missing/invalid, logs CRITICAL and exits. This path is NOT auto-created.
@@ -1376,7 +1427,7 @@ To use the canonical array-of-objects tasks:
 5. Validate a saved LlamaCloud configuration with the smoke checker:
 
    ```powershell
-   C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+   .\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
    ```
 
    If `configuration_id` is already set in the selected config file, omit the override flag. The smoke checker writes `raw_extract_result.json`, `workflow_normalized_data.json`, and `workflow_fit_report.json`.
@@ -1541,11 +1592,20 @@ The `module` and `class` values under `tasks:` still stay in the normal pipeline
 
 **Audience:** Administrators. Operators should contact an administrator when configuration changes are required.
 
-The `config-check` utility lives under `tools/config_check` and validates `config.yaml` before you deploy or restart services. Run it whenever you modify tasks, pipelines, or environment-specific paths--especially after applying workflow updates from product tasks 13-19.
+The `config-check` utility lives under `tools/config_check`. It validates
+deployment YAML, reads SQLite drafts/versions and bindings without modifying
+them, and validates portable pipeline or review-schema files before import.
 
 **Core workflow**
 - Use `C:\Windows\System32\cmd.exe` or PowerShell from the project root.
-- Execute `C:\Python313\python.exe -m tools.config_check validate --config config.yaml --base-dir .` to lint the active configuration.
+- Execute `.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --base-dir .` to validate deployment settings and the database-backed default selection.
+- Add `--pipeline KEY` or `--review-schema KEY`, with `--draft` or `--version N`,
+  for a stored definition. Use `--all-stored` for all drafts, versions, and
+  bindings.
+- Execute `.\.venv\Scripts\python.exe -m tools.config_check validate-file
+  --file path\to\bundle.yaml --kind pipeline` for a portable definition.
+- Database access is read-only. Exit codes are `0` clean, `1` errors, `2`
+  warnings only, and `64` command usage problems.
 - Pass `--format json` when you need machine-readable output for ticket attachments or CI logs.
 - Treat exit code `0` as success, `1` as blocking errors, and `2` as warnings that still need follow-up.
 

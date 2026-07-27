@@ -300,12 +300,18 @@ class WorkflowLoader:
                     task_instance.on_start(current_context)
 
                     # Wrap the run method as a Prefect task with NO_CACHE to avoid serialization errors
-                    @task(name=f"{task_name}_run", retries=1, retry_delay_seconds=3, cache_policy=NO_CACHE)
-                    def wrapped_run_task(context: dict):
+                    def run_task(context: dict[str, Any]) -> dict[str, Any]:
                         logger = get_run_logger()
                         logger.info(f"--> Running {task_name}")
                         result = task_instance.run(context)
                         return result or {}
+
+                    wrapped_run_task = task(
+                        name=f"{task_name}_run",
+                        retries=1,
+                        retry_delay_seconds=3,
+                        cache_policy=NO_CACHE,
+                    )(run_task)
 
                     # Execute task and get PrefectFuture
                     task_future = wrapped_run_task(current_context)

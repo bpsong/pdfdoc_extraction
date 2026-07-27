@@ -16,6 +16,7 @@ class TempConfig:
 
     def __init__(self, root: Path) -> None:
         self._config_path = root / "config.yaml"
+        self.pipeline_version_id = ""
         self._values = {
             "database.path": str(root / "app.sqlite3"),
             "database.run_migrations_on_startup": True,

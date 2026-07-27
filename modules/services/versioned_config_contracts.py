@@ -26,6 +26,9 @@ ValidationSourceKind = Literal[
     "review_schema_version",
     "portable_pipeline",
     "portable_review_schema",
+    "legacy_review_schema",
+    "pipeline_file",
+    "review_schema_file",
 ]
 LifecycleState = Literal["active", "inactive", "archived"]
 

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+from typing import cast
+
+from fastapi import FastAPI
 
 import modules.api_router as api_router
 from modules.db.connection import connect
@@ -79,12 +82,14 @@ def test_resolved_secret_stays_in_memory_only_across_runtime_api_audit_and_logs(
         lambda self, module_name, class_name: RuntimeTask,
     )
     document = created["documents"][0]
-    WorkflowLoader(
+    workflow = WorkflowLoader(
         config,
         definition=executable.definition,
         pipeline_version_id=executable.version_id,
         pipeline_template_id=executable.template_id,
-    ).load_workflow()(
+    ).load_workflow()
+    assert workflow is not None
+    workflow(
         {
             "id": document["id"],
             "batch_id": created["batch"]["id"],
@@ -94,7 +99,9 @@ def test_resolved_secret_stays_in_memory_only_across_runtime_api_audit_and_logs(
     )
     assert resolved_values == [sentinel]
 
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
+    cast(FastAPI, client.app).dependency_overrides[
+        api_router.get_current_user
+    ] = lambda: "admin"
     responses = [
         client.get("/api/pipelines/available?source=upload"),
         client.get("/api/admin/pipeline-templates?include_archived=true"),
@@ -173,7 +180,9 @@ def test_untrusted_draft_and_module_inputs_cannot_be_selected_or_executed(
     assert draft_upload.status_code == 400
     assert workflow.calls == []
 
-    client.app.dependency_overrides[api_router.get_current_user] = lambda: "admin"
+    cast(FastAPI, client.app).dependency_overrides[
+        api_router.get_current_user
+    ] = lambda: "admin"
     untrusted = client.post(
         "/api/admin/pipeline-templates",
         json={

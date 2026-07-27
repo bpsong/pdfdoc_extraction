@@ -8,23 +8,26 @@
 | Audience | Senior engineers, architects, technical leads, and operational owners |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
-| Last verified | 2026-06-24 |
-| Verified revision | `67c76a9` |
+| Last verified | 2026-07-26 |
+| Verified revision | `88e33a9` plus the Phase 14-15 working-tree audit |
 
 This document describes the current implementation, not a target-state
 architecture.
 
 ## Architecture at a glance
 
-The application processes PDFs through a YAML-configured sequence of Python
-tasks. Files enter through a polling watch folder or authenticated web upload.
-The application creates SQLite batch and document records, executes the
-configured workflow, persists extraction and review state, registers durable
-file artifacts, and exposes operational workflows through FastAPI.
+The application processes PDFs through named, immutable pipeline versions
+stored in SQLite. Files enter through an exact watch-folder binding or an
+authenticated upload whose operator explicitly selects one eligible published
+version. Deployment YAML supplies paths, services, security settings, and
+secret aliases; legacy root `pipeline`/`tasks` and filesystem review schemas
+are migration/import sources rather than active runtime definitions.
 
 The essential model is:
 
 - SQLite is authoritative for operational workflow state.
+- SQLite is authoritative for pipeline/review-schema templates, editable
+  drafts, immutable versions, exact dependencies, and ingress bindings.
 - The filesystem stores PDFs, exports, schemas, configuration, and other large
   artifacts.
 - Prefect wraps task execution and retries; it is not the authoritative
@@ -45,8 +48,10 @@ The essential model is:
    repositories and services rather than status files.
 2. **The filesystem owns large artifacts.** SQLite records artifact role,
    path, and metadata rather than file contents.
-3. **Pipeline composition is configuration-driven.** YAML defines task order,
-   implementation, parameters, and error behavior.
+3. **Pipeline composition is stored and versioned.** An editable SQLite draft
+   defines task order, implementation, parameters, and error behavior.
+   Publication creates an immutable executable version; YAML/JSON remain
+   portable import/export formats.
 4. **Workflow control is application-managed.** SQLite and workflow context
    drive progress, pause, resume, failure, and split behavior.
 5. **Backend responsibilities are layered.** Routes handle HTTP concerns,
@@ -149,20 +154,26 @@ sequenceDiagram
 
 ### Ingestion paths
 
-- **Watch folder:** validates the `%PDF-` signature, assigns a UUID, moves the
-  file to the processing directory, creates a batch/document, and invokes the
-  workflow synchronously. An explicit `False` workflow result is retried; the
-  retry reuses the existing UUID-backed batch/document state rather than
-  creating duplicate or orphan ingestion rows.
+- **Watch folder:** the serialized coordinator reconciles enabled bindings,
+  claims a file only after resolving the binding's exact eligible version,
+  validates the `%PDF-` signature, assigns a UUID, moves the file, and creates
+  assignment-bearing batch/document rows atomically. Binding changes affect
+  later claims only. An explicit `False` workflow result is retried against the
+  same UUID-backed state and assignment.
 - **Primary web upload:** `POST /api/batches/upload` creates one batch with a
-  document per accepted PDF, records source artifacts, and schedules
-  background processing.
+  document per accepted PDF only after the operator supplies one eligible
+  published `pipeline_version_id`. The whole batch shares that exact version;
+  invalid or stale selections create no rows or orphan files.
 - **Legacy web upload:** older single-file routes and response shapes remain
   for compatibility. New browser flows should use the batch API.
 
 ### Pipeline construction
 
-The YAML `pipeline` list defines order. Each entry in `tasks` supplies:
+The exact `pipeline_version_id` assigned before ingestion determines order and
+task configuration. `PipelineDefinitionService` loads that immutable version,
+verifies its content hash and approved module/class pairs, injects exact
+published review-schema dependencies, and resolves configured secret aliases
+in memory. A portable definition uses the familiar shape:
 
 ```yaml
 tasks:
@@ -178,10 +189,11 @@ pipeline:
 
 For each task, `WorkflowLoader` verifies module/class approval, places the
 configured pipeline key and index in `current_task_key` and
-`current_task_index`, starts a SQLite task run when document state is
-available, instantiates the task with the resolved `params`, invokes it
-through a Prefect task wrapper, and persists the result. The pipeline key is
-the authoritative operational identity even when SQLite state is unavailable.
+`current_task_index`, starts a SQLite task run attributed to the pinned
+`pipeline_version_id`, instantiates the task with the resolved immutable
+parameters, invokes it through a Prefect task wrapper, and persists the result.
+It never reloads the current global YAML pipeline or substitutes the newest
+published version.
 `on_error` is `stop` or `continue`. A continued failure is recorded in
 `continued_failures` while the transient `error` fields are cleared for the
 next task, so a successful downstream task receives its own completed task-run
@@ -222,6 +234,8 @@ The context is extensible but weakly typed. State required for resume,
 operator visibility, or audit must also be persisted in SQLite. Detailed task
 rules are in the
 [standard task creation guidelines](../tasks/standard_task_creation_guidelines.md).
+`pipeline_template_id` and `pipeline_version_id` are cached execution identity
+in context; tasks must preserve them, while SQLite remains authoritative.
 
 ## State model
 
@@ -330,6 +344,9 @@ review; mixed terminal outcomes produce `completed_with_errors`.
 | Review | `review_items`, `review_locks` |
 | Artifacts | `document_files` |
 | Governance | `audit_events`, `app_settings`, `config_versions` |
+| Versioned pipelines | `pipeline_templates`, `pipeline_drafts`, `pipeline_versions`, `pipeline_version_schema_dependencies` |
+| Versioned review forms | `review_schema_templates`, `review_schema_drafts`, `review_schema_versions` |
+| Ingress configuration | `watch_folder_bindings` |
 | Schema management | `schema_migrations` |
 
 [`modules/db/connection.py`](../modules/db/connection.py) resolves the database
@@ -388,11 +405,13 @@ Runtime YAML is resolved in this order:
 
 | Concern | Current owner |
 | --- | --- |
-| Pipeline, tasks, paths, web options | Runtime YAML |
+| Pipeline templates, drafts, immutable versions | SQLite versioned-configuration tables |
+| Review-form templates, drafts, immutable versions | SQLite versioned-configuration tables |
+| Exact pipeline-to-review-schema dependency | SQLite `pipeline_version_schema_dependencies` |
+| Upload selection and watch-folder binding | SQLite assignment columns and `watch_folder_bindings` |
+| Paths, web/auth options, database location, secret aliases | Deployment YAML/environment |
 | Operational/admin settings | SQLite `app_settings` |
-| Draft/published configuration history | SQLite `config_versions` |
-| Review form schemas | YAML under configured schema roots |
-| Deployment and reload behavior | Environment variables |
+| Legacy root pipelines and filesystem schemas | Migration/import-only sources |
 
 `ConfigManager` loads YAML, validates static paths, creates most `_dir`
 values, and validates `_dir` and `_file` entries. The watch input directory is
@@ -400,19 +419,27 @@ not auto-created. Additional validation covers pipeline order, task
 cardinality, review/split parameters, schema containment, and dynamic-import
 approval.
 
-The standalone checker provides deeper validation:
+The standalone checker validates deployment YAML and, when `database.path` is
+configured, opens SQLite in read-only/query-only mode and validates the active
+published configuration and bindings by default:
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools.config_check validate `
   --config path\to\config.yaml --import-checks
 ```
 
-Warning-only results use exit code `2`.
+Stored selectors include `--pipeline KEY` or `--review-schema KEY` with exactly
+one of `--draft`/`--version N`; `--all-stored` audits every stored source.
+`validate-file --kind runtime|pipeline|review-schema` validates a portable
+YAML/JSON file without importing it. Warning-only results use exit code `2`;
+usage errors use `64`. The checker does not migrate or modify SQLite.
 
-Admin services support configuration draft, validation, diff, and publish.
-Runtime behavior still depends on configuration loaded by the process, so
-reload semantics matter. Provider secrets must never enter API responses,
-audits, summaries, logs, screenshots, tests, commits, or documentation.
+Admin services support template lifecycle, optimistic draft revision checks,
+validation, redacted diff/export, clone, and immutable publication. Existing
+batches/documents, split children, task runs, and review items remain pinned
+to their recorded versions across later publication or lifecycle changes.
+Provider secrets must never enter API responses, audits, summaries, logs,
+screenshots, tests, commits, or documentation.
 
 ## Frontend and UI architecture
 
@@ -543,6 +570,9 @@ Supported metrics and distributed tracing are not currently emitted.
 Recovery paths are limited:
 
 - Completed review resumes from the next task using final persisted values.
+- Resume reloads the document's pinned pipeline version and the review item's
+  exact stored schema version; inactive or archived templates remain available
+  for already-assigned work.
 - Corrected provider/task failures are normally re-ingested.
 - Fan-in is recomputed as child leaves finish.
 - Arbitrary interrupted flows are not automatically reconstructed; SQLite

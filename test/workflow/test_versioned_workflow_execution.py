@@ -282,7 +282,9 @@ def test_task_runs_are_attributed_to_document_version(tmp_path, monkeypatch):
         pipeline_template_id=executable.template_id,
     )
     document = created["documents"][0]
-    loader.load_workflow()(
+    workflow = loader.load_workflow()
+    assert workflow is not None
+    workflow(
         {
             "id": document["id"],
             "batch_id": created["batch"]["id"],
