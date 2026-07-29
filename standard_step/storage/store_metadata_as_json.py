@@ -78,16 +78,32 @@ class StoreMetadataAsJson(BaseTask):
         self.data_dir: Path = Path(windows_long_path(str(data_dir_str)))
         self.filename_template: str = str(filename_template)
 
-        # Locate extraction.fields config for aliasing and is_table flags.
-        tasks_config = get_all_config(self.config_manager).get("tasks", {})
-        # Retain older fixture/task keys so existing configs still resolve aliases.
-        extract_task_def = (
-            tasks_config.get("extract_document_data")
-            or tasks_config.get("extract_document")
-            or {}
+        # Prefer an exact task-specific mapping. Legacy YAML execution may
+        # still obtain aliases from its extraction task through ConfigManager;
+        # versioned execution receives a deployment-only provider that hides
+        # those mutable workflow sections.
+        extraction_config = self.params.get("extraction")
+        explicit_fields = (
+            extraction_config.get("fields")
+            if isinstance(extraction_config, dict)
+            else None
         )
-        extraction_params = extract_task_def.get("params", {}) if isinstance(extract_task_def, dict) else {}
-        self.extraction_fields_config: Dict[str, Any] = extraction_params.get("fields", {})
+        self.extraction_fields_config: Dict[str, Any]
+        if isinstance(explicit_fields, dict):
+            self.extraction_fields_config = explicit_fields
+        else:
+            tasks_config = get_all_config(self.config_manager).get("tasks", {})
+            extract_task_def = (
+                tasks_config.get("extract_document_data")
+                or tasks_config.get("extract_document")
+                or {}
+            )
+            extraction_params = (
+                extract_task_def.get("params", {})
+                if isinstance(extract_task_def, dict)
+                else {}
+            )
+            self.extraction_fields_config = extraction_params.get("fields", {})
 
         if not self.extraction_fields_config:
             # Not fatal; we can still write JSON without aliasing/is_table metadata

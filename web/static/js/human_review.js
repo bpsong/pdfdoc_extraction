@@ -283,7 +283,7 @@
     }
 
     function formatInputValue(field, value) {
-        if (value === null || value === undefined) {
+        if (value === null || value === undefined || typeof value === "object") {
             return "";
         }
         if (field.type === "number" || field.type === "float") {
@@ -298,6 +298,13 @@
         }
         if (field.type === "datetime") {
             return normalizeDateTimeValue(value);
+        }
+        return String(value);
+    }
+
+    function scalarTextValue(value) {
+        if (value === null || value === undefined || typeof value === "object") {
+            return "";
         }
         return String(value);
     }
@@ -713,7 +720,7 @@
         } else if (field.editor === "textarea") {
             input = createElement("textarea", "textarea textarea-bordered textarea-sm w-full");
             input.rows = 2;
-            input.value = value ?? "";
+            input.value = scalarTextValue(value);
         } else {
             input = createElement("input", "input input-bordered input-sm w-full");
             input.type = field.type === "number" || field.type === "integer" || field.type === "float"

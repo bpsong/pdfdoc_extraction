@@ -95,6 +95,94 @@ def test_scalar_only_fallback_writes_single_row(tmp_path, sample_extraction_conf
     assert row["notes"] == "a,b"
 
 
+def test_versioned_pipeline_does_not_inherit_yaml_extraction_fields(tmp_path):
+    config_manager = cast(
+        ConfigManager,
+        DummyConfigManager(
+            {
+                "data_dir": str(tmp_path),
+                "filename": "{supplier_name}",
+                "tasks": {
+                    "extract_document_data": {
+                        "params": {
+                            "fields": {
+                                "legacy_invoice_number": {
+                                    "alias": "Legacy invoice number",
+                                    "type": "str",
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+        ),
+    )
+    task = StoreMetadataAsCsv(config_manager, params={})
+    context = {
+        "id": "versioned-csv",
+        "pipeline_version_id": "pipeline-version-1",
+        "data": {
+            "supplier_name": "Liberty Insurance",
+            "invoice_amount": 70.0,
+        },
+    }
+
+    task.run(context)
+
+    rows = read_csv_rows(str(next(tmp_path.glob("*.csv"))))
+    assert set(rows[0]) == {"supplier_name", "invoice_amount"}
+    assert "Legacy invoice number" not in rows[0]
+
+
+def test_versioned_pipeline_uses_explicit_csv_extraction_fields(tmp_path):
+    config_manager = cast(
+        ConfigManager,
+        DummyConfigManager(
+            {
+                "data_dir": str(tmp_path),
+                "filename": "{supplier_name}",
+                "tasks": {
+                    "extract_document_data": {
+                        "params": {
+                            "fields": {
+                                "legacy_invoice_number": {
+                                    "alias": "Legacy invoice number",
+                                    "type": "str",
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+        ),
+    )
+    task = StoreMetadataAsCsv(
+        config_manager,
+        extraction={
+            "fields": {
+                "supplier_name": {
+                    "alias": "Supplier",
+                    "type": "str",
+                }
+            }
+        },
+    )
+    context = {
+        "id": "versioned-csv-explicit",
+        "pipeline_version_id": "pipeline-version-1",
+        "data": {
+            "supplier_name": "Liberty Insurance",
+            "invoice_amount": 70.0,
+        },
+    }
+
+    task.run(context)
+
+    rows = read_csv_rows(str(next(tmp_path.glob("*.csv"))))
+    assert set(rows[0]) == {"Supplier", "invoice_amount"}
+    assert rows[0]["Supplier"] == "Liberty Insurance"
+
+
 def test_table_expands_rows_per_item_and_prefixes_item_columns(tmp_path, sample_extraction_config):
     cfg = dict(sample_extraction_config)
     cfg["data_dir"] = str(tmp_path)

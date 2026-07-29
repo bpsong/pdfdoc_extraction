@@ -70,7 +70,16 @@ class StoreMetadataAsCsv(BaseTask):
             self.filename_template = self.config_manager.get("filename")
 
         # Extraction fields config, if present: mapping of workflow field key -> config.
-        self.extraction_fields = self.params.get("extraction", {}).get("fields", {}) or {}
+        extraction_params = self.params.get("extraction")
+        self._extraction_fields_from_params = (
+            isinstance(extraction_params, dict)
+            and isinstance(extraction_params.get("fields"), dict)
+        )
+        self.extraction_fields = (
+            extraction_params.get("fields", {})
+            if isinstance(extraction_params, dict)
+            else {}
+        )
 
         # If not found in params, try to get from config_manager
         if not self.extraction_fields:
@@ -113,15 +122,26 @@ class StoreMetadataAsCsv(BaseTask):
             self.logger.debug("Validation failed: 'data' not in context")
             raise TaskError("Missing 'data' in context for StoreMetadataAsCsv task.")
 
-    def _detect_table_field(self, context: Dict[str, Any]) -> Optional[str]:
+    def _detect_table_field(
+        self,
+        context: Dict[str, Any],
+        extraction_fields: Optional[Dict[str, Any]] = None,
+    ) -> Optional[str]:
         """
         Detect the table field key from extraction_fields config.
 
         Returns:
             Field key in context["data"] marked as is_table: true, or None if none found.
         """
-        # extraction_fields is expected to map workflow field keys to metadata dicts.
-        for field_key, cfg in self.extraction_fields.items():
+        # extraction_fields is expected to map workflow field keys to metadata
+        # dicts. Default to the instance mapping for compatibility with callers
+        # that use this helper directly.
+        effective_fields = (
+            self.extraction_fields
+            if extraction_fields is None
+            else extraction_fields
+        )
+        for field_key, cfg in effective_fields.items():
             try:
                 if isinstance(cfg, dict) and cfg.get("is_table"):
                     # Retain optional override support for older configs while preferring the field key.
@@ -253,8 +273,17 @@ class StoreMetadataAsCsv(BaseTask):
             if not base_filename:
                 base_filename = unique_id
 
+            # Published pipelines must not inherit extraction fields from the
+            # deployment YAML. Their exact-version task params are authoritative.
+            extraction_fields = self.extraction_fields
+            if (
+                context.get("pipeline_version_id")
+                and not self._extraction_fields_from_params
+            ):
+                extraction_fields = {}
+
             # Detect table field (if any)
-            table_field = self._detect_table_field(context)
+            table_field = self._detect_table_field(context, extraction_fields)
             # Build rows and headers
             rows: List[Dict[str, Any]] = []
             headers: List[str] = []
@@ -288,8 +317,8 @@ class StoreMetadataAsCsv(BaseTask):
                 processed_fields = set()
 
                 # First, process fields defined in extraction_fields
-                if self.extraction_fields:
-                    for field_key, cfg in self.extraction_fields.items():
+                if extraction_fields:
+                    for field_key, cfg in extraction_fields.items():
                         # skip fields that are marked as table in v2 (they might be lists of objects)
                         if isinstance(cfg, dict) and cfg.get("is_table"):
                             continue
@@ -360,7 +389,7 @@ class StoreMetadataAsCsv(BaseTask):
                 for sf in scalar_fields:
                     # get alias from extraction_fields if present
                     alias = None
-                    cfg = self.extraction_fields.get(sf, {}) or {}
+                    cfg = extraction_fields.get(sf, {}) or {}
                     alias = cfg.get("alias") if isinstance(cfg, dict) else None
                     alias = alias or cfg.get("name") if isinstance(cfg, dict) else alias
                     header = alias or sf
@@ -373,11 +402,11 @@ class StoreMetadataAsCsv(BaseTask):
                     # e.g. extraction_fields may contain an entry for the table with subfields
                     alias = None
                     # check top-level fields mapping first
-                    cfg_top = self.extraction_fields.get(itf, {}) or {}
+                    cfg_top = extraction_fields.get(itf, {}) or {}
                     if isinstance(cfg_top, dict):
                         alias = cfg_top.get("alias") or cfg_top.get("name")
                     # check table-specific subfield mapping if available
-                    table_cfg = self.extraction_fields.get(table_field, {}) or {}
+                    table_cfg = extraction_fields.get(table_field, {}) or {}
                     if isinstance(table_cfg, dict):
                         # Prefer item_fields over fields for the schema used in tests
                         subfields = table_cfg.get("item_fields") or table_cfg.get("fields") or {}

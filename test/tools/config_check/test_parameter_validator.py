@@ -111,6 +111,35 @@ def test_extraction_fields_require_alias_and_type():
 
     assert any(issue.path.endswith("alias") for issue in result.errors)
 
+
+def test_extraction_api_key_accepts_versioned_secret_reference():
+    tasks = _base_tasks()
+    tasks["extract_metadata"]["params"]["api_key"] = {
+        "$secret": "llamacloud-primary"
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert not any(
+        issue.code == "param-extraction-missing-api-key"
+        for issue in result.errors
+    )
+
+
+def test_extraction_api_key_rejects_malformed_secret_reference():
+    tasks = _base_tasks()
+    tasks["extract_metadata"]["params"]["api_key"] = {
+        "$secret": "INVALID ALIAS",
+    }
+
+    result = validate_parameters({"tasks": tasks})
+
+    assert any(
+        issue.code == "param-extraction-missing-api-key"
+        for issue in result.errors
+    )
+
+
 def test_extraction_table_requires_item_fields():
     tasks = _base_tasks()
     tasks["extract_metadata"]["params"]["fields"]["supplier_name"]["is_table"] = True

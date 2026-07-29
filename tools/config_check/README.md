@@ -56,7 +56,10 @@ All commands are also available through
 authoritative for pipeline templates/drafts/versions, review-schema
 templates/drafts/versions, exact dependencies, and watch-folder bindings.
 Legacy top-level YAML `tasks`, `pipeline`, and filesystem `schema_file`
-definitions are accepted for validation and migration only.
+definitions are accepted for validation and migration only. Once a deployment
+has published its pipelines into SQLite, `tasks` and `pipeline` may be omitted
+from deployment YAML; `pipeline_secrets` remains there so published secret
+references can be resolved at execution time.
 
 When `database.path` is available, `validate` opens SQLite with `mode=ro` and
 `PRAGMA query_only=ON`; validation never migrates or writes the database.
@@ -93,7 +96,9 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 
 ## Validation Coverage Highlights
 
-- Schema checks backed by Pydantic ensure required sections, types, and strict-mode enforcement.
+- Schema checks backed by Pydantic ensure required deployment sections, types,
+  and strict-mode enforcement. Legacy `tasks` and `pipeline` are validated when
+  present but are not required for a SQLite-backed deployment.
 - Parameter validation covers extraction, storage, archiver, context, and rules (UpdateReference) tasks, including typed `object_fields`, table `item_fields`, csv_match clause bounds (1-5), and required column/from_context fields.
 - Pipeline analysis enforces extraction-before-storage, context-before-{nanoid}, and reserved internal task keys.
 - UI/API and stored-definition validation add active workflow business rules

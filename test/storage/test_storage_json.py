@@ -4,6 +4,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, cast
 from modules.config_manager import ConfigManager
+from modules.config_protocol import VersionedTaskConfig
 
 import pytest
 
@@ -22,6 +23,11 @@ class DummyConfigManager:
 
     def get_all(self) -> Dict[str, Any]:
         return self._tasks_conf
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key == "database":
+            return self._tasks_conf.get("database", default)
+        return default
 
 
 @pytest.fixture
@@ -111,6 +117,67 @@ def test_write_with_table_preserves_list_of_objects(temp_dir, config_manager, pa
     assert content["items"] == items
     # additional scalar preserved
     assert content["note"] == "sample"
+
+
+def test_versioned_pipeline_does_not_inherit_yaml_json_aliases(temp_dir):
+    legacy_config = DummyConfigManager(
+        {
+            "extract_document_data": {
+                "params": {
+                    "fields": {
+                        "invoice_amount": {
+                            "alias": "Legacy total",
+                            "type": "float",
+                        }
+                    }
+                }
+            }
+        }
+    )
+    task = StoreMetadataAsJson(
+        cast(ConfigManager, VersionedTaskConfig(legacy_config)),
+        data_dir=str(temp_dir),
+        filename="{invoice_amount}.json",
+    )
+
+    result = task.run(
+        {
+            "id": "versioned-json",
+            "pipeline_version_id": "pipeline-version-1",
+            "data": {"invoice_amount": 70.0},
+        }
+    )
+
+    content = read_json_file(Path(result["output_path"]))
+    assert content == {"invoice_amount": 70.0}
+    assert "Legacy total" not in content
+
+
+def test_versioned_pipeline_uses_explicit_json_extraction_fields(temp_dir):
+    task = StoreMetadataAsJson(
+        cast(ConfigManager, VersionedTaskConfig(DummyConfigManager({}))),
+        data_dir=str(temp_dir),
+        filename="{invoice_amount}.json",
+        extraction={
+            "fields": {
+                "invoice_amount": {
+                    "alias": "Published total",
+                    "type": "float",
+                }
+            }
+        },
+    )
+
+    result = task.run(
+        {
+            "id": "versioned-json-explicit",
+            "pipeline_version_id": "pipeline-version-1",
+            "data": {"invoice_amount": 70.0},
+        }
+    )
+
+    content = read_json_file(Path(result["output_path"]))
+    assert content == {"Published total": 70.0}
 
 
 def test_filename_generation_and_uniqueness(temp_dir, config_manager, patch_status_manager):

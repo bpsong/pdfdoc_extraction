@@ -193,7 +193,10 @@ configured pipeline key and index in `current_task_key` and
 `pipeline_version_id`, instantiates the task with the resolved immutable
 parameters, invokes it through a Prefect task wrapper, and persists the result.
 It never reloads the current global YAML pipeline or substitutes the newest
-published version.
+published version. Versioned tasks receive a restricted configuration provider
+that exposes the SQLite database location for shared persistence but hides
+deployment YAML workflow sections and secrets; task behavior comes only from
+the resolved published parameters.
 `on_error` is `stop` or `continue`. A continued failure is recorded in
 `continued_failures` while the transient `error` fields are cleared for the
 next task, so a successful downstream task receives its own completed task-run
@@ -413,15 +416,17 @@ Runtime YAML is resolved in this order:
 | Operational/admin settings | SQLite `app_settings` |
 | Legacy root pipelines and filesystem schemas | Migration/import-only sources |
 
-`ConfigManager` loads YAML, validates static paths, creates most `_dir`
-values, and validates `_dir` and `_file` entries. The watch input directory is
-not auto-created. Additional validation covers pipeline order, task
-cardinality, review/split parameters, schema containment, and dynamic-import
-approval.
+`ConfigManager` remains the deployment configuration provider for application
+startup, paths, authentication/web options, the SQLite location, task
+approval, and resolving secret aliases before execution. It is not the source
+of workflow composition or task behavior for a versioned document. The watch
+input directory is not auto-created.
 
 The standalone checker validates deployment YAML and, when `database.path` is
 configured, opens SQLite in read-only/query-only mode and validates the active
-published configuration and bindings by default:
+published configuration and bindings by default. Deployment YAML may omit
+legacy root `pipeline` and `tasks` after migration. Valid `$secret` references
+are checked as aliases while resolved values remain outside stored definitions:
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools.config_check validate `

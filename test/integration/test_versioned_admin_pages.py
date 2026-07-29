@@ -19,6 +19,8 @@ def test_admin_pages_render_versioned_workspace_contracts(monkeypatch):
     assert 'id="pipeline-template-select"' in pipelines.text
     assert 'id="pipeline-binding-version"' in pipelines.text
     assert 'id="pipeline-draft-revision"' in pipelines.text
+    assert 'id="pipeline-template-dialog"' in pipelines.text
+    assert 'id="pipeline-template-dialog-key"' in pipelines.text
     assert 'versioned_admin_view_models.js' in pipelines.text
 
 
@@ -37,6 +39,9 @@ def test_versioned_javascript_uses_exact_endpoints_not_legacy_mutations():
     pipeline_source = open(
         "web/static/js/pipeline_config.js", encoding="utf-8"
     ).read()
+    review_source = open(
+        "web/static/js/human_review.js", encoding="utf-8"
+    ).read()
 
     assert "/api/admin/review-schemas" in schema_source
     assert 'apiPut("/api/schemas' not in schema_source
@@ -44,3 +49,8 @@ def test_versioned_javascript_uses_exact_endpoints_not_legacy_mutations():
     assert 'apiPut("/api/admin/pipeline/draft' not in pipeline_source
     assert "schema_version_id" in pipeline_source
     assert "schema_file" not in pipeline_source
+    assert "window.prompt" not in pipeline_source
+    assert 'data-param-type="secret-reference"' in pipeline_source
+    assert "value.$secret" in pipeline_source
+    assert "function scalarTextValue" in review_source
+    assert "input.value = scalarTextValue(value)" in review_source

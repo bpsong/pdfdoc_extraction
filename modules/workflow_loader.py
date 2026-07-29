@@ -16,7 +16,11 @@ from prefect import flow, task, get_run_logger
 from prefect.futures import PrefectFuture
 from prefect.cache_policies import NO_CACHE
 
-from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
+from modules.config_protocol import (
+    ConfigProvider as ConfigManager,
+    VersionedTaskConfig,
+    get_all_config,
+)
 from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect
@@ -64,6 +68,11 @@ class WorkflowLoader:
         self.task_defs = self.cfg.get("tasks", {})
         self.pipeline_version_id = pipeline_version_id
         self.pipeline_template_id = pipeline_template_id
+        self.task_config_manager: ConfigManager = (
+            VersionedTaskConfig(config_manager)
+            if pipeline_version_id is not None
+            else config_manager
+        )
         self.logger = logging.getLogger(__name__)
         self.shutdown_manager = ShutdownManager()
 
@@ -294,7 +303,13 @@ class WorkflowLoader:
 
                     # Import and instantiate the task class, passing config_manager and params
                     task_class = self._import_task_class(module_name, class_name)
-                    task_instance = cast(BaseTask, task_class(config_manager=self.config_manager, **params))
+                    task_instance = cast(
+                        BaseTask,
+                        task_class(
+                            config_manager=self.task_config_manager,
+                            **params,
+                        ),
+                    )
 
                     # Call on_start with context
                     task_instance.on_start(current_context)
@@ -483,7 +498,9 @@ class WorkflowLoader:
                     cleanup_task_run_id = cleanup_task_run["id"]
                     current_context["task_run_id"] = cleanup_task_run_id
 
-                housekeeping_task_instance = CleanupTask(config_manager=self.config_manager)
+                housekeeping_task_instance = CleanupTask(
+                    config_manager=self.task_config_manager
+                )
                 housekeeping_task_instance.on_start(current_context)
 
                 @task(name="cleanup_task_run", retries=1, retry_delay_seconds=3, cache_policy=NO_CACHE)

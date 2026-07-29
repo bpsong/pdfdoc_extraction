@@ -80,6 +80,23 @@ def test_valid_config_passes_schema_validation():
     assert result.model is not None
 
 
+def test_sqlite_deployment_config_does_not_require_legacy_pipeline_sections():
+    config = _build_minimal_config()
+    config.pop("tasks")
+    config.pop("pipeline")
+    config["database"] = {"path": "./data/app_state.sqlite3"}
+    config["schema"] = {"directories": ["./schemas"]}
+    config["pipeline_secrets"] = {"llamacloud-primary": "synthetic-secret"}
+
+    result = validate_config_against_schema(config)
+
+    assert result.errors == []
+    assert result.warnings == []
+    assert result.model is not None
+    assert result.model.tasks is None
+    assert result.model.pipeline is None
+
+
 def test_missing_required_section_reports_error():
     config = _build_minimal_config()
     config.pop("watch_folder")

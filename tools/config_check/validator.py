@@ -197,7 +197,7 @@ class ConfigValidator:
 
         data_dict: Optional[Dict[str, Any]] = None
         if schema_result.model is not None:
-            data_dict = schema_result.model.model_dump(by_alias=True)
+            data_dict = schema_result.model.model_dump(by_alias=True, exclude_none=True)
 
         return ValidationResult(data=data_dict, errors=errors, warnings=warnings)
 
@@ -205,6 +205,8 @@ class ConfigValidator:
         """Run task existence and optional import validation."""
 
         if not isinstance(config_data, dict):
+            return ValidationResult()
+        if "tasks" not in config_data and "pipeline" not in config_data:
             return ValidationResult()
 
         task_result: TaskValidationResult = validate_tasks(
@@ -242,6 +244,8 @@ class ConfigValidator:
 
         if not isinstance(config_data, dict):
             return ValidationResult()
+        if "tasks" not in config_data and "pipeline" not in config_data:
+            return ValidationResult()
 
         parameter_result: ParameterValidationResult = validate_parameters(config_data)
 
@@ -276,6 +280,8 @@ class ConfigValidator:
         """Run pipeline dependency validation."""
 
         if not isinstance(config_data, dict):
+            return ValidationResult()
+        if "tasks" not in config_data and "pipeline" not in config_data:
             return ValidationResult()
 
         pipeline_result: PipelineValidationResult = validate_pipeline(config_data)

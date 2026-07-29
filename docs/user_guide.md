@@ -516,6 +516,12 @@ published version cannot be edited or deleted. To change behavior, update the
 draft and publish a new version; existing documents continue with the version
 already assigned to them.
 
+After at least one pipeline has been published into SQLite, runtime
+`config.yaml` does not need top-level `pipeline` or `tasks` sections. Retain
+deployment settings such as paths, database configuration, custom-task
+approvals, and `pipeline_secrets`; published definitions refer to secret
+aliases and never store resolved secret values.
+
 Each definition contains an ordered `pipeline` list and a `tasks` registry.
 Each pipeline entry references a task key with `module`, `class`, and `params`.
 That key is the task's authoritative identity in task-run state, errors, and
@@ -681,7 +687,8 @@ The administrator menu provides these workflows:
   order and parameters, select exact published review-schema versions, compare
   versions with redacted diffs, and use **Save Draft** -> **Validate** ->
   **Publish**. Publishing creates the next immutable version in SQLite and
-  never writes `config.yaml`.
+  never writes `config.yaml`. **New** and **Clone** open an application dialog
+  for the stable key and display name.
 - **Review Forms:** create or import a schema draft, configure its fields,
   validate it, publish immutable versions, inspect version history and
   dependencies, and export a portable definition. A schema must be published
@@ -744,7 +751,7 @@ administrator interface.
 
 For schema-driven review fields, see the [review schema administrator guide](review_schema_admin_guide.md).
 
-Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings. Configure provider secrets such as `api_key` through `config.yaml`, deployment secret management, or the masked credential control in the administrator Pipeline editor; saved values remain redacted when the pipeline is loaded again.
+Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings. Store provider secrets such as `api_key` under deployment-owned `pipeline_secrets`. The administrator Pipeline editor displays and edits only the corresponding secret alias; it never displays or versions the resolved value.
 
 #### 4.5.6. Backup and Recovery
 
@@ -974,6 +981,9 @@ After fan-out, each child document is a **leaf document** because it is processe
   - Advanced compatibility parameters may use nested `storage.data_dir` / `storage.filename` and a task-specific `extraction.fields` mapping. New configurations should normally use the top-level directory and filename with the extraction task's shared fields.
 - **Behavior:**
   - Uses configured field aliases for column names.
+  - In a published versioned pipeline, columns come from that version's
+    extracted data (or an explicit task-specific `extraction.fields` mapping);
+    deployment-level YAML field mappings are not inherited.
   - If one extraction field has `is_table: true`, writes one row per item and repeats the document-level values.
   - Prefixes item columns with `item_` and falls back to one row when no table data is present.
   - Sanitizes values and generates a unique filename to avoid overwrites.
@@ -1679,7 +1689,7 @@ A: Corrected values are persisted in SQLite with the document extraction state. 
 A: When split processing is enabled, the source PDF can create child documents based on document category and page range. Open the batch from **Processing Overview**, then select its split results to inspect the source and child documents.
 
 **Q: Can administrators change pipeline review or split behavior in the UI?**
-A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters and **Validation** to check configuration health. Secret provider values such as API keys can be configured through `config.yaml`, deployment secret management, or the masked administrator Pipeline control.
+A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters and **Validation** to check configuration health. Store provider values such as API keys in deployment configuration or secret management; the Pipeline editor selects their aliases without displaying the resolved values.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
 A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.

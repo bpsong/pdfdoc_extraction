@@ -9,6 +9,7 @@ from pathlib import Path
 
 # From assign_nanoid tests
 from modules.config_manager import ConfigManager
+from modules.config_protocol import VersionedTaskConfig
 from standard_step.context.assign_nanoid import AssignNanoidTask, TaskError
 
 # Shared fixtures
@@ -56,6 +57,22 @@ def test_init_with_param_and_fallback(mock_windows_long_path, config_manager_moc
     config_manager_mock.get.return_value = None
     task3 = ArchivePdfTask(config_manager_mock)
     assert task3.archive_dir == ""
+
+
+@patch("standard_step.archiver.archive_pdf.windows_long_path", side_effect=lambda x: x)
+def test_versioned_archive_does_not_inherit_yaml_task_params(
+    mock_windows_long_path,
+):
+    config = make_config_manager(
+        {
+            "database": {"path": "data/app_state.sqlite3"},
+            "tasks.archive_original_file.params.archive_dir": r"C:\legacy_archive",
+        }
+    )
+
+    task = ArchivePdfTask(VersionedTaskConfig(config))
+
+    assert task.archive_dir == ""
 
 @patch("os.path.exists")
 @patch("os.path.isdir")
@@ -197,6 +214,22 @@ def test_valid_length_and_context_update(mock_generate):
     result = task.run(ctx)
     assert "data" in result
     assert "nanoid" in result["data"]
+    assert len(result["data"]["nanoid"]) == 10
+
+
+@patch("standard_step.context.assign_nanoid.generate")
+def test_versioned_nanoid_does_not_inherit_yaml_length(mock_generate):
+    mock_generate.side_effect = lambda size: "X" * size
+    config = make_config_manager(
+        {
+            "database": {"path": "data/app_state.sqlite3"},
+            "assign_nanoid.length": 5,
+        }
+    )
+    task = AssignNanoidTask(VersionedTaskConfig(config))
+
+    result = task.run({"pipeline_version_id": "pipeline-version-1"})
+
     assert len(result["data"]["nanoid"]) == 10
 
 

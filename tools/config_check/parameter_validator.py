@@ -54,6 +54,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+from modules.services.versioned_config_contracts import (
+    is_secret_reference,
+    validate_secret_references,
+)
+
 from .pipeline_validator import MODULE_PREFIX_CLASSIFICATION
 from .rules_task_validator import validate_rules_task
 
@@ -466,11 +471,21 @@ def _validate_extraction_credential(
     code: str,
 ) -> None:
     value = params.get(key)
-    if not isinstance(value, str) or not value.strip():
+    valid_secret_reference = (
+        is_secret_reference(value)
+        and not validate_secret_references(value)
+    )
+    if (
+        not valid_secret_reference
+        and (not isinstance(value, str) or not value.strip())
+    ):
         errors.append(
             ParameterIssue(
                 path=f"{params_path}.{key}",
-                message=f"Extraction tasks require '{key}' to be provided as a non-empty string.",
+                message=(
+                    f"Extraction tasks require '{key}' to be a non-empty string "
+                    "or valid $secret reference."
+                ),
                 code=code,
                 details={
                     'config_key': f"{params_path}.{key}",

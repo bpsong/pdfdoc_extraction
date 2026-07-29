@@ -32,6 +32,7 @@
         baseVersionId: null,
         versions: [],
         schemaVersions: [],
+        templateDialogMode: "create",
     };
 
     const activeList = document.getElementById("pipeline-active-list");
@@ -68,6 +69,14 @@
     const bindingAdd = document.getElementById("pipeline-binding-add");
     const bindingFindings = document.getElementById("pipeline-binding-findings");
     const bindingList = document.getElementById("pipeline-binding-list");
+    const templateDialog = document.getElementById("pipeline-template-dialog");
+    const templateForm = document.getElementById("pipeline-template-form");
+    const templateDialogTitle = document.getElementById("pipeline-template-dialog-title");
+    const templateDialogDescription = document.getElementById("pipeline-template-dialog-description");
+    const templateDialogKey = document.getElementById("pipeline-template-dialog-key");
+    const templateDialogName = document.getElementById("pipeline-template-dialog-name");
+    const templateDialogCancel = document.getElementById("pipeline-template-dialog-cancel");
+    const templateDialogSubmit = document.getElementById("pipeline-template-dialog-submit");
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -438,6 +447,10 @@
 
     function parseControlValue(field) {
         const type = field.dataset.paramType || "string";
+        if (type === "secret-reference") {
+            const alias = field.value.trim();
+            return alias ? { $secret: alias } : null;
+        }
         if (type === "checkbox") {
             return field.checked;
         }
@@ -492,17 +505,36 @@
     }
 
     function secretControl(label, path, value) {
-        const configured = Boolean(value);
+        const alias = (
+            value
+            && typeof value === "object"
+            && Object.keys(value).length === 1
+            && typeof value.$secret === "string"
+        ) ? value.$secret : (typeof value === "string" ? value : "");
         return `
             <label class="form-control min-w-0">
-                <span class="label-text">${escapeHtml(label)}</span>
-                <div class="relative min-w-0">
-                    <input class="input input-bordered input-sm w-full min-w-0 pr-10 font-mono" type="password" autocomplete="off" data-secret-input data-param-path="${pathAttr(path)}" value="${controlValue(value)}">
-                    <button class="btn btn-ghost btn-xs btn-circle absolute right-1 top-1" type="button" aria-label="Show ${escapeHtml(label)}" title="Show ${escapeHtml(label)}" data-param-action="toggle-secret">Show</button>
-                </div>
-                <span class="text-xs text-base-content/50 mt-1">${configured ? "Hidden by default. Leave unchanged to keep the saved value." : "No value configured."}</span>
+                <span class="label-text">${escapeHtml(label)} secret alias</span>
+                <input class="input input-bordered input-sm w-full min-w-0 font-mono" autocomplete="off" data-param-type="secret-reference" data-param-path="${pathAttr(path)}" value="${controlValue(alias)}" placeholder="llamacloud-primary">
+                <span class="text-xs text-base-content/50 mt-1">References a value from deployment configuration. The secret itself is never displayed or versioned.</span>
             </label>
         `;
+    }
+
+    function openTemplateDialog(mode) {
+        const cloning = mode === "clone";
+        state.templateDialogMode = cloning ? "clone" : "create";
+        const sourceKey = state.template && state.template.template_key || "pipeline";
+        const sourceName = state.template && state.template.name || "Pipeline";
+        templateDialogTitle.textContent = cloning ? "Clone pipeline" : "New pipeline";
+        templateDialogDescription.textContent = cloning
+            ? "Copy the selected published pipeline into a new template and editable draft."
+            : "Create a new pipeline template and editable draft.";
+        templateDialogKey.value = cloning ? `${sourceKey}-copy` : "new-pipeline";
+        templateDialogName.value = cloning ? `${sourceName} copy` : "New pipeline";
+        templateDialogSubmit.textContent = cloning ? "Clone pipeline" : "Create pipeline";
+        templateDialog.showModal();
+        templateDialogKey.focus();
+        templateDialogKey.select();
     }
 
     function numberControl(label, path, value, attrs, findings) {
@@ -2398,35 +2430,42 @@
         state.templateId = templateSelect.value;
         loadPipelineConfig().catch((error) => window.DocFlow.showToast(error.message, "error"));
     });
-    templateCreate.addEventListener("click", async () => {
-        const templateKey = window.prompt("Stable pipeline key", "new-pipeline");
-        if (!templateKey) return;
-        const name = window.prompt("Pipeline name", "New pipeline") || templateKey;
-        try {
-            const result = await window.DocFlow.apiPost("/api/admin/pipeline-templates", {
-                template_key: templateKey,
-                name,
-            });
-            state.templateId = result.template.id;
-            await loadPipelineConfig();
-        } catch (error) {
-            window.DocFlow.showToast(error.message, "error");
+    templateCreate.addEventListener("click", () => {
+        openTemplateDialog("create");
+    });
+    templateClone.addEventListener("click", () => {
+        if (state.templateId) {
+            openTemplateDialog("clone");
         }
     });
-    templateClone.addEventListener("click", async () => {
-        if (!state.templateId) return;
-        const templateKey = window.prompt("Stable key for the clone", `${state.template.template_key}-copy`);
-        if (!templateKey) return;
-        const name = window.prompt("Clone name", `${state.template.name} copy`) || templateKey;
+    templateDialogCancel.addEventListener("click", () => {
+        templateDialog.close();
+    });
+    templateForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (!templateForm.reportValidity()) {
+            return;
+        }
+        const templateKey = templateDialogKey.value.trim();
+        const name = templateDialogName.value.trim() || templateKey;
+        const cloning = state.templateDialogMode === "clone";
+        if (cloning && !state.templateId) {
+            templateDialog.close();
+            return;
+        }
+        templateDialogSubmit.disabled = true;
         try {
-            const result = await window.DocFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/clone`, {
-                template_key: templateKey,
-                name,
-            });
+            const url = cloning
+                ? `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/clone`
+                : "/api/admin/pipeline-templates";
+            const result = await window.DocFlow.apiPost(url, { template_key: templateKey, name });
+            templateDialog.close();
             state.templateId = result.template.id;
             await loadPipelineConfig();
         } catch (error) {
             window.DocFlow.showToast(error.message, "error");
+        } finally {
+            templateDialogSubmit.disabled = false;
         }
     });
     templateStatus.addEventListener("change", async () => {

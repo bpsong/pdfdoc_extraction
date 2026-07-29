@@ -151,9 +151,44 @@
     </section>
 </div>
 <input id="pipeline-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">
+<dialog id="pipeline-template-dialog" class="modal" aria-labelledby="pipeline-template-dialog-title">
+    <form id="pipeline-template-form" class="modal-box">
+        <h2 id="pipeline-template-dialog-title" class="text-lg font-semibold">New pipeline</h2>
+        <p id="pipeline-template-dialog-description" class="mt-1 text-sm text-base-content/60">
+            Create a new pipeline template and editable draft.
+        </p>
+        <div class="mt-4 grid gap-3">
+            <label class="form-control">
+                <span class="label-text">Stable pipeline key</span>
+                <input
+                    id="pipeline-template-dialog-key"
+                    class="input input-bordered"
+                    required
+                    pattern="[a-z][a-z0-9]*(?:-[a-z0-9]+)*"
+                    autocomplete="off"
+                    aria-describedby="pipeline-template-key-help"
+                >
+                <span id="pipeline-template-key-help" class="mt-1 text-xs text-base-content/50">
+                    Lowercase kebab-case; it cannot be changed after creation.
+                </span>
+            </label>
+            <label class="form-control">
+                <span class="label-text">Pipeline name</span>
+                <input id="pipeline-template-dialog-name" class="input input-bordered" required autocomplete="off">
+            </label>
+        </div>
+        <div class="modal-action">
+            <button id="pipeline-template-dialog-cancel" class="btn btn-ghost" type="button">Cancel</button>
+            <button id="pipeline-template-dialog-submit" class="btn btn-primary" type="submit">Create pipeline</button>
+        </div>
+    </form>
+    <form method="dialog" class="modal-backdrop">
+        <button aria-label="Close pipeline dialog">Close</button>
+    </form>
+</dialog>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script src="/static/js/pipeline_config.js?v=versioned-templates" defer></script>
+<script src="/static/js/pipeline_config.js?v=versioned-templates-2" defer></script>
 {% endblock %}

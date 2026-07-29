@@ -29,6 +29,21 @@ Use `--all-stored --format json` to collect the full set. JSON output and
 redacted diffs must not contain resolved secrets. Exit code `0` is clean, `1`
 has errors, `2` is warning-only, and `64` indicates bad command usage.
 
+Top-level deployment YAML `pipeline` and `tasks` sections are optional after
+their definitions have been published into SQLite. If they remain, the checker
+reports migration-only deprecation warnings; remove them when they are no
+longer needed as import sources. Keep `pipeline_secrets`, because stored
+definitions resolve references such as:
+
+```yaml
+api_key:
+  $secret: llamacloud-primary
+```
+
+The referenced alias must exist under deployment-owned `pipeline_secrets`.
+Config-check accepts the reference object without requiring or exposing the
+resolved value.
+
 ## Portable Definition Findings
 
 Use `validate-file --file PATH --kind pipeline` or `--kind review-schema`

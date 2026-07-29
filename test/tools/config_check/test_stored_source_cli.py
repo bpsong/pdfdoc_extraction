@@ -40,7 +40,7 @@ def _stored_context(tmp_path: Path):
                 "module": "standard_step.extraction.extract_metadata",
                 "class": "ExtractMetadata",
                 "params": {
-                    "api_key": "synthetic-provider-key",
+                    "api_key": {"$secret": "extract-api"},
                     "configuration_id": "synthetic-config",
                     "fields": {
                         "supplier": {"alias": "Supplier", "type": "str"}
@@ -173,6 +173,27 @@ def test_cli_selector_combinations_and_schema_kinds(tmp_path, capsys):
         assert main(["schema", "--kind", kind]) == 0
         output = capsys.readouterr().out
         assert '"type": "object"' in output
+
+
+def test_cli_accepts_deployment_yaml_without_legacy_pipeline(tmp_path, capsys):
+    _, config_path, _, _ = _stored_context(tmp_path)
+    values = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    values.pop("tasks")
+    values.pop("pipeline")
+    config_path.write_text(yaml.safe_dump(values), encoding="utf-8")
+
+    assert main(
+        [
+            "validate",
+            "--config",
+            str(config_path),
+            "--pipeline",
+            "invoice",
+            "--version",
+            "1",
+        ]
+    ) == 0
+    assert "no issues found" in capsys.readouterr().out.lower()
 
 
 def test_missing_and_outdated_database_are_blocking_findings(tmp_path, capsys):

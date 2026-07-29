@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
+from modules.config_protocol import VersionedTaskConfig
 from modules.shutdown_manager import ShutdownManager
 from modules.status_manager import StatusManager
 import yaml
@@ -378,3 +379,54 @@ def test_housekeeping_execution_order_verification(initial_context, mock_all_dep
     # Verify final state
     assert result_context.get("data", {}).get("extracted") is True
     assert result_context.get("data", {}).get("cleaned_up") is True
+
+
+def test_versioned_loader_injects_deployment_only_config(
+    initial_context,
+    mock_all_dependencies,
+    mocker,
+):
+    legacy_loader, _ = mock_all_dependencies
+    captured = {}
+
+    class InspectTask:
+        def __init__(self, config_manager, **params):
+            captured["config_manager"] = config_manager
+            captured["params"] = params
+
+        def on_start(self, context):
+            return None
+
+        def run(self, context):
+            context.setdefault("data", {})["inspected"] = True
+            return context
+
+    definition = {
+        "pipeline": ["inspect"],
+        "tasks": {
+            "inspect": {
+                "module": "standard_step.test.inspect",
+                "class": "InspectTask",
+                "params": {"value": "published"},
+            }
+        },
+    }
+    loader = WorkflowLoader(
+        legacy_loader.config_manager,
+        definition=definition,
+        pipeline_version_id="pipeline-version-1",
+        pipeline_template_id="pipeline-template-1",
+    )
+    mocker.patch.object(loader, "_import_task_class", return_value=InspectTask)
+
+    flow = loader.load_workflow()
+    assert flow is not None
+    result = flow(initial_context)
+
+    task_config = captured["config_manager"]
+    assert isinstance(task_config, VersionedTaskConfig)
+    assert task_config.get("tasks") is None
+    assert task_config.get("pipeline") is None
+    assert captured["params"] == {"value": "published"}
+    assert result["data"]["inspected"] is True
+    assert result["pipeline_version_id"] == "pipeline-version-1"

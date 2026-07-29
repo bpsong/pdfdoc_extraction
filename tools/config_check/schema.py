@@ -211,11 +211,13 @@ class ConfigModel(BaseModel):
     watch_folder: WatchFolderConfig = Field(
         ..., description="Watch folder configuration"
     )
-    tasks: Dict[str, TaskDefinition] = Field(
-        ..., min_length=1, description="Mapping of task identifiers to their definitions"
+    tasks: Optional[Dict[str, TaskDefinition]] = Field(
+        default=None,
+        description="Legacy migration-only mapping of task identifiers to definitions",
     )
-    pipeline: List[str] = Field(
-        ..., min_length=1, description="Ordered execution pipeline referencing task keys"
+    pipeline: Optional[List[str]] = Field(
+        default=None,
+        description="Legacy migration-only ordered pipeline referencing task keys",
     )
 
     # Optional sections (schema remains open-ended for future expansion)
@@ -240,6 +242,15 @@ class ConfigModel(BaseModel):
     custom_steps: Optional[CustomStepsConfig] = Field(
         default=None, description="Deployment-controlled custom task approval registry"
     )
+    schema_config: Optional[Dict[str, Any]] = Field(
+        default=None,
+        alias="schema",
+        description="Filesystem schema migration/import settings",
+    )
+    pipeline_secrets: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Deployment-owned secret values keyed by pipeline secret alias",
+    )
     secrets: Optional[Dict[str, Any]] = Field(
         default=None, description="Secret management configuration"
     )
@@ -253,14 +264,20 @@ class ConfigModel(BaseModel):
 
     @field_validator("tasks")
     @classmethod
-    def _ensure_tasks_not_empty(cls, value: Dict[str, TaskDefinition]) -> Dict[str, TaskDefinition]:
+    def _ensure_tasks_not_empty(
+        cls, value: Optional[Dict[str, TaskDefinition]]
+    ) -> Optional[Dict[str, TaskDefinition]]:
+        if value is None:
+            return value
         if not value:
             raise ValueError("at least one task must be defined")
         return value
 
     @field_validator("pipeline")
     @classmethod
-    def _validate_pipeline_entries(cls, value: List[str]) -> List[str]:
+    def _validate_pipeline_entries(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return value
         if not value:
             raise ValueError("pipeline must contain at least one task reference")
         cleaned: List[str] = []

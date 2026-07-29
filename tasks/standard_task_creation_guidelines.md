@@ -72,6 +72,11 @@ Each task is a self-contained Python module that implements a specific step in t
   exact-version runtime copy assembled by the pipeline definition service.
   Tasks must not replace them with the active YAML pipeline, a newest
   published version, or mutable filesystem schema content.
+- `WorkflowLoader` gives versioned tasks a deployment-only configuration view
+  for shared infrastructure such as SQLite artifact registration. Workflow
+  sections and deployment secrets are intentionally unavailable through that
+  view; every task-specific option must be present in constructor parameters
+  or use a stable built-in default.
 - Resolved secret values in constructor parameters are runtime-only. Never
   copy task parameters wholesale into context, task-run summaries, audit
   events, logs, errors, API payloads, or durable artifacts.
