@@ -15,10 +15,9 @@ import os
 import uuid
 from typing import Any, Optional, Protocol
 import logging
-from pathlib import Path
 
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.utils import windows_long_path, is_pdf_header
+from modules.utils import is_pdf_header
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.db.repositories import DocumentRepository

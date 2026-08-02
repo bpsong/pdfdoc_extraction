@@ -5,7 +5,7 @@
 | Item | Value |
 | --- | --- |
 | Purpose | Executable, checkbox-based implementation plan |
-| Design authority | [Design: Multiple Versioned Pipeline Templates](design-multiple-pipeline-templates.md) |
+| Design authority | [Design: Multiple Versioned Pipeline Templates](../design-multiple-pipeline-templates.md) |
 | Audience | Coding agents, reviewers, test owners, and maintainers |
 | Scope | Versioned pipelines, versioned review schemas, ingestion selection, execution pinning, migration, UI, CLI, testing, and focused documentation |
 | Deferred | Mixed-document cross-pipeline routing and `workflow_runs` |

@@ -7,9 +7,8 @@ correctly identified and appropriate remediation recommendations are provided.
 """
 
 import unittest
-from typing import Dict, Any
 
-from .security_validator import SecurityValidator, SecurityAnalysisResult
+from tools.config_check.security_validator import SecurityValidator
 
 
 class TestSecurityValidator(unittest.TestCase):

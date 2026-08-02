@@ -1,6 +1,9 @@
 # Config-Check Error Codes Reference
 
-This document provides a comprehensive reference of all validation error codes used by the config-check tool, organized by validation category.
+This document provides the operator-facing validation codes used by the
+config-check tool, organized by category. The `code`, `severity`, `path`, and
+`message` in `--format json` output are authoritative for a particular run;
+optional flags can add file, import, performance, or security findings.
 
 ## Schema Validation Error Codes
 
@@ -25,6 +28,39 @@ This document provides a comprehensive reference of all validation error codes u
 | `task-import-class-not-found` | Error | Class not found in module | Verify class name exists in the specified module |
 | `task-import-not-callable` | Error | Specified attribute is not a callable class | Ensure attribute is a class, not a variable or function |
 
+## Stored Configuration And Versioning Error Codes
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `database-unavailable` | Error | Configured SQLite database cannot be opened read-only | Correct `database.path` and permissions; do not ask config-check to create or migrate it |
+| `database-schema-unavailable` | Error | Migration metadata cannot be read | Back up the database and start the application with approved migrations enabled |
+| `database-schema-outdated` | Error | Database migration version is behind the required version | Apply application migrations before validating stored content |
+| `database-schema-incomplete` | Error | Required versioned-configuration tables are missing | Apply application migrations; do not create tables manually |
+| `stored-active-pipeline-missing` | Error | No active published pipeline version is eligible | Publish and activate a valid pipeline template |
+| `stored-selector-invalid` | Error | Draft/version selector combination is invalid | Use exactly one of `--draft` or `--version N` with a stored key |
+| `stored-pipeline-not-found` | Error | Selected pipeline draft/version is absent | Check the stable key and version number |
+| `stored-review-schema-not-found` | Error | Selected review-form draft/version is absent | Check the stable key and version number |
+| `stored-pipeline-hash-mismatch` | Error | Immutable pipeline content no longer matches its hash | Restore a verified database backup; do not edit immutable rows |
+| `stored-review-schema-hash-mismatch` | Error | Immutable review-form content no longer matches its hash | Restore a verified database backup; do not edit immutable rows |
+| `binding-folder-unavailable` | Error | Enabled watch binding is not an accessible directory | Provision the exact binding folder or disable/correct the binding |
+| `binding-folder-overlap` | Error | Enabled binding folders are equal or nested | Use distinct, non-overlapping watch folders |
+| `binding-pipeline-inactive` | Error | Enabled binding references an inactive template | Activate an eligible template/version or update the binding |
+| `pipeline-secret-alias-unconfigured` | Error | A stored `$secret` alias is absent from deployment YAML | Add the alias under `pipeline_secrets` without exposing it in the stored definition |
+| `legacy-runtime-definition-deprecated` | Warning | Deployment YAML still contains top-level `tasks`/`pipeline` | Remove migrated workflow definitions after their versions are published |
+| `legacy-filesystem-schema-deprecated` | Warning | A filesystem review schema remains as migration input | Import and publish the review form, then replace `schema_file` with an exact version dependency |
+
+## Portable And Versioned Definition Error Codes
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `versioned-config-not-json` | Error | Definition contains a value that cannot be represented canonically | Use JSON-compatible mappings, lists, strings, numbers, booleans, and nulls |
+| `pipeline-schema-version-unsupported` | Error | Pipeline contract version is unsupported | Export from the current application or use its current schema version |
+| `pipeline-literal-or-invalid-secret` | Error | Secret-like parameter is literal or has malformed `$secret` syntax | Store only `{ "$secret": "alias" }` and configure the alias in deployment YAML |
+| `review-schema-not-json` | Error | Review-form content cannot be represented canonically | Use JSON-compatible schema content |
+| `review-schema-format-version-unsupported` | Error | Review-form contract version is unsupported | Export or recreate it with the current application |
+| `review-schema-invalid` | Error | Stored/portable review-form structure is invalid | Correct the reported field path and schema constraint |
+| `portable-review-schema-invalid` | Error | Portable review-form wrapper/content is invalid | Correct the portable file before import |
+
 ## Pipeline Business Rule Error Codes
 
 ### Pipeline Structure And Dependencies
@@ -41,6 +77,7 @@ This document provides a comprehensive reference of all validation error codes u
 | `pipeline-nanoid-before-context` | Error | Task references `{nanoid}` before a context initializer task | Add/move `AssignNanoidTask` before the task using `{nanoid}` |
 | `pipeline-unknown-token` | Error | Template token does not match a known extraction field or context token | Add the extraction field or update the template |
 | `pipeline-storage-filename-non-scalar` | Warning | Storage filename token references a table/non-scalar field | Use a scalar extraction field in filenames |
+| `pipeline-reserved-internal-task-key` | Error | User definition includes runner-owned `cleanup_task` | Remove it; cleanup is added by the workflow runner |
 
 ### Pipeline Cardinality And Ordering
 | Code | Severity | Description | Fix |
@@ -70,9 +107,12 @@ This document provides a comprehensive reference of all validation error codes u
 | `review-gate-invalid-confidence-threshold` | Error | Confidence threshold is outside 0 through 1 or not numeric | Set `confidence_threshold` to a number from 0 through 1 |
 | `review-gate-invalid-resume-policy` | Error | Unsupported resume policy | Use `resume_policy: next_task` or omit it |
 | `review-gate-invalid-split-confidence-levels` | Error | Split review confidence levels are invalid | Use a list containing only `high`, `medium`, or `low` |
-| `review-gate-schema-not-found` | Error | Referenced review schema cannot be loaded | Point `schema_file` at a configured schema file |
-| `schema-load-failed` | Error | Configured schema file could not be loaded | Fix the schema path or YAML/JSON syntax |
-| `schema-invalid` | Error | Schema file structure is invalid | Fix unsupported field types, enum choices, numeric constraints, object properties, or array items |
+| `review-gate-schema-version-required` | Error | Stored review gate lacks an exact published schema version | Select a published review-form version in the pipeline draft |
+| `review-gate-schema-version-not-found` | Error | Exact stored review-form dependency cannot be resolved | Select an existing eligible published version |
+| `review-gate-schema-version-mismatch` | Error | Task parameter and persisted schema dependency disagree | Re-select the schema version and save the pipeline draft |
+| `review-gate-schema-not-found` | Error | Legacy `schema_file` migration reference cannot be loaded | Correct and import the file, then replace it with a published version dependency |
+| `schema-load-failed` | Error | Legacy schema file could not be loaded | Fix the migration file path or YAML/JSON syntax |
+| `schema-invalid` | Error | Legacy schema file structure is invalid | Fix unsupported field types, enum choices, numeric constraints, object properties, or array items |
 
 ## Split Task Validation Error Codes
 
@@ -81,7 +121,7 @@ This document provides a comprehensive reference of all validation error codes u
 | `split-params-not-mapping` | Error | `LlamaCloudSplitTask.params` is not a mapping | Define params as a YAML mapping |
 | `split-missing-split-dir` | Error | Split task lacks `params.split_dir` | Add a non-empty split output directory |
 | `split-missing-categories-or-configuration` | Error | Enabled split task lacks both categories and configuration id | Add `configuration_id` or `categories` |
-| `split-missing-runtime-api-key` | Warning | Enabled split task lacks runtime API key and no adapter is configured | Add `api_key` or ensure an adapter is injected by tests |
+| `split-missing-runtime-api-key` | Warning | Enabled split task lacks runtime API key and no adapter is configured | In a versioned definition use an `api_key` `$secret` reference; adapters are test-only |
 | `split-invalid-allow-uncategorized` | Error | `allow_uncategorized` has an unsupported value | Use `include`, `forbid`, or `omit` |
 | `split-invalid-fail-on-confidence-levels` | Error | Invalid confidence level list | Use a list containing only `high`, `medium`, or `low` |
 | `split-invalid-fail-on-unknown-category` | Error | `fail_on_unknown_category` is not boolean | Set it to `true` or `false` |
@@ -98,7 +138,7 @@ This document provides a comprehensive reference of all validation error codes u
 | `rules-csv-not-readable` | Error | CSV file cannot be opened or parsed | Verify file is valid CSV format with proper permissions |
 | `rules-csv-empty` | Error | CSV file is empty | Add data to CSV file or use different reference file |
 | `rules-csv-missing-headers` | Error | CSV file has no column headers | Add proper column headers to first row of CSV |
-| `rules-csv-pandas-missing` | Error | pandas library required but not available | Install pandas: `pip install pandas` |
+| `rules-csv-pandas-missing` | Error | pandas library required but not available | Restore the repository environment with `pip install -r requirements.txt` |
 
 ### Column Reference Validation
 | Code | Severity | Description | Fix |
@@ -165,7 +205,7 @@ This document provides a comprehensive reference of all validation error codes u
 | Code | Severity | Description | Fix |
 |------|----------|-------------|-----|
 | `param-extraction-not-mapping` | Error | Extraction task params are not a mapping | Define params as a YAML mapping |
-| `param-extraction-missing-api-key` | Error | Extraction task lacks `api_key` | Add a non-empty API key or deployment placeholder |
+| `param-extraction-missing-api-key` | Error | Extraction task lacks a valid `api_key` value/reference | In a versioned definition add `api_key: { "$secret": "alias" }`; configure the alias only in deployment YAML |
 | `param-extraction-invalid-configuration-id` | Error | `configuration_id` is present but empty or not a string | Use a non-empty configuration id or omit it |
 | `param-extraction-missing-fields` | Error | Extraction task lacks field definitions | Add a non-empty `fields` mapping |
 | `param-extraction-multiple-tables` | Error | More than one extraction field is marked `is_table: true` | Keep one table field or split extraction design |
@@ -192,6 +232,7 @@ This document provides a comprehensive reference of all validation error codes u
 | `param-context-length-bounds` | Error | Context task `length` is outside bounds | Set `length` between 5 and 21 |
 | `param-housekeeping-not-mapping` | Error | Housekeeping params are not a mapping | Define params as a YAML mapping |
 | `param-housekeeping-processing-dir-invalid` | Error | Cleanup `processing_dir` is empty or not a string | Use a non-empty directory string |
+| `param-deprecated-task-slug` | Warning | Task params contain ignored `task_slug` | Remove it; the pipeline mapping key is authoritative |
 
 ## Error Severity Levels
 
@@ -204,6 +245,7 @@ This document provides a comprehensive reference of all validation error codes u
 - Configuration may cause issues or uses deprecated features
 - Should be addressed but won't prevent operation
 - Examples: Deprecated syntax, potential type mismatches, impossible conditions
+- Exit code `2` applies only when warnings exist and no errors exist
 
 ### Info (Exit Code 0)
 - Informational messages about configuration

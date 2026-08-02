@@ -20,7 +20,7 @@ version.
 - [What a Review Schema Controls](#what-a-review-schema-controls)
 - [Before You Begin](#before-you-begin)
 - [Method 1: Use the Review Form Editor](#method-1-use-the-review-form-editor)
-- [Method 2: Create or Edit a Schema File Directly](#method-2-create-or-edit-a-schema-file-directly)
+- [Method 2: Import or Export a Schema File](#method-2-import-or-export-a-schema-file)
 - [Schema File Reference](#schema-file-reference)
 - [Complete Example: Invoice Review Form](#complete-example-invoice-review-form)
 - [Connect the Schema to the Review Gate](#connect-the-schema-to-the-review-gate)
@@ -80,19 +80,20 @@ before asking operators to continue.
 1. Start the application and sign in as an administrator.
 2. Open `http://localhost:8000/app/schemas`, or select **Review Forms** from the
    administrator navigation.
-3. Select an existing schema template from the list, or select **New Schema**.
+3. Select an existing schema template from the list, or select **New Review
+   Form**.
 
 The page contains three areas:
 
 - **Review Forms** lists schema templates and lifecycle/version information.
 - The center panel contains the editable draft metadata and fields.
-- **YAML Preview** shows the current draft in YAML form. The preview is read
-  only; use the center-panel controls to make changes. When the selected file
-  ends in `.json`, the application saves the equivalent JSON content.
+- The right panel contains validation findings, immutable-version history,
+  published-pipeline dependencies, and a read-only **YAML Preview** of the
+  current draft. Use the center-panel controls to make changes.
 
 ### Create a schema
 
-1. Select **New Schema**.
+1. Select **New Review Form**.
 2. Enter a unique stable key and a clear display name.
 3. Enter a clear **Title**, such as `Invoice Review`.
 4. Enter a short **Description** explaining when the form is used.
@@ -111,7 +112,7 @@ The application will not overwrite another template with the same key.
 
 1. Select the schema from the left panel. Use **Search schemas** if the list is
    long.
-2. Confirm the file name and title before changing anything.
+2. Confirm the stable key, display name, and title before changing anything.
 3. Change the metadata or fields. An asterisk beside the schema title indicates
    that the draft has unsaved changes.
 4. Select **Validate** and resolve all findings.
@@ -121,7 +122,8 @@ The application will not overwrite another template with the same key.
 7. Test the resulting form with a representative document.
 
 Published content is immutable. Editing always changes the draft, not an
-existing version. Use clone/duplicate to create a separate template.
+existing version. To create a separate template, select **New Review Form** and
+import an exported definition into its draft.
 
 ### Add and configure a field
 
@@ -208,25 +210,26 @@ For example, a `serial_numbers` array contains repeated text values, while a
 `line_items` array normally contains objects with child fields such as
 `description`, `quantity`, and `unit_price`.
 
-### Validate, save, publish, clone, import, and export
+### Validate, save, publish, import, export, and change lifecycle
 
 - **Validate** checks the current draft without saving it.
 - **Save Draft** persists editable content in SQLite.
 - **Publish** repeats validation and creates the next immutable version.
-- **Clone/Duplicate** creates a separate template and editable draft.
 - **Import** accepts a portable YAML/JSON definition into a draft; it never
   publishes automatically.
 - **Export** emits a portable, redacted definition with stable key, version
   metadata, and content hash rather than database UUIDs.
+- **Status** follows `inactive` -> `active` -> `inactive` -> `archived`.
+  A template must have a published version before activation; archived
+  templates cannot be edited or published.
 
 Save remains unavailable while the editor detects a blocking error. Common
-errors include a missing title, an empty or duplicate key, an invalid file
-extension, an invalid text pattern, or minimum and maximum values that
+errors include a missing title, an empty or duplicate key, an invalid text
+pattern, or minimum and maximum values that
 contradict each other.
 
 The editor warns before discarding unsaved changes when you select another
-schema, create or duplicate a schema, follow another link, refresh, or close
-the page.
+schema, create a schema, follow another link, refresh, or close the page.
 
 Before deactivating or archiving a template, inspect its dependencies. Published
 pipeline versions and in-progress reviews retain access to the exact immutable
@@ -257,7 +260,7 @@ draft, publish it, replace the review-gate parameter in the pipeline draft with
 the selected exact `schema_version_id`, then publish the pipeline. Do not assume
 that a file or schema draft is currently used by a workflow.
 
-The schema folders can be configured explicitly:
+Folders used to locate legacy filesystem schemas can be configured explicitly:
 
 ```yaml
 schema:
@@ -266,8 +269,9 @@ schema:
 ```
 
 Relative folder names are resolved from the folder containing `config.yaml`.
-If several schema folders are configured, the Review Form Editor saves new schemas
-in the first folder. Ask the application owner before changing these folders.
+They do not control where Review Form Editor drafts are saved; those drafts and
+their published versions are stored in SQLite. Ask the application owner before
+changing the legacy schema search roots.
 
 ### Safe import procedure
 

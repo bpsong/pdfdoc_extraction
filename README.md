@@ -1,8 +1,7 @@
 ﻿# PDF Document Processing System
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.136.3-green.svg)](https://fastapi.tiangolo.com/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.139.2-green.svg)](https://fastapi.tiangolo.com/)
 
 A sophisticated PDF document processing system that leverages AI-powered extraction to convert unstructured PDF documents into structured data. Built with modern Python technologies and designed for enterprise document processing workflows.
 
@@ -19,13 +18,19 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Multiple Input Methods
 - **Watch Folder Monitoring**: Automated processing of dropped PDF files
 - **Web Upload Interface**: User-friendly web portal for manual uploads
-- **Real-time Processing**: Live status updates and progress tracking
+- **Polled Processing Status**: Browser pages refresh workflow progress at
+  short intervals
 - **Batch Uploads**: `/app/upload` supports multi-file upload and creates batch/document records for tracking
 
 ### Configurable Pipeline Architecture
 - **Modular Design**: Pluggable processing steps (extraction, storage, archiving, rules)
 - **Prefect Workflow Orchestration**: Reliable task execution and error handling
-- **Dynamic Configuration**: YAML-based pipeline definition
+- **Versioned Configuration**: Named SQLite pipeline templates with editable
+  drafts, immutable published versions, and exact review-form dependencies
+- **Explicit Routing**: Uploads select one exact published version and each
+  watch-folder binding pins one exact version
+- **Deployment YAML**: `config.yaml` owns paths, web/auth/logging settings,
+  custom-task approvals, and secret aliases—not new workflow definitions
 - **Extensible Framework**: Easy to add new processing steps
 - **SQLite-backed Workflow State**: Batches, documents, task runs, extracted fields, review items, artifacts, settings, and audit history are persisted in SQLite
 
@@ -39,7 +44,9 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Modern Web Interface
 - **FastAPI Backend**: High-performance REST API
 - **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/reports`, and `/app/settings`
-- **Admin App**: `/app/admin`, `/app/admin/pipeline`, `/app/admin/tasks`, `/app/admin/audit`, and `/app/admin/dry-run` (Review Gate Simulator)
+- **Admin App**: `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`,
+  `/app/schemas`, `/app/admin/tasks`, `/app/settings/validation`, and
+  `/app/admin/audit`
 - **Review Workflows**: Human review queues for low-confidence or policy-triggered extracted fields
 - **Responsive Design**: Mobile-friendly interface
 
@@ -71,15 +78,20 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 
 2. **Install dependencies**
    ```powershell
-   C:\Python313\python.exe -m pip install -r requirements.txt
+   py -3.13 -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install --upgrade pip
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
    ```
 
 3. **Configure the system**
-   Open `config.yaml` in the project root and set your host, credentials, and task parameters.
+   Open the ignored local `config.yaml` and set deployment paths, web/auth
+   settings, and provider secret aliases. Do not place new `tasks` or
+   `pipeline` blocks there. Create folders required by `watch_folder.dir` and
+   `web.upload_dir` before startup.
 
 4. **Run the application**
    ```powershell
-   C:\Python313\python.exe main.py
+   .\.venv\Scripts\python.exe main.py
    ```
 
    Database migrations run automatically on startup when `database.run_migrations_on_startup` is enabled.
@@ -90,14 +102,16 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ## Installation
 
 ### System Requirements
-- **Operating System**: Windows 11 (primary), cross-platform compatibility
+- **Operating System**: Windows 11 is the primary supported development/runtime
+  environment
 - **Python Version**: 3.13+
-- **Memory**: 4GB minimum, 8GB recommended
-- **Storage**: 2GB free space for application + document storage
+- **Memory and Storage**: Size for the PDF volume, provider workload, retained
+  artifacts, and SQLite database; no fixed production capacity is enforced by
+  the application
 
 ### Dependencies Installation
-```bash
-C:\Python313\python.exe -m pip install -r requirements.txt
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
 Key dependencies:
@@ -124,74 +138,50 @@ database:
   run_migrations_on_startup: true
 
 review:
-  enabled: true
   default_queue_name: "default_review"
   lock_timeout_minutes: 60
 
 watch_folder:
-  dir: "watch_folder"
+  dir: "watch_folder"  # required startup-compatibility path, not pipeline routing
   validate_pdf_header: true
   processing_dir: "processing_folder_default"
 
-tasks:
-  extract_document_data:
-    module: standard_step.extraction.extract_pdf
-    class: ExtractPdfTask
-    params:
-      api_key: "your_llama_cloud_api_key"
-      # Optional: use a saved Extract v2 configuration from the LlamaCloud UI.
-      # If omitted, the task builds an inline schema from fields.
-      configuration_id: "your_extract_v2_configuration_id"
-      tier: "agentic"
-      extraction_target: "per_doc"
-      fields:
-        supplier_name:
-          alias: "Supplier name"
-          type: "str"
-        summary:
-          alias: "Summary"
-          type: "Dict[str, Any]"
-          object_fields:
-            invoice_count:
-              alias: "Invoice count"
-              type: "int"
-            total_amount:
-              alias: "Total amount"
-              type: "float"
-            approved:
-              alias: "Approved"
-              type: "bool"
-        items:
-          alias: "Items"
-          type: "List[Any]"
-          is_table: true
-          item_fields:
-            description:
-              alias: "description"
-              type: "str"
-            quantity:
-              alias: "quantity"
-              type: "str"
-
-pipeline:
-  - extract_document_data
+pipeline_secrets:
+  llamacloud-primary: "SET-ONLY-IN-THIS-LOCAL-IGNORED-FILE"
 ```
 
-Output folders are task-owned. For example, CSV/JSON tasks use `params.data_dir`, local PDF storage uses `params.files_dir`, archive tasks use `params.archive_dir`, and split tasks use required `params.split_dir`; `_dir` paths are auto-created at startup except `watch_folder.dir`.
+Create review forms and pipelines visually after startup: publish and activate a
+review-form version when schema-driven review is needed, add tasks to a pipeline
+draft, reference secrets as `{ "$secret": "llamacloud-primary" }`, save,
+validate, publish, and activate the pipeline. `config.yaml` does not need
+top-level `tasks` or `pipeline` sections after migration.
+
+Output folders are task-owned in the exact SQLite pipeline version. CSV/JSON
+tasks use `data_dir`, local PDF storage uses `files_dir`, archive tasks use
+`archive_dir`, and split tasks use `split_dir`. CSV/JSON/local-PDF/split tasks
+create their output directory when execution begins if permissions allow;
+`ArchivePdfTask` requires its configured archive directory to exist.
+Deployment `_dir` keys are the paths that `ConfigManager` creates at startup,
+except `watch_folder.dir`.
 
 The current runtime uses the `llama-cloud` SDK and `LlamaCloud` client. New code should not use the legacy `llama-cloud-services` / `LlamaExtract` agent flow. `agent_id` is legacy; use `configuration_id` for saved Extract v2 configurations or omit it to build an inline schema from `fields`.
 
 ### Manual LlamaCloud Smoke Check
 
 After validating a saved Extract v2 configuration in the LlamaCloud UI, you can
-run a one-file SDK and workflow fit check against `sample_invoice.pdf`:
+run a one-file SDK and workflow fit check against `sample_invoice.pdf`. The
+manual tool reads a YAML task definition; it does not read SQLite or resolve
+`pipeline_secrets`. Export/copy the selected pipeline definition to an ignored
+local smoke file and provide the API key through the current process:
 
 ```powershell
-C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+$env:LLAMA_CLOUD_API_KEY = "set-locally"
+.\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config smoke-pipeline.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
 ```
 
-If `configuration_id` is already set in `dev_config.yaml`, omit the override
-flag.
+If `configuration_id` is already set in the smoke definition, omit the override
+flag. Do not commit the smoke definition or output because they can contain
+customer/provider data.
 
 The script writes:
 
@@ -204,7 +194,7 @@ The script writes:
 To re-check a saved raw result without another LlamaCloud call:
 
 ```powershell
-C:\Python313\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --raw-json test\data\llamacloud_smoke\raw_extract_result.json
+.\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config smoke-pipeline.yaml --raw-json test\data\llamacloud_smoke\raw_extract_result.json
 ```
 
 ### Environment Variables
@@ -232,42 +222,49 @@ Text status files are not required for configured workflow state. `/api/files` a
 Before first login, initialize the two fixed SQLite users:
 
 ```powershell
-C:\Python313\python.exe tools\setup_users.py --config config.yaml
+.\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml
 ```
 
 For an upgrade from YAML credentials, preserve the existing admin hash while creating the operator account:
 
 ```powershell
-C:\Python313\python.exe tools\setup_users.py --config config.yaml --legacy-config config.yaml
+.\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml --legacy-config config.yaml
 ```
 
 After a successful import, remove the legacy `authentication` block. Passwords must contain uppercase, lowercase, numeric, and symbol characters and be 12–72 UTF-8 bytes.
 
 1. **Login**: Access the app at `http://localhost:8000/app/upload` and select `admin` or `operator`
-2. **Upload PDFs**: Use `/app/upload` to submit one or more PDFs as a batch
+2. **Upload PDFs**: Use `/app/upload`, select one exact eligible published
+   pipeline version for the whole batch, and submit one or more PDFs
 3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track splitting, extraction, review, and completion state
 4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
 5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
 6. **Inspect Batch History**: Use `/app/reports` and click a recent batch row to view document task timelines and task-run details
-7. **Administer Configuration**: Admin users use `/app/admin/*` pages for pipeline, task catalog, audit, review-gate simulation, and schema workflows
+7. **Administer Configuration**: Admin users create/version pipelines in
+   `/app/admin/pipeline`, review forms in `/app/schemas`, inspect tasks and
+   validation, manage users, and view the `admin_` audit subset
 
 ### Watch Folder
 
-1. **Drop PDFs** into the `watch_folder` directory
-2. **Automatic Processing**: Files are automatically detected and processed
-3. **Status Updates**: Monitor progress through the web interface
+1. **Create a binding**: In the bottom of `/app/admin/pipeline`, bind an
+   existing, non-overlapping incoming folder to one exact published version
+2. **Drop PDFs** into that bound directory; `watch_folder.dir` alone is only a
+   required startup-compatibility path and does not assign a workflow
+3. **Automatic Processing**: Enabled bindings are scanned and files are pinned
+   to their bound version before processing
+4. **Status Updates**: Monitor progress through Reports and Processing Overview
 
 ### Command Line
 
 ```powershell
 # Run with default configuration
-C:\Python313\python.exe main.py
+.\.venv\Scripts\python.exe main.py
 
 # Use custom configuration
-C:\Python313\python.exe main.py --config-path custom_config.yaml
+.\.venv\Scripts\python.exe main.py --config-path custom_config.yaml
 
 # Run without web server (watch folder only)
-C:\Python313\python.exe main.py --no-web
+.\.venv\Scripts\python.exe main.py --no-web
 ```
 
 ## API Reference
@@ -283,7 +280,9 @@ The `admin` account has full access. The `operator` account cannot access admini
 
 ### File Operations
 - `POST /upload`: Legacy single-PDF upload endpoint; redirects to `/app/processing` after scheduling
-- `POST /api/batches/upload`: Upload a batch of PDFs and create SQLite batch/document records
+- `GET /api/pipelines/available`: List exact pipeline versions eligible for the current user
+- `POST /api/batches/upload`: Upload a batch of PDFs with a required
+  `pipeline_version_id` and create SQLite batch/document records
 - `GET /api/batches`: List ingestion batches
 - `GET /api/batches/{batch_id}`: Get batch details
 - `GET /api/batches/{batch_id}/documents`: List batch documents
@@ -304,11 +303,20 @@ The `admin` account has full access. The `operator` account cannot access admini
 - `GET /api/settings`: Non-secret runtime settings for operators
 - `GET /api/admin/settings`, `PUT /api/admin/settings`: Admin configuration state
 - `GET /api/admin/audit`: Admin audit events
-- `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`, `POST /api/admin/pipeline/publish`: Pipeline editing flow
-- `GET /api/admin/review-gate-rules`, `PUT /api/admin/review-gate-rules`: Review gate configuration
-- `GET /api/admin/split-settings`, `PUT /api/admin/split-settings`: Split settings configuration
+- `/api/admin/pipeline-templates`: Create/list named templates; per-template
+  endpoints manage metadata, clone, draft save/validate/import/export/diff,
+  immutable publish, and version history
+- `/api/admin/review-schemas`: Create/list review forms; per-template endpoints
+  manage metadata, draft save/validate/import/export, immutable publish,
+  versions, and dependency usage
+- `/api/admin/watch-folder-bindings`: List/create bindings; per-binding
+  `PATCH` and `DELETE` update or remove eligible unreferenced bindings
+- `GET /api/admin/pipeline`, `PUT /api/admin/pipeline/draft`,
+  `POST /api/admin/pipeline/publish`, review-gate-rules, split-settings, and
+  filesystem `/api/schemas` endpoints are legacy compatibility/configuration
+  surfaces. New workflow authoring uses the versioned template endpoints.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 pdfdoc_extraction/
@@ -322,7 +330,8 @@ pdfdoc_extraction/
 │   ├── db/                     # SQLite connection, migrations, repositories
 │   ├── services/               # Batch, review, reports, audit, settings, artifact services
 │   ├── status_manager.py       # Legacy text-status compatibility support
-│   ├── watch_folder_monitor.py # File system monitoring
+│   ├── services/watch_folder_coordinator.py # Multi-binding watch-folder routing
+│   ├── watch_folder_monitor.py # Legacy single-folder compatibility component
 │   └── workflow_manager.py     # Workflow orchestration
 ├── 📁 standard_step/           # Processing pipeline steps
 │   ├── extraction/             # Data extraction tasks
@@ -354,7 +363,7 @@ pdfdoc_extraction/
     └── archive/                # Historical PRDs, completed task lists, and audits
 ```
 
-## 🛠️ Development
+## Development
 
 ### Setting Up Development Environment
 
@@ -362,7 +371,7 @@ pdfdoc_extraction/
    ```powershell
    git clone <repository-url>
    cd pdfdoc_extraction
-   C:\Python313\python.exe -m venv .venv
+   py -3.13 -m venv .venv
    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
    ```
 
@@ -381,7 +390,8 @@ pdfdoc_extraction/
 
 - **PEP 8 Compliance**: Follow Python style guidelines
 - **Type Hints**: Use comprehensive type annotations
-- **Documentation**: Google-style docstrings for all modules
+- **Documentation**: Concise Google-style docstrings for public and non-obvious
+  modules, classes, and functions
 - **Error Handling**: Structured error handling with custom exceptions
 - **Testing**: Unit tests for all new features
 
@@ -396,25 +406,22 @@ pdfdoc_extraction/
 # Run specific test file
 .\.venv\Scripts\python.exe -m pytest -v test/core/test_config_manager.py
 
-# Run with coverage
-.\.venv\Scripts\python.exe -m pytest -v --cov=modules
-
-# Run static type checking (uses .venv from pyrightconfig.json)
+# Run static type checking when Pyright is installed (it is not pinned in requirements.txt)
 pyright
 ```
 
-Current focused validation for the SQLite-only workflow-state cleanup:
+Example focused validation for SQLite-backed ingestion and operator state:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v test\integration\test_sqlite_only_workflow_state.py test\integration\test_batch_upload_api.py test\integration\test_reports_api.py test\integration\test_settings_api.py
 ```
 
-The broader full-suite run remains part of the migration cleanup checklist.
+Run the full suite before handing off broad or cross-cutting changes.
 
 The end-to-end workflow fixture config also passes config-check:
 
 ```powershell
-C:\Python313\python.exe -m tools.config_check validate --config test\data\config.yaml --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config test\data\config.yaml --import-checks
 ```
 
 ### Test Categories
@@ -423,7 +430,7 @@ C:\Python313\python.exe -m tools.config_check validate --config test\data\config
 - **Integration Tests**: End-to-end workflow validation
 - **Third-party Tests**: External service integration testing
 
-## 🔧 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -451,9 +458,9 @@ Application logs are written to the file specified in `config.yaml` under `loggi
 1. Check the [User Guide](docs/user_guide.md) for detailed instructions
 2. Review [Design Architecture](docs/design_architecture.md) for technical details
 3. Examine application logs for error details
-4. Check the [Issues](../../issues) page for known problems
+4. Check the repository's issue tracker for known problems
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -472,21 +479,22 @@ Application logs are written to the file specified in `config.yaml` under `loggi
 - Update documentation as needed
 - Ensure backward compatibility
 
-## 📄 License
+## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+No repository license file is currently present. Confirm the applicable usage
+and distribution terms with the project owner before redistributing the code.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Llama Cloud** for AI-powered document extraction
 - **Prefect** for workflow orchestration
 - **FastAPI** for the web framework
 - Open source community for various tools and libraries
 
-## 📞 Support
+## Support
 
 For support and questions:
-- Create an issue in the [Issues](../../issues) section
+- Create an issue in the repository's issue tracker
 - Check existing documentation in the `docs/` folder
 - Review the [User Guide](docs/user_guide.md) for detailed instructions
 

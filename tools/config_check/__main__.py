@@ -14,14 +14,12 @@ The module exposes the CLI entry point used by the integration tests and packagi
 
 import argparse
 import logging
-import os
 import sqlite3
 import sys
 import yaml
 from pathlib import Path
 from typing import Optional
 
-from .schema import load_config_schema
 from .validator import ConfigValidator
 from .reporter import ValidationReporter
 from .stored_validator import (

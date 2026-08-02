@@ -25,9 +25,7 @@ import threading
 import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-import shutil
 from modules.config_protocol import ConfigProvider as ConfigManager
-from pathlib import Path
 
 class StatusManager:
     """

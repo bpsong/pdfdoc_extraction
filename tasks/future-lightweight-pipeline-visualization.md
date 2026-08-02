@@ -15,7 +15,8 @@ authoring experience. It already supports the important workflow operations:
 - retain advanced JSON as an escape hatch;
 - save and compare drafts;
 - validate before publishing;
-- compile and publish the existing `tasks` and `pipeline` YAML model; and
+- save and publish the versioned `tasks`/`pipeline` definition stored in
+  SQLite, with YAML/JSON used for preview and interchange; and
 - redact secrets and audit administrative changes.
 
 The React/Vite prototype is not a production dependency and should not be
@@ -95,7 +96,7 @@ Reconsider a node canvas only when at least one of these becomes approved
 product scope:
 
 - conditional branches or user-authored edges;
-- multiple named pipeline templates that require visual route mapping;
+- approved cross-pipeline routing that requires visual route mapping;
 - explicit graph fan-out and fan-in nodes;
 - run-state inspection where graph position is materially clearer than a list;
 - usability evidence showing that the current list causes significant operator
@@ -109,7 +110,7 @@ ordered `pipeline` list.
 
 - Porting the React/Vite prototype wholesale.
 - Adding a React island solely for visual polish.
-- Replacing the current YAML-backed runtime model.
+- Replacing the current SQLite-backed immutable-version runtime model.
 - Implementing arbitrary graph execution through UI changes alone.
 - Making fan-in an administrator-configurable task.
 - Removing the advanced JSON or read-only YAML inspection surfaces.
@@ -122,8 +123,8 @@ ordered `pipeline` list.
 - Keyboard controls and screen-reader labels remain available.
 - Existing authentication, CSRF, role, redaction, validation, publishing, and
   audit behavior is preserved.
-- Tests cover the added UI behavior and the existing pipeline compilation
-  contract.
+- Tests cover the added UI behavior and the existing canonicalization,
+  validation, and immutable-publication contract.
 - A before-and-after browser measurement demonstrates no material regression
   for the supported pipeline size and target browsers.
 
@@ -131,5 +132,5 @@ ordered `pipeline` list.
 
 - [Current architecture](../docs/design_architecture.md)
 - [Archived visual pipeline builder direction](archive/future-design-visual-pipeline-builder.md)
-- [Future multiple pipeline templates](future-multi-document-routing.md)
+- [Implemented multiple pipeline direction](future-multi-document-routing.md)
 - [Future mixed-document pipeline routing](future-mixed-document-routing.md)

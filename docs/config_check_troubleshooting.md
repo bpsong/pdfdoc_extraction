@@ -74,6 +74,10 @@ Suggestion: Create the directory or update the path in config
 **Fixes**
 - Provision the folder manually. The validator intentionally refuses to auto-create watch folders.
 - Double check that the account running the service has read/write permissions.
+- `watch_folder.dir` is a required startup-compatibility path; it does not route
+  documents. Provision and validate every enabled SQLite watch-folder binding
+  separately, because each binding selects one exact published pipeline
+  version.
 
 ## YAML Parse Errors
 
@@ -96,7 +100,8 @@ Suggestion: Create the directory or update the path in config
 
 **Fixes**
 - Remove the unexpected key or move it under the nearest `params` mapping if it belongs to a task.
-- Disable strict mode (`--strict` flag) when validating legacy configs that intentionally carry extra metadata.
+- Omit `--strict` when validating a legacy file that intentionally carries
+  extra metadata. Add `--strict` only when unknown keys should be blocking.
 
 ## Import Failures
 
@@ -170,12 +175,22 @@ custom_steps:
 
 **Symptom**
 ```
-[ERROR] tasks.extract_metadata.params.api_key: Extraction tasks require 'api_key' to be provided as a non-empty string.
+[ERROR] tasks.extract_metadata.params.api_key: Extraction tasks require 'api_key' to be a non-empty string or valid $secret reference.
 ```
 
 **Fixes**
-- Supply `api_key` in `tasks.<name>.params` (it may be pulled from a secrets store at runtime, but the validator needs a placeholder).
-- Store the values in your deployment environment and reference them via templating if you cannot commit them to source control.
+- In a stored or portable versioned definition, use a secret reference rather
+  than a literal or placeholder:
+  ```yaml
+  api_key:
+    $secret: llamacloud-primary
+  ```
+- Define the referenced alias under deployment-owned `pipeline_secrets` in the
+  ignored runtime YAML. Never put the resolved credential in SQLite, exports,
+  committed examples, or validation output.
+- A legacy YAML pipeline may still contain a non-empty string while being
+  migrated, but remove that legacy workflow definition after publishing the
+  versioned pipeline.
 - For LlamaCloud Extract v2, `configuration_id` is optional. If omitted, the task builds an inline schema from `fields`.
 - If you provide `configuration_id`, it must be a non-empty string from the LlamaCloud UI.
 - `agent_id` is legacy and is not required for new Extract v2 configuration.
@@ -220,7 +235,9 @@ custom_steps:
 ```
 
 **Fixes**
-- Point `files_dir` at an existing directory where local-drive exports should be written.
+- Point `files_dir` at the directory where local-drive exports should be
+  written. The storage task creates it when execution begins, but the service
+  account must be able to create or write it.
 - Provide a filename template (for example `{supplier_name}.pdf`) so each processed document is uniquely named.
 - Confirm the service account can write to the directory; the validator checks only for configuration shape, not permissions.
 
@@ -314,7 +331,9 @@ custom_steps:
       params:
         split_dir: "data/app/split"
   ```
-- `split_dir` is auto-created by `ConfigManager` because the key ends in `_dir`.
+- The split task creates `split_dir` when it reserves its first child PDF.
+  `ConfigManager` does not inspect or create directories inside SQLite-backed
+  pipeline definitions.
 - When `enabled: true`, configure either `configuration_id` from LlamaCloud or a non-empty `categories` list.
 - Set `allow_uncategorized` to exactly one of `include`, `forbid`, or `omit`.
 - Use only `high`, `medium`, and `low` in `fail_on_confidence_levels`.
@@ -327,15 +346,20 @@ custom_steps:
 ```
 [ERROR] tasks.review_gate.params.confidence_threshold: ReviewGateTask confidence_threshold must be between 0 and 1.
 [ERROR] tasks.review_gate.params.resume_policy: ReviewGateTask currently supports only resume_policy: next_task.
-[ERROR] tasks.review_gate.params.schema_file: Schema file could not be loaded: schemas/invoice.yaml
+[ERROR] tasks.review_gate.params.schema_version_id: ReviewGateTask requires an exact published schema_version_id.
 ```
 
 **Fixes**
 - Set `confidence_threshold` to a number from `0` through `1`, for example `0.95`.
 - Use `resume_policy: next_task` or omit the setting.
 - Use only `high`, `medium`, and `low` in `split_confidence_levels_requiring_review`.
-- Confirm `schema_file` points to a YAML, YML, or JSON schema under one of the configured schema directories.
-- Validate the schema itself if the finding path starts with `schemas.<schema name>`.
+- In the Pipeline editor, select an exact published review-form version. The
+  task parameter and persisted pipeline dependency must agree on that
+  `schema_version_id`.
+- If validating a legacy migration file that still uses `schema_file`, confirm
+  it points to a YAML, YML, or JSON schema under a configured legacy schema
+  directory, import and publish it, and replace the file reference before
+  publishing the pipeline.
 
 ## Web Server Configuration Errors
 
@@ -367,8 +391,10 @@ custom_steps:
 **Fixes**
 - **Invalid PDF validation setting**: Set `watch_folder.validate_pdf_header` to a boolean value:
   - `validate_pdf_header: true` to enable PDF header validation (recommended)
-  - `validate_pdf_header: false` to disable validation (use with caution)
+  - `validate_pdf_header: false` remains accepted for legacy compatibility
   - Remove quotes around boolean values (not `"true"` but `true`)
+- The primary batch-upload API and the SQLite watch-folder coordinator always
+  validate the `%PDF-` signature, regardless of this legacy setting.
 - **Empty or missing processing directory**: Set `watch_folder.processing_dir` to a valid directory name:
   - `processing_dir: "processing"` (default)
   - `processing_dir: "temp_processing"` for custom directory
@@ -542,8 +568,8 @@ custom_steps:
 
 **Fixes**
 - **Missing pandas (`rules-csv-pandas-missing`)**:
-  - Install pandas through the project environment:
-    `.\.venv\Scripts\python.exe -m pip install pandas`
+  - Restore project dependencies through the repository environment:
+    `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
   - Verify pandas is available in the current Python environment
   - Check that the correct Python environment is being used
 
@@ -576,7 +602,8 @@ custom_steps:
 
 **Fixes**
 - **Reduce field count**: Remove unnecessary extraction fields
-- **Split tasks**: Divide large extraction tasks into smaller, focused tasks
+- **Simplify the schema**: Move optional or unused provider fields out of the
+  definition; a published pipeline permits only one extraction task
 - **Prioritize fields**: Keep only essential fields for core functionality
 - **Use selective extraction**: Extract only fields needed for immediate processing
 
@@ -606,7 +633,7 @@ custom_steps:
 - **Parallel processing**: Consider if some tasks can be parallelized (requires code changes)
 - **Remove redundancy**: Eliminate duplicate or unnecessary processing steps
 
-Multiple extraction tasks are not a performance-warning case: they violate the pipeline cardinality rule and produce a blocking validation error.
+Multiple extraction tasks are not merely a performance-warning case: they violate the pipeline cardinality rule and produce a blocking validation error, even if performance analysis also emits a supplementary warning.
 
 ## Security Analysis Issues
 
@@ -705,10 +732,16 @@ For performance and security analysis:
 config-check validate --config .\config.yaml --performance-analysis --security-analysis --verbose
 ```
 
-For complete validation with all features:
+For a combined deployment analysis and full stored-object audit:
 ```
-config-check validate --config .\config.yaml --import-checks --check-files --performance-analysis --security-analysis --verbose
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --all-stored --import-checks --check-files --performance-analysis --security-analysis --verbose
 ```
+
+This combines optional analysis of runtime/legacy YAML with the read-only
+`--all-stored` audit. The optional import, file, performance, and security flags
+do not run a second analysis pass over SQLite definitions; stored definitions
+receive their normal structural, parameter, approval, secret, and dependency
+checks.
 
 Get machine-readable output for automated troubleshooting:
 ```

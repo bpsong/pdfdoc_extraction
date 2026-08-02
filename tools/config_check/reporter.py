@@ -49,10 +49,9 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, TextIO
+from typing import Dict, List, Optional, TextIO
 
 
 class FindingLevel(Enum):

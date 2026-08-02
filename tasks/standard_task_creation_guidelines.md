@@ -166,8 +166,8 @@ The workflow runner records standardized task lifecycle events:
 
 Task implementations should:
 
-- treat the key referenced by the YAML `pipeline` list as the authoritative
-  configured task key used for task-run tracking;
+- treat the key referenced by the stored/portable definition's `pipeline` list
+  as the authoritative configured task key used for task-run tracking;
 - read that identity from `context["current_task_key"]`; the workflow loader
   sets the task key and index before task setup even when SQLite state is not
   available;

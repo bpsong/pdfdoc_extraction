@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 2.9
-Release Date: 2026-07-26
+Version: 3.0
+Release Date: 2026-08-02
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 2.9
-Release Date: 2026-07-26
+Version: 3.0
+Release Date: 2026-08-02
 Author: [Your Organization/Name]
 
 ---
@@ -27,12 +27,24 @@ Author: [Your Organization/Name]
 - [4. Administrator Guide](#4-administrator-guide)
   - [4.1. Starting and Stopping Services](#41-starting-and-stopping-services)
   - [4.2. Required Folders and Permissions](#42-required-folders-and-permissions)
+    - [4.2.1. Pre-existing vs Auto-created folders](#421-pre-existing-vs-auto-created-folders-consolidated)
   - [4.3. Configuration Management](#43-configuration-management)
     - [4.3.1. High-level Structure](#431-high-level-structure)
     - [4.3.2. Global Sections](#432-global-sections)
     - [4.3.3. Pipeline Configuration](#433-pipeline-configuration)
   - [4.4. Managing Application Accounts and Passwords](#44-managing-application-accounts-and-passwords)
   - [4.5. Database, State, and Artifact Storage](#45-database-state-and-artifact-storage)
+    - [4.5.1. Database Initialization](#451-database-initialization)
+    - [4.5.2. What SQLite Stores](#452-what-sqlite-stores)
+    - [4.5.3. Filesystem Artifact Boundaries](#453-filesystem-artifact-boundaries)
+    - [4.5.4. Operator and Administrator State Views](#454-operator-and-administrator-state-views)
+    - [4.5.5. Administrator Workflow Details](#455-administrator-workflow-details)
+      - [Create and publish a pipeline visually](#create-and-publish-a-pipeline-visually)
+      - [Create and publish a review form visually](#create-and-publish-a-review-form-visually)
+      - [Add a watch-folder binding visually](#add-a-watch-folder-binding-visually)
+      - [Use Overview, Settings, Task Catalog, and Validation](#use-overview-settings-task-catalog-and-validation)
+      - [Administrator Audit History](#administrator-audit-history)
+    - [4.5.6. Backup and Recovery](#456-backup-and-recovery)
   - [4.6. Log Files and Troubleshooting](#46-log-files-and-troubleshooting)
   - [4.7. Graceful Shutdown and Error Recovery](#47-graceful-shutdown-and-error-recovery)
   - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
@@ -75,6 +87,7 @@ Author: [Your Organization/Name]
 | 2.7     | 2026-06-21 | [Your Organization] | Consolidated extraction and metadata storage under canonical module and class names while retaining Extract v2 array-of-objects behavior |
 | 2.8     | 2026-06-28 | [Your Organization] | Added typed scalar-list options and flat structured-object extraction with Pipeline editor, validation, review-schema mapping, and operator documentation |
 | 2.9     | 2026-07-26 | [Your Organization] | Documented SQLite-backed, immutable pipeline and review-schema versions, explicit upload selection, watch-folder bindings, exact-version execution, migration, recovery, and stored-definition validation |
+| 3.0     | 2026-08-02 | [Your Organization] | Completed the operator and administrator procedures for multi-pipeline routing, review forms, watch-folder bindings, outputs, validation, settings, audit visibility, and portable definitions; corrected remaining single-pipeline and task-behavior guidance |
 
 ---
 
@@ -84,7 +97,9 @@ This quick start separates administrator setup from normal operator work.
 
 **Administrator: first-time setup**
 
-1. Create the folders configured by `watch_folder.dir` and `web.upload_dir`. Both must already exist and allow the application account to read and write files.
+1. Create the startup compatibility folder configured by `watch_folder.dir`
+   and the upload staging folder configured by `web.upload_dir`. Both must
+   already exist and allow the application account to read and write files.
 2. Initialize the fixed administrator and operator accounts:
 
     ```powershell
@@ -98,7 +113,13 @@ This quick start separates administrator setup from normal operator work.
     ```
 
 4. Open the configured web address and test both accounts.
-5. Run the Config Check tool described in section 4.12 before processing production documents.
+5. As the administrator, create or import a review form when the workflow needs
+   human review, publish an immutable form version, then create a pipeline,
+   save and validate its draft, publish a version, and set the pipeline to
+   **Active**. Section 4.5.5 gives the complete procedure.
+6. For folder ingestion, create each real incoming folder on disk and add its
+   exact-version binding in the **Watch-folder bindings** panel on **Pipeline**.
+7. Run the Config Check tool described in section 4.12 before processing production documents.
 
 **Operator: process documents**
 
@@ -131,7 +152,7 @@ Key features:
 - Watch-folder based ingestion and web interface for PDF upload
 - SQLite-backed workflow state for batches, documents, task runs, extraction results, review items, artifacts, settings, and audit history
 - Role-based web interface for operators and administrators
-- Consistent alias-based output for CSV/JSON  
+- Isolated per-pipeline CSV/JSON output with optional task-specific aliases
   *(Alias means a friendly name used for data fields in outputs, such as column headers.)*
 
 Internet access is required for cloud-based extraction providers such as LlamaCloud Extract v2.
@@ -142,13 +163,18 @@ Internet access is required for cloud-based extraction providers such as LlamaCl
 
 ### Components
 
-- **Watch Folder Monitor:** Detects new PDFs in the configured `watch_folder.dir` (the folder the system watches for new files). This directory must pre-exist; it is not auto-created.
+- **Watch Folder Coordinator:** Scans every enabled SQLite watch-folder binding.
+  Each binding maps one existing, non-overlapping directory to one exact
+  published pipeline version. `watch_folder.processing_dir` is the shared
+  temporary work area. The deployment key `watch_folder.dir` must still
+  pre-exist for startup compatibility, but it does not choose the pipeline or
+  replace the SQLite bindings.
 - **Workflow Manager and Loader:** Loads the exact immutable pipeline version
   assigned at ingestion and carries that version through split, review resume,
   retry, and recovery.
 - **Standard Steps:** Executes ordered tasks for each file (split, extraction, review, rules, storage, archiver, housekeeping).
 - **SQLite State Services:** Record ingestion batches, documents, task runs, extracted fields, review queues, artifacts, settings, and audit events.
-- **Storage:** Writes extracted data to CSV/JSON and moves PDFs to their final destination.  
+- **Storage:** Writes extracted data to CSV/JSON and copies PDFs to their final destination.
 - **Logging:** Centralized application log with rotation.  
 - **Web Interface:** Provides role-appropriate pages for operators and administrators; see sections 3.2 and 3.3 for user instructions.
 
@@ -177,7 +203,7 @@ When document splitting is enabled, this guide uses two workflow terms:
       ReviewGate -->|Passes Review Rules| Rules[Rules Engine (e.g., update_reference)]
       Resume --> Rules
       Rules -->|Store| Storage[File & Data Storage]
-      Storage -->|Organized Files| Output[files/ and data/]
+      Storage -->|Organized Files| Output[Pipeline-version output folders]
       Storage -->|Child Status Change| FanIn[Update Source and Batch - Fan-in]
       Steps -->|Post-process| Archiver[Archive/Delete Input]
       Steps -->|State Events| SQLite[SQLite State Database]
@@ -189,14 +215,17 @@ When document splitting is enabled, this guide uses two workflow terms:
 
 ### What happens to your document?
 
-1. Submission: You place a PDF in the watch folder.  
+1. Submission: You upload PDFs and select a published version, or place a PDF
+   in an administrator-provided bound watch folder.
 2. Assignment: An upload uses the operator-selected published version; a
    watched file uses the exact published version in its folder binding.
 3. State record: The system creates SQLite batch/document records and a task-run record for each configured step.
 4. Extraction: Information is extracted through LlamaCloud Extract v2 and field values/confidence are persisted.
 5. Review gate: Optional rules decide whether the document needs human review.
 6. Rules: Optional business logic runs (e.g., update reference files).
-7. Storage: The PDF and extracted metadata are written to `files/` (PDF) and `data/` (CSV/JSON), and durable artifacts are registered in SQLite.
+7. Storage: The PDF and extracted metadata are written to the exact pipeline
+   version's configured output folders, and durable artifacts are registered in
+   SQLite.
 8. Post-process: The original input is archived or deleted per configuration.
 
 ---
@@ -226,27 +255,44 @@ Use an operator account for normal daily work. Use the administrator account onl
 
 **What is the Watch Folder?**
 
-- A directory the system monitors for PDFs. Any PDF placed here will be processed automatically.
+- A directory the administrator has bound to one exact published pipeline
+  version. The application can monitor several independent folders at the same
+  time, including several folders that use the same pipeline version.
 
 **How to add files:**
 
-1. Locate the watch folder (ask your administrator for the exact path; configured at `watch_folder.dir`).
-2. Copy or move your PDF files into this folder.  
-3. The system will automatically begin processing.
+1. Ask your administrator for the incoming folder assigned to your document
+   type and confirm the pipeline name and version attached to it. Do not assume
+   that the startup path in `watch_folder.dir` is the folder for your workflow.
+2. Copy or move complete PDF files into that folder. Do not copy partial files
+   or non-PDF content with a `.pdf` extension.
+3. The coordinator detects the file and creates a batch pinned to the binding's
+   exact pipeline version. Publishing a newer version does not change an
+   existing binding automatically.
 
 **What happens after upload:**
 
 - The system moves accepted files into the configured processing directory (`watch_folder.processing_dir`) with temporary unique filenames.
-- The configured pipeline performs extraction and any other enabled steps.
+- The exact pipeline version attached to the folder performs extraction and
+  any other configured steps.
 - Output locations depend on the storage tasks configured by the administrator.
-- For PDFs detected while the application is running, the monitor checks that the first five bytes are `%PDF-`. A file that fails this check remains in the watch folder and is skipped for the current run.
-- **Current limitation:** PDFs already present when the application starts do not receive the same header check before they are moved for processing. Remove invalid or incomplete files from the watch folder before restarting the application.
+- The coordinator checks the first five bytes for `%PDF-`, including files
+  already present when the application starts. A file that fails remains in
+  the incoming folder and is skipped. Replace or remove it before a later scan.
 - Web upload size and file-count limits do not apply to the watch folder, but extraction-provider limits still apply.
 
 **How to check completion:**
 
-- Look for a renamed PDF in `files/` and a corresponding CSV/JSON in `data/`.  
-- If outputs do not appear, ask your administrator to check logs.
+- Select **Reports**, find the watch-folder batch, and open **Processing** to
+  confirm the batch, document, and task statuses.
+- Select **Extraction** for a document to compare extracted and final values,
+  confidence, the raw provider payload, the PDF preview, and registered files.
+- A successful storage workflow normally registers a renamed PDF and its
+  configured CSV/JSON exports. Their actual folders come from that pipeline
+  version's task parameters; they are not necessarily `files/` and `data/`.
+- If the document is waiting for review, use **Review Queue**. If it failed or
+  expected artifacts do not appear, use **Failures** and ask an administrator
+  to check `app.log` and the selected pipeline version.
 
 ### 3.2. Using the Web Interface
 
@@ -261,9 +307,18 @@ Ask your administrator for the system's web address and your account password.
 **Upload PDF files:**
 
 1. Select **Upload & Process** from the left navigation menu.
-2. Select or drag the PDF documents into the upload area.
-3. Select **Start Processing** to submit the documents.
-4. The application opens the batch details so you can follow progress.
+2. Under **Choose a processing pipeline**, select the exact published version
+   appropriate for every file in this batch. No version is selected silently.
+3. Select or drag the PDF documents into the upload area.
+4. Review the selected-file list and remove any unintended file.
+5. Select **Start Processing** to submit the documents.
+6. The application opens the batch details so you can follow progress.
+
+Only active, eligible pipeline versions appear. One choice applies to the
+entire batch. If different documents need different pipelines, submit separate
+batches. If the required version is missing, select **Refresh** once and then
+ask an administrator to publish and activate it; do not choose a similar
+pipeline merely to continue.
 
 Unless an administrator changes the upload settings, the web interface accepts up to 20 files in one upload and up to 50 MB per file. The application also enforces an overall request-size limit. If an upload is rejected as too large, reduce the batch size or ask an administrator to review `web.max_upload_mb`, `web.max_upload_files`, and `web.max_upload_request_mb`.
 
@@ -297,14 +352,35 @@ The left navigation menu provides the following work areas. If the menu is colla
 
 Administrators also see **Overview**, **Users**, **Pipeline**, **Review Forms**, **Task Catalog**, **Validation**, and **Audit Log**. These administrative areas are not available to operators.
 
+**How to use the remaining operator pages:**
+
+- **Processing Overview** is reached automatically after upload or through
+  **Reports** > **Processing**. It shows pipeline steps, batch/document status,
+  and links to extraction, split, review, or failure details as applicable.
+- **Extraction** shows the source or stored PDF, registered artifacts,
+  extracted versus final values, confidence bands, review status, and the raw
+  provider payload. **Previous** and **Next** move among documents in the same
+  batch. This page is evidence of processing, not an editing screen.
+- **Reports** summarizes batches and documents, persisted statuses, ingestion
+  sources, review counts, completed/failed totals, average task-run span, and
+  recent batches. Select a recent batch for details and its **Processing** link.
+- **Settings** is read-only for operators. It exposes safe deployment paths and
+  runtime summaries with secret-like values redacted. In a multi-pipeline
+  deployment, a zero or empty legacy pipeline summary on this page does not
+  mean that SQLite pipeline versions are absent; use the pipeline shown on the
+  batch/document instead.
+
 #### Human Review
 
 Documents enter the review queue when the system cannot confidently accept the extracted information or when an administrator requires review.
 
 1. Select **Review Queue** from the left navigation menu.
 2. Use the search and filters to find the document.
-3. Select **Claim** beside the document to open its review screen.
-4. Select **Claim** at the top of the review screen to reserve the item. This prevents another operator from editing it at the same time.
+3. Select **Claim** beside an available document. This atomically reserves the
+   item and opens its review screen. Select **View** when you only need to
+   inspect it.
+4. If you opened an unclaimed item through **View**, select **Claim** at the top
+   before editing. An active claim prevents another operator from editing it.
 5. Compare the PDF preview with the extracted fields shown beside it.
 6. Correct inaccurate or missing values.
 7. Select **Preview Diff** to review your changes.
@@ -338,8 +414,10 @@ Migrated capabilities:
 - administrators maintain review forms from **Review Forms**;
 - operators work on documents from **Review Queue**;
 - drafts, comparisons, corrections, and completed values remain associated with the document;
-- administrators review schema and pipeline findings from **Validation**;
-- relevant administrator changes are recorded in **Audit Log**.
+- administrators validate stored drafts in **Review Forms** and **Pipeline**;
+  **Validation** remains the deployment/pasted-file diagnostic surface;
+- administrator actions are retained in SQLite audit history; the current
+  **Audit Log** page shows the `admin_` subset described in section 4.5.5.
 
 Administrators should use the unified Review Form Editor to maintain review schemas. Operators should use the review queue rather than editing schema files directly.
 
@@ -347,7 +425,8 @@ Administrators should use the unified Review Form Editor to maintain review sche
 
 When split processing is enabled, one uploaded PDF may create several child documents. The system processes each child separately after the split. One child may finish while another is still processing or waiting in **Review Queue**. Finishing the split does not mean that all child documents have finished; the original PDF is complete only after every child has reached a final status.
 
-To check progress, select **Processing Overview** from the left navigation menu, open the batch, and select its split results. This page shows:
+To check progress, select **Reports**, open the batch's **Processing** view, and
+select **View Split Results**. This page shows:
 
 - source document status
 - child document IDs
@@ -385,9 +464,12 @@ This section covers setup, configuration, and troubleshooting for administrators
     .\.venv\Scripts\python.exe main.py
     ```
 
-4. The system will begin monitoring the watch folder and processing files. By default, this command also starts the web interface, which will be accessible at `http://localhost:8000` (or the host/port configured in `config.yaml`).
+4. The system will begin scanning enabled SQLite watch-folder bindings and
+   processing files. By default, this command also starts the web interface,
+   which will be accessible at `http://localhost:8000` (or the host/port
+   configured in `config.yaml`).
 
-**Starting only the Watch Folder Monitor (without Web Interface):**
+**Starting only watch-folder processing (without Web Interface):**
 
 If you only need the watch folder functionality and do not wish to run the web interface, use the `--no-web` argument:
 
@@ -397,14 +479,20 @@ If you only need the watch folder functionality and do not wish to run the web i
 
 **Stopping the service:**
 
-To stop the system (both watch folder monitor and web interface, if running): Press `Ctrl+C` in the `Command Prompt` window where `main.py` is running. The system will gracefully shut down after finishing any current file processing.
+To stop the coordinator and web interface, press `Ctrl+C` in the terminal where
+`main.py` is running. This requests an orderly shutdown but does not guarantee
+that an in-progress provider job finishes first; follow section 4.7 afterward.
 
 ### 4.2. Required Folders and Permissions
 
 The system uses several folders for ingestion, processing, and storage. Ensure these folders exist and the system user has the correct permissions.
 
 Startup validation rules:
-- `watch_folder.dir` must already exist and be a directory. If missing or invalid, the application logs a CRITICAL error and exits at startup.
+
+- `watch_folder.dir` must already exist and be a directory. It is a deployment
+  startup-compatibility path; actual multi-pipeline intake is controlled by
+  enabled SQLite bindings. If missing or invalid, the application logs a
+  CRITICAL error and exits at startup.
 - `web.upload_dir` must already exist and be a directory. If missing or invalid, the application logs a CRITICAL error and exits at startup.
 - Directories referenced by keys ending in `_dir` (except `watch_folder.dir`) are auto-created when possible; failures cause a CRITICAL log and exit.
 - All `_dir` paths must exist and are directories; all `_file` paths must exist and are files.
@@ -414,29 +502,45 @@ Startup validation rules:
 This subsection summarizes which folders the system expects to already exist, and which the application will create automatically at startup when possible.
 
 Must pre-exist (startup validates and will fail if missing):
-- `watch_folder.dir` — Watch folder where PDFs are ingested. The application will not create this folder.
+
+- `watch_folder.dir` — Startup-compatibility folder. The application will not
+  create it; do not rely on it as an implicit pipeline binding.
 - `web.upload_dir` — Staging folder used by the web upload handler. The application validates this at startup.
-- Any config key that ends with `_file` (for example `tasks.*.params.reference_file`) — the referenced file must already exist and be a regular file.
+- Each directory entered in **Pipeline** > **Watch-folder bindings** — the
+  binding service requires it to exist, be accessible, and not overlap another
+  bound path.
+- Any deployment config key that ends with `_file` — the referenced file must
+  already exist and be a regular file.
 - Any other explicitly-documented required directory in your `config.yaml`.
 
-Auto-created if missing (ConfigManager attempts to create these at startup):
+Created automatically when needed:
+
 - `watch_folder.processing_dir` — Temporary processing folder where PDFs are moved with UUID filenames.
-- Any config key that ends with `_dir` (for example `tasks.*.params.files_dir`, `tasks.*.params.data_dir`, `archive_dir`) — the ConfigManager will attempt to create these directories.
-- Common task destinations such as `files/`, `data/`, and `archive_folder/` when specified via `_dir` keys.
+- Any deployment `config.yaml` key that ends with `_dir` — the ConfigManager
+  attempts to create it. This startup scan does not read task parameters from
+  SQLite pipeline versions.
+- Standard storage, split, and archive tasks create their configured output
+  directories when they execute. The application account still needs permission
+  to create and write them; create them in advance when the parent directory is
+  controlled or when early permission verification is required.
 
 Summary table:
 
 | Folder / Pattern | Purpose | Creation behavior |
 |------------------|---------|-------------------|
-| `watch_folder.dir` | Watch folder where PDFs are ingested | Must pre-exist; startup fails if missing |
+| `watch_folder.dir` | Startup-compatibility path, not multi-pipeline routing | Must pre-exist; startup fails if missing |
+| SQLite watch-folder binding path | Actual incoming folder for one exact pipeline version | Administrator creates the folder first; binding rejects missing, duplicate, or nested paths |
 | `web.upload_dir` | Web upload staging directory | Must pre-exist; startup fails if missing |
 | `watch_folder.processing_dir` | Files moved here prior to processing (UUID names) | Auto-created at startup if missing |
-| `tasks.*.params.files_dir` | Destination for processed PDFs (`store_file_to_localdrive`) | Auto-created at startup if missing |
-| `tasks.*.params.data_dir` | Destination for metadata (CSV/JSON) | Auto-created at startup if missing |
-| `*_file` (pattern) | Files referenced by tasks, e.g., reference CSVs | Must pre-exist (must be an existing file) |
+| Pipeline task `files_dir`, `data_dir`, `split_dir`, or `archive_dir` | Durable or intermediate task output | Stored in the immutable pipeline version; standard task creates it at execution when permitted |
+| Pipeline task `reference_file` | Existing reference file used by a rule task | Create and permission-test before publishing/processing |
 
 Notes and recommendations:
-- If the application cannot create an auto-created directory due to permission errors, it will log a CRITICAL error and exit. To avoid startup failure, either pre-create the directories or ensure the account running the application has permission to create them.
+
+- A failure to create a deployment `_dir` during startup logs a CRITICAL error
+  and exits. A standard task that cannot create its SQLite-configured output
+  directory fails that task at runtime. Pre-create important destinations and
+  verify permissions to catch either condition early.
 - To pre-create directories on Windows, use File Explorer or a Command Prompt:
 ```
 mkdir watch_folder processing web_upload files data archive_folder
@@ -456,12 +560,12 @@ logging:
   log_level: "INFO"                   # Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 watch_folder:
-  dir: "watch_folder"                 # Folder to watch for incoming PDFs (must pre-exist; startup fails if missing)
+  dir: "watch_folder"                 # Startup-compatibility path (must pre-exist; not a pipeline binding)
   validate_pdf_header: true           # Validate %PDF header before processing
   processing_dir: "processing"        # Folder where files are moved with UUID name (auto-created if missing)
 
 web:
-  upload_dir: "web_upload"            # Directory for future web uploads (must pre-exist; validated at startup)
+  upload_dir: "web_upload"            # Web-upload staging directory (must pre-exist; validated at startup)
   cors_allowed_origins: []            # Keep empty for same-origin browser use
 
 database:
@@ -469,25 +573,41 @@ database:
   run_migrations_on_startup: true      # Run migrations when the app starts
 
 review:
-  enabled: true
   default_queue_name: "default_review"
   lock_timeout_minutes: 60
 
-# Outputs are defined per task in `tasks`:
-# - Processed PDFs destination: tasks.store_file_to_localdrive.params.files_dir (auto-created)
-# - Metadata destinations: tasks.store_metadata_{csv,json}.params.data_dir (auto-created)
-# - Split child PDFs destination: tasks.<split_task>.params.split_dir (required for split tasks, auto-created)
-# - Archive destination: tasks.archive_pdf.params.archive_dir (auto-created)
+# Workflow tasks and output paths are stored in SQLite pipeline definitions,
+# not under top-level `tasks` or `pipeline` keys in this deployment file.
 ```
 
 #### 4.3.2. Global Sections
 
 - **logging:** Controls logging behavior.
-- **watch_folder:** Defines ingestion and processing folder behavior.
+- **watch_folder:** Defines coordinator timing/header behavior, the shared
+  processing directory, and the required startup-compatibility path. Exact
+  incoming-folder routing is stored in SQLite bindings.
 - **web:** Defines web upload directory and web server settings (host, port, secret key, optional CORS allowed origins).
 - **database:** Defines the SQLite workflow-state path and migration behavior.
 - **review:** Defines review queue behavior, queue name, and review lock duration.
-- Task output directories are owned by task parameters such as `data_dir`, `files_dir`, `archive_dir`, `processing_dir`, and `split_dir`. Except for `watch_folder.dir`, directory paths whose keys end in `_dir` are auto-created by `ConfigManager`.
+- **ui:** Defines the application name, default page size, and whether
+  administrator pages are enabled.
+- **validation:** Defines validation availability, strict-mode default, and the
+  allow-list switch for browser configuration saves. A save remains limited to
+  the non-secret keys displayed on **Overview**.
+- **auth:** Defines login failure rate limiting, attempt window, and cooldown.
+  Session duration is `web.token_exp_minutes`.
+- **pipeline_secrets:** Maps administrator-visible aliases to deployment-owned
+  provider credentials. Pipeline drafts store only `$secret` aliases, never
+  resolved values.
+- **custom_steps:** Deployment approval for exact `custom_step.*` module/class
+  pairs. Enabling or approving a class does not add it to any pipeline.
+- **schema_config** and filesystem schema paths are migration/validation inputs;
+  published SQLite review-form versions are authoritative for current review
+  gates.
+- Task output directories are owned by the exact pipeline version's parameters,
+  such as `data_dir`, `files_dir`, `archive_dir`, and `split_dir`. Standard
+  tasks create these when they execute. `watch_folder.processing_dir` remains a
+  deployment setting shared across workflows.
 
 For normal browser use, where users open the web application directly from the same FastAPI server, keep `web.cors_allowed_origins` as an empty list:
 
@@ -522,6 +642,13 @@ deployment settings such as paths, database configuration, custom-task
 approvals, and `pipeline_secrets`; published definitions refer to secret
 aliases and never store resolved secret values.
 
+YAML blocks containing `tasks:` and `pipeline:` elsewhere in this guide are
+portable definition examples and legacy migration shapes. They are useful for
+understanding task parameters, **Pipeline** import/export, and the
+`config-check validate-file` command; do not paste them into the active
+deployment `config.yaml` for a newly created workflow. Normal authoring is
+visual: **Pipeline** writes the draft and published versions to SQLite.
+
 Each definition contains an ordered `pipeline` list and a `tasks` registry.
 Each pipeline entry references a task key with `module`, `class`, and `params`.
 That key is the task's authoritative identity in task-run state, errors, and
@@ -533,9 +660,24 @@ batch. Each enabled watch folder likewise requires an exact version binding.
 There is no silent default or “latest” fallback. Automatic classification,
 mixed-document routing to different child pipelines, and conditional workflow
 graphs remain deferred.
+
+Pipeline lifecycle has an operational effect:
+
+- **Inactive** is the creation/editing state. A template can have published
+  versions while inactive, but those versions are not eligible for new intake.
+- **Active** makes its published versions eligible for upload selection and
+  enabled watch-folder bindings.
+- **Archived** is terminal. First set a template to inactive and ensure no
+  enabled watch-folder binding refers to it. Archived templates cannot be
+  restored or published again. Historical documents remain pinned and readable.
+
 Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
-The active `pipeline` may contain at most one split task, one extraction task, and one review-gate task. Alternate task definitions may remain under `tasks`, but listing more than one task of any singleton type in the active pipeline is a blocking validation error. When used, split must precede extraction and review gate must follow extraction.
+Each pipeline draft/version may contain at most one split task, one extraction
+task, and one review-gate task. Alternate task definitions may remain under
+`tasks`, but listing more than one singleton type in the ordered `pipeline` is
+a blocking validation error. When used, split must precede extraction and the
+review gate must follow extraction.
 
 Example task categories include:
 
@@ -693,21 +835,125 @@ The administrator menu provides these workflows:
   validate it, publish immutable versions, inspect version history and
   dependencies, and export a portable definition. A schema must be published
   before it can be selected in a pipeline draft.
-- **Watch Folders:** create and change bindings from normalized watch-folder
-  paths to exact published pipeline versions. Changing a binding affects only
-  future ingestion.
+- **Watch-folder bindings:** in the bottom panel of **Pipeline**, add an
+  existing incoming folder and pin it to an exact published version of the
+  selected pipeline. The current visual page lists existing bindings but does
+  not provide edit, disable, or delete controls; see the procedure below.
 - **Task Catalog:** inspect the workflow task classes available to the pipeline.
 - **Validation:** review active configuration, schema, and pipeline findings.
-- **Audit Log:** inspect relevant configuration and governance events.
+- **Audit Log:** inspect the legacy `admin_` configuration/governance event
+  subset; newer dot-named versioned events require the support path below.
+
+##### Create and publish a pipeline visually
+
+1. Sign in as `admin`, select **Pipeline**, then select **New**.
+2. Enter a permanent lowercase kebab-case key and a clear display name. The key
+   cannot be changed later. Complete **Document type** and **Description** so
+   operators can distinguish otherwise similar choices.
+3. In **Draft Pipeline**, choose a task from **Add task** and select **Add**.
+   Repeat for each task, then use the step controls to order, rename, duplicate,
+   or remove steps. **Task Catalog** explains each importable class.
+4. Select each draft step and complete its properties. For LlamaCloud tasks,
+   select a configured secret alias; the editor does not reveal the API key.
+   For a review gate, select an exact **Published review form version**.
+5. Select **Save Draft**. Saving is not publishing and cannot affect a running
+   or future document until a version is published and eligible.
+6. Select **Validate** and resolve every blocking finding. Use **Diff** to
+   compare the saved draft with its published base. The diff is redacted.
+7. Select **Publish** and confirm. Publication creates the next immutable
+   numbered version. A draft with no change from its base cannot create a new
+   version.
+8. Use the status selector beside **Clone** and choose **Active**. An inactive
+   pipeline, even one with a published version, is not available for new
+   uploads or enabled bindings.
+9. Sign in as an operator or open **Upload & Process**, select **Refresh**, and
+   confirm the intended name and version appear before processing documents.
+
+**Draft and version controls:** **Reset to Active** discards the current draft
+model in the browser in favor of the published base, while **Refresh** reloads
+saved state and warns about unsaved changes. **Clone** creates a new template
+from a published source and requires a new permanent key/name. **Export** saves
+the selected draft as portable YAML; **Import** replaces the selected
+template's draft only and never publishes it. Always validate and inspect the
+diff after an import. Existing batches, review resumes, split children, retries,
+and recovery continue with their originally assigned version.
+
+##### Create and publish a review form visually
+
+1. Select **Review Forms**, then **New Review Form**. Enter its stable key and
+   name in the prompts, then complete the title and description in the draft.
+   Use a key that clearly identifies the business document type.
+2. Add top-level fields with **String**, **Number**, **Boolean**, **Enum**,
+   **Object**, or **Array**. For object fields use the nested **Add** controls;
+   for arrays define their item type. Configure labels, required status,
+   validation constraints, and field keys to match extraction output.
+3. Select **Save draft**, then **Validate**. Resolve blocking findings and use
+   the canonical preview to verify the complete structure.
+4. Select **Publish** to create an immutable version, then set the form
+   lifecycle to **Active** before selecting it in a pipeline review-gate task.
+5. Return to **Pipeline**, select the review gate, and choose that exact
+   published version. Save, validate, and publish the pipeline again.
+
+The **Version history & dependencies** panel shows immutable form versions and
+which published pipeline tasks depend on them. Changing and republishing a form
+does not retarget an existing pipeline version. **Import** loads YAML/JSON into
+a draft; **Export** downloads the current portable draft. For detailed field
+constraints and patterns, use the [review schema administrator guide](review_schema_admin_guide.md).
+
+##### Add a watch-folder binding visually
+
+1. Create the real incoming folder on disk and grant the application account
+   read, move/delete, and directory-list permissions. Do not bind a drive root.
+2. On **Pipeline**, select the active template whose version will process the
+   folder. In **Watch-folder bindings**, enter the absolute folder path, choose
+   an exact published version, and select **Add binding**.
+3. Confirm the list shows the normalized path, **enabled**, pipeline name, and
+   version. Resolve any accessibility or eligibility finding before adding a PDF.
+4. Place a test PDF in the folder and verify its watch-folder batch in
+   **Reports** and **Processing Overview**.
+
+Paths must be unique and non-overlapping: a folder cannot duplicate, contain,
+or be contained by another binding. Multiple distinct folders may use the same
+pipeline version. A binding never follows “latest”; publish does not retarget
+it. Changes affect only files claimed afterward, while existing documents keep
+their assigned version.
+
+The current visual editor can add and list bindings only. To correct, disable,
+retarget, or delete a binding, use the authenticated administrator API
+`PATCH /api/admin/watch-folder-bindings/{binding_id}` or
+`DELETE /api/admin/watch-folder-bindings/{binding_id}` through an approved
+administration tool, or ask the application maintainer. Do not edit SQLite
+directly. Disable a binding before archiving its pipeline. Deletion is rejected
+after a batch references the binding so ingestion history remains explainable.
+
+##### Use Overview, Settings, Task Catalog, and Validation
+
+- **Overview** displays deployment/filesystem configuration health, legacy
+  pipeline/review/split summaries, recent `admin_` events, and the allow-list of
+  editable non-secret settings. Its Pipeline and published/draft metrics do not
+  enumerate all new SQLite pipeline/review-form templates; use **Pipeline**,
+  **Review Forms**, and config-check `--all-stored` for that inventory. **Save
+  Settings** writes only the displayed keys (application name/page size,
+  validation options, review queue name, and review lock timeout) to deployment
+  configuration and SQLite history. It cannot save credentials.
+- **Settings** is the read-only operator-safe view of deployment paths and
+  redacted runtime summaries. It is not the authoritative list of all SQLite
+  pipeline versions.
+- **Task Catalog** is an inventory and diagnostic view: search or filter by
+  category/import state, select a task to inspect its metadata, and use **Add in
+  Pipeline** to open the editor. It does not alter a draft by itself.
+- **Validation** can check the running deployment config, pasted YAML without
+  saving it, the legacy active pipeline surface, and filesystem schema files.
+  Review errors before warnings. For all SQLite templates, drafts, versions,
+  review forms, and bindings, use section 4.12's `--all-stored` command.
 
 ##### Administrator Audit History
 
-The **Audit Log** page at `/app/admin/audit` shows the append-only history of
-administrator configuration and governance actions. It is available only to the
-administrator role. The page displays events whose event type begins with
-`admin_`; operational document events such as review activity, processing
-failures, splitting, and fan-in completion are stored separately in the audit
-stream and are not shown on this page.
+The **Audit Log** page at `/app/admin/audit` shows the append-only subset of
+administrator history whose event type begins with `admin_`. It is available
+only to the administrator role. Operational document events such as review
+activity, processing failures, splitting, and fan-in completion are stored in
+the same audit stream but are not shown on this page.
 
 The following administrator events are currently recorded:
 
@@ -727,6 +973,16 @@ The following administrator events are currently recorded:
 | `admin_schema_created` | A schema is created. |
 | `admin_schema_updated` | An existing schema is changed. |
 | `admin_schema_duplicated` | An existing schema is copied to a new schema name. |
+
+The versioned pipeline, review-form, and watch-binding services record newer
+events with names such as `pipeline.template.created`,
+`pipeline.version.published`, `review_schema.version.published`, and
+`watch_binding.created`. These records are retained in SQLite but do not begin
+with `admin_`, so the current **Audit Log** page does not display them. Use
+SQLite backup/retention controls and an approved support query when that newer
+governance history must be inspected; never change or delete audit rows. Do not
+interpret an empty **Recent Admin Activity** panel as evidence that no
+versioned configuration change occurred.
 
 Each audit row has an immutable event ID, event type, acting user, and creation
 time. Depending on the action, **Details** can also show structured `before` and
@@ -799,11 +1055,14 @@ definition.
   - Look for "CRITICAL" messages that indicate startup failures.
   - "ERROR" messages show task failures with specific details.
   - "WARNING" messages indicate non-fatal issues that may affect performance.
-  - Use the web interface to monitor processing status in real-time.
+  - Use the web interface to monitor processing status through its periodic refreshes.
 
 ### 4.7. Graceful Shutdown and Error Recovery
 
-To stop the system, press `Ctrl+C` in the terminal where `main.py` is running. This asks the watch-folder monitor and web server to stop and runs registered cleanup handlers. It does not guarantee that every in-progress document finishes before the processes exit.
+To stop the system, press `Ctrl+C` in the terminal where `main.py` is running.
+This asks the watch-folder coordinator and web server to stop and runs
+registered cleanup handlers. It does not guarantee that every in-progress
+document finishes before the processes exit.
 
 After stopping or restarting:
 
@@ -819,12 +1078,21 @@ If the system fails to start, check `app.log`, validate `config.yaml`, confirm t
 
 Standard steps are predefined operations configured in workflows. Below are the main task types and their parameters.
 
+The YAML snippets in sections 4.8-4.10 show the portable definition shape used
+by **Pipeline** import/export and migration tools. For a new workflow, configure
+the same values with the visual editor. Do not add these `tasks` and `pipeline`
+blocks to runtime `config.yaml`. In published definitions, secret parameters
+must use `{ $secret: "alias" }`, where the alias exists under deployment-owned
+`pipeline_secrets`.
+
 #### 4.8.1. extraction
 
 - **Current module/class:** `standard_step.extraction.extract_pdf` / `ExtractPdfTask`
 - **Purpose:** Extracts structured data and confidence information from PDF documents through LlamaCloud Extract v2.
 - **params:**
-  - `api_key`: string, required LlamaCloud credential.
+  - `api_key`: required secret reference in a versioned pipeline, for example
+    `{ $secret: "llamacloud-primary" }`. Resolved credentials exist only in
+    deployment `pipeline_secrets`.
   - `configuration_id`: optional saved Extract v2 configuration ID from the LlamaCloud UI. If omitted, the task builds an inline schema from `fields`.
   - `tier`: optional inline Extract v2 tier. Supported values are `"agentic"` and `"cost_effective"`; the default is `"agentic"`.
   - `parse_tier`: optional Parse tier for inline extraction.
@@ -846,10 +1114,15 @@ Standard steps are predefined operations configured in workflows. Below are the 
   - Sends the PDF to the extraction provider.
   - Validates returned data against configured fields and types.
   - Normalizes extracted output to workflow field keys in `context["data"]`. Saved LlamaCloud configurations may return either field keys or aliases; both are accepted.
-  - Storage tasks can transform workflow field keys to configured aliases for CSV/JSON output.
+  - Storage tasks can transform workflow field keys only when their own
+    task-specific `extraction.fields` mapping defines output aliases.
 - **Notes:**
   - Use `configuration_id` when you want LlamaCloud to use a saved Extract v2 configuration. Omit it when you want the application to build the extraction schema from the YAML `fields` block.
-  - In saved-configuration mode, `tier`, `parse_tier`, `extraction_target`, `cite_sources`, and `confidence_scores` come from the saved LlamaCloud configuration. Local `fields` remain the workflow mapping used to normalize results for review and storage.
+  - In saved-configuration mode, `tier`, `parse_tier`, `extraction_target`,
+    `cite_sources`, and `confidence_scores` come from the saved LlamaCloud
+    configuration. Local `fields` normalize provider keys/aliases into stable
+    workflow keys. Configure any CSV/JSON output aliases separately on that
+    storage task.
   - Do not use `agent_id` for new configurations. It is a legacy Extract v1/LlamaExtract-era parameter and is not required by the current Extract v2 runtime.
   - Field names and types must match the provider's schema.
   - Internet access over HTTPS is required.
@@ -862,13 +1135,14 @@ tasks:
     module: standard_step.extraction.extract_pdf
     class: ExtractPdfTask
     params:
-      api_key: "llx-REDACTED"
+      api_key: { $secret: "llamacloud-primary" }
       tier: "agentic"
       extraction_target: "per_doc"
       fields:
         supplier_name:        { alias: "Supplier name",       type: "str" }
         client_name:          { alias: "Client name",         type: "str" }
         client_address:       { alias: "Client",              type: "str" }
+        purchase_order_number: { alias: "Purchase order",     type: "str" }
         invoice_amount:       { alias: "Invoice amount",      type: "float" }
         insurance_start_date: { alias: "Insurance Start Date",type: "str" }
         insurance_end_date:   { alias: "Insurance End Date",  type: "str" }
@@ -889,14 +1163,17 @@ pipeline:
 - **Purpose:** Optionally splits a source PDF into child PDF documents before downstream extraction and storage tasks run.
 - **params:**
   - `enabled`: boolean. If `false`, the task records a skipped split result and the source document continues as a normal document.
-  - `api_key`: string. Required at runtime when the real LlamaCloud split adapter is used.
+  - `api_key`: required secret reference when the real LlamaCloud split adapter
+    is used, for example `{ $secret: "llamacloud-primary" }`.
   - `configuration_id`: optional saved LlamaCloud split configuration ID.
   - `categories`: optional list of category definitions. Required when `configuration_id` is not provided.
   - `allow_uncategorized`: controls what LlamaCloud does with pages that do not match a configured category. The default is `"include"`; see the decision table below.
   - `fail_on_confidence_levels`: list of split confidence labels that cause the whole split task to fail before child documents are created. Default is `["low"]`.
   - `fail_on_unknown_category`: boolean. When `true`, blank, `other`, `uncategorized`, and disallowed category results fail the whole split task. Default is `true`.
   - `allowed_categories`: optional list of accepted category names. If omitted, inline `categories` are used as the allowed list.
-  - `split_dir`: string, required. Destination for generated child PDFs. Because the key ends in `_dir`, `ConfigManager` auto-creates it at startup when possible.
+  - `split_dir`: string, required. Destination for generated child PDFs. The
+    task creates it when execution begins if the application account has the
+    required filesystem permission.
   - `project_id` / `organization_id`: optional provider scoping values.
   - `poll_interval_seconds`: optional polling interval. Default is `1.0`.
   - `timeout_seconds`: optional timeout. Default is `7200.0`.
@@ -937,7 +1214,7 @@ tasks:
     class: LlamaCloudSplitTask
     params:
       enabled: true
-      api_key: "llx-REDACTED"
+      api_key: { $secret: "llamacloud-primary" }
       categories:
         - name: "invoice"
           description: "Supplier invoice pages"
@@ -978,9 +1255,13 @@ After fan-out, each child document is a **leaf document** because it is processe
 - **params:**
   - `data_dir`: string (required). Destination folder for CSV.
   - `filename`: string (required). Base filename template; `.csv` is auto-added.
-  - Advanced compatibility parameters may use nested `storage.data_dir` / `storage.filename` and a task-specific `extraction.fields` mapping. New configurations should normally use the top-level directory and filename with the extraction task's shared fields.
+  - Advanced compatibility parameters may use nested `storage.data_dir` /
+    `storage.filename`. Add a task-specific `extraction.fields` mapping when
+    CSV aliases or explicit table metadata are required; the extraction task's
+    mapping is not inherited by a published versioned storage task.
 - **Behavior:**
-  - Uses configured field aliases for column names.
+  - Uses task-specific configured field aliases for column names when present;
+    otherwise it uses workflow data keys.
   - In a published versioned pipeline, columns come from that version's
     extracted data (or an explicit task-specific `extraction.fields` mapping);
     deployment-level YAML field mappings are not inherited.
@@ -1011,9 +1292,17 @@ pipeline:
 - **params:**
   - `data_dir`: string (required). Destination folder for JSON.
   - `filename`: string (required). Base filename template; `.json` is auto-added.
+  - Optional task-specific `extraction.fields`: mapping used only when this JSON
+    task should emit aliases or retain explicit table metadata. It is not
+    inherited from another pipeline or deployment YAML.
 - **Behavior:**
   - Reads `context["data"]` (dict).
-  - Writes a JSON file with keys transformed to aliases (if configured in extraction fields).
+  - Writes a JSON file with keys transformed to aliases when a task-specific
+    `extraction.fields` mapping is configured.
+  - In a published versioned pipeline, deployment-level YAML extraction fields
+    are not inherited. Without a task-specific mapping, it writes the exact
+    workflow data keys produced by that pipeline version, preventing unrelated
+    columns or aliases from another workflow from leaking into the export.
   - Generates a unique filename to avoid overwrites.
 
 **YAML configuration example:**
@@ -1183,7 +1472,7 @@ tasks:
     module: standard_step.extraction.extract_pdf
     class: ExtractPdfTask
     params:
-      api_key: "llx-REDACTED"
+      api_key: { $secret: "llamacloud-primary" }
       fields:
         supplier_name: { alias: "Supplier name", type: "str" }
         invoice_amount: { alias: "Invoice Amount", type: "float" }
@@ -1225,9 +1514,8 @@ pipeline:
 - **Behavior:**
   - Generates a secure, URL-friendly ID using the Python `nanoid` package.
   - Validates `length` is an integer within 5–21; initialization fails with a configuration error otherwise.
-  - Writes the generated ID to `context["nanoid"]`.
+  - Writes the generated ID to `context["data"]["nanoid"]`.
   - Downstream tasks can reference `{nanoid}` in their filename/rename templates.
-
 
 **YAML configuration example:**
 ```yaml
@@ -1247,11 +1535,14 @@ pipeline:
 ```
 
 **Usage notes and migration:**
+
 - Update existing filename templates to include `{nanoid}` where a short unique prefix is desired; for example:
   - `{nanoid}_{purchase_order_number}_{supplier_name}`
 - This change ensures filenames are unique and traceable while remaining short.
+
 #### 4.8.10. housekeeping.cleanup
 
+- **Current module/class:** `standard_step.housekeeping.cleanup_task` / `CleanupTask`
 - **type:** `"housekeeping.cleanup"`
 - **Purpose:** Performs final cleanup after workflow execution by deleting the processed PDF from the processing directory so the folder does not accumulate UUID-named files.
 - **params:**
@@ -1264,12 +1555,15 @@ pipeline:
   - Records a completed or failed internal task run under the reserved `cleanup_task` key without changing the document's configured pipeline cursor.
 - **Notes:**
   - This task is automatically invoked by the WorkflowLoader when a flow reaches its cleanup phase.
-  - It does not require definition in the `tasks` section or inclusion in the `pipeline` list of `config.yaml`.
+  - It does not require definition in the portable `tasks` registry or
+    inclusion in the `pipeline` list.
   - Ensures the processing directory remains clean by removing only the processed PDF.
+
 #### 4.8.11. Validation and Failure Behavior
 
 - The administrator Pipeline editor validates drafts before publication:
-  - The active pipeline may contain at most one split task, one extraction task, and one review-gate task.
+  - Each draft/version may contain at most one split task, one extraction task,
+    and one review-gate task.
   - Extract tasks support at most one table field. A field is a table when `is_table: true` or its type is `List[Any]`, including the optional form.
   - Task parameter constraints, including the Nanoid length range of 5-21, are blocking findings.
   - Publish performs server-side validation again and atomically creates the
@@ -1278,7 +1572,9 @@ pipeline:
 - Config validation happens at startup via the `ConfigManager`:
   - Validates that `web.upload_dir` exists and is a directory.
   - Validates that `watch_folder.dir` exists and is a directory; if missing/invalid, logs CRITICAL and exits. This path is NOT auto-created.
-  - Pre-creates directories for any keys ending with `_dir` found across the config (e.g., task params) when possible, excluding `watch_folder.dir`.
+  - Pre-creates directories for deployment YAML keys ending with `_dir` when
+    possible, excluding `watch_folder.dir`. SQLite task output paths are
+    validated with the draft and created by their standard task at execution.
   - Validates all `_dir` paths exist and are directories; all `_file` paths exist and are files; exits on critical failure.
 - At runtime, tasks validate their own required parameters.
 - On validation failure or error:
@@ -1351,7 +1647,8 @@ The canonical tasks allow extraction of structured data where certain fields ret
 
 ##### Configuration
 
-To configure array-of-objects extraction, update your `config.yaml` to:
+To configure array-of-objects extraction, edit a pipeline draft visually or
+import a portable definition containing the following task parameters:
 
 1. Use the canonical extraction task:
    ```yaml
@@ -1359,7 +1656,7 @@ To configure array-of-objects extraction, update your `config.yaml` to:
      module: standard_step.extraction.extract_pdf
      class: ExtractPdfTask
      params:
-       api_key: "llx-REDACTED"
+       api_key: { $secret: "llamacloud-primary" }
        configuration_id: "YOUR-EXTRACT-V2-CONFIGURATION-ID"
        project_id: "YOUR-PROJECT-ID"  # optional advanced scope
        organization_id: "YOUR-ORGANIZATION-ID"  # optional advanced scope
@@ -1386,7 +1683,12 @@ To configure array-of-objects extraction, update your `config.yaml` to:
 
 ##### Storage Behavior
 
+Storage remains isolated to the selected pipeline version. Add a task-specific
+`extraction.fields` mapping to the CSV/JSON task when aliases or explicit table
+metadata are required.
+
 ##### Confidence Persistence
+
 - Scalar fields persist the provider's numeric confidence when available.
 - Object, scalar-array, and object-array fields persist an aggregate confidence using the minimum nested numeric confidence.
 - Nested confidence details are stored under each field's existing `source_json.confidence_details` payload, including per-cell paths such as `0.itemName` or `0.quantity`.
@@ -1394,13 +1696,18 @@ To configure array-of-objects extraction, update your `config.yaml` to:
 - This behavior applies to new extraction runs only. Existing completed extraction/review records are not rewritten automatically.
 
 ##### JSON Storage
+
 - Preserves the list-of-objects structure for table fields.
-- Configured fields are written under their aliases when aliases are present; otherwise workflow field keys are preserved.
+- Task-specific configured fields are written under their aliases when present;
+  otherwise workflow field keys are preserved.
 - Maintains backward compatibility with scalar-only data.
 
 ##### CSV Storage
+
 - **Row-per-item mode**: Creates one CSV row for each item in the array, repeating invoice-level fields.
-- **Column naming**: Scalar and item columns use configured aliases. Item columns are prefixed with `item_` (e.g., `item_description`, `item_quantity`).
+- **Column naming**: Scalar and item columns use task-specific configured
+  aliases when present. Item columns are prefixed with `item_` (e.g.,
+  `item_description`, `item_quantity`).
 - **Fallback**: If no table field is configured or the list is empty, falls back to single-row format.
 - **Example CSV output**:
   ```csv
@@ -1434,13 +1741,22 @@ To use the canonical array-of-objects tasks:
 
 4. After the LlamaCloud UI configuration is ready, test with a small set of documents before full deployment.
 
-5. Validate a saved LlamaCloud configuration with the smoke checker:
+5. Validate a saved LlamaCloud configuration with the manual smoke checker.
+   The script reads a YAML task definition; it does not load SQLite or resolve
+   `pipeline_secrets`. Export/copy the selected pipeline definition to an
+   ignored local smoke-input file and supply the credential through the current
+   PowerShell process:
 
    ```powershell
-   .\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config dev_config.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+   $env:LLAMA_CLOUD_API_KEY = "set-locally"
+   .\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config smoke-pipeline.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
    ```
 
-   If `configuration_id` is already set in the selected config file, omit the override flag. The smoke checker writes `raw_extract_result.json`, `workflow_normalized_data.json`, and `workflow_fit_report.json`.
+   If `configuration_id` is already in the task definition, omit the override.
+   Use `--raw-json path\to\result.json` for an offline fit check without a cloud
+   call. The checker writes `raw_extract_result.json`,
+   `workflow_normalized_data.json`, and `workflow_fit_report.json` under its
+   output directory. Do not commit those files or the smoke input.
 
 #### 4.9.5. Current Limitations
 
@@ -1453,7 +1769,9 @@ To use the canonical array-of-objects tasks:
 
 ### 4.10. Example Workflows
 
-**Example pipeline using the canonical extraction and storage tasks:**
+The deployment file and the portable pipeline definition are separate. A
+minimal deployment excerpt can contain the shared runtime settings and a local
+secret alias:
 
 ```yaml
 # Top-level configuration keys (abbreviated for example)
@@ -1473,19 +1791,30 @@ logging:
   log_file: "app.log"
   log_level: "INFO"
 
+pipeline_secrets:
+  llamacloud-primary: "SET-THIS-ONLY-IN-THE-LOCAL-IGNORED-CONFIG"
+```
+
+Never commit or export the resolved value under `pipeline_secrets`. The
+portable definition stores only its alias:
+
+```yaml
+schema_version: 1
+
 # Tasks registry: name -> module/class/params
 tasks:
   extract_document_data:
     module: standard_step.extraction.extract_pdf
     class: ExtractPdfTask
     params:
-      api_key: "llx-REDACTED"
+      api_key: { $secret: "llamacloud-primary" }
       tier: "agentic"
       extraction_target: "per_doc"
       fields:
         supplier_name:        { alias: "Supplier name",       type: "str" }
         client_name:          { alias: "Client name",         type: "str" }
         client_address:       { alias: "Client",              type: "str" }
+        purchase_order_number: { alias: "Purchase order",     type: "str" }
         invoice_amount:       { alias: "Invoice amount",      type: "float" }
         insurance_start_date: { alias: "Insurance Start Date",type: "str" }
         insurance_end_date:   { alias: "Insurance End Date",  type: "str" }
@@ -1573,7 +1902,7 @@ Notes:
 - The three storage-related tasks are separate:
   - `store_metadata_csv` writes CSV to `data_dir` using `filename` template.
   - `store_metadata_json` writes JSON to `data_dir` using `filename` template.
-  - `store_file_to_localdrive` moves the original PDF to `files_dir` using `filename`.
+  - `store_file_to_localdrive` copies the processed PDF to `files_dir` using `filename`; housekeeping later removes the temporary processing copy.
 - Field placeholders in `filename` come from extracted data keys (e.g., `{supplier_name}`, `{invoice_amount}`, `{policy_number}`).
 - Use `on_error: stop|continue` per task to control failure behavior.
 
@@ -1588,7 +1917,10 @@ custom_steps:
       class: CustomerValidationTask
 ```
 
-The `module` and `class` values under `tasks:` still stay in the normal pipeline configuration. The registry only approves which custom task classes may be imported.
+The `module` and `class` values stay in the portable/SQLite pipeline definition.
+The deployment registry only approves which custom task classes may be
+imported; it does not add a task to a pipeline.
+
 ### 4.11. Housekeeping and the Processing Folder
 
 - The `processing_dir` contains temporary working files during processing. Workflow state is stored in SQLite.
@@ -1607,6 +1939,7 @@ deployment YAML, reads SQLite drafts/versions and bindings without modifying
 them, and validates portable pipeline or review-schema files before import.
 
 **Core workflow**
+
 - Use `C:\Windows\System32\cmd.exe` or PowerShell from the project root.
 - Execute `.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --base-dir .` to validate deployment settings and the database-backed default selection.
 - Add `--pipeline KEY` or `--review-schema KEY`, with `--draft` or `--version N`,
@@ -1614,12 +1947,19 @@ them, and validates portable pipeline or review-schema files before import.
   bindings.
 - Execute `.\.venv\Scripts\python.exe -m tools.config_check validate-file
   --file path\to\bundle.yaml --kind pipeline` for a portable definition.
+- Use `--kind review-schema` instead when validating a portable review-form
+  definition.
+- Files left under `schemas/` are migration/import sources, not live workflow
+  authority. A warning about filesystem schema files means they should be
+  imported, published, and pinned from SQLite before the directory is retired;
+  it is not evidence that a published review form is missing.
 - Database access is read-only. Exit codes are `0` clean, `1` errors, `2`
   warnings only, and `64` command usage problems.
 - Pass `--format json` when you need machine-readable output for ticket attachments or CI logs.
 - Treat exit code `0` as success, `1` as blocking errors, and `2` as warnings that still need follow-up.
 
 **When to escalate**
+
 - Review `tools/config_check/README.md` for CLI flag details and examples.
 - Cross-reference `docs/config_check_troubleshooting.md` to resolve the common findings surfaced by tasks 13-19 (credential gaps, storage overrides, token mismatches, and similar issues).
 - If operators report workflow failures, run the validator before restarting production work; many configuration problems can be found without rerunning documents.
@@ -1632,11 +1972,19 @@ Operators do not need to run this tool. Administrators should share only the par
 A: Yes, for cloud providers such as LlamaCloud Extract v2 via HTTPS.
 
 **Q: Where are my processed files stored?**
-A: Processed PDF documents are saved by the "`store_file_to_localdrive`" task to the folder configured at `tasks.store_file_to_localdrive.params.files_dir`. Extracted metadata is saved separately:
-- CSV files: `tasks.store_metadata_csv.params.data_dir`
-- JSON files: `tasks.store_metadata_json.params.data_dir`
+A: Locations belong to the exact pipeline version assigned to the document:
 
-When SQLite document context exists, generated PDFs, CSV files, JSON files, archives, source originals, and split PDFs are also registered as document artifacts in SQLite. Split child PDFs are written to the configured split task directory at `tasks.<split_task>.params.split_dir`.
+- processed PDF: the `files_dir` of its `StoreFileToLocaldrive` task;
+- CSV/JSON: the `data_dir` of the corresponding metadata storage task;
+- split children: the split task's `split_dir`;
+- source archive: the archive task's `archive_dir`.
+
+Generated PDFs, CSV/JSON, archives, source originals, and split PDFs are also
+registered as document artifacts when SQLite document context exists. Open the
+document's **Extraction** page to see registered files; use **Pipeline** as an
+administrator to inspect the immutable version's task paths. Do not look for
+these values under runtime `config.yaml` `tasks`, because new pipelines are
+stored in SQLite.
 
 **Q: What happens if the same filename already exists?**
 A: Storage tasks generate unique filenames automatically by appending a numeric suffix (`_1`, `_2`, …) to avoid overwriting. See the [filename utility](../modules/utils.py) for the implementation.
@@ -1645,7 +1993,30 @@ A: Storage tasks generate unique filenames automatically by appending a numeric 
 A: LlamaCloud Extract and LlamaParse limits include max file size and processing time; consult the current provider documentation for your workspace and tier.
 
 **Q: How do I edit the configuration file safely?**  
-A: Use a plain text editor, preserve indentation, back up before changes, and restart the system after saving.
+A: Use `config.yaml` only for deployment settings, approvals, and secret aliases.
+Stop the application when changing paths or secrets, back up the ignored local
+file, preserve YAML indentation, run section 4.12's validator, and restart.
+Create or change workflow tasks visually in **Pipeline**; do not add new
+top-level `tasks` or `pipeline` blocks to deployment YAML.
+
+**Q: Does every new pipeline need to be defined in `config.yaml`?**
+A: No. Create its draft, tasks, review-form dependency, and immutable versions
+in SQLite through **Pipeline** and **Review Forms**. `config.yaml` remains the
+deployment source for the database path, web/watch processing paths, logging,
+custom-task approvals, and provider secret aliases.
+
+**Q: How do I give each pipeline a watch folder?**
+A: Create the incoming directory first. In **Pipeline**, select the active
+template, enter the absolute path under **Watch-folder bindings**, choose an
+exact published version, and select **Add binding**. Paths cannot overlap.
+Publishing a newer version does not update the binding. See section 4.5.5 for
+the current UI limitation on correcting, disabling, or deleting bindings.
+
+**Q: Why is a published pipeline missing from Upload & Process?**
+A: Publication and activation are separate. Confirm that the template lifecycle
+is **Active**, the version validates, and—when an operator is using the
+page—that it is eligible for operator selection. Select **Refresh** on the
+upload page after the administrator change.
 
 **Q: How do I set folder permissions on Windows?**
 A: Right-click the folder, select Properties > Security tab, and ensure the system user has Modify or Write permissions.
@@ -1674,7 +2045,10 @@ A: Open **Processing Overview** and inspect the batch and document steps. Then c
 A: The system retries temporary extraction failures, but a persistent provider limit can still cause the document to fail. Check **Failures**, `app.log`, and the provider quota dashboard. Wait for the limit to clear before re-uploading, and reduce batch volume if the problem repeats.
 
 **Q: What should I do if archiving fails due to directory permissions?**
-A: Ensure the `archive_dir` configured in `tasks.archive_pdf.params.archive_dir` exists and grants Modify permission to the account running the application. Check **Processing Overview**, **Failures**, and `app.log`. A successful archive is recorded with the document's files.
+A: Inspect the failed document's exact pipeline version and ensure its archive
+task `archive_dir` exists or can be created and grants Modify permission to the
+account running the application. Check **Processing Overview**, **Failures**,
+and `app.log`. A successful archive is registered with the document's files.
 
 **Q: What happens when reference file matching fails in the update_reference task?**
 A: When field values required for matching are not found in the pipeline context, the task logs a warning and continues without matching any rows. The task will not append new rows. It updates matched rows only, creating the configured `update_field` column at runtime if needed. Check your extraction field configuration and ensure the required fields (like `purchase_order_number` or `invoice_amount`) are being extracted correctly.
@@ -1689,10 +2063,18 @@ A: Corrected values are persisted in SQLite with the document extraction state. 
 A: When split processing is enabled, the source PDF can create child documents based on document category and page range. Open the batch from **Processing Overview**, then select its split results to inspect the source and child documents.
 
 **Q: Can administrators change pipeline review or split behavior in the UI?**
-A: Yes. Sign in as the administrator and use **Pipeline** to adjust task parameters and **Validation** to check configuration health. Store provider values such as API keys in deployment configuration or secret management; the Pipeline editor selects their aliases without displaying the resolved values.
+A: Yes. Sign in as the administrator and use **Pipeline** to adjust the split
+or review-gate step, then **Save Draft**, **Validate**, and **Publish**. Use
+**Review Forms** for the pinned review UI schema. **Validation** checks
+deployment/pasted-file surfaces; it does not publish the stored draft. Keep API
+keys under deployment `pipeline_secrets`; the editor stores only their aliases.
 
 **Q: How do I troubleshoot "Invalid credentials" errors during PDF extraction?**
-A: The system validates the required LlamaCloud `api_key` before processing. If you use a saved Extract v2 configuration, ensure `configuration_id` exists in the correct LlamaCloud project. Check `app.log` for detailed credential and extraction errors.
+A: Confirm that the pipeline step's `$secret` alias exists under deployment
+`pipeline_secrets`, without copying the key into the draft or logs. If you use
+a saved Extract v2 configuration, ensure `configuration_id` exists in the
+correct LlamaCloud project. Check `app.log` for the redacted provider error and
+run config-check against the stored version.
 
 ---
 
@@ -1703,18 +2085,36 @@ A: The system validates the required LlamaCloud `api_key` before processing. If 
 
 - **Administrator:** The fixed account role that can use all operator features and change application configuration and account passwords.
 - **Operator:** The fixed account role intended for daily upload, monitoring, review, failure investigation, and reporting.
-- **Pipeline:** The ordered list of processing tasks applied to every submitted PDF.
+- **Pipeline template:** A named workflow identity with one editable draft and
+  a history of immutable published versions.
+- **Pipeline version:** One immutable, numbered task definition. Every batch
+  and document is pinned to an exact version at ingestion.
+- **Pipeline draft:** The editable working definition. Saving or validating a
+  draft does not change processing until it is published and eligible.
 - **Task (standard step):** One configured operation, such as split, extraction, review, storage, or archiving.
+- **Artifact:** A registered business file associated with a document, such as
+  a source PDF, split PDF, archive, renamed PDF, CSV, or JSON export.
 - **Review gate:** Rules that decide whether a document can continue automatically or must be checked by an operator.
+- **Review form:** A versioned UI/validation schema that defines the fields and
+  constraints shown during human review. A review-gate task pins one exact
+  published form version when schema-driven review is used.
 - **Review queue:** The application area containing documents that require an operator decision.
 - **Source document:** The original PDF submitted for processing.
 - **Child document:** A PDF created from selected pages when a source document is split.
 - **Fan-out:** Creation of child documents that each run the remaining pipeline tasks.
 - **Fan-in:** Automatic recalculation of source-document and batch status from the child-document statuses.
 - **Alias:** A user-friendly field name used in the interface or exported CSV/JSON.
-- **Watch folder:** A folder monitored for newly added PDFs.
+- **Watch folder:** An existing incoming folder monitored for newly added PDFs.
+- **Watch-folder binding:** The SQLite record that maps one non-overlapping
+  watch folder to one exact published pipeline version.
+- **Claim:** A time-limited reservation that prevents two operators from
+  editing the same review item concurrently.
+- **Secret alias:** A non-secret name stored in a pipeline definition and
+  resolved at runtime from deployment-owned `pipeline_secrets`.
 - **Recovery reset:** The administrator command-line procedure that replaces the passwords for both fixed accounts when normal sign-in is unavailable.
-- **YAML:** The indentation-based text format used for application configuration.
+- **YAML:** The indentation-based text format used for deployment configuration
+  and portable pipeline/review-form import or export; SQLite remains the
+  workflow authority.
 - **API key:** A credential used by the application to access an external provider.
 
 ### Technical Page Reference
@@ -1735,17 +2135,25 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Settings | `/app/settings` | Operator and administrator | Select **Settings** from the left navigation menu. |
 | Overview | `/app/admin` | Administrator only | Sign in as the administrator, then select **Overview** from the left navigation menu. |
 | Users | `/app/admin/users` | Administrator only | Sign in as the administrator, then select **Users** from the left navigation menu. |
-| Pipeline | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, then select **Pipeline** from the left navigation menu. |
+| Pipeline and watch-folder bindings | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, select **Pipeline**, and use the binding panel at the bottom for folder routing. |
 | Review Forms | `/app/schemas` | Administrator only | Sign in as the administrator, then select **Review Forms** from the left navigation menu. |
+| Review form draft | `/app/schemas/{schema_name}` | Administrator only | Select a form in **Review Forms**; this is the bookmarkable editor view for that stable key. |
 | Task Catalog | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Task Catalog** from the left navigation menu. |
 | Validation | `/app/settings/validation` | Administrator only | Sign in as the administrator, then select **Validation** from the left navigation menu. |
 | Audit Log | `/app/admin/audit` | Administrator only | Sign in as the administrator, then select **Audit Log** from the left navigation menu. |
 
 The `/api/files` and `/api/status/{file_id}` endpoints are retained only for compatibility and are not the primary operator interface. Their Singapore-time fields treat timestamps without an offset as UTC and preserve explicit source offsets before displaying GMT+8.
 
+The old `/app/admin/review-gate` and `/app/admin/split` addresses redirect to
+**Pipeline**. Review and split settings now belong to their corresponding task
+cards in a versioned pipeline draft; they are not separate administrator pages.
+
 ### Example Configuration Files
 
-See sections 4.3.1 and 4.8 for complete examples. Use them as templates and adjust paths and credentials to your environment.
+See section 4.3.1 for deployment YAML and sections 4.8-4.10 for portable
+pipeline definitions. Keep those two scopes separate. Adjust local paths and
+secret aliases for the environment, and never copy resolved credentials into a
+portable file.
 
 ### Further Documentation
 

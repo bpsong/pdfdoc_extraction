@@ -11,7 +11,6 @@ from abc import ABC, abstractmethod
 import logging
 from modules.exceptions import TaskError
 from modules.config_protocol import ConfigProvider as ConfigManager
-from typing import Optional  # Import Optional
 
 
 class BaseTask(ABC):

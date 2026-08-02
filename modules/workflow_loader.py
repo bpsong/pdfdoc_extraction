@@ -9,8 +9,7 @@ This module is responsible for:
 
 import importlib
 import logging
-import sys
-from typing import Dict, Any, Callable, Mapping, Type, cast, Union
+from typing import Dict, Any, Callable, Mapping, Type, cast
 
 from prefect import flow, task, get_run_logger
 from prefect.futures import PrefectFuture

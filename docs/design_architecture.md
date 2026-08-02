@@ -8,8 +8,8 @@
 | Audience | Senior engineers, architects, technical leads, and operational owners |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
-| Last verified | 2026-07-26 |
-| Verified revision | `88e33a9` plus the Phase 14-15 working-tree audit |
+| Last verified | 2026-08-02 |
+| Verified revision | Current working tree after the versioned-pipeline documentation audit |
 
 This document describes the current implementation, not a target-state
 architecture.
@@ -65,7 +65,7 @@ The essential model is:
 flowchart LR
     subgraph Parent["Main process"]
         Main["main.py<br/>startup and supervision"]
-        Watch["WatchFolderMonitor"]
+        Watch["WatchFolderCoordinator"]
         Runner["FileProcessor<br/>WorkflowManager<br/>WorkflowLoader"]
         Main --> Watch --> Runner
     end
@@ -96,7 +96,7 @@ The default deployment contains two local processes:
 1. `main.py` resolves configuration, runs migrations, validates the task
    registry, configures logging, and constructs ingestion/workflow components.
 2. Unless `--no-web` is supplied, it starts Uvicorn as a subprocess.
-3. The parent process runs the polling watch-folder monitor and supervises the
+3. The parent process runs the polling watch-folder coordinator and supervises the
    web subprocess.
 4. Both processes access the configured SQLite database and filesystem.
 
@@ -110,7 +110,7 @@ pool, or multi-host coordination layer.
 | Component | Responsibility | Boundary |
 | --- | --- | --- |
 | [`main.py`](../main.py) | Startup, supervision, shutdown | No workflow business logic |
-| [`WatchFolderMonitor`](../modules/watch_folder_monitor.py) | Poll, validate, and move PDFs | No durable workflow-state ownership |
+| [`WatchFolderCoordinator`](../modules/services/watch_folder_coordinator.py) | Reconcile enabled bindings, validate and claim PDFs, and start their pinned versions | No durable workflow-state ownership |
 | [`FileProcessor`](../modules/file_processor.py) | Place files, create ingestion state, trigger processing | No task policy |
 | [`WorkflowManager`](../modules/workflow_manager.py) | Start root, child, and resumed flows | No table-specific persistence |
 | [`WorkflowLoader`](../modules/workflow_loader.py) | Approve, instantiate, and execute configured tasks | No domain task behavior |
@@ -491,8 +491,9 @@ limited navigation convenience; neither may represent workflow or permission
 state.
 
 Operator pages cover upload, processing, split and extraction inspection,
-review, failures, reports, and settings. Admin pages cover users, pipeline,
-tasks, schemas, validation, audit, and simulation.
+review, failures, reports, and settings. Admin pages cover the overview, fixed
+user accounts, versioned pipelines and review forms, the task catalog, legacy
+schema validation, and the filtered administrative audit log.
 
 Tailwind scans production templates and JavaScript. Rebuild committed CSS
 after utility-class or frontend dependency changes:

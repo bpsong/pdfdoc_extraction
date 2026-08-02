@@ -7,9 +7,8 @@ identified and appropriate recommendations are provided.
 """
 
 import unittest
-from typing import Dict, Any
 
-from .performance_analyzer import PerformanceAnalyzer, PerformanceAnalysisResult
+from tools.config_check.performance_analyzer import PerformanceAnalyzer
 
 
 class TestPerformanceAnalyzer(unittest.TestCase):

@@ -1,7 +1,7 @@
 fastapi==0.139.2
 starlette>=1.1.0,<2.0.0
+httpx2>=2.0.0,<3.0.0
 pydantic==2.10.6
-passlib==1.7.4
 python-jose==3.4.0
 PyYAML==6.0.2
 prefect==3.7.8

@@ -192,8 +192,9 @@ Additional rules:
   not pinned in `requirements.txt`. Run `pyright` only when it is available or
   the task explicitly adds it to the supported toolchain; report honestly when
   it was not run.
-- Ruff and pytest-cov are not currently project dependencies. Do not claim or
-  require those checks without first adding and documenting the tooling.
+- Ruff is not currently a project dependency. Do not claim or require Ruff
+  checks without first adding and documenting the tooling. Pytest-cov is pinned
+  in `requirements.txt` for explicit coverage runs.
 
 ## Task List Workflow
 

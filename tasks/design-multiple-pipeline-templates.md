@@ -4,12 +4,12 @@
 
 | Item | Value |
 | --- | --- |
-| Purpose | Implementation-ready design for multiple named, versioned processing pipelines and their review schemas |
+| Purpose | Implemented design and current contract for multiple named, versioned processing pipelines and review schemas |
 | Audience | Engineers, architects, administrators, and test owners |
 | Status | Implemented through Phase 15; maintained as the authoritative design |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, `tools/config_check/`, and `web/` |
 | Prerequisite | Current SQLite-backed batch, document, task-run, review, split, and audit model |
-| Source direction | [Future Design: Multiple Pipeline Templates](future-multi-document-routing.md) |
+| Source direction | [Implemented Direction: Multiple Pipeline Templates](future-multi-document-routing.md) |
 | Deferred extension | [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md) |
 
 ## Summary
@@ -21,11 +21,9 @@ The architecture and operator behavior are maintained in
 [User Guide](../docs/user_guide.md), and
 [Review Schema Administrator Guide](../docs/review_schema_admin_guide.md).
 
-The application currently loads one mutable `pipeline` and `tasks` definition
-from runtime YAML. This design replaces that global execution definition with
-The implemented application supports multiple named pipeline templates whose
-published versions are immutable and
-stored in SQLite. Review-form schemas follow the same model: the Review Forms
+The application supports multiple named pipeline templates whose published
+versions are immutable and stored in SQLite. Review-form schemas follow the
+same model: the Review Forms
 UI edits a schema draft in SQLite, publication creates an immutable schema
 version, and a published pipeline references an exact schema version.
 
@@ -104,9 +102,11 @@ Document type is optional descriptive metadata. It is not the primary pipeline
 identity because different templates may process the same document type for
 different business purposes.
 
-## Current-state gaps
+## Pre-implementation gaps (historical)
 
-The existing implementation has the following gaps:
+The refactor was designed to close the following gaps in the former
+single-pipeline implementation. These statements describe the old baseline,
+not current runtime behavior:
 
 - `WorkflowLoader` reads one global `pipeline` and `tasks` configuration.
 - `WorkflowManager` and `ResumeManager` reconstruct workflows from the current
@@ -205,7 +205,7 @@ refer directly to that version. A separate `workflow_runs` entity is deferred
 until mixed-document routing allows one document to execute parts of multiple
 versions.
 
-## Target architecture
+## Implemented architecture
 
 ```mermaid
 flowchart LR
@@ -406,7 +406,7 @@ subdirectories.
 
 ### Assignment columns
 
-Add the following target-state relationships:
+The implementation adds these relationships:
 
 | Table | Added columns |
 | --- | --- |
@@ -451,18 +451,19 @@ Version schema `1` is canonical JSON with this logical shape:
 {
   "schema_version": 1,
   "pipeline": [
-    "split_document",
     "extract_invoice",
-    "review_invoice",
-    "store_invoice"
+    "review_invoice"
   ],
   "tasks": {
-    "split_document": {
-      "module": "standard_step.split.llama_cloud",
-      "class": "LlamaCloudSplitTask",
+    "extract_invoice": {
+      "module": "standard_step.extraction.extract_pdf",
+      "class": "ExtractPdfTask",
       "params": {
-        "enabled": true,
-        "api_key": {"$secret": "llamacloud-primary"}
+        "api_key": {"$secret": "llamacloud-primary"},
+        "configuration_id": "invoice-config-id",
+        "fields": {
+          "invoice_number": {"alias": "Invoice number", "type": "str"}
+        }
       },
       "on_error": "stop"
     },
@@ -568,8 +569,9 @@ Existing pipeline versions and review resumes keep their prior schema version.
 
 ### Import and export
 
-The Review Forms UI and CLI may import `.yaml`, `.yml`, or `.json` into a
-schema draft. Import never publishes. Export may emit either canonical JSON or
+The Review Forms UI imports `.yaml`, `.yml`, or `.json` into a schema draft;
+the CLI validates portable files but does not import them. Import never
+publishes. Export may emit either canonical JSON or
 human-readable YAML with stable schema key, version number, and content hash
 metadata. Exported files are portable artifacts, not watched runtime inputs.
 
@@ -685,7 +687,9 @@ The route performs these operations in order:
 1. Parse exactly one `pipeline_version_id`.
 2. Resolve the version, verify its hash, validate template eligibility, and
    authorize the current role.
-3. Validate all file names, sizes, content types, and PDF headers.
+3. Enforce request/file-count and size limits, then validate filename
+   extensions and PDF headers. The supplied MIME type is recorded as metadata,
+   not trusted as proof of PDF content.
 4. Save files to collision-safe processing paths.
 5. In one SQLite transaction, create the batch, root documents, source
    artifacts, assignment fields, and upload-selection audit event.
@@ -751,14 +755,14 @@ interval. Reconciliation and file claiming use one coordinator lock:
 The coordinator moves each accepted PDF into the shared processing directory,
 then creates a one-document batch with assignment source `watch_folder` and
 the binding ID. Existing retry and invalid-header behavior remains. A binding
-or folder error produces a startup/admin validation finding without stopping
-unrelated bindings.
+  or folder error is logged and skipped without stopping unrelated bindings;
+  config-check and binding administration expose the corresponding finding.
 
 ## Execution design
 
 ### Pipeline definition service
 
-A new pipeline-definition service is the only runtime path that reads
+A pipeline-definition service is the only runtime path that reads
 published definition content. Given a version ID, it:
 
 1. reads the immutable version and template;
@@ -781,10 +785,9 @@ safe failures.
 `pipeline_version_id`. When a SQLite document ID is present, the manager reads
 the authoritative assignment and rejects any conflicting caller value.
 
-`WorkflowLoader` is constructed with an executable definition and version ID.
-Its current singleton behavior must be removed or replaced so definitions
-cannot leak between runs. `load_workflow` iterates the supplied definition,
-not `ConfigManager.get("pipeline")`.
+`WorkflowLoader` receives an executable definition and version ID per run, so
+definitions cannot leak between workflows. `load_workflow` iterates the
+supplied definition, not `ConfigManager.get("pipeline")`.
 
 `ReviewGateTask` receives the immutable schema map through an injected
 SQLite-backed schema provider or an explicit resolved-schema constructor
@@ -873,7 +876,7 @@ and must never infer the current latest version.
 
 ## Services and repositories
 
-New or expanded service responsibilities:
+Implemented service responsibilities:
 
 | Service | Responsibility |
 | --- | --- |
@@ -909,14 +912,16 @@ cookie-authenticated mutations.
 | `GET /api/admin/review-schemas/{schema_template_id}/draft` | Read schema draft and revision |
 | `PUT /api/admin/review-schemas/{schema_template_id}/draft` | Save schema draft using `expected_revision` |
 | `POST /api/admin/review-schemas/{schema_template_id}/draft/validate` | Validate submitted or stored schema draft |
-| `POST /api/admin/review-schemas/{schema_template_id}/draft/publish` | Publish exact expected schema revision |
+| `POST /api/admin/review-schemas/{schema_template_id}/publish` | Publish exact expected schema revision |
 | `GET /api/admin/review-schemas/{schema_template_id}/versions` | List immutable schema versions |
-| `GET /api/admin/review-schema-versions/{schema_version_id}` | Read immutable schema version |
+| `GET /api/admin/review-schemas/{schema_template_id}/versions/{schema_version_id}` | Read immutable schema version |
 | `POST /api/admin/review-schemas/{schema_template_id}/draft/import` | Validate and import YAML/JSON into the selected draft |
 | `GET /api/admin/review-schemas/{schema_template_id}/draft/export` | Export the current draft as portable YAML or JSON |
-| `GET /api/admin/review-schema-versions/{schema_version_id}/export` | Export redacted portable YAML or JSON |
+| `GET /api/admin/review-schemas/{schema_template_id}/versions/{schema_version_id}/export` | Export redacted portable YAML or JSON |
+| `GET /api/admin/review-schemas/{schema_template_id}/usage` | List published pipeline dependencies |
 | `GET /api/admin/pipeline-templates` | List templates with latest version and draft summary |
 | `POST /api/admin/pipeline-templates` | Create inactive template and empty draft |
+| `GET /api/admin/pipeline-templates/schema-versions` | List eligible review-form versions for pipeline editing |
 | `GET /api/admin/pipeline-templates/{template_id}` | Get metadata, draft summary, versions, and bindings |
 | `PATCH /api/admin/pipeline-templates/{template_id}` | Update metadata or perform a valid lifecycle transition |
 | `POST /api/admin/pipeline-templates/{template_id}/clone` | Clone latest published definition into a new template |
@@ -925,11 +930,11 @@ cookie-authenticated mutations.
 | `POST /api/admin/pipeline-templates/{template_id}/draft/import` | Validate a portable bundle and import it into the draft |
 | `GET /api/admin/pipeline-templates/{template_id}/draft/export` | Export the current draft as a portable redacted bundle |
 | `POST /api/admin/pipeline-templates/{template_id}/draft/validate` | Validate submitted or stored revision |
-| `POST /api/admin/pipeline-templates/{template_id}/draft/publish` | Publish exact expected revision |
+| `POST /api/admin/pipeline-templates/{template_id}/publish` | Publish exact expected revision |
 | `GET /api/admin/pipeline-templates/{template_id}/versions` | List immutable version metadata |
-| `GET /api/admin/pipeline-versions/{version_id}` | Read redacted version and display snapshot |
-| `GET /api/admin/pipeline-versions/{version_id}/export` | Export a portable redacted bundle with schema dependencies |
-| `GET /api/admin/pipeline-versions/{left_id}/diff/{right_id}` | Return redacted canonical diff |
+| `GET /api/admin/pipeline-templates/{template_id}/versions/{version_id}` | Read redacted version and display snapshot |
+| `GET /api/admin/pipeline-templates/{template_id}/versions/{version_id}/export` | Export a portable redacted bundle with schema dependencies |
+| `GET /api/admin/pipeline-templates/{template_id}/diff` | Return a redacted draft/base or selected-version diff |
 | `GET /api/admin/watch-folder-bindings` | List bindings and validation state |
 | `POST /api/admin/watch-folder-bindings` | Create exact-version binding |
 | `PATCH /api/admin/watch-folder-bindings/{binding_id}` | Update path, version, or enabled state |
@@ -952,11 +957,14 @@ Draft save request:
     "pipeline": ["extract_invoice"],
     "tasks": {
       "extract_invoice": {
-        "module": "standard_step.extraction.llama_cloud_v2",
+        "module": "standard_step.extraction.extract_pdf",
         "class": "ExtractPdfTask",
         "params": {
           "api_key": {"$secret": "llamacloud-primary"},
-          "configuration_id": "invoice-config"
+          "configuration_id": "invoice-config",
+          "fields": {
+            "invoice_number": {"alias": "Invoice number", "type": "str"}
+          }
         },
         "on_error": "stop"
       }
@@ -969,8 +977,7 @@ Publish request:
 
 ```json
 {
-  "expected_revision": 5,
-  "expected_content_hash": "sha256..."
+  "expected_revision": 5
 }
 ```
 
@@ -990,15 +997,12 @@ raw secret-bearing values.
 
 ### Existing single-pipeline endpoints
 
-The existing `/api/admin/pipeline` single-resource endpoints are internal to
-the current production page and are replaced atomically with the endpoints
-above when the new page ships. They do not continue writing active YAML.
-External compatibility is not promised for these administrative endpoints.
-
-The existing file-backed schema administration endpoints are likewise
-replaced atomically by the versioned review-schema endpoints. YAML/JSON upload
-becomes draft import, and download becomes explicit export. No API mutation
-writes into `schema.directories` after migration.
+The older `/api/admin/pipeline`, review-gate-rules, split-settings, and
+filesystem-schema endpoints remain compatibility/global-administration
+surfaces. The production Pipeline and Review Forms pages use the versioned
+endpoints above, and compatibility APIs do not define execution for newly
+assigned versioned documents. No versioned API mutation writes into
+`schema.directories` after migration.
 
 Legacy processing/status APIs remain compatibility-only and must not become a
 new source of pipeline assignment or execution state.
@@ -1007,8 +1011,7 @@ new source of pipeline assignment or execution state.
 
 ### Review Forms workspace
 
-The production Review Forms page becomes a versioned schema workspace. It
-provides:
+The production Review Forms page is a versioned schema workspace. It provides:
 
 - schema-template list and lifecycle badges;
 - one revision-controlled draft per schema template;
@@ -1027,8 +1030,8 @@ version.
 
 ### Administrator pipeline workspace
 
-The production `/app/admin/pipeline` page remains Jinja with a page-specific
-vanilla JavaScript controller. It gains:
+The production `/app/admin/pipeline` page is Jinja with a page-specific vanilla
+JavaScript controller. It provides:
 
 - template list with lifecycle and latest-version badges;
 - create and clone actions;
@@ -1120,9 +1123,9 @@ Blocking validation includes:
 - unsafe filesystem paths used by non-schema task parameters;
 - publication identical to the base version.
 
-The existing pipeline validator and standalone config-check rules should be
-refactored to validate an explicit definition plus resolved dependency
-metadata rather than assume root-level global YAML.
+The pipeline validator and standalone config-check rules validate an explicit
+definition plus resolved dependency metadata rather than assuming root-level
+global YAML.
 
 ### Review schema validation
 
@@ -1148,10 +1151,10 @@ unpublished file.
 
 ### Binding validation
 
-Binding validation runs on mutation, coordinator reconciliation, startup
-validation, and admin validation pages. It detects invalid paths, path
-overlaps, inaccessible folders, missing versions, inactive templates, and
-enabled bindings that no longer meet ingestion rules.
+Binding validation runs on mutation and read-only config-check audits. The
+coordinator independently reconciles current rows and skips/logs inaccessible
+bindings. These paths detect invalid or overlapping folders, missing versions,
+inactive templates, and enabled bindings that no longer meet ingestion rules.
 
 Publishing one template never validates or mutates another template except
 that shared secret availability and referenced immutable schema versions may
@@ -1211,8 +1214,7 @@ Targeted selectors are added:
 
 # Validate one immutable pipeline version and its exact dependencies.
 .\.venv\Scripts\python.exe -m tools.config_check validate `
-  --config .\config.yaml --pipeline invoice-processing --version 3 `
-  --import-checks --check-files
+  --config .\config.yaml --pipeline invoice-processing --version 3
 
 # Validate one stored review schema draft or version.
 .\.venv\Scripts\python.exe -m tools.config_check validate `
@@ -1241,10 +1243,9 @@ or deployed:
 .\.venv\Scripts\python.exe -m tools.config_check validate-file `
   --kind runtime --file .\config.yaml
 
-# Pipeline bundle before import. --config allows dependency and secret-alias checks.
+# Pipeline bundle before import. --config resolves dependencies and secret aliases.
 .\.venv\Scripts\python.exe -m tools.config_check validate-file `
-  --kind pipeline --file .\invoice-pipeline.yaml --config .\config.yaml `
-  --import-checks --check-files
+  --kind pipeline --file .\invoice-pipeline.yaml --config .\config.yaml
 
 # Review schema before import.
 .\.venv\Scripts\python.exe -m tools.config_check validate-file `
@@ -1268,9 +1269,22 @@ template:
   key: invoice-processing
   name: Invoice Processing
 definition:
+  schema_version: 1
   pipeline:
+    - extract_invoice
     - review_invoice
   tasks:
+    extract_invoice:
+      module: standard_step.extraction.extract_pdf
+      class: ExtractPdfTask
+      params:
+        api_key: { $secret: llamacloud-primary }
+        configuration_id: invoice-config
+        fields:
+          invoice_number:
+            alias: Invoice number
+            type: str
+      on_error: stop
     review_invoice:
       module: standard_step.review.review_gate
       class: ReviewGateTask
@@ -1278,16 +1292,19 @@ definition:
         schema:
           key: invoice-review
           version: 2
-          content_hash: "sha256..."
+          content_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         confidence_threshold: 0.8
       on_error: stop
 dependencies:
   review_schemas:
     - key: invoice-review
       version: 2
-      content_hash: "sha256..."
-      schema: {} # Required only for fully offline validation/import.
+      content_hash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 ```
+
+This abbreviated bundle resolves the dependency against the SQLite database
+provided by `--config`. A fully offline bundle also embeds the non-empty schema
+under that dependency entry, and its canonical hash must equal the coordinate.
 
 On import, the resolver replaces the portable `schema` coordinate with the
 target database's `schema_version_id`; the stored draft never retains both
@@ -1299,14 +1316,15 @@ coordinates to local UUIDs, and then save a draft. Import never publishes.
 
 ### CLI compatibility and output
 
-- `--format text|json`, `--strict`, `--base-dir`, `--import-checks`,
-  `--check-files`, `--performance-analysis`, and `--security-analysis` remain
-  supported where applicable.
-- Import checks verify approved module/class resolution for the selected
-  pipeline definition.
-- File checks validate non-schema task file dependencies such as reference
-  CSVs and writable directories. Review schema content comes from SQLite or
-  the validated bundle, not `schema.directories`.
+- `--format text|json` applies to every source. `--strict`, `--base-dir`,
+  `--import-checks`, `--check-files`, `--performance-analysis`, and
+  `--security-analysis` are applied by `ConfigValidator` to runtime/legacy YAML
+  content. In a `validate` invocation with a stored selector, that runtime
+  analysis is merged with the read-only SQLite findings.
+- Stored and portable pipeline sources always receive shared structural,
+  parameter, task-approval, secret-reference, and schema-dependency checks.
+  The optional runtime analysis flags do not add filesystem, performance, or
+  security passes over the SQLite definition or a non-runtime portable file.
 - Exit codes remain `0` for valid, `1` for errors, `2` for warnings only, and
   `64` for command usage errors.
 - JSON finding paths identify their source, for example
@@ -1316,8 +1334,7 @@ coordinates to local UUIDs, and then save a draft. Import never publishes.
   and returns a blocking finding when the database schema is too old.
 - Reporters redact secret-like keys and values consistently for file and
   database inputs.
-- A flag that does not apply to the selected source returns usage exit code
-  `64`; it is never silently ignored.
+- Invalid source-selector combinations return usage exit code `64`.
 - `config-check schema` gains
   `--kind runtime|pipeline|review-schema|pipeline-bundle` so automation can
   retrieve each portable contract.
@@ -1335,45 +1352,27 @@ coordinates to local UUIDs, and then save a draft. Import never publishes.
 
 ### Audit events
 
-At minimum, record:
+The implemented event families are:
 
-- `review_schema_template_created`;
-- `review_schema_template_metadata_updated`;
-- `review_schema_template_activated`;
-- `review_schema_template_deactivated`;
-- `review_schema_template_archived`;
-- `review_schema_draft_saved`;
-- `review_schema_draft_imported`;
-- `review_schema_draft_validated`;
-- `review_schema_version_published`;
-- `review_schema_version_exported` when required by audit policy;
-- `pipeline_template_created`;
-- `pipeline_template_metadata_updated`;
-- `pipeline_template_cloned`;
-- `pipeline_template_activated`;
-- `pipeline_template_deactivated`;
-- `pipeline_template_archived`;
-- `pipeline_draft_saved`;
-- `pipeline_draft_imported`;
-- `pipeline_draft_validated`;
-- `pipeline_version_published`;
-- `pipeline_version_exported` when required by audit policy;
-- `pipeline_version_diff_viewed` when required by audit policy;
-- `watch_folder_binding_created`;
-- `watch_folder_binding_updated`;
-- `watch_folder_binding_disabled`;
-- `watch_folder_binding_deleted`;
-- `pipeline_selected_for_upload`;
-- `pipeline_assigned_from_watch_folder`;
-- `pipeline_assignment_migrated`;
-- `pipeline_definition_integrity_failed`;
-- `pipeline_secret_resolution_failed`.
+- `review_schema.template.created` and `review_schema.template.updated`;
+- `review_schema.draft.saved`, `.validated`, `.imported`, and `.exported`;
+- `review_schema.version.published` and `.exported`;
+- `pipeline.template.created`, `.updated`, and `.cloned`;
+- `pipeline.draft.saved`, `.validated`, and `.imported`;
+- `pipeline.version.published` and `.exported`;
+- `pipeline.diff.viewed`;
+- `watch_binding.created`, `.updated`, and `.deleted`;
+- `ingestion.pipeline.assigned`;
+- `versioned_config.legacy_migration.completed`; and
+- `ingestion.pipeline.legacy_migrated`.
 
-Events include stable IDs, version number, template key/name snapshot, actor,
+Events include the applicable stable IDs, version/template details, actor,
 outcome, and non-secret summary. Upload selection is attributed to the current
 user. Binding assignment is attributed to `system` plus the binding ID.
 Read-only local CLI validation does not create audit events; API-driven
 validation and import retain their existing audit expectations.
+The current Audit Log page filters for the older `admin_` prefix, so these
+dot-named events remain persisted but are not all visible on that page.
 
 ### Redaction
 
@@ -1385,13 +1384,13 @@ echoing values.
 Tests, fixtures, screenshots, logs, diffs, audit payloads, task-run JSON, and
 error responses use synthetic aliases and cannot contain real credentials.
 
-## Migration design
+## Migration design and implemented behavior
 
 ### Schema migration
 
-The next database schema version is `3`. The migration runner must perform an
-explicit ordered upgrade because replaying `CREATE TABLE IF NOT EXISTS` does
-not add columns to existing tables.
+The versioned-configuration database schema is version `3`. The migration
+runner performs an explicit ordered upgrade because replaying
+`CREATE TABLE IF NOT EXISTS` does not add columns to existing tables.
 
 Upgrade order:
 
@@ -1525,7 +1524,7 @@ tables. Root YAML retains infrastructure configuration and
 drive execution. Legacy `schema.directories` may support explicit import/file
 validation during transition, but it does not drive review execution.
 
-## Delivery sequence
+## Historical delivery sequence
 
 1. **Persistence and migration**
    - Add schema version `3`, pipeline and review-schema repositories, explicit
@@ -1555,8 +1554,8 @@ validation during transition, but it does not drive review execution.
      migration/operator guidance, and remove global pipeline and filesystem
      schema runtime paths.
 
-Each stage must preserve a runnable application. New ingestion must not be
-enabled until version-aware execution is complete.
+Each implementation stage preserved a runnable application; version-aware
+execution preceded enabling the new ingestion paths.
 
 ## Test strategy
 
@@ -1711,7 +1710,7 @@ npm run build:css
 Live LlamaCloud checks remain opt-in and must not run without explicit
 credentials and authorization.
 
-## Acceptance criteria
+## Implemented acceptance criteria
 
 - At least two templates can be administered independently.
 - Each template has one revision-controlled draft and independently numbered,

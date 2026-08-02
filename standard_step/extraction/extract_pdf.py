@@ -22,7 +22,7 @@ Notes:
 
 import logging
 import re
-from typing import Any, Dict, Optional, List, Union
+from typing import Any, Dict, Optional, List
 
 # Import get_logger if available, otherwise use standard logging
 try:

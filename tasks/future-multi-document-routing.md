@@ -4,8 +4,8 @@
 
 Record the product direction now implemented for supporting multiple published
 pipeline templates. Administrators configure pipelines for different
-document-processing use cases, and the application will select a complete
-pipeline when a document enters the system.
+document-processing use cases, and the application assigns one exact published
+version when a document enters the system.
 
 This baseline is current runtime behavior. The implementation-ready design and
 completed work are recorded in
@@ -85,11 +85,14 @@ resuming with their pinned versions.
 
 ### Operator Upload
 
-The upload page will require the operator to select an available published
-pipeline before processing begins. The initial implementation should apply one
-pipeline selection to the entire uploaded batch.
+The upload page requires the operator to select an available published pipeline
+version before processing begins. One selection applies to the entire uploaded
+batch.
 
-The UI should show at least:
+The UI shows the eligible version summaries supplied by
+`/api/pipelines/available`, including the template name, description/version
+details made available to operators, and operator instructions when configured.
+The API enforces the authoritative eligibility rules.
 
 - pipeline name and description;
 - intended document type or use case;
@@ -124,8 +127,8 @@ watch_folder_bindings:
     version: 2
 ```
 
-The final storage format may be SQLite-backed rather than YAML-backed, but the
-same validation rules apply:
+The authoritative bindings are stored in SQLite rather than deployment YAML.
+The conceptual YAML above is explanatory only. Current validation rules are:
 
 - each enabled folder has exactly one published pipeline version;
 - paths are unique after Windows path normalization;
@@ -139,11 +142,7 @@ Each published pipeline version must contain the complete executable serial
 definition required by the workflow loader:
 
 ```yaml
-template:
-  key: invoice-processing
-  name: Invoice Processing
-  document_type: invoice
-
+schema_version: 1
 pipeline:
   - split_document
   - extract_invoice
@@ -153,15 +152,15 @@ pipeline:
 
 tasks:
   extract_invoice:
-    module: standard_step.extraction.llama_cloud_v2
+    module: standard_step.extraction.extract_pdf
     class: ExtractPdfTask
     params:
       configuration_id: invoice-config-id
+      api_key: { $secret: llamacloud-primary }
     on_error: stop
 ```
 
-The exact persistence schema should be finalized with the multi-template admin
-work. A clean target model would provide separate records for:
+The implemented persistence model provides separate records for:
 
 - pipeline templates;
 - immutable pipeline versions;
@@ -175,11 +174,9 @@ rules.
 
 ## Execution Requirements
 
-The current runtime reads one global `pipeline` and `tasks` configuration. The
-multi-template implementation must change execution so that the selected
-published definition is passed explicitly through the workflow lifecycle.
-
-Required behavior:
+The runtime no longer executes one global YAML `pipeline`/`tasks` definition.
+The selected immutable SQLite definition is passed explicitly through the
+workflow lifecycle. Current behavior:
 
 1. Resolve and authorize the selected published pipeline version before
    creating or queuing the ingestion records.
@@ -196,10 +193,10 @@ Required behavior:
 8. Display processing state using a safe snapshot derived from the pinned
    version.
 
-The existing display-only pipeline snapshot is not sufficient for execution
-because it intentionally omits task parameters. The application must retain an
-immutable executable definition while continuing to expose only redacted,
-non-secret data through APIs, audit events, logs, and UI snapshots.
+Display-only pipeline snapshots are not used for execution because they omit
+task parameters. The immutable executable definition is retained in SQLite,
+while APIs, audit events, logs, and UI snapshots expose only redacted,
+non-secret data.
 
 ## Simpler Extraction Task
 
@@ -238,7 +235,7 @@ Splitting remains a task within a selected pipeline. When enabled:
 - fan-in continues to derive source and batch status from terminal leaves;
 - retries must not create duplicate child documents.
 
-The initial implementation assumes a split source contains documents that can
+The current implementation assumes a split source contains documents that can
 all be processed by the selected pipeline. Routing different split categories
 to different pipelines is a separate future capability and should be added
 only when mixed-document bundles are a demonstrated requirement.
@@ -250,7 +247,11 @@ ingress bindings, pipeline assignments, task runs, review state, and audit
 history. The filesystem continues to hold PDFs and other large business
 artifacts.
 
-Audit events should cover at least:
+Persisted audit events cover template/draft/version/binding operations and the
+ingestion assignment. The current Audit Log page displays only the older
+`admin_` event family, so dot-named versioning and assignment events may require
+API/database inspection until that UI filter is expanded. Event families
+include:
 
 - template creation, rename, clone, activation, deactivation, and archive;
 - draft save, validation, publication, and published-version diff;
@@ -259,8 +260,8 @@ Audit events should cover at least:
 - the template and version assigned to each ingestion.
 
 Pipeline read APIs and audit payloads must redact secret-like task parameters.
-Published versions should reference secrets through the application's approved
-configuration mechanism rather than expose secret values in browser-editable
+Published versions use `$secret` alias objects; resolved values remain in
+deployment-owned `pipeline_secrets` and are not exposed in browser-editable
 definitions.
 
 ## Validation Requirements
@@ -282,14 +283,12 @@ Publishing one template must not overwrite or change another template.
 
 ## Migration Behavior
 
-The legacy single configured pipeline can be imported as the first template and its
-initial published version. Existing behavior can remain compatible by treating
-that migrated template as the configured ingress binding for the current watch
-folder.
-
-Migration must not rely on the mutable current configuration when resuming
-documents already in review or processing. The implementation plan must define
-how pre-migration runs retain or reconstruct a safe executable definition.
+The legacy single configured pipeline can be imported as the first template and
+initial published version. The migration service backfills eligible historical
+batch, document, task-run, split-child, review, and binding relationships while
+recording migration findings. Once migration is verified, top-level YAML
+`tasks`/`pipeline` and filesystem schema references can be removed; deployment
+YAML keeps infrastructure settings and `pipeline_secrets` aliases.
 
 ## Deferred Scope
 
@@ -302,7 +301,7 @@ how pre-migration runs retain or reconstruct a safe executable definition.
 - Rewriting historical extraction, review, or task-run records.
 - Replacing the existing split fan-out/fan-in model.
 
-## Acceptance Criteria
+## Implemented Guarantees
 
 - An administrator can manage at least two independent pipeline templates.
 - Each template can be drafted, validated, published, and versioned without
@@ -331,8 +330,8 @@ persisted split classification, confidence policy, operator correction,
 category-to-pipeline mappings, child-specific pinned versions, and resume/fan-in
 rules across those versions.
 
-That complexity should not be part of the initial multiple-pipeline-template
-implementation. The deferred design is documented in
+That complexity is not part of the multiple-pipeline-template implementation.
+The deferred design is documented in
 [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md),
 which depends on the template and immutable-version model defined here.
 

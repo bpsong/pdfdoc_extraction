@@ -80,10 +80,12 @@ administrator UI/API, not this CLI.
 
 The unified web app wraps the same validation logic for operator/admin views:
 
-- `/app/settings/validation` shows configuration, schema, and pipeline findings in the UI.
+- `/app/settings/validation` shows the current deployment/legacy global
+  validation summary. It does not enumerate every SQLite draft and version.
 - `GET /api/config/validation` returns validation status for the current runtime configuration.
 - `POST /api/config/validation` runs validation with request-provided options.
-- Admin pipeline and schema pages call validation APIs before publishing configuration changes.
+- Admin Pipeline and Review Form pages validate their selected SQLite draft
+  before publishing an immutable version.
 
 Use the CLI for pre-deployment checks and automation. Use the UI when an operator or administrator needs to inspect the active runtime configuration from the running application.
 
@@ -104,10 +106,10 @@ Exit codes mirror the CLI requirements: `0` (valid), `1` (errors), `2` (warnings
 - UI/API and stored-definition validation add active workflow business rules
   for split, review gate, task approval, exact schema-version dependencies,
   immutable version hashes, and ingress bindings.
-- **New**: Enhanced schema validation for web server and watch folder configuration fields.
-- **New**: Import validation to verify task modules and classes are importable.
-- **New**: Comprehensive rules task validation for CSV file processing and field references.
-- **New**: Runtime file validation mode with `--check-files` flag for file system checks.
+- Schema validation covers web server and watch-folder deployment fields.
+- Import validation verifies that configured task modules and classes resolve.
+- Rules-task validation covers CSV processing and field references.
+- Runtime file validation is available through `--check-files`.
 
 ## Current UI/API Business Rules
 
@@ -165,7 +167,8 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - `LlamaCloudSplitTask.params` must be a mapping.
 - `split_dir` is required and must be a non-empty string.
 - When split is enabled, either `configuration_id` or `categories` must be configured.
-- When split is enabled, an `api_key` is required at runtime unless an adapter is injected for tests; validation reports this as a warning.
+- When split is enabled, an `api_key` is required at runtime. Stored/portable
+  definitions use a `$secret` reference; an injected adapter is test-only.
 - `allow_uncategorized` must be one of `include`, `forbid`, or `omit`.
 - `fail_on_confidence_levels`, when provided, must be a list containing only `high`, `medium`, or `low`.
 - `fail_on_unknown_category`, when provided, must be a boolean.
@@ -175,7 +178,9 @@ The admin validation endpoints reuse the shared config-check validator and then 
 
 ### Schema Rules Used By Review
 
-- Schema files must be YAML, YML, or JSON files under configured schema directories.
+- Stored review-form content is validated directly. Legacy `schema_file`
+  migration sources must be YAML, YML, or JSON under configured schema
+  directories.
 - Schema `fields` must be a mapping.
 - Supported field types are `string`, `number`, `integer`, `float`, `boolean`, `date`, `datetime`, `enum`, `array`, and `object`.
 - Enum fields require `choices` or `enum`, and a configured default must be one of those choices.
@@ -204,7 +209,8 @@ Enhanced validation for watch folder settings:
 
 - `watch_folder.validate_pdf_header`: Enable PDF header validation (default: true)
   - Must be a boolean value
-  - Example: `validate_pdf_header: false` to disable validation
+  - This switch remains for legacy ingestion compatibility; the primary batch
+    upload API and SQLite watch-folder coordinator always validate `%PDF-`
 - `watch_folder.processing_dir`: Temporary processing directory (default: "processing")
   - Must be a non-empty string representing a directory path
   - Example: `processing_dir: "temp_processing"`
@@ -226,7 +232,10 @@ watch_folder:
 
 ## Import Validation
 
-Use the `--import-checks` flag to verify that task modules and classes can be imported:
+Use the `--import-checks` flag to verify task modules/classes found in the
+runtime or legacy YAML being validated. Stored and portable versioned
+definitions already receive the shared task-approval check; this optional flag
+does not add another import-analysis pass over those sources.
 
 ```powershell
 config-check validate --config config.yaml --import-checks
@@ -453,7 +462,9 @@ clauses:
 
 ## Performance Impact Analysis
 
-The `--performance-analysis` flag enables performance impact analysis that identifies potential performance issues in configuration files before deployment.
+The `--performance-analysis` flag enables performance impact analysis for task
+definitions present in runtime/legacy YAML. It does not analyze a selected
+SQLite definition or non-runtime portable file.
 
 ### Performance Analysis Features
 
@@ -465,11 +476,15 @@ Analyzes extraction tasks for performance impact based on field count and comple
 config-check validate --config config.yaml --performance-analysis
 ```
 
-**Performance thresholds:**
+**Performance analyzer thresholds:**
 - **Warning**: >20 extraction fields per task
 - **Error**: >50 extraction fields per task
 - **Info**: Multiple table fields (>1 table field)
 - **Warning**: >3 table fields per task
+
+The normal pipeline validator permits only one `List[Any]` table field, so a
+multiple-table definition already has a blocking validation error; performance
+findings are supplementary diagnostics.
 
 #### Rules Task Complexity Analysis
 Evaluates rules tasks for performance bottlenecks:
@@ -487,6 +502,10 @@ Assesses overall pipeline performance characteristics:
 - **Error**: >30 tasks in pipeline
 - **Warning**: >2 extraction tasks in pipeline
 - **Info**: >5 rules tasks in pipeline
+
+The normal pipeline validator permits only one extraction task. Therefore a
+multiple-extraction pipeline is invalid even if performance analysis also emits
+a threshold finding.
 
 ### Performance Analysis Examples
 
@@ -565,14 +584,14 @@ csv_match:
 
 #### Pipeline Optimization
 ```yaml
-# BEFORE: Performance warning (20 tasks)
+# BEFORE: Invalid and inefficient (multiple extraction tasks)
 pipeline:
   - extract_task1
   - extract_task2
   - extract_task3
   # ... 17 more tasks
 
-# AFTER: Optimized (consolidated tasks)
+# AFTER: Valid single-extraction pipeline
 pipeline:
   - extract_consolidated
   - apply_rules
@@ -582,7 +601,10 @@ pipeline:
 
 ## Security Analysis
 
-The `--security-analysis` flag enables security analysis that identifies potential security vulnerabilities in configuration files before deployment.
+The `--security-analysis` flag enables security analysis of the runtime/legacy
+YAML document before deployment. Stored definitions still receive the shared
+secret-reference and task-approval checks, but not this optional path-analysis
+pass.
 
 ### Security Analysis Features
 
@@ -733,7 +755,9 @@ tasks:
 
 ## Runtime File Validation
 
-The `--check-files` flag enables runtime file validation that performs file system checks beyond structural validation.
+The `--check-files` flag enables file checks for references present in the
+runtime/legacy YAML document. It does not walk task paths inside a selected
+SQLite definition or a non-runtime portable file.
 
 ### Runtime File Validation Features
 
@@ -786,12 +810,16 @@ config-check validate --config config.yaml --check-files --format json
 
 ## Sample Configurations
 
-Two ready-to-run sample files live under `tools/config_check/examples/`:
+The maintained samples under `tools/config_check/examples/` are:
 
-- `valid_config.yaml` - Passes all validators and demonstrates required/optional sections.
-- `invalid_missing_paths.yaml` - Shows typical path and dependency failures for smoke testing.
+- `minimal_config.yaml` - Minimal SQLite-backed deployment YAML.
+- `complete_config.yaml` - Expanded SQLite-backed deployment settings.
+- `valid_config.yaml` - Legacy deployment-schema fixture.
+- `invalid_missing_paths.yaml` - Intentional path/dependency failures.
+- `rules_task_examples.yaml` - Valid and invalid rules-task fragments.
 
-Use them as templates for new environments or as fixtures when extending the validator.
+Start new deployments from the minimal or complete sample. Treat the legacy and
+invalid files as validator fixtures, not production templates.
 
 ## Troubleshooting
 

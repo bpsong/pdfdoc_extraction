@@ -15,11 +15,11 @@ This is a future design proposal, not current runtime behavior.
 
 ## Prerequisite Design
 
-This feature depends on
-[Future Design: Multiple Pipeline Templates](future-multi-document-routing.md).
+This feature builds on the
+[implemented multiple-pipeline direction](future-multi-document-routing.md).
 Multiple named templates, immutable published versions, explicit pipeline
-assignments, and version-aware resume behavior must exist before mixed-document
-routing is implemented.
+assignments, and version-aware resume behavior already exist; cross-pipeline
+child routing remains deferred.
 
 This document extends that design; it does not replace ingestion-time pipeline
 selection. Operators and watch folders select a router pipeline at ingestion,
@@ -359,8 +359,8 @@ target pipeline definition.
 
 ## Related Future Design
 
-- [Future Design: Multiple Pipeline Templates](future-multi-document-routing.md)
-  is the required foundation for template identity, publishing, version
+- [Implemented Multiple Pipeline Templates](future-multi-document-routing.md)
+  is the current foundation for template identity, publishing, version
   pinning, ingestion selection, and simple target extraction tasks.
 - [Future Design: Lightweight Pipeline Visualization](future-lightweight-pipeline-visualization.md)
   records the conditions under which route mapping or graph complexity could

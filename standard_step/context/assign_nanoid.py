@@ -7,7 +7,7 @@ Follows the standard task creation guidelines:
 - Updates context with key "nanoid" inside the "data" dictionary
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from nanoid import generate
 from modules.base_task import BaseTask, TaskError

@@ -1,6 +1,6 @@
 # Product Requirements Document: Config.yaml Validator CLI
 
-> Historical note: this PRD is completed. Current config-check usage is documented in `tools/config_check/README.md`, troubleshooting in `docs/config_check_troubleshooting.md`, and active migration cleanup in `tasks/tasks-prd-refactor-unified-pdfdoc-processing.md`.
+> Historical note: this PRD is completed. Current config-check usage is documented in `tools/config_check/README.md`, with troubleshooting in `docs/config_check_troubleshooting.md`.
 
 1. Introduction/Overview
 
