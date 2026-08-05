@@ -1,0 +1,67 @@
+kind: pipeline-bundle
+format_version: 1
+template:
+  key: glm-ocr-phase-9
+  name: GLM-OCR Phase 9
+definition:
+  schema_version: 1
+  pipeline:
+    - glm_extract
+    - save_csv
+  tasks:
+    glm_extract:
+      module: standard_step.extraction.glm_ocr_extract
+      class: GlmOcrExtractTask
+      params:
+        ollama_host: http://127.0.0.1:11434
+        model: glm-ocr:latest
+        document_instructions: Extract the synthetic invoice fields.
+        dpi: 216
+        num_ctx: 8192
+        num_predict: 2048
+        timeout_seconds: 300
+        fields:
+          supplier:
+            alias: Supplier
+            type: str
+          invoice_total:
+            alias: Invoice total
+            type: float
+          line_items:
+            alias: Line items
+            type: List[Any]
+            is_table: true
+            item_fields:
+              description:
+                alias: Description
+                type: str
+              quantity:
+                alias: Quantity
+                type: int
+    save_csv:
+      module: standard_step.storage.store_metadata_as_csv
+      class: StoreMetadataAsCsv
+      params:
+        data_dir: data
+        filename: "{id}"
+        extraction:
+          fields:
+            supplier:
+              alias: Supplier
+              type: str
+            invoice_total:
+              alias: Invoice total
+              type: float
+            line_items:
+              alias: Line items
+              type: List[Any]
+              is_table: true
+              item_fields:
+                description:
+                  alias: Description
+                  type: str
+                quantity:
+                  alias: Quantity
+                  type: int
+dependencies:
+  review_schemas: []

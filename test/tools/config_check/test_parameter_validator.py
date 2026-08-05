@@ -902,3 +902,47 @@ def test_glm_parameters_reject_credentials_bad_host_and_numeric_values():
     assert "param-glm-invalid-num-predict" in codes
     assert "param-glm-invalid-timeout-seconds" in codes
     assert "param-glm-llamacloud-only" in codes
+
+
+def test_glm_parameters_report_actionable_model_host_field_and_table_errors():
+    invalid_fields = {
+        "broken": "not-a-field-mapping",
+        "first_table": {
+            "alias": "First table",
+            "type": "List[Any]",
+            "is_table": True,
+            "item_fields": {"value": {"alias": "Value", "type": "str"}},
+        },
+        "second_table": {
+            "alias": "Second table",
+            "type": "List[Any]",
+            "is_table": True,
+            "item_fields": {"value": {"alias": "Value", "type": "str"}},
+        },
+    }
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": _glm_task_params(
+                    ollama_host="ftp://localhost:11434/api?unsafe=true",
+                    model="",
+                    fields=invalid_fields,
+                ),
+            }
+        }
+    }
+
+    result = validate_parameters(config)
+    issues = {issue.code: issue for issue in result.errors}
+
+    for code in (
+        "param-glm-invalid-host",
+        "param-glm-missing-model",
+        "param-field-invalid",
+        "param-extraction-multiple-tables",
+    ):
+        assert code in issues
+        assert issues[code].path.startswith("tasks.glm_extract.params")
+        assert issues[code].message

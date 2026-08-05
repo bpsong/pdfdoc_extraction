@@ -70,6 +70,8 @@ def test_mixed_schemas_are_strict_partitioned_and_deterministic() -> None:
         "line_items",
     ]
     assert first.canonical_schema["additionalProperties"] is False
+    assert first.scalar_page_schema is not None
+    assert first.table_page_schema is not None
     assert "required" not in first.scalar_page_schema
     assert "required" not in first.table_page_schema
     assert first.scalar_page_schema["properties"]["summary"]["required"] == [
@@ -115,6 +117,7 @@ def test_scalar_object_table_and_mixed_partitions(
 
 def test_scalar_prompt_contains_contract_unicode_and_escaped_guidance() -> None:
     bundle = build_glm_ocr_schemas(_mixed_fields())
+    assert bundle.scalar_page_schema is not None
     prompt = build_scalar_object_prompt(
         bundle.scalar_fields,
         bundle.scalar_page_schema,
@@ -145,6 +148,9 @@ def test_scalar_prompt_contains_contract_unicode_and_escaped_guidance() -> None:
 
 def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:
     bundle = build_glm_ocr_schemas(_mixed_fields())
+    assert bundle.table_field_key is not None
+    assert bundle.table_field is not None
+    assert bundle.table_page_schema is not None
     prompt = build_table_prompt(
         bundle.table_field_key,
         bundle.table_field,
@@ -164,6 +170,10 @@ def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:
 
 def test_prompts_do_not_gain_runtime_document_values() -> None:
     bundle = build_glm_ocr_schemas(_mixed_fields())
+    assert bundle.scalar_page_schema is not None
+    assert bundle.table_field_key is not None
+    assert bundle.table_field is not None
+    assert bundle.table_page_schema is not None
     runtime_value = "SECRET_INVOICE_RUNTIME_VALUE_731"
     scalar_prompt = build_scalar_object_prompt(
         bundle.scalar_fields,

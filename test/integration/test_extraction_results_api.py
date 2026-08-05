@@ -138,6 +138,61 @@ def test_document_extraction_api_returns_ui_ready_payload(tmp_path, monkeypatch)
     assert payload["files"][0]["filename"] == "invoice.pdf"
 
 
+def test_document_extraction_api_presents_safe_glm_provider_metadata(
+    tmp_path, monkeypatch
+) -> None:
+    client, config, state = _client(tmp_path, monkeypatch)
+    document_id = state["created"]["document"]["id"]
+    with connect(config) as conn:
+        conn.execute("DELETE FROM extracted_fields WHERE document_id = ?", (document_id,))
+        conn.execute("DELETE FROM extraction_results WHERE document_id = ?", (document_id,))
+        result = ExtractionRepository(conn).save_result(
+            document_id=document_id,
+            provider="glm_ocr_ollama",
+            data={"supplier": "Local Supplier"},
+            metadata={
+                "provider": "glm_ocr_ollama",
+                "model": "glm-ocr:latest",
+                "host_classification": "loopback",
+                "page_count": 1,
+                "prompt_hash": "sha256-only",
+            },
+        )
+        ExtractionRepository(conn).save_fields(
+            document_id=document_id,
+            extraction_result_id=result["id"],
+            fields=[
+                {
+                    "field_key": "supplier",
+                    "field_alias": "Supplier",
+                    "extracted_value": "Local Supplier",
+                    "final_value": "Local Supplier",
+                    "confidence": None,
+                    "requires_review": True,
+                    "review_status": "required",
+                }
+            ],
+        )
+
+    response = client.get(f"/api/documents/{document_id}/extraction")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["latest_extraction"]["provider"] == "glm_ocr_ollama"
+    assert payload["latest_extraction"]["provider_job_id"] is None
+    assert payload["latest_extraction"]["metadata"] == {
+        "provider": "glm_ocr_ollama",
+        "model": "glm-ocr:latest",
+        "host_classification": "loopback",
+        "page_count": 1,
+        "prompt_hash": "sha256-only",
+    }
+    assert payload["fields"][0]["confidence"] is None
+    assert payload["fields"][0]["requires_review"] is True
+    assert "ollama_host" not in response.text
+    assert '"prompt"' not in response.text
+
+
 def test_document_extraction_api_404s_for_unknown_document(tmp_path, monkeypatch) -> None:
     client, _, _ = _client(tmp_path, monkeypatch)
 

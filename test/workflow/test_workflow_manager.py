@@ -457,10 +457,3 @@ def test_split_child_preflight_is_provider_specific_for_llama_and_glm(
     assert llama_manager._is_llamacloud_extract_task(
         llama_config.get("tasks.extract")
     ) is True
-
-    # Clean up created directories/files for isolation
-    try:
-        if file_path.exists():
-            file_path.unlink()
-    except Exception:
-        pass

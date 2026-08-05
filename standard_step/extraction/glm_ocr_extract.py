@@ -333,13 +333,14 @@ class GlmOcrExtractTask(BaseTask):
         """Register a redacted failure and provider-specific operator guidance."""
         failure_type = "glm_ocr_unexpected_error" if unexpected else "glm_ocr_failed"
         if error is not None:
-            failure_type = {
+            provider_failure_types: dict[type[Exception], str] = {
                 GlmOcrUnavailableError: "glm_ocr_unavailable",
                 GlmOcrModelNotFoundError: "glm_ocr_model_missing",
                 GlmOcrTimeoutError: "glm_ocr_timeout",
                 GlmOcrPdfError: "glm_ocr_pdf_error",
                 GlmOcrResponseError: "glm_ocr_protocol_error",
-            }.get(type(error), failure_type)
+            }
+            failure_type = provider_failure_types.get(type(error), failure_type)
         context["fatal_failure"] = {
             "failure_type": failure_type,
             "message": task_error.message,

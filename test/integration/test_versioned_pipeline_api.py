@@ -42,6 +42,27 @@ def _definition(label="Extract"):
     }
 
 
+def _glm_definition():
+    return {
+        "schema_version": 1,
+        "pipeline": ["glm_extract"],
+        "tasks": {
+            "glm_extract": {
+                "label": "Local GLM-OCR extract",
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": {
+                    "ollama_host": "http://127.0.0.1:11434",
+                    "model": "glm-ocr:latest",
+                    "fields": {
+                        "supplier": {"alias": "Supplier", "type": "str"}
+                    },
+                },
+            }
+        },
+    }
+
+
 def test_pipeline_template_lifecycle_clone_diff_and_redaction(tmp_path, monkeypatch):
     client, _ = _admin_client(tmp_path, monkeypatch)
     created = client.post(
@@ -115,3 +136,28 @@ def test_pipeline_stale_revision_operator_forbidden_and_legacy_writes_gone(
         lambda: "operator"
     )
     assert client.get("/api/admin/pipeline-templates").status_code == 403
+
+
+def test_operator_cannot_publish_glm_task_configuration(tmp_path, monkeypatch):
+    client, _ = _admin_client(tmp_path, monkeypatch)
+    created = client.post(
+        "/api/admin/pipeline-templates",
+        json={
+            "template_key": "glm-secure-publish",
+            "name": "GLM secure publish",
+            "definition": _glm_definition(),
+        },
+    )
+    assert created.status_code == 200
+    template_id = created.json()["template"]["id"]
+    cast(FastAPI, client.app).dependency_overrides[api_router.get_current_user] = (
+        lambda: "operator"
+    )
+
+    response = client.post(
+        f"/api/admin/pipeline-templates/{template_id}/publish",
+        json={"expected_revision": 1},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin role required"

@@ -1038,6 +1038,54 @@
         `;
     }
 
+    function glmOcrExtractControls(step) {
+        const params = step.params || {};
+        const fields = params.fields && typeof params.fields === "object" && !Array.isArray(params.fields) ? params.fields : {};
+        const fieldEntries = Object.entries(fields);
+        const tableCount = fieldEntries.filter(([, field]) => {
+            const fieldValue = field && typeof field === "object" ? field : {};
+            return Boolean(fieldValue.is_table) || unwrapOptionalType(fieldValue.type) === "List[Any]";
+        }).length;
+        const host = params.ollama_host || "http://127.0.0.1:11434";
+        const model = params.model || "glm-ocr:latest";
+        const tableStatus = tableCount === 0 ? "No table" : tableCount === 1 ? "One table" : `${tableCount} tables (fix required)`;
+        return `
+            <div class="space-y-3" data-glm-ocr-controls>
+                <div class="rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <div class="text-xs font-semibold uppercase text-primary">Local GLM-OCR extraction</div>
+                    <div class="mt-2 grid gap-2 text-xs sm:grid-cols-2">
+                        <div><span class="text-base-content/55">Model</span><div class="font-mono break-all">${escapeHtml(model)}</div></div>
+                        <div><span class="text-base-content/55">Ollama host</span><div class="font-mono break-all">${escapeHtml(host)}</div></div>
+                        <div><span class="text-base-content/55">Fields</span><div>${fieldEntries.length}</div></div>
+                        <div><span class="text-base-content/55">Table status</span><div>${escapeHtml(tableStatus)}</div></div>
+                    </div>
+                </div>
+                <div class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
+                    GLM-OCR does not provide confidence scores. If a Review Gate follows this task, every extracted field is sent for operator review.
+                </div>
+                ${section("Local model", `
+                    <div class="grid gap-3 md:grid-cols-2">
+                        ${textControl("Ollama host", ["ollama_host"], host, { mono: true, hint: "Local Ollama HTTP endpoint. Embedded credentials are not allowed.", findings: inlineFindings(step, "ollama_host") })}
+                        ${textControl("Model", ["model"], model, { mono: true, findings: inlineFindings(step, "model") })}
+                    </div>
+                    <div class="mt-3">
+                        ${textareaControl("Document instructions", ["document_instructions"], params.document_instructions || "", { full: true, findings: inlineFindings(step, "document_instructions") })}
+                    </div>
+                `)}
+                ${detailsSection("Local runtime settings", `
+                    <div class="grid gap-3 md:grid-cols-2">
+                        ${numberControl("PDF render DPI", ["dpi"], params.dpi ?? 216, 'min="72" step="1"', inlineFindings(step, "dpi"))}
+                        ${numberControl("Context length", ["num_ctx"], params.num_ctx ?? 8192, 'min="1" step="1"', inlineFindings(step, "num_ctx"))}
+                        ${numberControl("Prediction length", ["num_predict"], params.num_predict ?? 2048, 'min="1" step="1"', inlineFindings(step, "num_predict"))}
+                        ${numberControl("Timeout (seconds)", ["timeout_seconds"], params.timeout_seconds ?? 300, 'min="1" step="1"', inlineFindings(step, "timeout_seconds"))}
+                    </div>
+                `)}
+                ${extractionFieldControls(step, "Define scalar fields, flat objects, and at most one array-of-objects table for local GLM-OCR extraction.")}
+                ${structuredFieldSchemaDrawer(step)}
+            </div>
+        `;
+    }
+
     function extractionFieldNames() {
         const extract = stepsOf(state.draft).find((step) => taskKind(step) === "extract");
         const fields = extract && extract.params && extract.params.fields;
@@ -1206,6 +1254,9 @@
     }
 
     function taskSpecificControls(step) {
+        if (step.class === "GlmOcrExtractTask") {
+            return glmOcrExtractControls(step);
+        }
         const kind = taskKind(step);
         if (kind === "split") {
             return splitControls(step);
@@ -1447,6 +1498,7 @@
         const defaults = {
             LlamaCloudSplitTask: { enabled: true, api_key: "", allow_uncategorized: "include", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
             ExtractPdfTask: { api_key: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
+            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
             AssignNanoidTask: { length: 10 },
             StoreMetadataAsCsv: { data_dir: "data", filename: "{id}" },
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },

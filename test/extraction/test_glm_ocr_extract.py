@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -214,6 +215,20 @@ def test_task_success_preserves_context_merges_flags_and_persists_safe_rows(
     assert optional_source["pages"] == []
     assert optional_source["validation_findings"][0]["code"] == "schema_type"
     assert "INV-7" not in rows["optional_note"]["source_json"]
+    persisted_metadata = json_loads(result["metadata_json"])
+    for runtime_parameter in (
+        "ollama_host",
+        "document_instructions",
+        "dpi",
+        "num_ctx",
+        "num_predict",
+        "timeout_seconds",
+        "fields",
+        "api_key",
+    ):
+        assert runtime_parameter not in persisted_metadata
+        assert runtime_parameter not in context
+    assert "Read the invoice labels" not in result["metadata_json"]
     assert artifact_count == 1  # The ingestion source only; extraction creates none.
 
 
@@ -327,7 +342,10 @@ def test_task_validation_rejects_invalid_provider_configuration(
     pdf_path = tmp_path / "invoice.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\n")
     config = TempConfig(tmp_path / "app.sqlite3", {})
-    context = {"file_path": str(pdf_path), "current_task_key": "glm_extract"}
+    context: dict[str, Any] = {
+        "file_path": str(pdf_path),
+        "current_task_key": "glm_extract",
+    }
     task = GlmOcrExtractTask(config, **_params(**overrides))
 
     with pytest.raises(TaskError, match=message):

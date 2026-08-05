@@ -195,6 +195,7 @@ Keep this section updated during implementation.
 - `test/extraction/test_glm_ocr_extract.py`
 - `test/integration/test_glm_ocr_pipeline.py`
 - `test/visual/test_glm_ocr_pipeline_editor.py`
+- `test/fixtures/glm_ocr_pipeline.yml`
 
 ### Expected existing areas
 
@@ -208,8 +209,16 @@ Keep this section updated during implementation.
 - `tools/config_check/parameter_validator.py`.
 - `tasks/standard_task_creation_guidelines.md` for the structured review-flag
   context contract established in Phase 5.
-- Production pipeline editor JavaScript.
-- CSV storage and versioned workflow integration tests.
+- `web/static/js/pipeline_config.js` for the separate GLM-OCR renderer,
+  dedicated defaults, and exact-class dispatch only.
+- `test/pipeline_visual_editor_prototype/test_production_parameter_parity.py`
+  for GLM parameter coverage without changing existing renderer expectations.
+- `test/integration/test_extraction_results_api.py` for safe GLM provider
+  presentation through the extraction-results API.
+- `test/integration/test_versioned_pipeline_api.py` for administrator-only GLM
+  pipeline publication coverage.
+- CSV storage and versioned workflow integration tests; the production CSV and
+  JSON storage task implementations remain unchanged.
 - Architecture, user, troubleshooting, and standard-task documentation.
 - `requirements.txt`.
 
@@ -562,44 +571,44 @@ neutral field-editor primitives.
 **Exit criterion:** GLM has a distinct, testable properties form and the
 existing LlamaCloud form is unaffected.
 
-- [ ] **7.1 Add dedicated task dispatch**
-  - [ ] Dispatch `GlmOcrExtractTask` to `glmOcrExtractControls`.
-  - [ ] Perform this check before generic `.extraction.` dispatch.
-  - [ ] Leave `extractControls` unchanged.
-  - [ ] Keep GLM out of `providerModes` and saved/inline Llama state.
+- [x] **7.1 Add dedicated task dispatch**
+  - [x] Dispatch `GlmOcrExtractTask` to `glmOcrExtractControls`.
+  - [x] Perform this check before generic `.extraction.` dispatch.
+  - [x] Leave `extractControls` unchanged.
+  - [x] Keep GLM out of `providerModes` and saved/inline Llama state.
 
-- [ ] **7.2 Build GLM runtime controls**
-  - [ ] Add Ollama host and model controls.
-  - [ ] Add document instructions.
-  - [ ] Add DPI, context length, prediction length, and timeout controls.
-  - [ ] Add inline validation findings.
-  - [ ] Add the unscored/all-field-review explanatory notice.
-  - [ ] Do not show API key, Llama configuration ID, tier, citations, project,
+- [x] **7.2 Build GLM runtime controls**
+  - [x] Add Ollama host and model controls.
+  - [x] Add document instructions.
+  - [x] Add DPI, context length, prediction length, and timeout controls.
+  - [x] Add inline validation findings.
+  - [x] Add the unscored/all-field-review explanatory notice.
+  - [x] Do not show API key, Llama configuration ID, tier, citations, project,
     organization, or confidence controls.
 
-- [ ] **7.3 Reuse structured-field controls**
-  - [ ] Reuse field key, alias, guidance, type, and required controls.
-  - [ ] Reuse object-child editing.
-  - [ ] Reuse array-of-object row editing.
-  - [ ] Preserve the one-table constraint.
-  - [ ] Ensure changing GLM fields does not mutate a Llama task or another task.
-  - [ ] Ensure CSV field override can copy definitions from GLM.
+- [x] **7.3 Reuse structured-field controls**
+  - [x] Reuse field key, alias, guidance, type, and required controls.
+  - [x] Reuse object-child editing.
+  - [x] Reuse array-of-object row editing.
+  - [x] Preserve the one-table constraint.
+  - [x] Ensure changing GLM fields does not mutate a Llama task or another task.
+  - [x] Ensure CSV field override can copy definitions from GLM.
 
-- [ ] **7.4 Add editor defaults and summaries**
-  - [ ] Add default GLM parameters.
-  - [ ] Display model, host, field count, and table status without exposing
+- [x] **7.4 Add editor defaults and summaries**
+  - [x] Add default GLM parameters.
+  - [x] Display model, host, field count, and table status without exposing
     sensitive data.
-  - [ ] Keep existing Llama defaults and summaries unchanged.
-  - [ ] Use production files under `web/`; do not implement only in the prototype.
+  - [x] Keep existing Llama defaults and summaries unchanged.
+  - [x] Use production files under `web/`; do not implement only in the prototype.
 
-- [ ] **7.5 Complete Phase 7 unit-test gate**
-  - [ ] Add source/DOM regression tests proving separate renderer dispatch.
-  - [ ] Test the absence of Llama controls in the GLM form.
-  - [ ] Test the presence of scalar, object, and table controls.
-  - [ ] Test task parameter parity.
-  - [ ] Test existing Llama editor markup and defaults remain unchanged.
-  - [ ] Rebuild CSS only if Tailwind classes or CSS sources change.
-  - [ ] Run:
+- [x] **7.5 Complete Phase 7 unit-test gate**
+  - [x] Add source/DOM regression tests proving separate renderer dispatch.
+  - [x] Test the absence of Llama controls in the GLM form.
+  - [x] Test the presence of scalar, object, and table controls.
+  - [x] Test task parameter parity.
+  - [x] Test existing Llama editor markup and defaults remain unchanged.
+  - [x] Rebuild CSS only if Tailwind classes or CSS sources change.
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v `
@@ -609,7 +618,7 @@ existing LlamaCloud form is unaffected.
   test\services\test_task_catalog_service.py
 ```
 
-- [ ] If frontend utility classes or CSS changed, run:
+- [x] If frontend utility classes or CSS changed, run: (not applicable; no CSS changed)
 
 ```powershell
 npm run build:css
@@ -626,41 +635,41 @@ npm run build:css
 **Exit criterion:** Mocked upload and watch-folder workflows both complete
 through mandatory review and CSV resume, and gate-free execution also works.
 
-- [ ] **8.1 Add a representative pipeline fixture**
-  - [ ] Configure GLM extraction with SuperStore invoice scalar fields.
-  - [ ] Configure one `line_items` object array.
-  - [ ] Attach a pinned review-schema version with matching keys and types.
-  - [ ] Add `ReviewGateTask`.
-  - [ ] Add `StoreMetadataAsCsv`.
-  - [ ] Ensure the CSV task obtains the GLM field definitions.
+- [x] **8.1 Add a representative pipeline fixture**
+  - [x] Configure GLM extraction with SuperStore invoice scalar fields.
+  - [x] Configure one `line_items` object array.
+  - [x] Attach a pinned review-schema version with matching keys and types.
+  - [x] Add `ReviewGateTask`.
+  - [x] Add `StoreMetadataAsCsv`.
+  - [x] Ensure the CSV task obtains the GLM field definitions.
 
-- [ ] **8.2 Test upload-path execution**
-  - [ ] Ingest a synthetic PDF through the upload service.
-  - [ ] Mock GLM structured output.
-  - [ ] Verify task-run completion and SQLite provider metadata.
-  - [ ] Verify every field reaches review with null confidence.
-  - [ ] Apply corrections and complete review.
-  - [ ] Verify resume starts at CSV storage.
-  - [ ] Verify one CSV row per line item and registered `export_csv` artifact.
+- [x] **8.2 Test upload-path execution**
+  - [x] Ingest a synthetic PDF through the upload service.
+  - [x] Mock GLM structured output.
+  - [x] Verify task-run completion and SQLite provider metadata.
+  - [x] Verify every field reaches review with null confidence.
+  - [x] Apply corrections and complete review.
+  - [x] Verify resume starts at CSV storage.
+  - [x] Verify one CSV row per line item and registered `export_csv` artifact.
 
-- [ ] **8.3 Test watch-folder execution**
-  - [ ] Bind a temporary watch folder to the published pipeline version.
-  - [ ] Ingest a different synthetic PDF through `WatchFolderCoordinator`.
-  - [ ] Verify assignment and pinned pipeline identity.
-  - [ ] Verify review, correction, resume, and CSV output.
-  - [ ] Verify upload and watch runs do not share context or output paths.
+- [x] **8.3 Test watch-folder execution**
+  - [x] Bind a temporary watch folder to the published pipeline version.
+  - [x] Ingest a different synthetic PDF through `WatchFolderCoordinator`.
+  - [x] Verify assignment and pinned pipeline identity.
+  - [x] Verify review, correction, resume, and CSV output.
+  - [x] Verify upload and watch runs do not share context or output paths.
 
-- [ ] **8.4 Test gate-free execution**
-  - [ ] Publish a GLM-to-CSV pipeline without a review gate.
-  - [ ] Verify the unscored flag does not pause execution.
-  - [ ] Verify CSV uses extracted values directly.
-  - [ ] Verify no review item or stale review requirement is created.
+- [x] **8.4 Test gate-free execution**
+  - [x] Publish a GLM-to-CSV pipeline without a review gate.
+  - [x] Verify the unscored flag does not pause execution.
+  - [x] Verify CSV uses extracted values directly.
+  - [x] Verify no review item or stale review requirement is created.
 
-- [ ] **8.5 Complete Phase 8 unit/integration gate**
-  - [ ] Test extraction-results API redaction and provider presentation.
-  - [ ] Test CSV array expansion with GLM field aliases.
-  - [ ] Test pinned version execution.
-  - [ ] Run:
+- [x] **8.5 Complete Phase 8 unit/integration gate**
+  - [x] Test extraction-results API redaction and provider presentation.
+  - [x] Test CSV array expansion with GLM field aliases.
+  - [x] Test pinned version execution.
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v `
@@ -683,37 +692,37 @@ ready for live visual testing.
 **Exit criterion:** The full automated suite passes or only documented
 pre-existing failures remain, and the implementation is cleared for live testing.
 
-- [ ] **9.1 Review security and operational behavior**
-  - [ ] Confirm Ollama URLs cannot contain embedded credentials.
-  - [ ] Confirm no API key is required or persisted for GLM.
-  - [ ] Confirm raw images, prompts, responses, and extracted values are absent
+- [x] **9.1 Review security and operational behavior**
+  - [x] Confirm Ollama URLs cannot contain embedded credentials.
+  - [x] Confirm no API key is required or persisted for GLM.
+  - [x] Confirm raw images, prompts, responses, and extracted values are absent
     from errors and task-run summaries.
-  - [ ] Confirm task parameters are not copied wholesale into context or SQLite.
-  - [ ] Confirm only administrators can publish the new task configuration.
-  - [ ] Confirm same-origin PDF preview and existing security headers are unchanged.
+  - [x] Confirm task parameters are not copied wholesale into context or SQLite.
+  - [x] Confirm only administrators can publish the new task configuration.
+  - [x] Confirm same-origin PDF preview and existing security headers are unchanged.
 
-- [ ] **9.2 Run configuration validation**
-  - [ ] Validate a representative GLM pipeline through config-check.
-  - [ ] Validate a published GLM pipeline through the shared validator.
-  - [ ] Verify missing model, malformed URL, invalid fields, and multiple tables
+- [x] **9.2 Run configuration validation**
+  - [x] Validate a representative GLM pipeline through config-check.
+  - [x] Validate a published GLM pipeline through the shared validator.
+  - [x] Verify missing model, malformed URL, invalid fields, and multiple tables
     produce actionable findings.
-  - [ ] Verify a LlamaCloud pipeline still requires its API key.
+  - [x] Verify a LlamaCloud pipeline still requires its API key.
 
-- [ ] **9.3 Run focused regression suites**
-  - [ ] Run all extraction tests.
-  - [ ] Run review, storage, workflow, registry, catalog, and config-check tests.
-  - [ ] Run production editor visual/static tests.
-  - [ ] Run `pip check`.
+- [x] **9.3 Run focused regression suites**
+  - [x] Run all extraction tests.
+  - [x] Run review, storage, workflow, registry, catalog, and config-check tests.
+  - [x] Run production editor visual/static tests.
+  - [x] Run `pip check`.
 
-- [ ] **9.4 Run full regression**
-  - [ ] Run the complete pytest suite.
-  - [ ] Record unrelated/pre-existing failures.
-  - [ ] Review the diff for accidental files, credentials, raw extraction output,
+- [x] **9.4 Run full regression**
+  - [x] Run the complete pytest suite.
+  - [x] Record unrelated/pre-existing failures.
+  - [x] Review the diff for accidental files, credentials, raw extraction output,
     local databases, PDFs, screenshots, and generated runtime state.
-  - [ ] Confirm no live GLM call occurs during the full suite.
+  - [x] Confirm no live GLM call occurs during the full suite.
 
-- [ ] **9.5 Complete Phase 9 test gate**
-  - [ ] Run:
+- [x] **9.5 Complete Phase 9 test gate**
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v test\extraction
@@ -926,6 +935,26 @@ Record during execution:
 - Phase 6 verification: Required registry/catalog/pipeline/config/workflow gate
   passed with 70 tests. An additional 22 workflow and LlamaCloud extraction
   regression tests passed after provider-specific split preflight changes.
+- Phase 7 verification: The separate production GLM-OCR renderer, defaults,
+  runtime controls, structured-field reuse, summary, and exact-class dispatch
+  passed the prescribed 23-test gate. A byte-level renderer snapshot proves the
+  existing LlamaCloud extraction editor was not changed. No CSS changed, so a
+  Tailwind rebuild was not applicable.
+- Phase 8 verification: Mocked upload and watch-folder workflows both pinned an
+  exact published GLM pipeline version, persisted null-confidence extraction
+  rows, paused every field for review, applied corrections, resumed at CSV, and
+  registered separate `export_csv` artifacts. The gate-free GLM-to-CSV path
+  completed without review state. The prescribed gate passed with 30 tests.
+- Phase 7-8 repository regression: `node --check` passed for the production
+  pipeline editor, and the complete pytest suite passed with 971 tests and 4
+  skips in 131.42 seconds.
+- Production-task isolation audit: `store_metadata_as_csv.py`,
+  `store_metadata_as_json.py`, `extract_pdf.py`, and `llama_cloud_v2.py` have no
+  Phase 7-8 diff. The protected storage hashes remained
+  `2A279E8D13C572F9542266A3F173748BDC66BA508CAAA4982CC8CD78F018F59E`
+  (CSV) and
+  `88E146F744EA3169AD59145DE23789D5D2E5F16F13DF460CCCC8203675C5E884`
+  (JSON).
 - Phase 4-6 repository regression: The final complete pytest suite passed with
   963 tests and 4 skips in 123.44 seconds.
 - Provider-isolation correction: The initial Phase 1 implementation temporarily
@@ -953,11 +982,37 @@ Record during execution:
   PDF, and archived PDF artifacts were all present.
 - Existing-provider visual evidence directory:
   `C:\Users\bpson\.codex\visualizations\2026\07\24\019f92a8-52b2-7542-a9bd-b43f8aa09eaf\llamacloud-isolation-test`.
+- Phase 9 security/configuration verification: The focused security matrix passed
+  with 9 tests. It covers credential-bearing URL rejection, absence of a GLM API
+  key, safe task-run summaries and context persistence, administrator-only
+  publication, unchanged security headers and same-origin preview behavior,
+  actionable malformed-configuration findings, published-pipeline validation,
+  and the unchanged LlamaCloud API-key requirement. The portable
+  `test/fixtures/glm_ocr_pipeline.yml` bundle passed config-check validation.
+- Phase 9 focused regression: Extraction passed with 107 tests; review, storage,
+  workflow, registry, catalog, and config-check passed with 100 tests; production
+  editor visual/static coverage passed with 36 tests. `node --check` passed and
+  `pip check` reported no broken requirements. A non-failing Prefect temporary
+  server teardown message attempted to write to a closed log stream after the
+  visual run; the test process exited successfully.
+- Phase 9 full regression and type gate: The complete suite passed with 973 tests
+  and 4 skips in 126.28 seconds. Pyright, using the repository Pylance-compatible
+  configuration, reported 0 errors, 0 warnings, and 0 informational findings.
+  No live Ollama/GLM call was made by the automated suite.
+- Phase 9 repository audit: No credentials, PDFs, databases, CSVs, logs,
+  screenshots, or runtime extraction artifacts were added. The existing
+  LlamaCloud extract implementations and production CSV/JSON storage tasks have
+  no diff. The protected storage hashes remain
+  `2A279E8D13C572F9542266A3F173748BDC66BA508CAAA4982CC8CD78F018F59E`
+  (CSV) and
+  `88E146F744EA3169AD59145DE23789D5D2E5F16F13DF460CCCC8203675C5E884`
+  (JSON).
 - Triggered GLM visual-test PDFs and outcomes: Deferred to Phase 10.
 - GLM portal extraction/review/CSV result: Deferred to Phase 10.
 - GLM watch-folder extraction/review/CSV result: Deferred to Phase 10.
 - GLM visual evidence directory: Deferred to Phase 10.
-- Final full-suite result:
+- Final full-suite result: Phase 9 checkpoint passed with 973 tests and 4 skips;
+  final post-live verification remains part of Phase 10.
 - Checks not run and reason: No live Ollama/GLM-OCR call or visual workflow test
-  was run because those are explicitly deferred to Phase 10. Phases 7-10 have
-  not started; this implementation stop is after completion of Phases 4-6.
+  was run because those are explicitly deferred to Phase 10. Phases 1-9 are
+  complete; Phase 10 has not started.
