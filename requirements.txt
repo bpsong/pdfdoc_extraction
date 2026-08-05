@@ -7,6 +7,9 @@ PyYAML==6.0.2
 prefect==3.7.8
 llama-cloud>=2.1
 pypdf>=6.6
+ollama==0.6.2
+PyMuPDF==1.28.0
+jsonschema>=4.26,<5
 pandas==2.2.3
 uvicorn==0.34.2
 pytest==8.3.5

@@ -1,0 +1,945 @@
+# Design and Implementation Plan: Local GLM-OCR Extraction Task
+
+## Document status
+
+| Item | Value |
+| --- | --- |
+| Purpose | Decision-complete, checkbox-based implementation plan |
+| Audience | AI coding agents, reviewers, test owners, and maintainers |
+| Governing standard | `tasks/standard_task_creation_guidelines.md` |
+| Main outcome | Add a local Ollama/GLM-OCR structured extraction task without changing the existing LlamaCloud task's behavior |
+| Completion rule | Complete only after all phases, live portal/watch-folder verification, documentation, and final audit pass |
+
+## Strict provider isolation
+
+- The existing LlamaCloud implementation remains independently owned by
+  `standard_step/extraction/extract_pdf.py` and
+  `standard_step/extraction/llama_cloud_v2.py`.
+- The GLM-OCR implementation must not refactor, wrap, import into, or otherwise
+  alter either existing LlamaCloud module.
+- Provider-neutral in this plan means that GLM output follows the same external
+  field/context contract; it does not mean that the two providers share runtime
+  implementation code.
+- Behavioral compatibility is proven by tests that compare outputs across the
+  independent implementations.
+- The new task remains `standard_step.extraction.glm_ocr_extract.GlmOcrExtractTask`
+  and receives its own registry entry, validation, persistence orchestration,
+  and visual properties editor.
+
+## Execution rules
+
+- Work phases in order and start from the next unchecked task.
+- Mark a subtask `[x]` only after its code and required tests pass.
+- Mark a phase `[x]` only after every subtask and its unit-test gate pass.
+- Use `.\.venv\Scripts\python.exe` for every Python command.
+- Preserve unrelated changes in the dirty worktree.
+- Do not stage, commit, or discard changes unless explicitly requested.
+- Keep the Relevant Files and Implementation Notes sections current.
+- Mock Ollama in normal automated tests; run the live model only in the final visual phase.
+- Follow `BaseTask`, `TaskError`, context preservation, SQLite persistence,
+  approval-registry, and logging rules from the standard-task guideline.
+- Do not log or persist raw PDF images, raw model responses, extracted customer
+  values, or full prompts in task-run errors.
+
+## Design decisions
+
+### New task identity
+
+- Module: `standard_step.extraction.glm_ocr_extract`
+- Class: `GlmOcrExtractTask`
+- Registry key: `glm_ocr_extract`
+- Provider value: `glm_ocr_ollama`
+- Display purpose: "Extract structured PDF data with local GLM-OCR"
+
+### Task parameters
+
+```yaml
+module: standard_step.extraction.glm_ocr_extract
+class: GlmOcrExtractTask
+params:
+  ollama_host: http://127.0.0.1:11434
+  model: glm-ocr:latest
+  document_instructions: ""
+  dpi: 216
+  num_ctx: 8192
+  num_predict: 2048
+  timeout_seconds: 300
+  fields: {}
+```
+
+Rules:
+
+- `fields` uses the existing extraction field contract.
+- Scalar, scalar-array, flat object, and one array-of-objects table are supported.
+- Field keys become JSON and context keys.
+- Aliases and descriptions guide the prompt but do not replace field keys.
+- `temperature` is fixed at zero and is not an administrator setting.
+- The task does not start Ollama automatically.
+- Ollama-unavailable and model-not-installed failures raise redacted `TaskError`
+  messages with operator instructions.
+- Full `glmocr[selfhosted]` and PP-DocLayout are out of scope for the first release.
+
+### Extraction behavior
+
+- Render PDF pages in memory with PyMuPDF.
+- Make one scalar/object schema call per page when scalar or object fields exist.
+- Make one separate table-focused schema call per page when a table field exists.
+- Use permissive page schemas so absent page-level fields are not forced.
+- Use a strict final schema with required fields after page results are merged.
+- Use `additionalProperties: false` for configured objects.
+- Embed the schema and configured extraction guidance in each prompt.
+- Merge scalars and object children deterministically, retain the first non-empty
+  value, and record later conflicts in safe metadata.
+- Concatenate table rows across pages and deduplicate normalized identical rows.
+- Preserve every configured top-level key in the final result; use `None` when no
+  usable value was extracted so review corrections can update an existing SQLite
+  field row.
+- Treat model-shape or field-validation findings as reviewable extraction quality
+  unless the response cannot be parsed at all.
+- Runtime failures, PDF rendering failures, invalid JSON, or invalid response
+  envelopes fail the task.
+
+### Confidence and review behavior
+
+- Persist `confidence = NULL` and `confidence_label = NULL`.
+- Do not manufacture a numerical confidence or confidence threshold.
+- The task adds a structured review flag:
+
+```json
+{
+  "glm_ocr_unscored": {
+    "reason": "unscored_extraction",
+    "field_keys": ["all", "configured", "top_level_fields"]
+  }
+}
+```
+
+- The review gate consumes this provider-neutral structured flag, pauses the
+  workflow, highlights all listed fields, and marks them as requiring review.
+- If no review gate exists in the pipeline, the flag does not pause execution
+  and downstream storage runs normally.
+- The review gate continues supporting existing boolean/list business flags.
+- The review form exposes all configured GLM-OCR fields, including missing values
+  and arrays of objects, for correction.
+- Review completion writes corrected `final_value_json` values and resumes at the
+  next task.
+
+### Persistence and downstream behavior
+
+- Store the complete normalized object in `extraction_results.data_json`.
+- Store one `extracted_fields` row for every configured top-level field.
+- Store arrays and objects as JSON values in their top-level field rows.
+- Store only safe execution metadata: model, host classification, page count,
+  timings, call strategy, schema hash, prompt hash, source page numbers,
+  validation findings, and conflicts.
+- Update `context["data"]` without discarding existing values.
+- Merge GLM metadata under its own `context["metadata"]` child instead of
+  replacing unrelated metadata.
+- CSV storage expands the configured object array to one row per item and repeats
+  top-level scalar values.
+- No database migration is required.
+
+### Separate visual properties editor
+
+- Add a dedicated `glmOcrExtractControls(step)` renderer.
+- Dispatch `GlmOcrExtractTask` to that renderer before the generic
+  extraction/LlamaCloud renderer.
+- Leave `extractControls(step)` and its LlamaCloud modes unchanged.
+- Reuse low-level UI helpers for text boxes, numeric controls, required toggles,
+  type dropdowns, object children, and array-of-object row definitions.
+- Do not share LlamaCloud provider-mode state, API-key fields, configuration IDs,
+  tiers, citations, or confidence controls with GLM-OCR.
+- Display a visible notice that GLM-OCR supplies no field confidence and that
+  adding a review gate causes every configured field to require operator review.
+
+## Acceptance criteria
+
+- Administrators can add and configure the GLM-OCR task independently of
+  LlamaCloud Extract.
+- Existing LlamaCloud pipelines and visual editing behave exactly as before.
+- A dynamically configured scalar/object/table schema is sent to local GLM-OCR.
+- Extracted data uses configured field keys and types.
+- Every configured top-level field is persisted, including missing values.
+- A following review gate pauses and exposes every GLM-OCR field.
+- Omitting the review gate allows direct downstream storage.
+- Review corrections survive resume and are used by CSV/JSON storage.
+- Portal upload and watch-folder ingestion both complete using different real
+  SuperStore invoice PDFs.
+- At least one CSV export contains one row per extracted invoice line item.
+- No live GLM-OCR dependency is introduced into the default automated test suite.
+
+## Phase dependency map
+
+```text
+1 -> 2 -> 3 -> 4 -> 5
+4 + 5 -> 6
+2 + 4 + 6 -> 7
+5 + 6 + 7 -> 8
+1-8 -> 9
+9 -> 10
+```
+
+## Relevant Files
+
+Keep this section updated during implementation.
+
+### Expected new files
+
+- `standard_step/extraction/structured_fields.py`
+- `standard_step/extraction/glm_ocr_prompt.py`
+- `standard_step/extraction/glm_ocr_adapter.py`
+- `standard_step/extraction/glm_ocr_extract.py`
+- `test/extraction/test_structured_fields.py`
+- `test/extraction/test_glm_ocr_prompt_schema.py`
+- `test/extraction/test_glm_ocr_adapter.py`
+- `test/extraction/test_glm_ocr_extract.py`
+- `test/integration/test_glm_ocr_pipeline.py`
+- `test/visual/test_glm_ocr_pipeline_editor.py`
+
+### Expected existing areas
+
+- Task registry and catalog services.
+- Pipeline/config-check validation services.
+- Review gate and review service tests.
+- Workflow manager's LlamaCloud split-child preflight.
+- Production pipeline editor JavaScript.
+- CSV storage and versioned workflow integration tests.
+- Architecture, user, troubleshooting, and standard-task documentation.
+- `requirements.txt`.
+
+### Protected existing LlamaCloud files
+
+The following files must remain unmodified by the GLM-OCR implementation:
+
+- `standard_step/extraction/extract_pdf.py`
+- `standard_step/extraction/llama_cloud_v2.py`
+
+---
+
+## Phase 1 - Baseline, dependencies, and shared extraction contract
+
+- [x] **Phase 1 complete**
+
+**Main task:** Establish a regression baseline and provider-neutral
+structured-field foundation.
+
+**Prerequisites:** This plan is accepted for implementation.
+
+**Exit criterion:** Shared helpers exist, Llama behavior is unchanged,
+dependencies are healthy, and Phase 1 tests pass.
+
+- [x] **1.1 Record the baseline**
+  - [x] Capture `git status --short`.
+  - [x] Record pre-existing failures under Implementation Notes.
+  - [x] Confirm Ollama is not required for baseline tests.
+  - [x] Confirm existing LlamaCloud schema, persistence, review, storage, and
+    pipeline-editor tests pass.
+
+- [x] **1.2 Add direct runtime dependencies**
+  - [x] Add `ollama==0.6.2` to `requirements.txt`.
+  - [x] Add `PyMuPDF==1.28.0` to `requirements.txt`.
+  - [x] Add a direct compatible `jsonschema` dependency if final-schema
+    validation uses it.
+  - [x] Do not add `glmocr[selfhosted]`.
+  - [x] Run `pip check` after installation.
+
+- [x] **1.3 Introduce provider-neutral field helpers**
+  - [x] Implement GLM-owned type parsing, schema construction, alias lookup,
+    object normalization, and table normalization in `structured_fields.py`.
+  - [x] Preserve existing LlamaCloud source code, schema output, and
+    normalization behavior without importing the new helpers into LlamaCloud.
+  - [x] Support strict-object generation as an opt-in GLM mode.
+  - [x] Compare the independent GLM helpers with existing public LlamaCloud
+    behavior in regression tests; do not add compatibility re-exports.
+  - [x] Add typed result/finding structures for normalized fields.
+
+- [x] **1.4 Complete Phase 1 unit-test gate**
+  - [x] Add regression coverage proving LlamaCloud schema output is unchanged.
+  - [x] Test scalar, optional, scalar-list, object, and object-array type parsing.
+  - [x] Test alias-versus-key lookup and newline normalization.
+  - [x] Test strict-object mode separately from LlamaCloud compatibility mode.
+  - [x] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\extraction\test_llama_cloud_v2_schema.py `
+  test\extraction\test_extract_pdf_edge_cases.py `
+  test\extraction\test_structured_fields.py
+```
+
+---
+
+## Phase 2 - Dynamic GLM schema and prompt generation
+
+- [x] **Phase 2 complete**
+
+**Main task:** Convert visual field configuration into deterministic GLM-OCR
+schemas and prompts.
+
+**Prerequisites:** Phase 1 complete.
+
+**Exit criterion:** Every supported visual field definition produces stable,
+valid GLM schemas and focused prompts.
+
+- [x] **2.1 Build canonical and page schemas**
+  - [x] Generate the final canonical schema with configured required fields.
+  - [x] Generate per-page schemas without top-level required fields.
+  - [x] Keep required child properties for emitted object/table rows.
+  - [x] Add `additionalProperties: false` to configured objects.
+  - [x] Generate a scalar/object schema and a separate table schema.
+  - [x] Reject more than one configured table.
+
+- [x] **2.2 Build scalar/object prompts**
+  - [x] Include exact field keys, aliases, types, required state, and guidance.
+  - [x] Include document-level instructions.
+  - [x] Instruct the model not to invent values.
+  - [x] Preserve leading zeros for string identifiers.
+  - [x] Require numbers without currency symbols or separators.
+  - [x] Include the schema text to ground structured output.
+
+- [x] **2.3 Build table prompts**
+  - [x] Describe the logical table and every item field.
+  - [x] Require one object per logical row.
+  - [x] Exclude headers, footers, subtotals, blank rows, and duplicates unless
+    explicitly configured.
+  - [x] Require values from one visual row to remain in the same object.
+  - [x] Keep the configured table key as the response property.
+
+- [x] **2.4 Complete Phase 2 unit-test gate**
+  - [x] Test deterministic schema and prompt generation.
+  - [x] Test required/optional top-level and child behavior.
+  - [x] Test scalar-only, object-only, table-only, and mixed configurations.
+  - [x] Test prompt escaping and Unicode guidance.
+  - [x] Test that prompts contain no runtime document values.
+  - [x] Test rejection of multiple tables and malformed field definitions.
+  - [x] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\extraction\test_structured_fields.py `
+  test\extraction\test_glm_ocr_prompt_schema.py
+```
+
+---
+
+## Phase 3 - Ollama/GLM-OCR adapter
+
+- [x] **Phase 3 complete**
+
+**Main task:** Implement a testable local inference adapter without workflow or
+persistence responsibilities.
+
+**Prerequisites:** Phase 2 complete.
+
+**Exit criterion:** The adapter can render, call, parse, validate, and merge
+documents using only mocked Ollama during automated testing.
+
+- [x] **3.1 Implement in-memory PDF rendering**
+  - [x] Open PDFs through PyMuPDF.
+  - [x] Render pages at configured DPI into in-memory PNG bytes.
+  - [x] Use Windows-long-path handling.
+  - [x] Close documents and release page/image resources on success and failure.
+  - [x] Reject missing, unreadable, empty, or invalid PDFs with safe errors.
+
+- [x] **3.2 Implement native Ollama calls**
+  - [x] Construct an injectable Ollama client using `ollama_host` and
+    `timeout_seconds`.
+  - [x] Use `model`, image bytes, prompt, `format=schema`, and `stream=False`.
+  - [x] Use fixed temperature zero plus configured `num_ctx` and `num_predict`.
+  - [x] Validate service availability and model presence.
+  - [x] Do not start or stop Ollama from task code.
+  - [x] Do not add provider-level retries; rely on the workflow runner's retry.
+
+- [x] **3.3 Implement page orchestration**
+  - [x] Run scalar/object calls only when those fields exist.
+  - [x] Run separate table calls only when a table exists.
+  - [x] Parse response JSON strictly.
+  - [x] Detect incomplete/token-length responses.
+  - [x] Record safe call timing, page number, call type, and completion reason.
+
+- [x] **3.4 Implement deterministic merging**
+  - [x] Merge scalar and object values by first non-empty value.
+  - [x] Record conflicting later values without logging their raw contents.
+  - [x] Concatenate and deduplicate table rows.
+  - [x] Associate top-level fields with contributing source page numbers.
+  - [x] Validate the merged object against the canonical schema.
+  - [x] Return partial structured data plus findings when values are missing or
+    type-invalid.
+  - [x] Fail when no response can be parsed into a structured object.
+
+- [x] **3.5 Complete Phase 3 unit-test gate**
+  - [x] Mock the Ollama client; do not require a live server.
+  - [x] Test request payloads for scalar and table calls.
+  - [x] Test one-page and multi-page orchestration.
+  - [x] Test service unavailable, missing model, timeout, malformed JSON,
+    truncated output, and invalid PDF.
+  - [x] Test scalar conflicts, object merging, table concatenation, and
+    deduplication.
+  - [x] Test resource cleanup after exceptions.
+  - [x] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\extraction\test_glm_ocr_adapter.py
+```
+
+---
+
+## Phase 4 - `GlmOcrExtractTask` and SQLite persistence
+
+**Main task:** Create the approved `BaseTask` implementation and
+provider-neutral output contract.
+
+**Prerequisites:** Phase 3 complete.
+
+**Exit criterion:** The task follows the standard-task contract and produces
+complete provider-neutral SQLite/context output.
+
+- [ ] **4.1 Create the task class**
+  - [ ] Inherit directly from `BaseTask`.
+  - [ ] Keep `__init__` side-effect free.
+  - [ ] Load only constructor parameters supplied by the versioned pipeline.
+  - [ ] Implement `on_start`, `validate_required_fields`, and `run`.
+  - [ ] Validate field count, one-table limit, host, model, numeric options, and
+    `context["file_path"]`.
+  - [ ] Preserve workflow-owned context keys.
+
+- [ ] **4.2 Normalize task output**
+  - [ ] Ensure every configured top-level key exists in `processed_data`.
+  - [ ] Use `None` for missing scalar, object, or table values.
+  - [ ] Update rather than replace `context["data"]`.
+  - [ ] Add GLM metadata under a dedicated metadata child.
+  - [ ] Append the structured `glm_ocr_unscored` review flag without
+    overwriting existing flags.
+
+- [ ] **4.3 Persist extraction state**
+  - [ ] Save one `extraction_results` row with provider `glm_ocr_ollama`.
+  - [ ] Save one `extracted_fields` row per configured top-level field.
+  - [ ] Persist confidence and confidence label as `NULL`.
+  - [ ] Keep initial `requires_review` false; the review gate owns the transition.
+  - [ ] Store page/source evidence and safe validation details in `source_json`.
+  - [ ] Set `context["extraction_result_id"]`.
+  - [ ] Do not create an artifact because the task creates no durable file.
+
+- [ ] **4.4 Implement task failure behavior**
+  - [ ] Translate Ollama connection, missing-model, PDF, timeout, and protocol
+    failures to redacted `TaskError`.
+  - [ ] Call `register_error` consistently.
+  - [ ] Add provider-specific but non-sensitive `fatal_failure` guidance.
+  - [ ] Never place raw responses, images, prompts, extracted values, or host
+    credentials in errors.
+
+- [ ] **4.5 Complete Phase 4 unit-test gate**
+  - [ ] Test initialization and validation.
+  - [ ] Test success with scalar, object, table, missing, and conflicting values.
+  - [ ] Test context preservation and review-flag merging.
+  - [ ] Test SQLite result and field rows.
+  - [ ] Test null confidence and safe source metadata.
+  - [ ] Test expected and unexpected failures.
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\extraction\test_glm_ocr_extract.py `
+  test\extraction\test_extraction_sqlite_persistence.py
+```
+
+---
+
+## Phase 5 - Mandatory all-field review integration
+
+**Main task:** Make structured unscored review flags pause and expose all GLM
+fields only when a review gate exists.
+
+**Prerequisites:** Phase 4 complete.
+
+**Exit criterion:** A downstream review gate reliably requires operator review
+of every configured GLM field, while gate-free pipelines continue normally.
+
+- [ ] **5.1 Extend review-flag handling**
+  - [ ] Preserve existing list and boolean-map review flags.
+  - [ ] Accept structured flag entries containing a reason and field-key list.
+  - [ ] Add a business-rule reason for the unscored extraction.
+  - [ ] Add every listed field to `highlight_fields`.
+  - [ ] Mark every listed field `requires_review` when the gate runs.
+  - [ ] Ensure document and low-confidence review scopes allow all highlighted
+    GLM fields to be edited.
+
+- [ ] **5.2 Preserve conditional gate behavior**
+  - [ ] Verify a pipeline without a review gate continues directly to storage.
+  - [ ] Verify no stale `requires_review` state is created without a gate.
+  - [ ] Verify a following gate pauses regardless of numeric threshold settings.
+  - [ ] Verify missing configured values appear and can be corrected.
+  - [ ] Verify corrected object arrays reconstruct correctly on resume.
+
+- [ ] **5.3 Complete Phase 5 unit-test gate**
+  - [ ] Test structured review flags alone and alongside legacy flags.
+  - [ ] Test all-field highlighting and persistence.
+  - [ ] Test a GLM result with required and optional fields.
+  - [ ] Test review correction and resume-context reconstruction.
+  - [ ] Test ordinary LlamaCloud confidence behavior is unchanged.
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\standard_step\review\test_review_gate.py `
+  test\services\test_review_service.py `
+  test\services\test_resume_manager.py
+```
+
+---
+
+## Phase 6 - Registration, validation, and workflow-provider separation
+
+**Main task:** Make the new task publishable and remove LlamaCloud assumptions
+from provider-neutral extraction classification.
+
+**Prerequisites:** Phases 4 and 5 complete.
+
+**Exit criterion:** GLM is an approved, publishable extraction task with
+provider-correct validation and preflight behavior.
+
+- [ ] **6.1 Register the task**
+  - [ ] Add the exact module/class pair to `BUILTIN_TASKS`.
+  - [ ] Ensure the task catalog imports and displays it.
+  - [ ] Add registry-coverage tests for the new `BaseTask` subclass.
+  - [ ] Confirm custom-task approval rules remain unchanged.
+
+- [ ] **6.2 Add GLM parameter validation**
+  - [ ] Validate non-empty model and well-formed HTTP(S) Ollama host.
+  - [ ] Reject URLs with embedded credentials.
+  - [ ] Validate positive DPI, context, prediction, and timeout settings.
+  - [ ] Reuse shared extraction-field validation.
+  - [ ] Do not require `api_key` or `configuration_id`.
+  - [ ] Reject or report LlamaCloud-only parameters on the GLM task.
+  - [ ] Keep LlamaCloud credential validation unchanged for `ExtractPdfTask`.
+
+- [ ] **6.3 Generalize pipeline extraction-field discovery**
+  - [ ] Allow review-schema compatibility checks to obtain fields from either
+    approved extraction class.
+  - [ ] Keep singleton extraction-task ordering rules.
+  - [ ] Ensure CSV's field-reuse behavior recognizes the GLM task.
+  - [ ] Preserve exact published task parameters.
+
+- [ ] **6.4 Correct split-child preflight**
+  - [ ] Restrict LlamaCloud access preflight to its exact task module/class.
+  - [ ] Ensure GLM extraction after a split does not call LlamaCloud preflight.
+  - [ ] Let the GLM task validate its own runtime availability.
+  - [ ] Keep existing source-level LlamaCloud failure behavior unchanged.
+
+- [ ] **6.5 Complete Phase 6 unit-test gate**
+  - [ ] Test task registry and catalog entries.
+  - [ ] Test valid and invalid GLM parameters.
+  - [ ] Test GLM fields satisfy review-schema compatibility checks.
+  - [ ] Test Llama credentials remain mandatory only for Llama tasks.
+  - [ ] Test split-child dispatch for Llama and GLM extractors.
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\services\test_task_registry_service.py `
+  test\services\test_task_catalog_service.py `
+  test\services\test_pipeline_template_service.py `
+  test\tools\config_check\test_parameter_validator.py `
+  test\workflow\test_workflow_manager.py
+```
+
+---
+
+## Phase 7 - Separate production visual properties editor
+
+**Main task:** Add an independent GLM-OCR properties form while reusing only
+neutral field-editor primitives.
+
+**Prerequisites:** Phases 2, 4, and 6 complete.
+
+**Exit criterion:** GLM has a distinct, testable properties form and the
+existing LlamaCloud form is unaffected.
+
+- [ ] **7.1 Add dedicated task dispatch**
+  - [ ] Dispatch `GlmOcrExtractTask` to `glmOcrExtractControls`.
+  - [ ] Perform this check before generic `.extraction.` dispatch.
+  - [ ] Leave `extractControls` unchanged.
+  - [ ] Keep GLM out of `providerModes` and saved/inline Llama state.
+
+- [ ] **7.2 Build GLM runtime controls**
+  - [ ] Add Ollama host and model controls.
+  - [ ] Add document instructions.
+  - [ ] Add DPI, context length, prediction length, and timeout controls.
+  - [ ] Add inline validation findings.
+  - [ ] Add the unscored/all-field-review explanatory notice.
+  - [ ] Do not show API key, Llama configuration ID, tier, citations, project,
+    organization, or confidence controls.
+
+- [ ] **7.3 Reuse structured-field controls**
+  - [ ] Reuse field key, alias, guidance, type, and required controls.
+  - [ ] Reuse object-child editing.
+  - [ ] Reuse array-of-object row editing.
+  - [ ] Preserve the one-table constraint.
+  - [ ] Ensure changing GLM fields does not mutate a Llama task or another task.
+  - [ ] Ensure CSV field override can copy definitions from GLM.
+
+- [ ] **7.4 Add editor defaults and summaries**
+  - [ ] Add default GLM parameters.
+  - [ ] Display model, host, field count, and table status without exposing
+    sensitive data.
+  - [ ] Keep existing Llama defaults and summaries unchanged.
+  - [ ] Use production files under `web/`; do not implement only in the prototype.
+
+- [ ] **7.5 Complete Phase 7 unit-test gate**
+  - [ ] Add source/DOM regression tests proving separate renderer dispatch.
+  - [ ] Test the absence of Llama controls in the GLM form.
+  - [ ] Test the presence of scalar, object, and table controls.
+  - [ ] Test task parameter parity.
+  - [ ] Test existing Llama editor markup and defaults remain unchanged.
+  - [ ] Rebuild CSS only if Tailwind classes or CSS sources change.
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\pipeline_visual_editor_prototype\test_production_parameter_parity.py `
+  test\visual\test_schema_editor_regressions.py `
+  test\visual\test_glm_ocr_pipeline_editor.py `
+  test\services\test_task_catalog_service.py
+```
+
+- [ ] If frontend utility classes or CSS changed, run:
+
+```powershell
+npm run build:css
+```
+
+---
+
+## Phase 8 - Workflow, review, resume, and CSV integration
+
+**Main task:** Prove the complete provider-neutral lifecycle with mocked Ollama.
+
+**Prerequisites:** Phases 5, 6, and 7 complete.
+
+**Exit criterion:** Mocked upload and watch-folder workflows both complete
+through mandatory review and CSV resume, and gate-free execution also works.
+
+- [ ] **8.1 Add a representative pipeline fixture**
+  - [ ] Configure GLM extraction with SuperStore invoice scalar fields.
+  - [ ] Configure one `line_items` object array.
+  - [ ] Attach a pinned review-schema version with matching keys and types.
+  - [ ] Add `ReviewGateTask`.
+  - [ ] Add `StoreMetadataAsCsv`.
+  - [ ] Ensure the CSV task obtains the GLM field definitions.
+
+- [ ] **8.2 Test upload-path execution**
+  - [ ] Ingest a synthetic PDF through the upload service.
+  - [ ] Mock GLM structured output.
+  - [ ] Verify task-run completion and SQLite provider metadata.
+  - [ ] Verify every field reaches review with null confidence.
+  - [ ] Apply corrections and complete review.
+  - [ ] Verify resume starts at CSV storage.
+  - [ ] Verify one CSV row per line item and registered `export_csv` artifact.
+
+- [ ] **8.3 Test watch-folder execution**
+  - [ ] Bind a temporary watch folder to the published pipeline version.
+  - [ ] Ingest a different synthetic PDF through `WatchFolderCoordinator`.
+  - [ ] Verify assignment and pinned pipeline identity.
+  - [ ] Verify review, correction, resume, and CSV output.
+  - [ ] Verify upload and watch runs do not share context or output paths.
+
+- [ ] **8.4 Test gate-free execution**
+  - [ ] Publish a GLM-to-CSV pipeline without a review gate.
+  - [ ] Verify the unscored flag does not pause execution.
+  - [ ] Verify CSV uses extracted values directly.
+  - [ ] Verify no review item or stale review requirement is created.
+
+- [ ] **8.5 Complete Phase 8 unit/integration gate**
+  - [ ] Test extraction-results API redaction and provider presentation.
+  - [ ] Test CSV array expansion with GLM field aliases.
+  - [ ] Test pinned version execution.
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\integration\test_glm_ocr_pipeline.py `
+  test\integration\test_extraction_results_api.py `
+  test\storage\test_storage_csv.py `
+  test\workflow\test_versioned_workflow_execution.py `
+  test\services\test_watch_folder_coordinator.py
+```
+
+---
+
+## Phase 9 - Security, regression, and live-readiness gate
+
+**Main task:** Establish that the change is safe, backward-compatible, and
+ready for live visual testing.
+
+**Prerequisites:** Phases 1-8 complete.
+
+**Exit criterion:** The full automated suite passes or only documented
+pre-existing failures remain, and the implementation is cleared for live testing.
+
+- [ ] **9.1 Review security and operational behavior**
+  - [ ] Confirm Ollama URLs cannot contain embedded credentials.
+  - [ ] Confirm no API key is required or persisted for GLM.
+  - [ ] Confirm raw images, prompts, responses, and extracted values are absent
+    from errors and task-run summaries.
+  - [ ] Confirm task parameters are not copied wholesale into context or SQLite.
+  - [ ] Confirm only administrators can publish the new task configuration.
+  - [ ] Confirm same-origin PDF preview and existing security headers are unchanged.
+
+- [ ] **9.2 Run configuration validation**
+  - [ ] Validate a representative GLM pipeline through config-check.
+  - [ ] Validate a published GLM pipeline through the shared validator.
+  - [ ] Verify missing model, malformed URL, invalid fields, and multiple tables
+    produce actionable findings.
+  - [ ] Verify a LlamaCloud pipeline still requires its API key.
+
+- [ ] **9.3 Run focused regression suites**
+  - [ ] Run all extraction tests.
+  - [ ] Run review, storage, workflow, registry, catalog, and config-check tests.
+  - [ ] Run production editor visual/static tests.
+  - [ ] Run `pip check`.
+
+- [ ] **9.4 Run full regression**
+  - [ ] Run the complete pytest suite.
+  - [ ] Record unrelated/pre-existing failures.
+  - [ ] Review the diff for accidental files, credentials, raw extraction output,
+    local databases, PDFs, screenshots, and generated runtime state.
+  - [ ] Confirm no live GLM call occurs during the full suite.
+
+- [ ] **9.5 Complete Phase 9 test gate**
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v test\extraction
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\standard_step\review `
+  test\storage `
+  test\services\test_task_registry_service.py `
+  test\services\test_task_catalog_service.py `
+  test\tools\config_check\test_parameter_validator.py `
+  test\workflow\test_workflow_manager.py
+.\.venv\Scripts\python.exe -m pytest -v
+.\.venv\Scripts\python.exe -m pip check
+```
+
+---
+
+## Phase 10 - Live administrator visual testing, documentation, and final audit
+
+**Main task:** Use the real application and local GLM-OCR as an administrator,
+then document verified behavior.
+
+**Prerequisites:** Phase 9 complete.
+
+**Exit criterion:** An administrator has visually created and published the
+pipeline, processed two different real invoices through portal and watch-folder
+ingestion, reviewed every field, produced two CSV artifacts, and the final
+documentation matches verified behavior.
+
+- [ ] **10.1 Prepare the live environment**
+  - [ ] Confirm `glm-ocr:latest` is installed.
+  - [ ] Start Ollama if it is not already running.
+  - [ ] Verify the native API and one harmless model request.
+  - [ ] Start the application with isolated test paths and a dedicated SQLite
+    database.
+  - [ ] Use an unused local port and synthetic administrator account.
+  - [ ] Keep evidence in an ignored test-output directory.
+  - [ ] Do not use or modify a customer/runtime production database.
+
+- [ ] **10.2 Create the review form visually**
+  - [ ] Sign in as administrator.
+  - [ ] Create and publish a SuperStore invoice review form containing:
+    - [ ] `row_id` - string, required.
+    - [ ] `order_date` - string, required.
+    - [ ] `ship_mode` - string, required.
+    - [ ] `customer_name` - string, required.
+    - [ ] `ship_to_address` - string, required.
+    - [ ] `order_id` - string, required.
+    - [ ] `invoice_subtotal` - number, required.
+    - [ ] `discount_percent` - number, optional.
+    - [ ] `shipping_fee` - number, required.
+    - [ ] `total_amount_payable` - number, required.
+    - [ ] `line_items` - required array of objects.
+    - [ ] Row properties: `product_name`, `sub_category`, `category`,
+      `product_id`, `quantity`, `unit_cost`, and `subtotal`.
+
+- [ ] **10.3 Create and publish the pipeline visually**
+  - [ ] Create a new pipeline template.
+  - [ ] Add `GlmOcrExtractTask`.
+  - [ ] Confirm its properties form is separate from LlamaCloud Extract.
+  - [ ] Configure Ollama host, model, instructions, runtime settings, scalar
+    fields, and `line_items`.
+  - [ ] Confirm array-of-object editing uses the reused row-field editor.
+  - [ ] Add `ReviewGateTask` and select the exact review-form version.
+  - [ ] Set review scope to the entire document.
+  - [ ] Add `StoreMetadataAsCsv` with an isolated output directory and
+    collision-safe filename.
+  - [ ] Validate and publish the pipeline.
+  - [ ] Capture desktop and narrow-width GLM properties screenshots.
+  - [ ] Capture the published GLM Extract -> Review Gate -> CSV pipeline.
+
+- [ ] **10.4 Run the portal-upload live trigger**
+
+  Use:
+
+  ```text
+  sample stock invoices from internet\invoice_Steven Ward_9240.pdf
+  ```
+
+  - [ ] Select the newly published pipeline in the upload portal.
+  - [ ] Upload the PDF.
+  - [ ] Follow processing until it enters the review queue.
+  - [ ] Open and claim the review item.
+  - [ ] Confirm all configured fields are highlighted/editable despite missing
+    confidence.
+  - [ ] Compare every scalar and line-item value with the PDF preview.
+  - [ ] Correct inaccurate or missing values.
+  - [ ] Complete review and confirm pipeline resume.
+  - [ ] Confirm CSV output is created and registered.
+  - [ ] Verify one CSV row per line item with repeated invoice-level values.
+  - [ ] Confirm provider `glm_ocr_ollama` and null confidence in SQLite.
+  - [ ] Capture upload, processing, review, and export evidence.
+
+- [ ] **10.5 Run the watch-folder live trigger**
+
+  Use a different invoice:
+
+  ```text
+  sample stock invoices from internet\invoice_Tamara Chand_41648.pdf
+  ```
+
+  - [ ] Create a dedicated watch-folder binding visually against the exact
+    published pipeline version.
+  - [ ] Copy the invoice into the bound watch folder.
+  - [ ] Observe the document through the administration and processing UI.
+  - [ ] Confirm watch-folder assignment and pinned pipeline version.
+  - [ ] Open and claim its separate review item.
+  - [ ] Review every scalar and line-item value.
+  - [ ] Correct values if necessary and complete review.
+  - [ ] Confirm a separate CSV artifact is produced.
+  - [ ] Confirm no context, extraction rows, review item, or CSV path was reused
+    from the portal upload.
+  - [ ] Capture watch binding, ingestion, review, and CSV evidence.
+
+- [ ] **10.6 Enforce the unique-invoice rule for retries**
+  - [ ] Never trigger a previously used PDF again during this visual run.
+  - [ ] Do not use a file whose name begins with `random_merged`.
+  - [ ] If another trigger is required, use the next unused file in this order:
+    1. `invoice_Sue Ann Reed_10365.pdf`
+    2. `invoice_Suzanne McNair_2725.pdf`
+    3. `invoice_Tamara Chand_25931.pdf`
+    4. `invoice_Steven Roelle_14184.pdf`
+  - [ ] Record every triggered filename and outcome under Implementation Notes.
+
+- [ ] **10.7 Complete visual and accessibility checks**
+  - [ ] Verify the GLM form at desktop, tablet, and mobile widths.
+  - [ ] Verify labels, help text, validation, focus order, keyboard navigation,
+    and accessible control names.
+  - [ ] Verify long model/host values do not overflow.
+  - [ ] Verify object-array editing remains usable on narrow screens.
+  - [ ] Verify review represents missing confidence without a fake percentage.
+  - [ ] Verify no secret or raw provider payload appears in the UI.
+  - [ ] Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -v `
+  test\visual\test_glm_ocr_pipeline_editor.py `
+  test\visual\test_schema_editor_regressions.py `
+  test\visual\test_schema_review_visual.py
+```
+
+- [ ] **10.8 Update maintained documentation**
+  - [ ] Update `docs/design_architecture.md` with the provider-neutral
+    extraction flow, structured review flag, and local runtime boundary.
+  - [ ] Update `docs/user_guide.md` with Ollama prerequisites, task parameters,
+    visual configuration, no-confidence review behavior, portal/watch operation,
+    and CSV expansion.
+  - [ ] Update `docs/config_check_troubleshooting.md` with local-provider errors.
+  - [ ] Update `tools/config_check/README.md` and examples for GLM parameters.
+  - [ ] Update `tasks/standard_task_creation_guidelines.md` because structured
+    review flags establish a shared task/review contract.
+  - [ ] Keep this plan's Relevant Files and Implementation Notes accurate.
+  - [ ] Do not document PP-DocLayout, confidence, citations, or automatic Ollama
+    startup as implemented.
+
+- [ ] **10.9 Perform the final verification and audit**
+  - [ ] Rerun GLM, review, storage, registry, config, and visual unit tests.
+  - [ ] Rerun the full suite if code changed while resolving visual findings.
+  - [ ] Review the final diff for secrets, raw output, sample-PDF copies,
+    databases, generated CSV files, logs, and misplaced screenshots.
+  - [ ] Confirm both live documents reached terminal completion after review and
+    produced distinct CSV artifacts.
+  - [ ] Confirm the LlamaCloud editor and extraction tests remain passing.
+  - [ ] Mark Phase 10 and the overall plan complete only after evidence is recorded.
+
+## Final requirement audit
+
+- [ ] New GLM task follows the standard-task creation guideline.
+- [ ] Direct Ollama only; no full GLM SDK dependency.
+- [ ] Dynamic scalar, object, and array-of-object schemas work.
+- [ ] Table extraction uses a separate schema-directed VLM call.
+- [ ] No fake confidence is produced.
+- [ ] A downstream review gate requires review of every configured GLM field.
+- [ ] No review gate means no pause.
+- [ ] Structured JSON is available in context and SQLite.
+- [ ] Review corrections reconstruct correctly on resume.
+- [ ] CSV output expands line items correctly.
+- [ ] GLM and Llama visual property editors are separate.
+- [ ] Existing LlamaCloud behavior remains compatible.
+- [ ] Portal and watch-folder live tests use different non-merged invoices.
+- [ ] Documentation and visual evidence are complete.
+- [ ] Full automated regression is complete.
+
+## Implementation Notes
+
+Record during execution:
+
+- Baseline commit/worktree state: Commit
+  `356a8603215bbdd3fa7702a11475730fc9261cad`; dirty worktree recorded before implementation;
+  pre-existing user changes were limited to `security_best_practices_report.md`,
+  `security_remediation_checklist.md`, `tools/config_check/README.md`, and
+  `tools/config_check/examples/ERROR_CODES.md`, plus this untracked plan.
+- Pre-existing test failures: None. The 64-test baseline covering LlamaCloud
+  schema/persistence, review, CSV/JSON storage, and visual-editor compatibility
+  passed in 6.27 seconds without Ollama running.
+- Dependency-resolution notes: Installed direct dependencies `ollama==0.6.2`,
+  `PyMuPDF==1.28.0`, and `jsonschema>=4.26,<5`; `pip check` reported no broken
+  requirements. `glmocr[selfhosted]` was intentionally not added.
+- Phase 1 verification: Required gate passed (18 tests); the broader 64-test
+  LlamaCloud/persistence/review/storage/editor compatibility matrix also passed.
+- Phase 2 verification: Required gate passed (23 tests).
+- Phase 3 verification: Required gate passed (14 tests), all with mocked Ollama;
+  the complete extraction test directory passed with 86 tests.
+- Provider-isolation correction: The initial Phase 1 implementation temporarily
+  delegated LlamaCloud schema/normalization methods to the new helper. At the
+  operator's request, both existing LlamaCloud modules were restored exactly to
+  their committed content, and this plan was amended to prohibit that coupling.
+  The complete extraction test directory passed again after restoration (86
+  tests in 10.17 seconds).
+- Existing-provider isolation regression (2026-08-05): Both published
+  LlamaCloud pipelines were exercised through the production UI after the
+  restoration. `LlamaCloud Invoice Live` completed invoice `36259` without
+  review; `Insurance Invoice` extracted `sample_invoice.pdf`, paused for the
+  configured low-confidence review, and completed after the visually verified
+  amount of SGD 70.00 was accepted. Both batches completed with zero failed
+  documents and successful CSV, JSON, local-file, and archive task runs.
+- Existing-provider watch-folder regression (2026-08-05): The enabled binding
+  for `D:\python_code\pdfdoc_extraction\watch_folder` selected exact published
+  version 1 of `LlamaCloud Invoice Live`. A new copy of
+  `invoice_Aaron Bergman_36258.pdf` created watch-folder batch
+  `daf060d2-f9a1-4045-b110-4f87442c08ed`. LlamaCloud returned invoice number
+  36258, date 2012-03-06, one line item for 48.71, and total 50.10. The review
+  gate paused because the total's 94.8% confidence was just below its 95%
+  override. The displayed value was visually verified and accepted without
+  correction; the batch then completed with zero failures. CSV, JSON, stored
+  PDF, and archived PDF artifacts were all present.
+- Existing-provider visual evidence directory:
+  `C:\Users\bpson\.codex\visualizations\2026\07\24\019f92a8-52b2-7542-a9bd-b43f8aa09eaf\llamacloud-isolation-test`.
+- Triggered GLM visual-test PDFs and outcomes: Deferred to Phase 10.
+- GLM portal extraction/review/CSV result: Deferred to Phase 10.
+- GLM watch-folder extraction/review/CSV result: Deferred to Phase 10.
+- GLM visual evidence directory: Deferred to Phase 10.
+- Final full-suite result:
+- Checks not run and reason: No live Ollama/GLM-OCR call or visual workflow test
+  was run because those are explicitly deferred to Phase 10; work stopped before
+  Phase 4 as requested.

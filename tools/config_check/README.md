@@ -295,7 +295,7 @@ Verifies that all referenced columns exist in the target CSV file:
 tasks:
   update_supplier_status:
     module: "standard_step.rules.update_reference"
-    class: "UpdateReference"
+    class: "UpdateReferenceTask"
     params:
       reference_file: "reference_file/suppliers.csv"
       update_field: "status"  # Must exist in CSV
@@ -412,7 +412,7 @@ Identifies potentially problematic configurations:
 tasks:
   update_invoice_status:
     module: "standard_step.rules.update_reference"
-    class: "UpdateReference"
+    class: "UpdateReferenceTask"
     params:
       reference_file: "reference_file/invoices.csv"
       update_field: "processing_status"
@@ -533,9 +533,7 @@ config-check validate --config config.yaml --performance-analysis --import-check
 - `performance-complex-field-patterns`: Complex extraction patterns detected (info level)
 
 #### Rules Performance Issues
-- `performance-complex-context-paths`: Deeply nested context paths detected (info level)
 - `performance-complex-context-paths`: Complex context paths detected (info level)
-- `performance-excessive-string-comparisons`: Too many string comparisons (info level)
 
 #### Pipeline Performance Issues
 - `performance-excessive-pipeline-length`: Pipeline too long (warning level)
@@ -747,7 +745,8 @@ watch_folder:
 # Secure task configuration
 tasks:
   store_data:
-    module: "standard_step.storage.store_json"
+    module: "standard_step.storage.store_metadata_as_json"
+    class: "StoreMetadataAsJson"
     params:
       data_dir: "./output"            # Application-relative directory
       filename: "result.json"         # Simple filename without variables

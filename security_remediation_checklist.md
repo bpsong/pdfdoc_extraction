@@ -4,7 +4,26 @@
 
 Date: 2026-06-06
 
-Source report: `security_best_practices_report.md`
+Source report: [Security Best Practices Report](security_best_practices_report.md)
+
+## Current-State Note (2026-08-02)
+
+This checklist preserves remediation history. Paths, dependency versions,
+commands, screenshots, test totals, and status counts below reflect their
+recorded verification dates rather than the current repository state.
+
+- The current dependency manifest pins FastAPI `0.139.2` and allows Starlette
+  `>=1.1.0,<2.0.0`; the repository virtual environment currently resolves
+  Starlette `1.3.1`.
+- The former `extract_pdf_v2.py` implementation and its dedicated test module
+  have been consolidated into the canonical extraction implementation and
+  tests. Their appearances below are retained as historical evidence.
+- Reproducible commands for the current repository must use
+  `.\.venv\Scripts\python.exe`. Commands using `C:\Python313\python.exe` record
+  the original remediation environment and should not be copied as current
+  instructions.
+- Re-run the relevant current tests before changing a finding's status or using
+  this checklist for a release decision.
 
 Legend:
 
@@ -13,7 +32,7 @@ Legend:
 - `Assessed` Reviewed for likelihood/risk, but not remediated
 - Effort labels are rough implementation effort from the codebase perspective, not business priority.
 
-## Current Status
+## Status at Latest Recorded Verification
 
 - Fixed: 15
 - Assessed but not fixed: 0

@@ -1,9 +1,14 @@
-# Config-Check Error Codes Reference
+# Config-Check Core Error Codes Reference
 
-This document provides the operator-facing validation codes used by the
-config-check tool, organized by category. The `code`, `severity`, `path`, and
-`message` in `--format json` output are authoritative for a particular run;
-optional flags can add file, import, performance, or security findings.
+This document is a curated reference for the core validation codes operators
+encounter most often. It is not an exhaustive registry: optional flags and new
+validation rules can add file, import, performance, security, and other
+findings. See the [main config-check guide](../README.md) for those validation
+modes.
+
+For a particular run, the `code`, `severity`, `path`, and `message` in
+`--format json` output are authoritative. Automation should consume those
+fields rather than assume that this document contains every possible code.
 
 ## Schema Validation Error Codes
 

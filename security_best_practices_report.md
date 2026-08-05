@@ -6,6 +6,25 @@ Date: 2026-06-06
 
 Scope: Static review of the Python/FastAPI PDF processing application after the recent refactor. I reviewed the web server, API routes, authentication utilities, workflow loading, extraction tasks, templates, static JavaScript, configuration handling, and dependency metadata. I did not make code changes.
 
+## Current-State Addendum (2026-08-02)
+
+This report remains a point-in-time security review. Historical paths,
+dependency versions, commands, and verification results below are retained as
+evidence and should not be treated as current operating instructions.
+
+- The current dependency manifest pins FastAPI `0.139.2` and allows Starlette
+  `>=1.1.0,<2.0.0`; the repository virtual environment currently resolves
+  Starlette `1.3.1`.
+- Extraction behavior previously described under `extract_pdf_v2.py` has been
+  consolidated into `standard_step/extraction/extract_pdf.py`. References to
+  the removed v2 path below describe the implementation reviewed at the time.
+- Current Python commands must use `.\.venv\Scripts\python.exe` as documented in
+  `AGENTS.MD`. The global `C:\Python313\python.exe` commands in Verification
+  Notes record the original review environment only.
+- Remediation states and test totals are accurate only as of their recorded
+  verification dates. Re-run the current security and full test suites before
+  relying on them for a release decision.
+
 ## Executive Summary
 
 The refactor has several good security foundations: authentication is centralized, most SQLite access is parameterized, runtime settings redact secret-looking values in several admin paths, and configuration files are ignored by Git. The highest-priority gaps are in browser-facing and config-driven execution surfaces.
