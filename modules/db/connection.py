@@ -22,6 +22,11 @@ def json_dumps(value: Any) -> str:
     return json.dumps(value if value is not None else {}, ensure_ascii=False, sort_keys=True)
 
 
+def json_value_dumps(value: Any) -> str:
+    """Serialize a business value while preserving an explicit JSON null."""
+    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+
+
 def json_loads(value: str | None, default: Any = None) -> Any:
     """Deserialize JSON text, returning default for empty or invalid values."""
     if value is None or value == "":

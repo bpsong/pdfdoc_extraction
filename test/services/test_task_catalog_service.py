@@ -94,3 +94,46 @@ def test_task_catalog_includes_assign_nanoid_summary(tmp_path: Path) -> None:
     assert task["docstring_summary"] == (
         "Generate a unique nanoid string and add it to the shared context."
     )
+
+
+def test_task_catalog_imports_and_displays_glm_ocr_extract(tmp_path: Path) -> None:
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "pipeline": ["glm_extract"],
+            "tasks": {
+                "glm_extract": {
+                    "module": "standard_step.extraction.glm_ocr_extract",
+                    "class": "GlmOcrExtractTask",
+                    "params": {
+                        "ollama_host": "http://127.0.0.1:11434",
+                        "model": "glm-ocr:latest",
+                        "dpi": 216,
+                        "num_ctx": 8192,
+                        "num_predict": 2048,
+                        "timeout_seconds": 300,
+                        "fields": {
+                            "invoice_number": {
+                                "alias": "Invoice number",
+                                "type": "str",
+                            }
+                        },
+                    },
+                }
+            },
+        },
+    )
+
+    catalog = TaskCatalogService(config).catalog()
+    glm = next(
+        task
+        for task in catalog["tasks"]
+        if task["class_name"] == "GlmOcrExtractTask"
+    )
+
+    assert glm["import_status"] == "ok"
+    assert glm["is_configured"] is True
+    assert glm["configured_keys"] == ["glm_extract"]
+    assert glm["category"] == "extraction"
+    assert glm["expected_inputs"] == ["file_path", "document_id", "batch_id"]
+    assert "extraction_result_id" in glm["expected_outputs"]

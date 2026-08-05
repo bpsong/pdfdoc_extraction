@@ -87,3 +87,68 @@ def test_review_service_reclaims_expired_lock(tmp_path):
         claimed = service.claim(review["id"], "bob")
 
     assert claimed["assigned_to"] == "bob"
+
+
+def test_review_service_corrects_missing_glm_object_and_array_fields(tmp_path):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename=pdf_path.name,
+        )
+        extraction = ExtractionRepository(conn).save_result(
+            document_id=created["document"]["id"],
+            provider="glm_ocr_ollama",
+            data={"summary": None, "items": None},
+        )
+        ExtractionRepository(conn).save_fields(
+            document_id=created["document"]["id"],
+            extraction_result_id=extraction["id"],
+            fields=[
+                {"field_key": "summary", "extracted_value": None},
+                {"field_key": "items", "extracted_value": None},
+            ],
+        )
+        ExtractionRepository(conn).set_review_requirements(
+            created["document"]["id"], ["summary", "items"]
+        )
+        review = ReviewRepository(conn).create_review_item(
+            batch_id=created["batch"]["id"],
+            document_id=created["document"]["id"],
+            queue_name="default_review",
+            reason="business_rule",
+            scope="low_confidence_fields",
+            metadata={"highlight_fields": ["summary", "items"]},
+        )
+        service = ReviewService(conn, config)
+        service.claim(review["id"], "operator")
+        service.complete(
+            review["id"],
+            "operator",
+            {
+                "summary": {"currency": "SGD", "tax": 9.0},
+                "items": [{"description": "Paper", "quantity": 2}],
+            },
+            trigger_resume=False,
+        )
+        fields = {
+            row["field_key"]: row
+            for row in ExtractionRepository(conn).get_fields(
+                created["document"]["id"]
+            )
+        }
+
+    assert json_loads(fields["summary"]["final_value_json"]) == {
+        "currency": "SGD",
+        "tax": 9.0,
+    }
+    assert json_loads(fields["items"]["final_value_json"]) == [
+        {"description": "Paper", "quantity": 2}
+    ]
+    assert fields["summary"]["review_status"] == "corrected"
+    assert fields["items"]["review_status"] == "corrected"

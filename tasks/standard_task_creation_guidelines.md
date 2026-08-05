@@ -145,6 +145,29 @@ authoritative store for durable workflow state.
 - Do not overwrite workflow-owned identity or position keys with unrelated
   task data.
 
+### Structured review flags
+
+Tasks that produce reviewable business findings may add `review_flags` to the
+shared context. Producers must preserve flags already supplied by earlier
+tasks. The review gate accepts the legacy forms—a list of flag names or a
+boolean map—and a structured map whose entries contain a stable reason and the
+top-level extracted field keys that need operator attention:
+
+```python
+context.setdefault("review_flags", {})["provider_output_unscored"] = {
+    "reason": "unscored_extraction",
+    "field_keys": ["invoice_number", "line_items"],
+}
+```
+
+Structured `field_keys` must use configured top-level extraction keys, not
+aliases or extracted values. Do not place prompts, provider responses,
+credentials, or customer values in a review flag. A review flag is inert until
+a configured review gate consumes it; tasks must not set `pipeline_state` or
+durable `requires_review` state merely because they emitted a flag. When the
+gate runs, it owns highlighting fields, updating `extracted_fields`, creating
+the review item, and pausing the workflow.
+
 ---
 
 ## 5. Workflow State, Audit, and Artifact Convention

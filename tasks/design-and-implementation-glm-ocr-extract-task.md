@@ -198,10 +198,16 @@ Keep this section updated during implementation.
 
 ### Expected existing areas
 
-- Task registry and catalog services.
-- Pipeline/config-check validation services.
-- Review gate and review service tests.
-- Workflow manager's LlamaCloud split-child preflight.
+- `modules/db/connection.py` and `modules/db/repositories.py` for explicit-null
+  extraction-field value persistence.
+- `modules/services/task_registry_service.py` and task catalog tests.
+- `modules/services/pipeline_template_service.py` and pipeline/config-check
+  validation tests.
+- `standard_step/review/review_gate.py`, review service tests, and resume tests.
+- `modules/workflow_manager.py` and split-child preflight tests.
+- `tools/config_check/parameter_validator.py`.
+- `tasks/standard_task_creation_guidelines.md` for the structured review-flag
+  context contract established in Phase 5.
 - Production pipeline editor JavaScript.
 - CSV storage and versioned workflow integration tests.
 - Architecture, user, troubleshooting, and standard-task documentation.
@@ -395,48 +401,48 @@ provider-neutral output contract.
 **Exit criterion:** The task follows the standard-task contract and produces
 complete provider-neutral SQLite/context output.
 
-- [ ] **4.1 Create the task class**
-  - [ ] Inherit directly from `BaseTask`.
-  - [ ] Keep `__init__` side-effect free.
-  - [ ] Load only constructor parameters supplied by the versioned pipeline.
-  - [ ] Implement `on_start`, `validate_required_fields`, and `run`.
-  - [ ] Validate field count, one-table limit, host, model, numeric options, and
+- [x] **4.1 Create the task class**
+  - [x] Inherit directly from `BaseTask`.
+  - [x] Keep `__init__` side-effect free.
+  - [x] Load only constructor parameters supplied by the versioned pipeline.
+  - [x] Implement `on_start`, `validate_required_fields`, and `run`.
+  - [x] Validate field count, one-table limit, host, model, numeric options, and
     `context["file_path"]`.
-  - [ ] Preserve workflow-owned context keys.
+  - [x] Preserve workflow-owned context keys.
 
-- [ ] **4.2 Normalize task output**
-  - [ ] Ensure every configured top-level key exists in `processed_data`.
-  - [ ] Use `None` for missing scalar, object, or table values.
-  - [ ] Update rather than replace `context["data"]`.
-  - [ ] Add GLM metadata under a dedicated metadata child.
-  - [ ] Append the structured `glm_ocr_unscored` review flag without
+- [x] **4.2 Normalize task output**
+  - [x] Ensure every configured top-level key exists in `processed_data`.
+  - [x] Use `None` for missing scalar, object, or table values.
+  - [x] Update rather than replace `context["data"]`.
+  - [x] Add GLM metadata under a dedicated metadata child.
+  - [x] Append the structured `glm_ocr_unscored` review flag without
     overwriting existing flags.
 
-- [ ] **4.3 Persist extraction state**
-  - [ ] Save one `extraction_results` row with provider `glm_ocr_ollama`.
-  - [ ] Save one `extracted_fields` row per configured top-level field.
-  - [ ] Persist confidence and confidence label as `NULL`.
-  - [ ] Keep initial `requires_review` false; the review gate owns the transition.
-  - [ ] Store page/source evidence and safe validation details in `source_json`.
-  - [ ] Set `context["extraction_result_id"]`.
-  - [ ] Do not create an artifact because the task creates no durable file.
+- [x] **4.3 Persist extraction state**
+  - [x] Save one `extraction_results` row with provider `glm_ocr_ollama`.
+  - [x] Save one `extracted_fields` row per configured top-level field.
+  - [x] Persist confidence and confidence label as `NULL`.
+  - [x] Keep initial `requires_review` false; the review gate owns the transition.
+  - [x] Store page/source evidence and safe validation details in `source_json`.
+  - [x] Set `context["extraction_result_id"]`.
+  - [x] Do not create an artifact because the task creates no durable file.
 
-- [ ] **4.4 Implement task failure behavior**
-  - [ ] Translate Ollama connection, missing-model, PDF, timeout, and protocol
+- [x] **4.4 Implement task failure behavior**
+  - [x] Translate Ollama connection, missing-model, PDF, timeout, and protocol
     failures to redacted `TaskError`.
-  - [ ] Call `register_error` consistently.
-  - [ ] Add provider-specific but non-sensitive `fatal_failure` guidance.
-  - [ ] Never place raw responses, images, prompts, extracted values, or host
+  - [x] Call `register_error` consistently.
+  - [x] Add provider-specific but non-sensitive `fatal_failure` guidance.
+  - [x] Never place raw responses, images, prompts, extracted values, or host
     credentials in errors.
 
-- [ ] **4.5 Complete Phase 4 unit-test gate**
-  - [ ] Test initialization and validation.
-  - [ ] Test success with scalar, object, table, missing, and conflicting values.
-  - [ ] Test context preservation and review-flag merging.
-  - [ ] Test SQLite result and field rows.
-  - [ ] Test null confidence and safe source metadata.
-  - [ ] Test expected and unexpected failures.
-  - [ ] Run:
+- [x] **4.5 Complete Phase 4 unit-test gate**
+  - [x] Test initialization and validation.
+  - [x] Test success with scalar, object, table, missing, and conflicting values.
+  - [x] Test context preservation and review-flag merging.
+  - [x] Test SQLite result and field rows.
+  - [x] Test null confidence and safe source metadata.
+  - [x] Test expected and unexpected failures.
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v `
@@ -456,29 +462,29 @@ fields only when a review gate exists.
 **Exit criterion:** A downstream review gate reliably requires operator review
 of every configured GLM field, while gate-free pipelines continue normally.
 
-- [ ] **5.1 Extend review-flag handling**
-  - [ ] Preserve existing list and boolean-map review flags.
-  - [ ] Accept structured flag entries containing a reason and field-key list.
-  - [ ] Add a business-rule reason for the unscored extraction.
-  - [ ] Add every listed field to `highlight_fields`.
-  - [ ] Mark every listed field `requires_review` when the gate runs.
-  - [ ] Ensure document and low-confidence review scopes allow all highlighted
+- [x] **5.1 Extend review-flag handling**
+  - [x] Preserve existing list and boolean-map review flags.
+  - [x] Accept structured flag entries containing a reason and field-key list.
+  - [x] Add a business-rule reason for the unscored extraction.
+  - [x] Add every listed field to `highlight_fields`.
+  - [x] Mark every listed field `requires_review` when the gate runs.
+  - [x] Ensure document and low-confidence review scopes allow all highlighted
     GLM fields to be edited.
 
-- [ ] **5.2 Preserve conditional gate behavior**
-  - [ ] Verify a pipeline without a review gate continues directly to storage.
-  - [ ] Verify no stale `requires_review` state is created without a gate.
-  - [ ] Verify a following gate pauses regardless of numeric threshold settings.
-  - [ ] Verify missing configured values appear and can be corrected.
-  - [ ] Verify corrected object arrays reconstruct correctly on resume.
+- [x] **5.2 Preserve conditional gate behavior**
+  - [x] Verify a pipeline without a review gate continues directly to storage.
+  - [x] Verify no stale `requires_review` state is created without a gate.
+  - [x] Verify a following gate pauses regardless of numeric threshold settings.
+  - [x] Verify missing configured values appear and can be corrected.
+  - [x] Verify corrected object arrays reconstruct correctly on resume.
 
-- [ ] **5.3 Complete Phase 5 unit-test gate**
-  - [ ] Test structured review flags alone and alongside legacy flags.
-  - [ ] Test all-field highlighting and persistence.
-  - [ ] Test a GLM result with required and optional fields.
-  - [ ] Test review correction and resume-context reconstruction.
-  - [ ] Test ordinary LlamaCloud confidence behavior is unchanged.
-  - [ ] Run:
+- [x] **5.3 Complete Phase 5 unit-test gate**
+  - [x] Test structured review flags alone and alongside legacy flags.
+  - [x] Test all-field highlighting and persistence.
+  - [x] Test a GLM result with required and optional fields.
+  - [x] Test review correction and resume-context reconstruction.
+  - [x] Test ordinary LlamaCloud confidence behavior is unchanged.
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v `
@@ -499,41 +505,41 @@ from provider-neutral extraction classification.
 **Exit criterion:** GLM is an approved, publishable extraction task with
 provider-correct validation and preflight behavior.
 
-- [ ] **6.1 Register the task**
-  - [ ] Add the exact module/class pair to `BUILTIN_TASKS`.
-  - [ ] Ensure the task catalog imports and displays it.
-  - [ ] Add registry-coverage tests for the new `BaseTask` subclass.
-  - [ ] Confirm custom-task approval rules remain unchanged.
+- [x] **6.1 Register the task**
+  - [x] Add the exact module/class pair to `BUILTIN_TASKS`.
+  - [x] Ensure the task catalog imports and displays it.
+  - [x] Add registry-coverage tests for the new `BaseTask` subclass.
+  - [x] Confirm custom-task approval rules remain unchanged.
 
-- [ ] **6.2 Add GLM parameter validation**
-  - [ ] Validate non-empty model and well-formed HTTP(S) Ollama host.
-  - [ ] Reject URLs with embedded credentials.
-  - [ ] Validate positive DPI, context, prediction, and timeout settings.
-  - [ ] Reuse shared extraction-field validation.
-  - [ ] Do not require `api_key` or `configuration_id`.
-  - [ ] Reject or report LlamaCloud-only parameters on the GLM task.
-  - [ ] Keep LlamaCloud credential validation unchanged for `ExtractPdfTask`.
+- [x] **6.2 Add GLM parameter validation**
+  - [x] Validate non-empty model and well-formed HTTP(S) Ollama host.
+  - [x] Reject URLs with embedded credentials.
+  - [x] Validate positive DPI, context, prediction, and timeout settings.
+  - [x] Reuse shared extraction-field validation.
+  - [x] Do not require `api_key` or `configuration_id`.
+  - [x] Reject or report LlamaCloud-only parameters on the GLM task.
+  - [x] Keep LlamaCloud credential validation unchanged for `ExtractPdfTask`.
 
-- [ ] **6.3 Generalize pipeline extraction-field discovery**
-  - [ ] Allow review-schema compatibility checks to obtain fields from either
+- [x] **6.3 Generalize pipeline extraction-field discovery**
+  - [x] Allow review-schema compatibility checks to obtain fields from either
     approved extraction class.
-  - [ ] Keep singleton extraction-task ordering rules.
-  - [ ] Ensure CSV's field-reuse behavior recognizes the GLM task.
-  - [ ] Preserve exact published task parameters.
+  - [x] Keep singleton extraction-task ordering rules.
+  - [x] Ensure CSV's field-reuse behavior recognizes the GLM task.
+  - [x] Preserve exact published task parameters.
 
-- [ ] **6.4 Correct split-child preflight**
-  - [ ] Restrict LlamaCloud access preflight to its exact task module/class.
-  - [ ] Ensure GLM extraction after a split does not call LlamaCloud preflight.
-  - [ ] Let the GLM task validate its own runtime availability.
-  - [ ] Keep existing source-level LlamaCloud failure behavior unchanged.
+- [x] **6.4 Correct split-child preflight**
+  - [x] Restrict LlamaCloud access preflight to its exact task module/class.
+  - [x] Ensure GLM extraction after a split does not call LlamaCloud preflight.
+  - [x] Let the GLM task validate its own runtime availability.
+  - [x] Keep existing source-level LlamaCloud failure behavior unchanged.
 
-- [ ] **6.5 Complete Phase 6 unit-test gate**
-  - [ ] Test task registry and catalog entries.
-  - [ ] Test valid and invalid GLM parameters.
-  - [ ] Test GLM fields satisfy review-schema compatibility checks.
-  - [ ] Test Llama credentials remain mandatory only for Llama tasks.
-  - [ ] Test split-child dispatch for Llama and GLM extractors.
-  - [ ] Run:
+- [x] **6.5 Complete Phase 6 unit-test gate**
+  - [x] Test task registry and catalog entries.
+  - [x] Test valid and invalid GLM parameters.
+  - [x] Test GLM fields satisfy review-schema compatibility checks.
+  - [x] Test Llama credentials remain mandatory only for Llama tasks.
+  - [x] Test split-child dispatch for Llama and GLM extractors.
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v `
@@ -910,6 +916,18 @@ Record during execution:
 - Phase 2 verification: Required gate passed (23 tests).
 - Phase 3 verification: Required gate passed (14 tests), all with mocked Ollama;
   the complete extraction test directory passed with 86 tests.
+- Phase 4 verification: Required task/persistence gate passed with 26 tests.
+  The new task persists provider `glm_ocr_ollama`, explicit JSON null values,
+  null confidence, safe source evidence, and no task-created artifact.
+- Phase 5 verification: Required review/service/resume gate passed with 16
+  tests. A broader GLM/review run passed with 36 tests, including gate-free
+  storage, structured and legacy flags, missing-value correction, and corrected
+  object-array resume reconstruction.
+- Phase 6 verification: Required registry/catalog/pipeline/config/workflow gate
+  passed with 70 tests. An additional 22 workflow and LlamaCloud extraction
+  regression tests passed after provider-specific split preflight changes.
+- Phase 4-6 repository regression: The final complete pytest suite passed with
+  963 tests and 4 skips in 123.44 seconds.
 - Provider-isolation correction: The initial Phase 1 implementation temporarily
   delegated LlamaCloud schema/normalization methods to the new helper. At the
   operator's request, both existing LlamaCloud modules were restored exactly to
@@ -941,5 +959,5 @@ Record during execution:
 - GLM visual evidence directory: Deferred to Phase 10.
 - Final full-suite result:
 - Checks not run and reason: No live Ollama/GLM-OCR call or visual workflow test
-  was run because those are explicitly deferred to Phase 10; work stopped before
-  Phase 4 as requested.
+  was run because those are explicitly deferred to Phase 10. Phases 7-10 have
+  not started; this implementation stop is after completion of Phases 4-6.

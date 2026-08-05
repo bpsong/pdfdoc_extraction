@@ -213,6 +213,113 @@ def test_review_gate_uses_field_threshold_override(tmp_path):
     assert metadata["highlight_fields"] == ["supplier"]
 
 
+def test_review_gate_structured_unscored_flag_highlights_every_listed_field(tmp_path):
+    config, created, task_run = _create_document_with_fields(
+        tmp_path,
+        [
+            {
+                "field_key": "supplier",
+                "extracted_value": "Acme",
+                "confidence": None,
+            },
+            {
+                "field_key": "serial_numbers",
+                "extracted_value": None,
+                "confidence": None,
+            },
+        ],
+    )
+    task = ReviewGateTask(
+        config,
+        confidence_threshold=0.99,
+        require_review_when_missing_confidence=False,
+        review_scope="low_confidence_fields",
+        allow_operator_to_edit_high_confidence_fields=False,
+        schema_file="invoice.yaml",
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "data": {"supplier": "Acme", "serial_numbers": None},
+        "review_flags": {
+            "legacy_false": False,
+            "glm_ocr_unscored": {
+                "reason": "unscored_extraction",
+                "field_keys": ["supplier", "serial_numbers"],
+            },
+        },
+    }
+
+    result = task.run(context)
+
+    with connect(config) as conn:
+        review = ReviewRepository(conn).list_queue()[0]
+        metadata = json_loads(review["metadata_json"])
+        fields = {
+            item["field_key"]: item
+            for item in ExtractionRepository(conn).get_fields(
+                created["document"]["id"]
+            )
+        }
+    assert result["pipeline_state"] == "paused"
+    assert metadata["highlight_fields"] == ["serial_numbers", "supplier"]
+    assert metadata["editable_fields"] == ["serial_numbers", "supplier"]
+    assert metadata["reasons"] == [
+        {
+            "reason": "business_rule",
+            "flag": "glm_ocr_unscored",
+            "business_rule_reason": "unscored_extraction",
+            "field_keys": ["serial_numbers", "supplier"],
+        }
+    ]
+    assert fields["supplier"]["requires_review"] == 1
+    assert fields["serial_numbers"]["requires_review"] == 1
+
+
+def test_review_gate_structured_list_flag_preserves_legacy_flag_behavior(tmp_path):
+    config, created, task_run = _create_document_with_field(tmp_path, 0.99)
+    task = ReviewGateTask(
+        config,
+        confidence_threshold=0.8,
+        require_review_when_missing_confidence=False,
+        schema_file="invoice.yaml",
+    )
+    context = {
+        "id": created["document"]["id"],
+        "batch_id": created["batch"]["id"],
+        "document_id": created["document"]["id"],
+        "task_run_id": task_run["id"],
+        "data": {"supplier": "Acme"},
+        "review_flags": [
+            "legacy_rule",
+            {
+                "flag": "glm_ocr_unscored",
+                "reason": "unscored_extraction",
+                "field_keys": ["supplier"],
+            },
+        ],
+    }
+
+    task.run(context)
+
+    with connect(config) as conn:
+        metadata = json_loads(
+            ReviewRepository(conn).list_queue()[0]["metadata_json"]
+        )
+    assert metadata["reasons"] == [
+        {"reason": "business_rule", "flag": "legacy_rule"},
+        {
+            "reason": "business_rule",
+            "flag": "glm_ocr_unscored",
+            "business_rule_reason": "unscored_extraction",
+            "field_keys": ["supplier"],
+        },
+    ]
+    assert metadata["highlight_fields"] == ["supplier"]
+
+
 def test_review_gate_pauses_for_low_confidence_and_does_not_duplicate_open_item(tmp_path):
     config, created, task_run = _create_document_with_field(tmp_path, 0.2)
     task = ReviewGateTask(config, confidence_threshold=0.8, schema_file="invoice.yaml")

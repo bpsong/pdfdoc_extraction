@@ -571,7 +571,18 @@ class PipelineTemplateService:
         tasks = definition.get("tasks")
         if isinstance(tasks, dict):
             for task in tasks.values():
-                if not isinstance(task, dict) or task.get("class") != "ExtractPdfTask":
+                if not isinstance(task, dict) or (
+                    task.get("module"), task.get("class")
+                ) not in {
+                    (
+                        "standard_step.extraction.extract_pdf",
+                        "ExtractPdfTask",
+                    ),
+                    (
+                        "standard_step.extraction.glm_ocr_extract",
+                        "GlmOcrExtractTask",
+                    ),
+                }:
                     continue
                 params = task.get("params")
                 fields = params.get("fields") if isinstance(params, dict) else None

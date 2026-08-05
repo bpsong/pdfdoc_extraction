@@ -235,7 +235,7 @@ class WorkflowManager:
             start_task_index,
             definition=executable.definition if executable is not None else None,
         )
-        if not task_key or not self._is_extract_task(task_key, task_config):
+        if not task_key or not self._is_llamacloud_extract_task(task_config):
             return False
         raw_params = task_config.get("params")
         params: dict[str, Any] = raw_params if isinstance(raw_params, dict) else {}
@@ -395,6 +395,14 @@ class WorkflowManager:
         class_name = str(task_config.get("class") or "").lower()
         key = task_key.lower()
         return "extract" in key or ".extraction" in module_name or "extract" in class_name
+
+    @staticmethod
+    def _is_llamacloud_extract_task(task_config: dict[str, Any]) -> bool:
+        """Return whether split-child preflight must call LlamaCloud Extract."""
+        return (
+            task_config.get("module") == "standard_step.extraction.extract_pdf"
+            and task_config.get("class") == "ExtractPdfTask"
+        )
 
     @staticmethod
     def _build_child_context(

@@ -26,6 +26,9 @@ def test_builtin_standard_tasks_are_approved(tmp_path: Path) -> None:
     assert registry.is_approved("standard_step.extraction.extract_pdf", "ExtractPdfTask")
     assert registry.is_approved("standard_step.review.review_gate", "ReviewGateTask")
     assert registry.is_approved("standard_step.storage.store_metadata_as_json", "StoreMetadataAsJson")
+    assert registry.is_approved(
+        "standard_step.extraction.glm_ocr_extract", "GlmOcrExtractTask"
+    )
 
 
 def test_builtin_registry_covers_all_standard_step_base_tasks() -> None:

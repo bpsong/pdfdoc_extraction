@@ -137,10 +137,11 @@ class ReviewGateTask(BaseTask):
                 highlight_fields.append(field_key)
 
         business_flags = context.get("review_flags") or context.get("business_rule_flags") or []
-        if isinstance(business_flags, dict):
-            business_flags = [key for key, value in business_flags.items() if value]
-        for flag in business_flags if isinstance(business_flags, list) else []:
-            reasons.append({"reason": "business_rule", "flag": flag})
+        business_reasons, business_highlights = self._business_rule_reasons(
+            business_flags
+        )
+        reasons.extend(business_reasons)
+        highlight_fields.extend(business_highlights)
 
         if schema is not None:
             raw_payload = context.get("data")
@@ -156,6 +157,65 @@ class ReviewGateTask(BaseTask):
                     highlight_fields.append(str(error["path"]).split(".")[0])
 
         return reasons, sorted(set(highlight_fields))
+
+    @classmethod
+    def _business_rule_reasons(
+        cls,
+        flags: Any,
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Normalize legacy and structured business-rule review flags."""
+        reasons: list[dict[str, Any]] = []
+        highlights: list[str] = []
+
+        def append_structured(flag: Any, value: dict[str, Any]) -> None:
+            flag_name = str(flag or value.get("flag") or "business_rule")
+            field_keys = value.get("field_keys")
+            normalized_fields = (
+                sorted(
+                    {
+                        str(field_key)
+                        for field_key in field_keys
+                        if isinstance(field_key, str) and field_key
+                    }
+                )
+                if isinstance(field_keys, list)
+                else []
+            )
+            business_reason = value.get("reason")
+            reason: dict[str, Any] = {
+                "reason": "business_rule",
+                "flag": flag_name,
+            }
+            if isinstance(business_reason, str) and business_reason:
+                reason["business_rule_reason"] = business_reason
+            if normalized_fields:
+                reason["field_keys"] = normalized_fields
+                highlights.extend(normalized_fields)
+            reasons.append(reason)
+
+        if isinstance(flags, dict):
+            for flag, value in flags.items():
+                if not value:
+                    continue
+                if isinstance(value, dict):
+                    append_structured(flag, value)
+                else:
+                    reasons.append({"reason": "business_rule", "flag": flag})
+            return reasons, highlights
+
+        if not isinstance(flags, list):
+            return reasons, highlights
+        for flag in flags:
+            if isinstance(flag, dict):
+                if "field_keys" in flag or "reason" in flag:
+                    append_structured(flag.get("flag"), flag)
+                    continue
+                nested_reasons, nested_highlights = cls._business_rule_reasons(flag)
+                reasons.extend(nested_reasons)
+                highlights.extend(nested_highlights)
+                continue
+            reasons.append({"reason": "business_rule", "flag": flag})
+        return reasons, highlights
 
     def _review_metadata(
         self,

@@ -53,6 +53,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from urllib.parse import urlsplit
 
 from modules.services.versioned_config_contracts import (
     is_secret_reference,
@@ -85,6 +86,23 @@ _EXTRACTION_CREDENTIAL_PREFIXES = (
 
 _LOCALDRIVE_MODULE_SUFFIX = 'store_file_to_localdrive'
 _STORAGE_OVERRIDE_KEYS = {"data_dir", "filename"}
+_GLM_OCR_TASK = (
+    "standard_step.extraction.glm_ocr_extract",
+    "GlmOcrExtractTask",
+)
+_GLM_POSITIVE_INTEGER_PARAMS = ("dpi", "num_ctx", "num_predict")
+_GLM_LLAMACLOUD_ONLY_PARAMS = (
+    "api_key",
+    "configuration_id",
+    "tier",
+    "parse_tier",
+    "extraction_target",
+    "cite_sources",
+    "confidence_scores",
+    "project_id",
+    "organization_id",
+    "poll_interval_seconds",
+)
 
 
 
@@ -170,6 +188,7 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
                 errors,
                 warnings,
                 module_name=module_name,
+                class_name=class_name,
             )
         elif classification == "storage":
             if _is_localdrive_storage(module_name):
@@ -341,6 +360,7 @@ def _validate_extraction_params(
     warnings: List[ParameterIssue],
     *,
     module_name: Optional[str] = None,
+    class_name: Optional[str] = None,
 ) -> None:
     if not isinstance(params, dict):
         errors.append(
@@ -353,7 +373,10 @@ def _validate_extraction_params(
         )
         return
 
-    if _requires_extraction_credentials(module_name) or 'fields' in params:
+    is_glm_ocr = (module_name, class_name) == _GLM_OCR_TASK
+    if is_glm_ocr:
+        _validate_glm_ocr_runtime_options(params, params_path, errors)
+    elif _requires_extraction_credentials(module_name) or 'fields' in params:
         _validate_extraction_credential(
             params,
             params_path,
@@ -408,14 +431,128 @@ def _validate_extraction_params(
             ParameterIssue(
                 path=f"{params_path}.fields",
                 message=(
-                    "Multiple extraction fields are marked is_table: true; ExtractPdfTask "
-                    "supports only a single table payload."
+                    "Multiple extraction fields are marked is_table: true; the "
+                    "configured extraction task supports only a single table payload."
                 ),
                 code="param-extraction-multiple-tables",
                 details={
                     "config_key": f"{params_path}.fields",
                     "fields": table_fields,
                 },
+            )
+        )
+
+
+def _validate_glm_ocr_runtime_options(
+    params: Dict[str, Any],
+    params_path: str,
+    errors: List[ParameterIssue],
+) -> None:
+    """Validate credential-free local GLM-OCR task parameters."""
+    for key in _GLM_LLAMACLOUD_ONLY_PARAMS:
+        if key not in params:
+            continue
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.{key}",
+                message=(
+                    f"GLM-OCR does not support LlamaCloud-only parameter '{key}'."
+                ),
+                code="param-glm-llamacloud-only",
+                details={"config_key": f"{params_path}.{key}", "parameter": key},
+            )
+        )
+
+    host = params.get("ollama_host")
+    host_path = f"{params_path}.ollama_host"
+    if not isinstance(host, str) or not host.strip():
+        errors.append(
+            ParameterIssue(
+                path=host_path,
+                message="GLM-OCR ollama_host must be a non-empty HTTP(S) URL.",
+                code="param-glm-invalid-host",
+                details={"config_key": host_path},
+            )
+        )
+    else:
+        parsed = urlsplit(host.strip())
+        invalid_host = (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.path not in {"", "/"}
+            or bool(parsed.query)
+            or bool(parsed.fragment)
+        )
+        try:
+            port = parsed.port
+            invalid_port = port is not None and not 1 <= port <= 65535
+        except ValueError:
+            invalid_port = True
+        if parsed.username is not None or parsed.password is not None:
+            errors.append(
+                ParameterIssue(
+                    path=host_path,
+                    message="GLM-OCR ollama_host must not contain credentials.",
+                    code="param-glm-host-credentials",
+                    details={"config_key": host_path},
+                )
+            )
+        elif invalid_host or invalid_port:
+            errors.append(
+                ParameterIssue(
+                    path=host_path,
+                    message=(
+                        "GLM-OCR ollama_host must be an HTTP(S) base URL without "
+                        "a path, query, fragment, or invalid port."
+                    ),
+                    code="param-glm-invalid-host",
+                    details={"config_key": host_path},
+                )
+            )
+
+    _validate_required_string(
+        params,
+        params_path,
+        "model",
+        errors,
+        code="param-glm-missing-model",
+    )
+    if "document_instructions" in params and not isinstance(
+        params.get("document_instructions"), str
+    ):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.document_instructions",
+                message="GLM-OCR document_instructions must be text.",
+                code="param-glm-invalid-document-instructions",
+                details={"config_key": f"{params_path}.document_instructions"},
+            )
+        )
+    for key in _GLM_POSITIVE_INTEGER_PARAMS:
+        if key not in params:
+            continue
+        value = params.get(key)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            errors.append(
+                ParameterIssue(
+                    path=f"{params_path}.{key}",
+                    message=f"GLM-OCR {key} must be a positive integer.",
+                    code=f"param-glm-invalid-{key.replace('_', '-')}",
+                    details={"config_key": f"{params_path}.{key}"},
+                )
+            )
+    timeout = params.get("timeout_seconds")
+    if "timeout_seconds" in params and (
+        isinstance(timeout, bool)
+        or not isinstance(timeout, (int, float))
+        or timeout <= 0
+    ):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.timeout_seconds",
+                message="GLM-OCR timeout_seconds must be a positive number.",
+                code="param-glm-invalid-timeout-seconds",
+                details={"config_key": f"{params_path}.timeout_seconds"},
             )
         )
 

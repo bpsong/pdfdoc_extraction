@@ -15,6 +15,7 @@ from modules.status_manager import StatusManager
 from modules.workflow_manager import WorkflowManager
 from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.utils import sanitize_filename
+from test.helpers_sqlite import TempConfig
 
 @pytest.fixture
 def test_environment():
@@ -399,6 +400,63 @@ def test_workflow_manager_propagates_source_web(monkeypatch, tmp_path):
     # No legacy text status record should be created for source propagation.
     status = status_manager.get_status(unique_id)
     assert status is None
+
+
+def test_split_child_preflight_is_provider_specific_for_llama_and_glm(
+    tmp_path, monkeypatch
+):
+    glm_config = TempConfig(
+        tmp_path / "glm.sqlite3",
+        {
+            "pipeline": ["glm_extract"],
+            "tasks": {
+                "glm_extract": {
+                    "module": "standard_step.extraction.glm_ocr_extract",
+                    "class": "GlmOcrExtractTask",
+                    "params": {
+                        "ollama_host": "http://127.0.0.1:11434",
+                        "model": "glm-ocr:latest",
+                    },
+                }
+            },
+        },
+    )
+    glm_manager = WorkflowManager(glm_config)
+    preflight = Mock(side_effect=AssertionError("must not call LlamaCloud"))
+    monkeypatch.setattr(
+        "modules.workflow_manager.preflight_extract_v2_access", preflight
+    )
+
+    assert glm_manager._fail_children_when_extract_preflight_fails({}, [], 0) is False
+    preflight.assert_not_called()
+    assert glm_manager._is_llamacloud_extract_task(
+        glm_config.get("tasks.glm_extract")
+    ) is False
+
+    llama_config = TempConfig(
+        tmp_path / "llama.sqlite3",
+        {
+            "pipeline": ["extract"],
+            "tasks": {
+                "extract": {
+                    "module": "standard_step.extraction.extract_pdf",
+                    "class": "ExtractPdfTask",
+                    "params": {"api_key": "test-key"},
+                }
+            },
+        },
+    )
+    llama_manager = WorkflowManager(llama_config)
+    llama_preflight = Mock(return_value=None)
+    monkeypatch.setattr(
+        "modules.workflow_manager.preflight_extract_v2_access", llama_preflight
+    )
+
+    assert llama_manager._fail_children_when_extract_preflight_fails({}, [], 0) is False
+    llama_preflight.assert_called_once()
+    assert llama_manager._is_llamacloud_extract_task(
+        llama_config.get("tasks.extract")
+    ) is True
 
     # Clean up created directories/files for isolation
     try:

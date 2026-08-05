@@ -65,6 +65,52 @@ def review_definition(schema_version_id):
     return definition
 
 
+def glm_review_definition(schema_version_id):
+    fields = {
+        "supplier": {"alias": "Supplier", "type": "str"},
+    }
+    return {
+        "schema_version": 1,
+        "pipeline": ["glm_extract", "review", "store_csv"],
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": {
+                    "ollama_host": "http://127.0.0.1:11434",
+                    "model": "glm-ocr:latest",
+                    "document_instructions": "",
+                    "dpi": 216,
+                    "num_ctx": 8192,
+                    "num_predict": 2048,
+                    "timeout_seconds": 300,
+                    "fields": fields,
+                },
+                "on_error": "stop",
+            },
+            "review": {
+                "module": "standard_step.review.review_gate",
+                "class": "ReviewGateTask",
+                "params": {
+                    "confidence_threshold": 0.8,
+                    "schema_version_id": schema_version_id,
+                },
+                "on_error": "stop",
+            },
+            "store_csv": {
+                "module": "standard_step.storage.store_metadata_as_csv",
+                "class": "StoreMetadataAsCsv",
+                "params": {
+                    "data_dir": "data",
+                    "filename": "{supplier}.csv",
+                    "extraction": {"fields": fields},
+                },
+                "on_error": "stop",
+            },
+        },
+    }
+
+
 def create_active_schema(conn):
     service = ReviewSchemaVersionService(conn)
     created = service.create_template(
@@ -364,3 +410,28 @@ def test_pipeline_rejects_review_fields_not_produced_by_extraction(context):
         item["code"] == "pipeline-schema-extraction-mismatch"
         for item in error.value.result["findings"]
     )
+
+
+def test_glm_fields_satisfy_review_schema_and_publish_exact_csv_reuse(context):
+    conn, service = context
+    schema_version_id = create_active_schema(conn)
+    definition = glm_review_definition(schema_version_id)
+    created = service.create_template(
+        template_key="glm-invoice",
+        name="GLM invoice",
+        initial_definition=definition,
+        user="admin",
+    )
+
+    published = service.publish(
+        created["template"]["id"], expected_revision=1, user="admin"
+    )
+    loaded = service.load_version(published["version"]["id"])["definition"]
+
+    assert loaded["tasks"]["glm_extract"]["params"] == definition["tasks"][
+        "glm_extract"
+    ]["params"]
+    assert loaded["tasks"]["store_csv"]["params"]["extraction"]["fields"] == {
+        "supplier": {"alias": "Supplier", "type": "str"}
+    }
+    assert "api_key" not in loaded["tasks"]["glm_extract"]["params"]

@@ -8,7 +8,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from modules.db.connection import json_dumps, json_loads, transaction, utc_now
+from modules.db.connection import (
+    json_dumps,
+    json_loads,
+    json_value_dumps,
+    transaction,
+    utc_now,
+)
 
 
 TERMINAL_STATUSES = {"completed", "Pipeline Completed Successfully", "review_completed"}
@@ -569,9 +575,9 @@ class ExtractionRepository:
                         extraction_result_id,
                         field["field_key"],
                         field.get("field_alias"),
-                        json_dumps(value),
-                        json_dumps(field.get("corrected_value")) if "corrected_value" in field else None,
-                        json_dumps(final_value),
+                        json_value_dumps(value),
+                        json_value_dumps(field.get("corrected_value")) if "corrected_value" in field else None,
+                        json_value_dumps(final_value),
                         field.get("confidence"),
                         field.get("confidence_label"),
                         1 if field.get("requires_review") else 0,
@@ -613,7 +619,7 @@ class ExtractionRepository:
                         review_status = 'corrected', updated_at = ?
                     WHERE document_id = ? AND field_key = ?
                     """,
-                    (json_dumps(corrected_value), json_dumps(corrected_value), now, document_id, field_key),
+                    (json_value_dumps(corrected_value), json_value_dumps(corrected_value), now, document_id, field_key),
                 )
 
     def set_review_requirements(self, document_id: str, required_field_keys: list[str]) -> None:

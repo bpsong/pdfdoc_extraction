@@ -171,3 +171,59 @@ def test_resume_manager_finalizes_when_review_gate_is_last(tmp_path, monkeypatch
     assert document is not None and document["status"] == "completed"
     assert batch is not None and batch["status"] == "completed"
     assert [run["task_key"] for run in task_runs] == ["cleanup_task"]
+
+
+def test_resume_context_reconstructs_corrected_objects_arrays_and_missing_values(tmp_path):
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4")
+    config = TempConfig(tmp_path / "app.sqlite3", {})
+    initialize_database(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(pdf_path),
+            original_filename=pdf_path.name,
+        )
+        repository = ExtractionRepository(conn)
+        result = repository.save_result(
+            document_id=created["document"]["id"],
+            provider="glm_ocr_ollama",
+            data={"summary": None, "items": None, "optional_note": None},
+        )
+        repository.save_fields(
+            document_id=created["document"]["id"],
+            extraction_result_id=result["id"],
+            fields=[
+                {"field_key": "summary", "extracted_value": None},
+                {"field_key": "items", "extracted_value": None},
+                {"field_key": "optional_note", "extracted_value": None},
+            ],
+        )
+        repository.apply_corrections(
+            created["document"]["id"],
+            {
+                "summary": {"currency": "SGD", "tax": 9.0},
+                "items": [
+                    {"description": "Paper", "quantity": 2},
+                    {"description": "Pen", "quantity": 1},
+                ],
+                "optional_note": None,
+            },
+        )
+        document = DocumentRepository(conn).get(created["document"]["id"])
+        assert document is not None
+        context = ResumeManager(config)._build_resume_context(
+            document,
+            repository,
+            TaskRunRepository(conn),
+        )
+
+    assert context["data"] == {
+        "summary": {"currency": "SGD", "tax": 9.0},
+        "items": [
+            {"description": "Paper", "quantity": 2},
+            {"description": "Pen", "quantity": 1},
+        ],
+        "optional_note": None,
+    }
+    assert context["metadata"]["latest_extraction_result_id"] == result["id"]

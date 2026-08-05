@@ -41,6 +41,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "tools"))
 
 from tools.config_check.parameter_validator import validate_parameters  # noqa: E402
+from tools.config_check.pipeline_validator import validate_pipeline  # noqa: E402
 
 
 def _base_tasks():
@@ -795,3 +796,109 @@ def test_extraction_with_unknown_module_requires_credentials():
     result = validate_parameters({"tasks": tasks})
     error_codes = {issue.code for issue in result.errors}
     assert "param-extraction-missing-api-key" in error_codes
+
+
+def _glm_task_params(**overrides):
+    params = {
+        "ollama_host": "http://127.0.0.1:11434",
+        "model": "glm-ocr:latest",
+        "document_instructions": "",
+        "dpi": 216,
+        "num_ctx": 8192,
+        "num_predict": 2048,
+        "timeout_seconds": 300,
+        "fields": {
+            "invoice_number": {"alias": "Invoice number", "type": "str"},
+            "items": {
+                "alias": "Items",
+                "type": "List[Any]",
+                "is_table": True,
+                "item_fields": {
+                    "description": {"alias": "Description", "type": "str"}
+                },
+            },
+        },
+    }
+    params.update(overrides)
+    return params
+
+
+def test_glm_parameters_are_valid_without_llama_credentials_and_feed_csv_fields():
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": _glm_task_params(),
+            },
+            "store_csv": {
+                "module": "standard_step.storage.store_metadata_as_csv",
+                "class": "StoreMetadataAsCsv",
+                "params": {
+                    "data_dir": "data",
+                    "filename": "{invoice_number}.csv",
+                    "extraction": {"fields": _glm_task_params()["fields"]},
+                },
+            },
+        },
+        "pipeline": ["glm_extract", "store_csv"],
+    }
+
+    parameters = validate_parameters(config)
+    pipeline = validate_pipeline(config)
+
+    assert parameters.errors == []
+    assert not any(
+        issue.code in {"pipeline-missing-extraction", "pipeline-unknown-token"}
+        for issue in pipeline.errors
+    )
+
+
+def test_glm_runtime_numeric_options_may_use_task_defaults():
+    params = _glm_task_params()
+    for key in ("dpi", "num_ctx", "num_predict", "timeout_seconds"):
+        params.pop(key)
+    result = validate_parameters(
+        {
+            "tasks": {
+                "glm_extract": {
+                    "module": "standard_step.extraction.glm_ocr_extract",
+                    "class": "GlmOcrExtractTask",
+                    "params": params,
+                }
+            }
+        }
+    )
+
+    assert result.errors == []
+
+
+def test_glm_parameters_reject_credentials_bad_host_and_numeric_values():
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": _glm_task_params(
+                    ollama_host="http://user:password@localhost:11434",
+                    dpi=0,
+                    num_ctx=True,
+                    num_predict=-1,
+                    timeout_seconds=0,
+                    api_key="not-supported",
+                    configuration_id="not-supported",
+                ),
+            }
+        }
+    }
+
+    result = validate_parameters(config)
+    codes = {issue.code for issue in result.errors}
+
+    assert "param-extraction-missing-api-key" not in codes
+    assert "param-glm-host-credentials" in codes
+    assert "param-glm-invalid-dpi" in codes
+    assert "param-glm-invalid-num-ctx" in codes
+    assert "param-glm-invalid-num-predict" in codes
+    assert "param-glm-invalid-timeout-seconds" in codes
+    assert "param-glm-llamacloud-only" in codes
