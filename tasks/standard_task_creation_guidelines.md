@@ -168,6 +168,13 @@ durable `requires_review` state merely because they emitted a flag. When the
 gate runs, it owns highlighting fields, updating `extracted_fields`, creating
 the review item, and pausing the workflow.
 
+When an extraction provider supplies no numeric field confidence, persist
+confidence as null and use a structured flag when policy requires named fields
+to be reviewed. Never invent a numeric score to activate threshold logic. A
+consumer review gate must combine structured field keys with its other review
+conditions and preserve document-wide editing when `review_scope` is
+`document`. Downstream execution without a review gate must remain valid.
+
 ---
 
 ## 5. Workflow State, Audit, and Artifact Convention

@@ -811,6 +811,7 @@
     display: grid;
     grid-template-columns: minmax(13rem, 0.65fr) minmax(20rem, 1fr) minmax(22rem, 1fr);
     grid-template-areas:
+        "template template template"
         "guide guide guide"
         "active draft editor"
         "yaml yaml validation"
@@ -822,6 +823,10 @@
 
 .pipeline-config-workspace > * {
     min-width: 0;
+}
+
+.pipeline-template-panel {
+    grid-area: template;
 }
 
 .pipeline-guide-panel {
@@ -1019,6 +1024,50 @@
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(8rem, 0.8fr) max-content;
     gap: 0.75rem;
     align-items: end;
+}
+
+.property-field-grid-polished {
+    align-items: start;
+}
+
+.extraction-field-editor-polished {
+    container-type: inline-size;
+}
+
+.property-field-grid-polished > .form-control {
+    min-width: 0;
+}
+
+.extraction-field-remove {
+    align-self: start;
+    margin-top: 1.25rem;
+    min-width: 4.75rem;
+    border-color: oklch(var(--er) / 0.45);
+}
+
+.extraction-field-remove:hover,
+.extraction-field-remove:focus-visible {
+    border-color: oklch(var(--er));
+    background: oklch(var(--er) / 0.1);
+}
+
+.extraction-field-details-polished {
+    grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.3fr);
+    align-items: start;
+}
+
+.extraction-field-details-polished > .label {
+    min-height: 4.5rem;
+}
+
+@container (max-width: 32rem) {
+    .property-field-grid-polished {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .extraction-field-details-polished {
+        grid-template-columns: 1fr;
+    }
 }
 
 .threshold-row {
@@ -2070,6 +2119,7 @@
     .pipeline-config-workspace {
         grid-template-columns: minmax(13rem, 0.7fr) minmax(20rem, 1.3fr);
         grid-template-areas:
+            "template template"
             "guide guide"
             "active draft"
             "editor editor"
@@ -2198,6 +2248,7 @@
     .pipeline-config-workspace {
         grid-template-columns: 1fr;
         grid-template-areas:
+            "template"
             "guide"
             "active"
             "draft"
@@ -2245,6 +2296,29 @@
     .row-schema-columns,
     .row-schema-field {
         grid-template-columns: 1fr;
+    }
+
+    .extraction-field-remove {
+        justify-self: start;
+        margin-top: 0;
+    }
+
+    .extraction-field-details-polished {
+        grid-template-columns: 1fr;
+    }
+
+    .extraction-required-control {
+        min-height: 0;
+        gap: 0.5rem;
+        padding: 0.5rem;
+    }
+
+    .extraction-required-control > span {
+        min-width: 0;
+    }
+
+    .extraction-required-control .label-text {
+        white-space: nowrap;
     }
 
     .row-schema-drawer {

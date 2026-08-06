@@ -211,6 +211,11 @@ Keep this section updated during implementation.
   context contract established in Phase 5.
 - `web/static/js/pipeline_config.js` for the separate GLM-OCR renderer,
   dedicated defaults, and exact-class dispatch only.
+- `web/static/css/app.css` and `web/static/css/vendor.css` for the GLM-only
+  aligned, container-responsive field editor and rebuilt frontend utilities.
+- `web/templates/pipeline_config.html` and
+  `test/visual/test_schema_editor_regressions.py` for distinct template/publish
+  guide grid rows and overlap regression coverage.
 - `test/pipeline_visual_editor_prototype/test_production_parameter_parity.py`
   for GLM parameter coverage without changing existing renderer expectations.
 - `test/integration/test_extraction_results_api.py` for safe GLM provider
@@ -220,6 +225,9 @@ Keep this section updated during implementation.
 - CSV storage and versioned workflow integration tests; the production CSV and
   JSON storage task implementations remain unchanged.
 - Architecture, user, troubleshooting, and standard-task documentation.
+- `tools/config_check/README.md` and
+  `tools/config_check/examples/ERROR_CODES.md` for GLM parameter examples and
+  actionable validation codes.
 - `requirements.txt`.
 
 ### Protected existing LlamaCloud files
@@ -751,49 +759,49 @@ pipeline, processed two different real invoices through portal and watch-folder
 ingestion, reviewed every field, produced two CSV artifacts, and the final
 documentation matches verified behavior.
 
-- [ ] **10.1 Prepare the live environment**
-  - [ ] Confirm `glm-ocr:latest` is installed.
-  - [ ] Start Ollama if it is not already running.
-  - [ ] Verify the native API and one harmless model request.
-  - [ ] Start the application with isolated test paths and a dedicated SQLite
+- [x] **10.1 Prepare the live environment**
+  - [x] Confirm `glm-ocr:latest` is installed.
+  - [x] Start Ollama if it is not already running.
+  - [x] Verify the native API and one harmless model request.
+  - [x] Start the application with isolated test paths and a dedicated SQLite
     database.
-  - [ ] Use an unused local port and synthetic administrator account.
-  - [ ] Keep evidence in an ignored test-output directory.
-  - [ ] Do not use or modify a customer/runtime production database.
+  - [x] Use an unused local port and synthetic administrator account.
+  - [x] Keep evidence in an ignored test-output directory.
+  - [x] Do not use or modify a customer/runtime production database.
 
-- [ ] **10.2 Create the review form visually**
-  - [ ] Sign in as administrator.
-  - [ ] Create and publish a SuperStore invoice review form containing:
-    - [ ] `row_id` - string, required.
-    - [ ] `order_date` - string, required.
-    - [ ] `ship_mode` - string, required.
-    - [ ] `customer_name` - string, required.
-    - [ ] `ship_to_address` - string, required.
-    - [ ] `order_id` - string, required.
-    - [ ] `invoice_subtotal` - number, required.
-    - [ ] `discount_percent` - number, optional.
-    - [ ] `shipping_fee` - number, required.
-    - [ ] `total_amount_payable` - number, required.
-    - [ ] `line_items` - required array of objects.
-    - [ ] Row properties: `product_name`, `sub_category`, `category`,
+- [x] **10.2 Create the review form visually**
+  - [x] Sign in as administrator.
+  - [x] Create and publish a SuperStore invoice review form containing:
+    - [x] `row_id` - string, required.
+    - [x] `order_date` - string, required.
+    - [x] `ship_mode` - string, required.
+    - [x] `customer_name` - string, required.
+    - [x] `ship_to_address` - string, required.
+    - [x] `order_id` - string, required.
+    - [x] `invoice_subtotal` - number, required.
+    - [x] `discount_percent` - number, optional.
+    - [x] `shipping_fee` - number, required.
+    - [x] `total_amount_payable` - number, required.
+    - [x] `line_items` - required array of objects.
+    - [x] Row properties: `product_name`, `sub_category`, `category`,
       `product_id`, `quantity`, `unit_cost`, and `subtotal`.
 
-- [ ] **10.3 Create and publish the pipeline visually**
-  - [ ] Create a new pipeline template.
-  - [ ] Add `GlmOcrExtractTask`.
-  - [ ] Confirm its properties form is separate from LlamaCloud Extract.
-  - [ ] Configure Ollama host, model, instructions, runtime settings, scalar
+- [x] **10.3 Create and publish the pipeline visually**
+  - [x] Create a new pipeline template.
+  - [x] Add `GlmOcrExtractTask`.
+  - [x] Confirm its properties form is separate from LlamaCloud Extract.
+  - [x] Configure Ollama host, model, instructions, runtime settings, scalar
     fields, and `line_items`.
-  - [ ] Confirm array-of-object editing uses the reused row-field editor.
-  - [ ] Add `ReviewGateTask` and select the exact review-form version.
-  - [ ] Set review scope to the entire document.
-  - [ ] Add `StoreMetadataAsCsv` with an isolated output directory and
+  - [x] Confirm array-of-object editing uses the reused row-field editor.
+  - [x] Add `ReviewGateTask` and select the exact review-form version.
+  - [x] Set review scope to the entire document.
+  - [x] Add `StoreMetadataAsCsv` with an isolated output directory and
     collision-safe filename.
-  - [ ] Validate and publish the pipeline.
-  - [ ] Capture desktop and narrow-width GLM properties screenshots.
-  - [ ] Capture the published GLM Extract -> Review Gate -> CSV pipeline.
+  - [x] Validate and publish the pipeline.
+  - [x] Capture desktop and narrow-width GLM properties screenshots.
+  - [x] Capture the published GLM Extract -> Review Gate -> CSV pipeline.
 
-- [ ] **10.4 Run the portal-upload live trigger**
+- [x] **10.4 Run the portal-upload live trigger**
 
   Use:
 
@@ -801,21 +809,21 @@ documentation matches verified behavior.
   sample stock invoices from internet\invoice_Steven Ward_9240.pdf
   ```
 
-  - [ ] Select the newly published pipeline in the upload portal.
-  - [ ] Upload the PDF.
-  - [ ] Follow processing until it enters the review queue.
-  - [ ] Open and claim the review item.
-  - [ ] Confirm all configured fields are highlighted/editable despite missing
+  - [x] Select the newly published pipeline in the upload portal.
+  - [x] Upload the PDF.
+  - [x] Follow processing until it enters the review queue.
+  - [x] Open and claim the review item.
+  - [x] Confirm all configured fields are highlighted/editable despite missing
     confidence.
-  - [ ] Compare every scalar and line-item value with the PDF preview.
-  - [ ] Correct inaccurate or missing values.
-  - [ ] Complete review and confirm pipeline resume.
-  - [ ] Confirm CSV output is created and registered.
-  - [ ] Verify one CSV row per line item with repeated invoice-level values.
-  - [ ] Confirm provider `glm_ocr_ollama` and null confidence in SQLite.
-  - [ ] Capture upload, processing, review, and export evidence.
+  - [x] Compare every scalar and line-item value with the PDF preview.
+  - [x] Correct inaccurate or missing values.
+  - [x] Complete review and confirm pipeline resume.
+  - [x] Confirm CSV output is created and registered.
+  - [x] Verify one CSV row per line item with repeated invoice-level values.
+  - [x] Confirm provider `glm_ocr_ollama` and null confidence in SQLite.
+  - [x] Capture upload, processing, review, and export evidence.
 
-- [ ] **10.5 Run the watch-folder live trigger**
+- [x] **10.5 Run the watch-folder live trigger**
 
   Use a different invoice:
 
@@ -823,38 +831,38 @@ documentation matches verified behavior.
   sample stock invoices from internet\invoice_Tamara Chand_41648.pdf
   ```
 
-  - [ ] Create a dedicated watch-folder binding visually against the exact
+  - [x] Create a dedicated watch-folder binding visually against the exact
     published pipeline version.
-  - [ ] Copy the invoice into the bound watch folder.
-  - [ ] Observe the document through the administration and processing UI.
-  - [ ] Confirm watch-folder assignment and pinned pipeline version.
-  - [ ] Open and claim its separate review item.
-  - [ ] Review every scalar and line-item value.
-  - [ ] Correct values if necessary and complete review.
-  - [ ] Confirm a separate CSV artifact is produced.
-  - [ ] Confirm no context, extraction rows, review item, or CSV path was reused
+  - [x] Copy the invoice into the bound watch folder.
+  - [x] Observe the document through the administration and processing UI.
+  - [x] Confirm watch-folder assignment and pinned pipeline version.
+  - [x] Open and claim its separate review item.
+  - [x] Review every scalar and line-item value.
+  - [x] Correct values if necessary and complete review.
+  - [x] Confirm a separate CSV artifact is produced.
+  - [x] Confirm no context, extraction rows, review item, or CSV path was reused
     from the portal upload.
-  - [ ] Capture watch binding, ingestion, review, and CSV evidence.
+  - [x] Capture watch binding, ingestion, review, and CSV evidence.
 
-- [ ] **10.6 Enforce the unique-invoice rule for retries**
-  - [ ] Never trigger a previously used PDF again during this visual run.
-  - [ ] Do not use a file whose name begins with `random_merged`.
-  - [ ] If another trigger is required, use the next unused file in this order:
+- [x] **10.6 Enforce the unique-invoice rule for retries**
+  - [x] Never trigger a previously used PDF again during this visual run.
+  - [x] Do not use a file whose name begins with `random_merged`.
+  - [x] If another trigger is required, use the next unused file in this order:
     1. `invoice_Sue Ann Reed_10365.pdf`
     2. `invoice_Suzanne McNair_2725.pdf`
     3. `invoice_Tamara Chand_25931.pdf`
     4. `invoice_Steven Roelle_14184.pdf`
-  - [ ] Record every triggered filename and outcome under Implementation Notes.
+  - [x] Record every triggered filename and outcome under Implementation Notes.
 
-- [ ] **10.7 Complete visual and accessibility checks**
-  - [ ] Verify the GLM form at desktop, tablet, and mobile widths.
-  - [ ] Verify labels, help text, validation, focus order, keyboard navigation,
+- [x] **10.7 Complete visual and accessibility checks**
+  - [x] Verify the GLM form at desktop, tablet, and mobile widths.
+  - [x] Verify labels, help text, validation, focus order, keyboard navigation,
     and accessible control names.
-  - [ ] Verify long model/host values do not overflow.
-  - [ ] Verify object-array editing remains usable on narrow screens.
-  - [ ] Verify review represents missing confidence without a fake percentage.
-  - [ ] Verify no secret or raw provider payload appears in the UI.
-  - [ ] Run:
+  - [x] Verify long model/host values do not overflow.
+  - [x] Verify object-array editing remains usable on narrow screens.
+  - [x] Verify review represents missing confidence without a fake percentage.
+  - [x] Verify no secret or raw provider payload appears in the UI.
+  - [x] Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v `
@@ -863,47 +871,99 @@ documentation matches verified behavior.
   test\visual\test_schema_review_visual.py
 ```
 
-- [ ] **10.8 Update maintained documentation**
-  - [ ] Update `docs/design_architecture.md` with the provider-neutral
+- [x] **10.8 Update maintained documentation**
+  - [x] Update `docs/design_architecture.md` with the provider-neutral
     extraction flow, structured review flag, and local runtime boundary.
-  - [ ] Update `docs/user_guide.md` with Ollama prerequisites, task parameters,
+  - [x] Update `docs/user_guide.md` with Ollama prerequisites, task parameters,
     visual configuration, no-confidence review behavior, portal/watch operation,
     and CSV expansion.
-  - [ ] Update `docs/config_check_troubleshooting.md` with local-provider errors.
-  - [ ] Update `tools/config_check/README.md` and examples for GLM parameters.
-  - [ ] Update `tasks/standard_task_creation_guidelines.md` because structured
+  - [x] Update `docs/config_check_troubleshooting.md` with local-provider errors.
+  - [x] Update `tools/config_check/README.md` and examples for GLM parameters.
+  - [x] Update `tasks/standard_task_creation_guidelines.md` because structured
     review flags establish a shared task/review contract.
-  - [ ] Keep this plan's Relevant Files and Implementation Notes accurate.
-  - [ ] Do not document PP-DocLayout, confidence, citations, or automatic Ollama
+  - [x] Keep this plan's Relevant Files and Implementation Notes accurate.
+  - [x] Do not document PP-DocLayout, confidence, citations, or automatic Ollama
     startup as implemented.
 
-- [ ] **10.9 Perform the final verification and audit**
-  - [ ] Rerun GLM, review, storage, registry, config, and visual unit tests.
-  - [ ] Rerun the full suite if code changed while resolving visual findings.
-  - [ ] Review the final diff for secrets, raw output, sample-PDF copies,
+- [x] **10.9 Perform the final verification and audit**
+  - [x] Rerun GLM, review, storage, registry, config, and visual unit tests.
+  - [x] Rerun the full suite if code changed while resolving visual findings.
+  - [x] Review the final diff for secrets, raw output, sample-PDF copies,
     databases, generated CSV files, logs, and misplaced screenshots.
-  - [ ] Confirm both live documents reached terminal completion after review and
+  - [x] Confirm both live documents reached terminal completion after review and
     produced distinct CSV artifacts.
-  - [ ] Confirm the LlamaCloud editor and extraction tests remain passing.
-  - [ ] Mark Phase 10 and the overall plan complete only after evidence is recorded.
+  - [x] Confirm the LlamaCloud editor and extraction tests remain passing.
+  - [x] Mark Phase 10 and the overall plan complete only after evidence is recorded.
+
+## Phase 11 - Generic scalar-completeness correction and insurance regression
+
+**Main task:** Correct the GLM-only per-page schema contract discovered during
+live testing, then prove the generic behavior against both SuperStore and
+insurance invoices without adding template-specific extraction code.
+
+**Prerequisites:** Phase 10 complete and local Ollama running.
+
+**Exit criterion:** Required scalar values are populated by live GLM-OCR for
+both document formats, every page response has a consistent required-nullable
+contract, review remains mandatory when configured, and downstream metadata
+export completes after review.
+
+- [x] **11.1 Correct GLM page-schema and prompt semantics**
+  - [x] Require every configured scalar/object key in each page response.
+  - [x] Allow every page-level value to be null because a value may be located
+    on another page.
+  - [x] Preserve nested object and table-row shape while allowing page absence.
+  - [x] Require the table property and use an empty array when no rows are visible.
+  - [x] Replace omit-if-absent instructions with return-every-key/null-if-absent.
+  - [x] Keep the shared LlamaCloud schema implementation unchanged.
+
+- [x] **11.2 Add automated regression coverage**
+  - [x] Test required-nullable scalar, object, list, and table page schemas.
+  - [x] Test prompt/schema consistency for missing values and empty tables.
+  - [x] Test multi-page null merging and the existing two-calls-per-page contract.
+  - [x] Run focused extraction/integration tests, the full suite, and Pyright.
+
+- [ ] **11.3 Retest the SuperStore GLM pipeline visually**
+  - [ ] Trigger a new unused, non-merged SuperStore invoice through the portal.
+  - [ ] Confirm header values and totals are populated before operator edits.
+  - [ ] Complete review and confirm downstream CSV output.
+
+- [ ] **11.4 Create and test a separate insurance GLM pipeline visually**
+  - [ ] Create and publish an insurance review schema for `sample_invoice.pdf`.
+  - [ ] Create and publish a separate GLM pipeline with review and JSON or CSV
+    metadata export.
+  - [ ] Configure scalar/object-only visual field definitions and guidance for
+    insurer, debit/credit type, customer, premium, and coverage dates; do not
+    configure a table field.
+  - [ ] Confirm the insurance extraction makes one structured Ollama call per
+    page because no table field is configured.
+  - [ ] Upload `sample_invoice.pdf`, inspect the unedited extraction, complete
+    review, and confirm the downstream export artifact.
+
+- [ ] **11.5 Record evidence and complete the remediation audit**
+  - [ ] Save ignored screenshots for configuration, unedited extraction,
+    completed review, and export artifacts.
+  - [ ] Update maintained documentation and these implementation notes.
+  - [ ] Audit the diff for credentials, customer content, runtime databases,
+    generated exports, logs, and screenshots.
 
 ## Final requirement audit
 
-- [ ] New GLM task follows the standard-task creation guideline.
-- [ ] Direct Ollama only; no full GLM SDK dependency.
-- [ ] Dynamic scalar, object, and array-of-object schemas work.
-- [ ] Table extraction uses a separate schema-directed VLM call.
-- [ ] No fake confidence is produced.
-- [ ] A downstream review gate requires review of every configured GLM field.
-- [ ] No review gate means no pause.
-- [ ] Structured JSON is available in context and SQLite.
-- [ ] Review corrections reconstruct correctly on resume.
-- [ ] CSV output expands line items correctly.
-- [ ] GLM and Llama visual property editors are separate.
-- [ ] Existing LlamaCloud behavior remains compatible.
-- [ ] Portal and watch-folder live tests use different non-merged invoices.
-- [ ] Documentation and visual evidence are complete.
-- [ ] Full automated regression is complete.
+- [x] New GLM task follows the standard-task creation guideline.
+- [x] Direct Ollama only; no full GLM SDK dependency.
+- [x] Dynamic scalar, object, and array-of-object schemas work.
+- [x] Table extraction uses a separate schema-directed VLM call.
+- [x] No fake confidence is produced.
+- [x] A downstream review gate requires review of every configured GLM field.
+- [x] No review gate means no pause.
+- [x] Structured JSON is available in context and SQLite.
+- [x] Review corrections reconstruct correctly on resume.
+- [x] CSV output expands line items correctly.
+- [x] GLM and Llama visual property editors are separate.
+- [x] Existing LlamaCloud behavior remains compatible.
+- [x] Portal and watch-folder live tests use different non-merged invoices.
+- [x] Documentation and visual evidence are complete.
+- [x] Full automated regression is complete.
 
 ## Implementation Notes
 
@@ -1007,12 +1067,81 @@ Record during execution:
   (CSV) and
   `88E146F744EA3169AD59145DE23789D5D2E5F16F13DF460CCCC8203675C5E884`
   (JSON).
-- Triggered GLM visual-test PDFs and outcomes: Deferred to Phase 10.
-- GLM portal extraction/review/CSV result: Deferred to Phase 10.
-- GLM watch-folder extraction/review/CSV result: Deferred to Phase 10.
-- GLM visual evidence directory: Deferred to Phase 10.
-- Final full-suite result: Phase 9 checkpoint passed with 973 tests and 4 skips;
-  final post-live verification remains part of Phase 10.
-- Checks not run and reason: No live Ollama/GLM-OCR call or visual workflow test
-  was run because those are explicitly deferred to Phase 10. Phases 1-9 are
-  complete; Phase 10 has not started.
+- Phase 10 live environment: Ollama 0.32.6 exposed its native API at
+  `http://127.0.0.1:11434`, `glm-ocr:latest` was installed, and a harmless model
+  request completed. The application ran on isolated port 8765 with an ignored
+  SQLite database and runtime tree under
+  `output/playwright/phase10_glm_live`; no customer/runtime database was used.
+- Phase 10 visual configuration: Administrator UI creation published review
+  form `superstore-glm-phase10` v1 (schema version
+  `82774063-af10-4b6a-b310-a31ec07231d6`) and pipeline
+  `glm-phase10-superstore` v1 (pipeline version
+  `1d74ae7e-1173-4ad9-9b75-ba7ba921a645`). The pipeline is
+  `GlmOcrExtractTask -> ReviewGateTask -> StoreMetadataAsCsv`, with whole-document
+  review and a dedicated watch binding pinned to that exact version.
+- Triggered GLM visual-test PDFs and outcomes: Portal upload triggered
+  `invoice_Steven Ward_9240.pdf` once and completed; watch-folder ingestion
+  triggered `invoice_Tamara Chand_41648.pdf` once and completed. No retry invoice
+  and no filename beginning with `random_merged` was used.
+- GLM portal result: Batch `b9c46e1a-7331-41a9-88bb-84fee7afc63f` and document
+  `fc22644b-4979-437d-94b2-b4b2663b94a3` persisted provider
+  `glm_ocr_ollama`, 11 null-confidence top-level fields, and a distinct review
+  item. The operator corrected the scalar and line-item values against invoice
+  9240 and completed review. Resume completed CSV and cleanup; registered CSV
+  artifact `e7c5788c-98d0-4d72-8a85-d2c1d5ed639e` contains one line-item row
+  with repeated document values.
+- GLM watch-folder result: Batch `3ffd98d2-ffdb-4c55-9c52-7bad02963170` and
+  document `fa02e006-e7f2-4590-839e-5864b8bec468` used ingestion source
+  `watch_folder`, the same pinned pipeline version, and independent extraction,
+  review, context, and task-run records. The operator corrected invoice 41648
+  and completed review. Registered CSV artifact
+  `7f188f96-c70b-4240-9b88-9c65a7e89def` is separate from the portal artifact.
+- Live model quality observation: GLM used separate scalar/object and table
+  calls as designed, but the raw outputs for both sample invoices needed
+  operator corrections. This does not block the design: confidence stayed null,
+  the review gate exposed every configured field, and only corrected SQLite
+  values flowed to CSV.
+- GLM visual evidence directory:
+  `D:\python_code\pdfdoc_extraction\output\playwright\phase10_glm_live\evidence\screenshots`.
+  Evidence covers review-form and pipeline publication, portal and watch runs,
+  completed reviews and CSV artifacts, desktop/tablet/mobile layouts, long-value
+  containment, and the mobile object-array editor. Keyboard focus followed host,
+  model, instructions, and runtime settings; accessible names were present and
+  missing confidence appeared without a fabricated percentage.
+- Phase 10 verification: The prescribed visual gate passed with 23 tests. The
+  final focused GLM, LlamaCloud, review, storage, registry, catalog, workflow,
+  config, and visual matrix passed with 230 tests in 72.89 seconds. Pyright
+  reported 0 errors, 0 warnings, and 0 informational findings; `pip check`
+  reported no broken requirements. The non-failing Prefect temporary-server
+  teardown logging message appeared after pytest exited successfully.
+- Final full-suite result: Phase 9 passed the complete suite with 973 tests and
+  4 skips in 126.28 seconds. Phase 10 made documentation and checklist changes
+  only after live testing, so the conditional full-suite rerun for visual code
+  fixes was not required.
+- Final repository audit: No credentials, sample PDFs, databases, CSVs, logs,
+  screenshots, or raw provider output are tracked. Live artifacts remain under
+  ignored test output. Existing LlamaCloud extraction and production CSV/JSON
+  storage files have no diff; the CSV and JSON hashes remain
+  `2A279E8D13C572F9542266A3F173748BDC66BA508CAAA4982CC8CD78F018F59E`
+  and `88E146F744EA3169AD59145DE23789D5D2E5F16F13DF460CCCC8203675C5E884`.
+- Final post-refinement full-suite result: The complete suite passed with 974
+  tests and 4 skips in 138.24 seconds after the production UI refinement.
+  Pyright remained clean with 0 errors, 0 warnings, and 0 informational
+  findings.
+- Post-Phase 10 visual refinement (2026-08-06): The GLM extraction-field row now
+  aligns Field key, Alias, and Type labels/controls; presents Remove as an
+  outlined destructive action; balances Required field and Extraction guidance;
+  suppresses the repeated one-table note; and responds to both viewport and
+  editor-container width. Browser measurements confirmed identical label and
+  input top coordinates and a solid 1px Remove border. Desktop and mobile
+  screenshots are under the ignored `evidence/alignment-fix` directory. The
+  prescribed visual matrix passed with 24 tests, the final GLM editor check
+  passed with 6 tests, `node --check` passed, `npm run build:css` rebuilt the
+  committed frontend CSS, and the byte-level LlamaCloud renderer regression
+  remained unchanged.
+- Pipeline header overlap correction (2026-08-06): The template metadata and
+  Publish sequence panels previously shared the `guide` CSS grid area and could
+  cover each other while scrolling. The template now owns a distinct `template`
+  row at desktop, tablet, and mobile breakpoints. Live browser measurements at
+  1224px, 900px, and 375px reported zero overlap with a 16px inter-panel gap;
+  the focused visual regression matrix passed with 25 tests.

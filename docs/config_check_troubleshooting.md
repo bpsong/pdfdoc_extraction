@@ -210,6 +210,37 @@ custom_steps:
   validation. A rejected publish creates no immutable SQLite version and
   leaves the editable draft unchanged.
 
+## GLM-OCR Local Provider Configuration Errors
+
+**Common findings**
+
+```text
+[ERROR] tasks.glm_extract.params.ollama_host: GLM-OCR ollama_host must not contain credentials.
+[ERROR] tasks.glm_extract.params.ollama_host: GLM-OCR ollama_host must be an HTTP(S) base URL without a path, query, fragment, or invalid port.
+[ERROR] tasks.glm_extract.params.model: Required parameter 'model' must be a non-empty string.
+[ERROR] tasks.glm_extract.params.dpi: GLM-OCR dpi must be a positive integer.
+```
+
+**Fixes**
+
+- Use a base URL such as `http://127.0.0.1:11434`; never embed a username,
+  password, API key, query string, or fragment.
+- Set `model` to a model already installed in Ollama, normally
+  `glm-ocr:latest`.
+- Keep `dpi`, `num_ctx`, and `num_predict` as positive integers and
+  `timeout_seconds` as a positive number, or omit them to use task defaults.
+- Remove LlamaCloud-only parameters such as `api_key`, `configuration_id`,
+  `tier`, `cite_sources`, and `confidence_scores` from the GLM task.
+- Keep at most one table field and give it non-empty `item_fields`.
+
+If validation passes but execution reports that Ollama is unavailable, start
+Ollama outside the application and verify `GET /api/version` on the configured
+host. If the model is missing, run `ollama pull glm-ocr:latest`. A timeout can
+mean that the local model is still loading or the document is too demanding;
+check Ollama and application logs, available memory, and the configured timeout.
+The application does not start Ollama automatically and does not fabricate
+confidence when GLM returns none.
+
 ## Structured Object Extraction Fields
 
 **Symptoms**

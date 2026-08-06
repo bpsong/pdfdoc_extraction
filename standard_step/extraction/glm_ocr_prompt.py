@@ -44,26 +44,29 @@ def build_glm_ocr_schemas(fields: dict[str, Any]) -> GlmOcrSchemaBundle:
     ]
     table_key, table_field = table_entries[0] if table_entries else (None, None)
 
-    scalar_schema = (
-        build_data_schema(
+    canonical_schema = build_data_schema(fields, strict_objects=True)
+    _allow_configured_optional_values(canonical_schema, fields)
+
+    scalar_schema = None
+    if scalar_fields:
+        scalar_schema = build_data_schema(
             scalar_fields,
             strict_objects=True,
             include_required=False,
         )
-        if scalar_fields
-        else None
-    )
-    table_schema = (
-        build_data_schema(
+        _require_nullable_page_values(scalar_schema, scalar_fields)
+
+    table_schema = None
+    if table_key is not None and table_field is not None:
+        table_schema = build_data_schema(
             {table_key: table_field},
             strict_objects=True,
             include_required=False,
         )
-        if table_key is not None and table_field is not None
-        else None
-    )
+        _require_page_table(table_schema, table_key, table_field)
+
     return GlmOcrSchemaBundle(
-        canonical_schema=build_data_schema(fields, strict_objects=True),
+        canonical_schema=canonical_schema,
         scalar_page_schema=scalar_schema,
         table_page_schema=table_schema,
         scalar_fields=scalar_fields,
@@ -125,21 +128,38 @@ def build_scalar_object_prompt(
     schema: dict[str, Any],
     *,
     document_instructions: str = "",
+    recovery_pass: bool = False,
 ) -> str:
     """Build a stable prompt for one page's scalar and object fields."""
     if not fields:
         raise ValueError("Scalar/object prompt requires at least one field")
     field_lines = [_describe_field(key, config) for key, config in fields.items()]
     instructions = document_instructions.strip() or "None."
+    recovery_lines = (
+        [
+            "This is a focused recovery pass for configured required values "
+            "that were not populated in the initial pass.",
+            "Search the complete page carefully before returning JSON null. "
+            "Return null only after confirming that no visibly supported "
+            "value exists for that field.",
+        ]
+        if recovery_pass
+        else []
+    )
     return "\n".join(
         [
             "Extract configured scalar and object values from this single PDF page.",
+            *recovery_lines,
             "Return exactly one JSON object matching the supplied JSON Schema.",
             "Use the configured field keys as JSON keys; aliases only identify "
             "labels in the document.",
+            "Return every configured top-level field exactly once.",
+            "Use JSON null when a configured value is not visibly supported "
+            "on this page; do not omit its key.",
+            "For a configured object, return every configured child key and "
+            "use JSON null for a child not visible on this page.",
             "Do not invent, infer, or copy a value when it is not visibly "
             "supported on this page.",
-            "Omit a top-level field that is absent on this page.",
             "Preserve leading zeros for fields whose configured type is string.",
             "For numeric fields, return JSON numbers without currency symbols "
             "or thousands separators.",
@@ -185,7 +205,10 @@ def build_table_prompt(
             "Preserve leading zeros for row fields whose configured type is string.",
             "For numeric row fields, return JSON numbers without currency "
             "symbols or thousands separators.",
-            "When no logical rows are visible, omit the top-level table property.",
+            "Return every configured row key in every row object and use JSON "
+            "null when that row does not visibly support a configured value.",
+            "Always return the top-level table property. When no logical rows "
+            "are visible, return an empty array for it.",
             "Do not include commentary, Markdown, code fences, or properties outside the schema.",
             f"Document instructions: {instructions}",
             f"Table: {_stable_json(table_descriptor)}",
@@ -223,6 +246,85 @@ def _validate_children(parent_key: str, children: Any, kind: str) -> None:
                 f"Nested structured child '{parent_key}.{child_key}' is not supported"
             )
         _validate_supported_type(child_type, f"Child '{parent_key}.{child_key}'")
+
+
+def _allow_configured_optional_values(
+    schema: dict[str, Any],
+    fields: dict[str, Any],
+) -> None:
+    """Allow explicit null only where the final configured type is optional."""
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        return
+    for field_key, field_config in fields.items():
+        property_schema = properties.get(field_key)
+        if not isinstance(property_schema, dict) or not isinstance(field_config, dict):
+            continue
+        if is_optional_type(str(field_config.get("type", "str"))):
+            _allow_null(property_schema)
+        if field_config.get("is_table", False):
+            item_schema = property_schema.get("items")
+            if isinstance(item_schema, dict):
+                _allow_configured_optional_values(
+                    item_schema,
+                    field_config.get("item_fields", {}),
+                )
+        elif has_object_fields(field_config):
+            _allow_configured_optional_values(
+                property_schema,
+                field_config.get("object_fields", {}),
+            )
+
+
+def _require_nullable_page_values(
+    schema: dict[str, Any],
+    fields: dict[str, Any],
+) -> None:
+    """Require every page key while representing page absence as JSON null."""
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        return
+    schema["required"] = [key for key in fields if key in properties]
+    for field_key, field_config in fields.items():
+        property_schema = properties.get(field_key)
+        if not isinstance(property_schema, dict) or not isinstance(field_config, dict):
+            continue
+        _allow_null(property_schema)
+        if has_object_fields(field_config):
+            _require_nullable_page_values(
+                property_schema,
+                field_config.get("object_fields", {}),
+            )
+
+
+def _require_page_table(
+    schema: dict[str, Any],
+    table_key: str,
+    table_field: dict[str, Any],
+) -> None:
+    """Require one table array and nullable values for every emitted row key."""
+    properties = schema.get("properties", {})
+    if not isinstance(properties, dict):
+        return
+    table_schema = properties.get(table_key)
+    if not isinstance(table_schema, dict):
+        return
+    schema["required"] = [table_key]
+    item_schema = table_schema.get("items")
+    if isinstance(item_schema, dict):
+        _require_nullable_page_values(
+            item_schema,
+            table_field.get("item_fields", {}),
+        )
+
+
+def _allow_null(schema: dict[str, Any]) -> None:
+    """Add JSON null to one schema type without weakening its other constraints."""
+    type_value = schema.get("type")
+    if isinstance(type_value, str):
+        schema["type"] = [type_value, "null"]
+    elif isinstance(type_value, list) and "null" not in type_value:
+        schema["type"] = [*type_value, "null"]
 
 
 def _validate_field_key(field_key: Any, location: str) -> None:

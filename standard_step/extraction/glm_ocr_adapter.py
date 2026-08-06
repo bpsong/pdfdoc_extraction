@@ -24,6 +24,7 @@ from standard_step.extraction.glm_ocr_prompt import (
 from standard_step.extraction.structured_fields import (
     FieldNormalizationFinding,
     get_extracted_value,
+    is_optional_type,
     normalize_configured_fields,
     normalize_scalar_field,
     normalize_table_field,
@@ -149,6 +150,8 @@ class GlmOcrAdapter:
         conflicts: list[GlmOcrConflict] = []
         field_pages: dict[str, list[int]] = {key: [] for key in fields}
         merged: dict[str, Any] = {}
+        if schemas.table_field_key is not None:
+            merged[schemas.table_field_key] = []
         scalar_pages: dict[str, int] = {}
         object_child_pages: dict[str, int] = {}
         seen_table_rows: set[str] = set()
@@ -205,6 +208,51 @@ class GlmOcrAdapter:
                     normalization_findings,
                     conflicts,
                 )
+                recovery_fields = _missing_required_scalar_fields(
+                    page_data,
+                    schemas.scalar_fields,
+                )
+                if recovery_fields:
+                    recovery_schemas = build_glm_ocr_schemas(recovery_fields)
+                    if recovery_schemas.scalar_page_schema is None:
+                        raise GlmOcrResponseError(
+                            "GLM-OCR could not build a scalar recovery schema"
+                        )
+                    recovery_prompt = build_scalar_object_prompt(
+                        recovery_fields,
+                        recovery_schemas.scalar_page_schema,
+                        document_instructions=document_instructions,
+                        recovery_pass=True,
+                    )
+                    recovery_data, recovery_record = self._call_model(
+                        client,
+                        page_number=page_number,
+                        call_type="scalar_recovery",
+                        image_bytes=image_bytes,
+                        prompt=recovery_prompt,
+                        schema=recovery_schemas.scalar_page_schema,
+                    )
+                    parsed_response_count += 1
+                    calls.append(recovery_record)
+                    findings.extend(
+                        _schema_findings(
+                            recovery_data,
+                            recovery_schemas.scalar_page_schema,
+                            page_number=page_number,
+                            call_type="scalar_recovery",
+                        )
+                    )
+                    self._merge_scalar_fields(
+                        recovery_data,
+                        recovery_schemas,
+                        page_number,
+                        merged,
+                        scalar_pages,
+                        object_child_pages,
+                        field_pages,
+                        normalization_findings,
+                        conflicts,
+                    )
 
             if table_prompt is not None and schemas.table_page_schema is not None:
                 page_data, record = self._call_model(
@@ -496,6 +544,46 @@ def _schema_findings(
             )
         )
     return findings
+
+
+def _missing_required_scalar_fields(
+    page_data: dict[str, Any],
+    fields: dict[str, Any],
+) -> dict[str, Any]:
+    """Return required scalar/object definitions not populated on one page."""
+    missing: dict[str, Any] = {}
+    for field_key, field_config in fields.items():
+        if is_optional_type(str(field_config.get("type", "str"))):
+            continue
+        alias = str(field_config.get("alias", field_key))
+        found, value = get_extracted_value(page_data, field_key, alias)
+        if not found or not _has_value(value):
+            missing[field_key] = field_config
+            continue
+        object_fields = field_config.get("object_fields")
+        if not isinstance(object_fields, dict):
+            continue
+        if not isinstance(value, dict) or _missing_required_object_child(
+            value,
+            object_fields,
+        ):
+            missing[field_key] = field_config
+    return missing
+
+
+def _missing_required_object_child(
+    value: dict[str, Any],
+    fields: dict[str, Any],
+) -> bool:
+    """Return whether a configured required object child lacks a page value."""
+    for child_key, child_config in fields.items():
+        if is_optional_type(str(child_config.get("type", "str"))):
+            continue
+        alias = str(child_config.get("alias", child_key))
+        found, child_value = get_extracted_value(value, child_key, alias)
+        if not found or not _has_value(child_value):
+            return True
+    return False
 
 
 def _safe_ollama_exception(error: Exception, *, during: str) -> GlmOcrAdapterError:

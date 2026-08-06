@@ -145,6 +145,34 @@ The admin validation endpoints reuse the shared config-check validator and then 
 - A flat object with mixed primitive property types uses `type: "Dict[str, Any]"` and a non-empty `object_fields` mapping.
 - Structured object properties may use `str`, `int`, `float`, `bool`, or their `Optional[...]` forms. Nested object and list properties are rejected.
 
+For `standard_step.extraction.glm_ocr_extract.GlmOcrExtractTask`, validation also
+requires an HTTP(S) `ollama_host` without credentials, query, or fragment and a
+non-empty `model`. `dpi`, `num_ctx`, and `num_predict` must be positive integers;
+`timeout_seconds` must be positive. LlamaCloud-only parameters are rejected.
+For example:
+
+```yaml
+glm_extract:
+  module: standard_step.extraction.glm_ocr_extract
+  class: GlmOcrExtractTask
+  params:
+    ollama_host: http://127.0.0.1:11434
+    model: glm-ocr:latest
+    dpi: 216
+    num_ctx: 8192
+    num_predict: 2048
+    timeout_seconds: 300
+    fields:
+      invoice_number: { alias: Invoice number, type: str }
+      line_items:
+        alias: Line items
+        type: List[Any]
+        is_table: true
+        item_fields:
+          description: { alias: Description, type: str }
+          quantity: { alias: Quantity, type: int }
+```
+
 ### Task Approval Rules
 
 - Active pipeline task module/class pairs must be approved before they can be dynamically imported.
@@ -853,6 +881,18 @@ invalid files as validator fixtures, not production templates.
 
 - **`param-field-invalid-object-child-type`**: Structured object property uses an unsupported nested type
   - Fix: Use `str`, `int`, `float`, `bool`, or an optional form of one of those types
+
+- **`param-glm-invalid-host` / `param-glm-host-credentials`**: Ollama host is not a safe HTTP(S) base URL
+  - Fix: Use a base URL such as `http://127.0.0.1:11434` without credentials, query, or fragment
+
+- **`param-glm-missing-model`**: GLM-OCR model is missing
+  - Fix: Set a non-empty installed model name such as `glm-ocr:latest`
+
+- **`param-glm-invalid-dpi` / `param-glm-invalid-num-ctx` / `param-glm-invalid-num-predict` / `param-glm-invalid-timeout-seconds`**: Runtime value is not positive
+  - Fix: Use positive numeric values or omit the setting to use its default
+
+- **`param-glm-llamacloud-only`**: A cloud-only parameter was supplied to GLM-OCR
+  - Fix: Remove LlamaCloud credentials and options from the local extraction task
 
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path

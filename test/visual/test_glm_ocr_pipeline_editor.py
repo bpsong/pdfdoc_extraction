@@ -103,6 +103,39 @@ def test_glm_renderer_reuses_scalar_object_and_table_field_primitives() -> None:
     assert "params.extraction = { fields: clone(sourceFields) };" in storage_copy
 
 
+def test_glm_field_rows_use_polished_alignment_and_destructive_action() -> None:
+    """Keep the GLM field row aligned while preserving the Llama renderer."""
+    source = _source()
+    neutral_fields = _between(
+        source,
+        "    function extractionFieldControls(step, hint) {",
+        "    function structuredFieldSchemaDrawer(step) {",
+    )
+
+    for marker in (
+        'step.class === "GlmOcrExtractTask"',
+        "property-field-grid-polished",
+        "extraction-field-details-polished",
+        "extraction-required-control",
+        "btn-outline extraction-field-remove",
+        "full: !polishedLayout",
+        "tableBlocked && !polishedLayout",
+    ):
+        assert marker in neutral_fields
+
+    css = (ROOT / "web/static/css/app.css").read_text(encoding="utf-8")
+    for marker in (
+        ".property-field-grid-polished",
+        "align-items: start",
+        "container-type: inline-size",
+        "@container (max-width: 32rem)",
+        ".extraction-field-remove",
+        "border-color: oklch(var(--er) / 0.45)",
+        ".extraction-field-details-polished",
+    ):
+        assert marker in css
+
+
 def test_glm_defaults_and_summary_are_local_and_non_secret() -> None:
     source = _source()
     renderer = _between(

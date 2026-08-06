@@ -72,14 +72,47 @@ def test_mixed_schemas_are_strict_partitioned_and_deterministic() -> None:
     assert first.canonical_schema["additionalProperties"] is False
     assert first.scalar_page_schema is not None
     assert first.table_page_schema is not None
-    assert "required" not in first.scalar_page_schema
-    assert "required" not in first.table_page_schema
+    assert first.scalar_page_schema["required"] == [
+        "invoice_number",
+        "optional_note",
+        "tags",
+        "summary",
+    ]
+    assert first.table_page_schema["required"] == ["line_items"]
+    scalar_properties = first.scalar_page_schema["properties"]
+    assert scalar_properties["invoice_number"]["type"] == ["string", "null"]
+    assert scalar_properties["optional_note"]["type"] == ["string", "null"]
+    assert scalar_properties["tags"]["type"] == ["array", "null"]
+    assert scalar_properties["summary"]["type"] == ["object", "null"]
     assert first.scalar_page_schema["properties"]["summary"]["required"] == [
-        "currency"
+        "currency",
+        "tax",
+    ]
+    assert scalar_properties["summary"]["properties"]["currency"]["type"] == [
+        "string",
+        "null",
+    ]
+    assert scalar_properties["summary"]["properties"]["tax"]["type"] == [
+        "number",
+        "null",
     ]
     row_schema = first.table_page_schema["properties"]["line_items"]["items"]
-    assert row_schema["required"] == ["sku", "quantity", "amount"]
+    assert row_schema["required"] == ["sku", "quantity", "amount", "note"]
+    assert all(
+        "null" in row_schema["properties"][key]["type"]
+        for key in ("sku", "quantity", "amount", "note")
+    )
     assert row_schema["additionalProperties"] is False
+    canonical_properties = first.canonical_schema["properties"]
+    assert canonical_properties["invoice_number"]["type"] == "string"
+    assert canonical_properties["optional_note"]["type"] == ["string", "null"]
+    assert canonical_properties["summary"]["properties"]["currency"]["type"] == (
+        "string"
+    )
+    assert canonical_properties["summary"]["properties"]["tax"]["type"] == [
+        "number",
+        "null",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -137,6 +170,10 @@ def test_scalar_prompt_contains_contract_unicode_and_escaped_guidance() -> None:
     assert "leading zeros" in prompt
     assert "currency symbols or thousands separators" in prompt
     assert "Do not invent" in prompt
+    assert "Return every configured top-level field exactly once" in prompt
+    assert "Use JSON null" in prompt
+    assert "do not omit its key" in prompt
+    assert "Omit a top-level field" not in prompt
     schema_text = json.dumps(
         bundle.scalar_page_schema,
         ensure_ascii=False,
@@ -144,6 +181,22 @@ def test_scalar_prompt_contains_contract_unicode_and_escaped_guidance() -> None:
         sort_keys=True,
     )
     assert schema_text in prompt
+
+
+def test_scalar_recovery_prompt_is_focused_without_changing_schema() -> None:
+    fields = {"invoice_number": _mixed_fields()["invoice_number"]}
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+
+    prompt = build_scalar_object_prompt(
+        fields,
+        bundle.scalar_page_schema,
+        recovery_pass=True,
+    )
+
+    assert "focused recovery pass" in prompt
+    assert "Search the complete page carefully before returning JSON null" in prompt
+    assert '"invoice_number"' in prompt
 
 
 def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:
@@ -163,6 +216,9 @@ def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:
     assert '"key":"quantity"' in prompt
     assert "one JSON object per logical visual row" in prompt
     assert "same visual row" in prompt
+    assert "Always return the top-level table property" in prompt
+    assert "return an empty array" in prompt
+    assert "omit the top-level table property" not in prompt
     for excluded in ("headers", "footers", "subtotals", "blank rows", "duplicate rows"):
         assert excluded in prompt
     assert "Only product rows." in prompt

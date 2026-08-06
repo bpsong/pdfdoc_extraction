@@ -222,7 +222,7 @@ class GlmOcrExtractTask(BaseTask):
             "model": self.model,
             "host_classification": _host_classification(self.ollama_host),
             "page_count": result.page_count,
-            "call_strategy": "per_page_scalar_object_and_table",
+            "call_strategy": "per_page_scalar_object_optional_recovery_and_table",
             "calls": calls,
             "field_pages": {
                 str(key): list(pages) for key, pages in result.field_pages.items()

@@ -49,6 +49,7 @@ Author: [Your Organization/Name]
   - [4.7. Graceful Shutdown and Error Recovery](#47-graceful-shutdown-and-error-recovery)
   - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
        - [4.8.1. extraction](#481-extraction)
+         - [GLM-OCR extraction (local Ollama)](#glm-ocr-extraction-local-ollama)
        - [4.8.2. split.llamacloud_split](#482-splitllamacloud_split)
        - [4.8.3. storage.store_metadata_as_csv](#483-storagestore_metadata_as_csv)
        - [4.8.4. storage.store_metadata_as_json](#484-storagestore_metadata_as_json)
@@ -1155,7 +1156,91 @@ pipeline:
   - extract_document_data
 ```
 
-`standard_step.extraction.extract_pdf.ExtractPdfTask` is the only registered PDF extraction task.
+##### GLM-OCR extraction (local Ollama)
+
+- **Module/class:** `standard_step.extraction.glm_ocr_extract` /
+  `GlmOcrExtractTask`
+- **Purpose:** Extracts schema-directed structured data through a locally
+  reachable Ollama server and the `glm-ocr:latest` vision model.
+- **Prerequisites:** Install Ollama separately, pull `glm-ocr:latest`, start
+  Ollama, and confirm the configured HTTP endpoint is reachable. The application
+  does not install, start, or stop Ollama.
+- **Parameters:**
+  - `ollama_host`: HTTP(S) base URL, normally
+    `http://127.0.0.1:11434`. Embedded credentials, query strings, and fragments
+    are rejected.
+  - `model`: installed Ollama model name, normally `glm-ocr:latest`.
+  - `document_instructions`: optional document-level extraction guidance. Do not
+    place secrets in instructions.
+  - `dpi`: positive integer PDF render resolution; default `216`.
+  - `num_ctx`: positive integer model context size; default `8192`.
+  - `num_predict`: positive integer output-token limit; default `2048`.
+  - `timeout_seconds`: positive request timeout; default `300`.
+  - `fields`: the same stable extraction-field mapping used by downstream
+    review and storage. Scalar fields, scalar lists, flat objects, and one
+    `List[Any]` table with `item_fields` are supported.
+
+Configure this task from **Admin > Pipeline** by adding **Glm Ocr Extract**.
+Its properties panel is separate from the LlamaCloud Extract editor. Set the
+local model values, add scalar fields, and use **List of objects > Edit row
+schema** for invoice lines. Add and configure **Review Gate** after extraction,
+pin an exact published review-form version, then add CSV or JSON storage. Save,
+validate, and publish the pipeline before assigning it to an upload or
+watch-folder binding.
+
+The task renders pages locally in memory and makes schema-directed vision calls.
+Scalar/object fields and the object-array table use separate calls so table
+instructions can focus on visible rows. Results are normalized under
+`context["data"]`, persisted to SQLite with provider `glm_ocr_ollama`, and are
+available to every downstream task. The task does not provide field confidence,
+citations, or PP-DocLayout output. Confidence therefore remains null; no score
+is invented.
+
+When a review gate follows GLM extraction, the task's structured unscored-output
+flag makes every configured top-level field reviewable. Use document review
+scope when the operator must inspect all scalar values and every line-item cell.
+The queue displays missing confidence instead of a percentage. The operator
+compares values with the PDF, corrects them, and completes review; resume then
+reconstructs `context["data"]` from final SQLite values before CSV/JSON storage.
+If no review gate is present, the flag is inert and the pipeline continues.
+
+For portal ingestion, select the published GLM pipeline on **Upload & Process**.
+For watch-folder ingestion, create an enabled binding to that exact published
+version. Use a unique output filename such as `{id}`. CSV storage expands an
+array-of-objects field to one row per item and repeats document-level scalar
+values on each row.
+
+```yaml
+tasks:
+  glm_extract:
+    module: standard_step.extraction.glm_ocr_extract
+    class: GlmOcrExtractTask
+    params:
+      ollama_host: http://127.0.0.1:11434
+      model: glm-ocr:latest
+      document_instructions: Extract only values printed on the invoice.
+      dpi: 216
+      num_ctx: 8192
+      num_predict: 2048
+      timeout_seconds: 300
+      fields:
+        invoice_number: { alias: Invoice number, type: str }
+        total: { alias: Total, type: float }
+        line_items:
+          alias: Line items
+          type: List[Any]
+          is_table: true
+          item_fields:
+            description: { alias: Description, type: str }
+            quantity: { alias: Quantity, type: int }
+            unit_price: { alias: Unit price, type: float }
+pipeline:
+  - glm_extract
+```
+
+The registered PDF extraction choices are the existing LlamaCloud
+`ExtractPdfTask` and the independent local `GlmOcrExtractTask`. A pipeline may
+contain only one extraction task.
 
 #### 4.8.2. split.llamacloud_split
 

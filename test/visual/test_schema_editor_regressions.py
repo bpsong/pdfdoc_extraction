@@ -63,6 +63,24 @@ def test_schema_and_pipeline_editors_share_admin_panel_structure() -> None:
     assert ".schema-panel-header" not in styles
 
 
+def test_pipeline_template_and_publish_guide_use_distinct_grid_rows() -> None:
+    """Prevent the publish guide from covering template metadata controls."""
+    template = (ROOT / "web/templates/pipeline_config.html").read_text(
+        encoding="utf-8"
+    )
+    styles = (ROOT / "web/static/css/app.css").read_text(encoding="utf-8")
+
+    assert template.count('class="admin-panel pipeline-template-panel"') == 1
+    assert template.count('class="admin-panel pipeline-guide-panel"') == 1
+    assert ".pipeline-template-panel" in styles
+    assert '"template template template"' in styles
+    assert '"guide guide guide"' in styles
+    assert '"template template"' in styles
+    assert '"guide guide"' in styles
+    assert '"template"' in styles
+    assert '"guide"' in styles
+
+
 def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:
     source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")

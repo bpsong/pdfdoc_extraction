@@ -726,6 +726,7 @@
     }
 
     function extractionFieldControls(step, hint) {
+        const polishedLayout = step.class === "GlmOcrExtractTask";
         const params = step.params || {};
         const fields = params.fields && typeof params.fields === "object" && !Array.isArray(params.fields) ? params.fields : {};
         const fieldEntries = Object.entries(fields);
@@ -766,8 +767,8 @@
                 ? typeOptions
                 : [{ value: baseType, label: `Legacy type (${baseType})`, disabled: true }, ...typeOptions];
             return `
-                <div class="field-editor">
-                    <div class="property-field-grid">
+                <div class="field-editor ${polishedLayout ? "extraction-field-editor-polished" : ""}">
+                    <div class="property-field-grid ${polishedLayout ? "property-field-grid-polished" : ""}">
                         <label class="form-control">
                             <span class="label-text">Field key</span>
                             <input class="input input-bordered input-sm font-mono" aria-label="Field key for ${escapeHtml(fieldKey)}" data-param-action="rename-extract-field" data-field-key="${escapeHtml(fieldKey)}" value="${escapeHtml(fieldKey)}">
@@ -780,21 +781,21 @@
                             </select>
                             <span class="mt-1 text-xs text-base-content/50">Python type: ${escapeHtml(withRequiredState(baseType, required))}${isTable ? " · flat row objects" : ""}</span>
                         </label>
-                        <button class="btn btn-ghost btn-square btn-sm self-end text-error" type="button" title="Remove field" aria-label="Remove field ${escapeHtml(fieldKey)}" data-param-action="remove-extract-field" data-field-key="${escapeHtml(fieldKey)}">Remove</button>
+                        <button class="btn ${polishedLayout ? "btn-outline extraction-field-remove" : "btn-ghost btn-square self-end"} btn-sm text-error" type="button" title="Remove field" aria-label="Remove field ${escapeHtml(fieldKey)}" data-param-action="remove-extract-field" data-field-key="${escapeHtml(fieldKey)}">Remove</button>
                     </div>
                     ${inlineFindings(step, `fields.${fieldKey}`, true)}
-                    <div class="mt-3 grid gap-3 md:grid-cols-2">
-                        <label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-3">
+                    <div class="mt-3 grid gap-3 ${polishedLayout ? "extraction-field-details-polished" : "md:grid-cols-2"}">
+                        <label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-3 ${polishedLayout ? "extraction-required-control" : ""}">
                             <input class="checkbox checkbox-sm" type="checkbox" aria-label="Required field ${escapeHtml(fieldKey)}" data-param-action="field-required" data-field-key="${escapeHtml(fieldKey)}" ${required ? "checked" : ""}>
                             <span>
                                 <span class="label-text block">Required field</span>
                                 <span class="text-xs text-base-content/50">${required ? "Must be returned" : "May be omitted"}</span>
                             </span>
                         </label>
-                        ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: true, ariaLabel: `Extraction guidance for ${fieldKey}` })}
+                        ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: !polishedLayout, ariaLabel: `Extraction guidance for ${fieldKey}` })}
                         ${schemaControls}
                     </div>
-                    ${tableBlocked ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review forms may contain multiple arrays of objects.</div>' : ""}
+                    ${tableBlocked && !polishedLayout ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review forms may contain multiple arrays of objects.</div>' : ""}
                 </div>
             `;
         }).join("");

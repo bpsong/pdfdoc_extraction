@@ -85,7 +85,8 @@ flowchart LR
     APIs --> Services["Services"] --> DB
     Runner --> Files[(Filesystem)]
     Services --> Files
-    Runner --> Provider["LlamaCloud APIs"]
+    Runner --> CloudProvider["LlamaCloud APIs"]
+    Runner --> LocalProvider["Local Ollama / GLM-OCR"]
     Pages --> Browser["Browser"]
     Assets --> Browser
     Browser --> APIs
@@ -104,6 +105,14 @@ Watch-folder files are processed sequentially. Web batch uploads use FastAPI
 background tasks and can overlap with watch-folder or other web work. Split
 children are launched sequentially. There is no distributed queue, worker
 pool, or multi-host coordination layer.
+
+Extraction providers are independent implementations behind the same workflow
+boundary. LlamaCloud owns its cloud API, saved-configuration, citation, and
+confidence behavior. `GlmOcrExtractTask` calls an administrator-configured
+Ollama HTTP endpoint, renders PDF pages locally in memory, and normalizes its
+result to the same top-level `context["data"]` field contract. It does not start
+or supervise Ollama. The first GLM integration uses the native Ollama API only;
+PP-DocLayout and the full GLM-OCR SDK are not runtime components.
 
 ## Component boundaries
 
@@ -280,7 +289,7 @@ Human review is a persisted stop and new-flow restart:
 
 1. Extraction persists normalized results and fields.
 2. `ReviewGateTask` evaluates confidence, required-field, split-confidence,
-   and configured policy.
+   structured review flags, and configured policy.
 3. If required, it creates a review item, marks the document
    `review_required`, and sets `pipeline_state` to `paused`.
 4. The loader marks the task run paused and returns before downstream execution
@@ -301,6 +310,15 @@ cleanup and leaf-derived fan-in complete normally.
 
 The original Prefect flow is not suspended. SQLite retains the business state
 needed for operator work and resume.
+
+Extraction tasks may preserve numeric provider confidence when it exists or
+persist it as null when it does not. They must never fabricate a score.
+Provider-neutral structured review flags contain a stable reason plus configured
+top-level field keys; they must not contain prompts, provider responses,
+credentials, or extracted customer values. A flag does not pause a workflow by
+itself. A downstream review gate consumes it, marks the specified fields for
+review, creates durable review state, and pauses. Without a review gate, the
+same extraction output can continue directly to storage or another task.
 
 Review lock acquisition is enforced atomically in SQLite. The current operator
 may renew a lock, an expired lock may be claimed by another operator, and an

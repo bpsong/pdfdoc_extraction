@@ -143,6 +143,16 @@ def test_one_page_mixed_requests_use_native_ollama_payloads(tmp_path: Path) -> N
         "summary",
     }
     assert set(table_request["format"]["properties"]) == {"items"}
+    assert scalar_request["format"]["required"] == [
+        "invoice_number",
+        "summary",
+    ]
+    assert scalar_request["format"]["properties"]["invoice_number"]["type"] == [
+        "string",
+        "null",
+    ]
+    assert table_request["format"]["required"] == ["items"]
+    assert table_request["format"]["properties"]["items"]["type"] == "array"
     assert "Read the billing invoice only." in scalar_request["prompt"]
     assert "Read the billing invoice only." in table_request["prompt"]
 
@@ -153,7 +163,10 @@ def test_multi_page_merges_objects_records_conflicts_and_deduplicates_rows(
     pdf_path = _make_pdf(tmp_path / "two-pages.pdf", page_count=2)
     client = _client(
         _response(
-            {"invoice_number": "FIRST", "summary": {"currency": "USD"}}
+            {
+                "invoice_number": "FIRST",
+                "summary": {"currency": "USD", "tax": None},
+            }
         ),
         _response(
             {
@@ -164,7 +177,10 @@ def test_multi_page_merges_objects_records_conflicts_and_deduplicates_rows(
             }
         ),
         _response(
-            {"invoice_number": "SECOND", "summary": {"tax": "3.50"}}
+            {
+                "invoice_number": "SECOND",
+                "summary": {"currency": "USD", "tax": "3.50"},
+            }
         ),
         _response(
             {
@@ -244,6 +260,28 @@ def test_scalar_array_is_normalized_through_the_shared_field_contract(
     )
 
     assert result.data == {"tags": ["1", "02"]}
+
+
+def test_page_null_and_empty_table_are_valid_absence_values(tmp_path: Path) -> None:
+    scalar_pdf = _make_pdf(tmp_path / "optional.pdf")
+    scalar_result = _adapter(_client(_response({"note": None}))).extract(
+        str(scalar_pdf),
+        {"note": {"alias": "Note", "type": "Optional[str]"}},
+    )
+
+    assert scalar_result.data == {"note": None}
+    assert scalar_result.field_pages == {"note": []}
+    assert scalar_result.findings == []
+
+    table_pdf = _make_pdf(tmp_path / "empty-table.pdf")
+    table_result = _adapter(_client(_response({"items": []}))).extract(
+        str(table_pdf),
+        {"items": _fields()["items"]},
+    )
+
+    assert table_result.data == {"items": []}
+    assert table_result.field_pages == {"items": []}
+    assert table_result.findings == []
 
 
 def test_client_factory_receives_host_and_timeout_and_accepts_latest_alias(
@@ -342,7 +380,10 @@ def test_missing_value_is_preserved_as_none_with_final_schema_finding(
     tmp_path: Path,
 ) -> None:
     pdf_path = _make_pdf(tmp_path / "missing-value.pdf")
-    client = _client(_response({}))
+    client = _client(
+        _response({"invoice_number": None}),
+        _response({"invoice_number": None}),
+    )
 
     result = _adapter(client).extract(
         str(pdf_path),
@@ -352,6 +393,43 @@ def test_missing_value_is_preserved_as_none_with_final_schema_finding(
     assert result.data == {"invoice_number": None}
     assert result.field_pages == {"invoice_number": []}
     assert any(item.code in {"schema_required", "schema_type"} for item in result.findings)
+    assert [record.call_type for record in result.calls] == [
+        "scalar_object",
+        "scalar_recovery",
+    ]
+
+
+def test_required_null_value_gets_one_focused_recovery_pass(tmp_path: Path) -> None:
+    pdf_path = _make_pdf(tmp_path / "recovery.pdf")
+    client = _client(
+        _response({"invoice_number": None, "optional_note": None}),
+        _response({"invoice_number": "000123"}),
+    )
+
+    result = _adapter(client).extract(
+        str(pdf_path),
+        {
+            "invoice_number": {"alias": "Invoice #", "type": "str"},
+            "optional_note": {"alias": "Note", "type": "Optional[str]"},
+        },
+    )
+
+    assert result.data == {
+        "invoice_number": "000123",
+        "optional_note": None,
+    }
+    assert result.field_pages == {
+        "invoice_number": [1],
+        "optional_note": [],
+    }
+    assert [record.call_type for record in result.calls] == [
+        "scalar_object",
+        "scalar_recovery",
+    ]
+    recovery_request = client.generate.call_args_list[1].kwargs
+    assert set(recovery_request["format"]["properties"]) == {"invoice_number"}
+    assert "focused recovery pass" in recovery_request["prompt"]
+    assert "optional_note" not in recovery_request["format"]["properties"]
 
 
 def test_render_pdf_uses_normalized_path_and_returns_in_memory_pngs(

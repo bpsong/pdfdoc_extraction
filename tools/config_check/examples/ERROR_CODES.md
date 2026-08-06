@@ -104,6 +104,19 @@ fields rather than assume that this document contains every possible code.
 | `custom-task-registry-missing-class` | Error | Custom registry entry lacks `class` | Add a non-empty class name |
 | `custom-task-registry-invalid-module` | Error | Custom registry module does not use `custom_step.` prefix | Move custom tasks under `custom_step.` or update the registry |
 
+### GLM-OCR Extraction Parameters
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `param-glm-invalid-host` | Error | Ollama host is not an HTTP(S) base URL or contains a path, query, fragment, or invalid port | Use a base URL such as `http://127.0.0.1:11434` |
+| `param-glm-host-credentials` | Error | Ollama host contains embedded credentials | Remove the username/password; GLM-OCR does not use an API key |
+| `param-glm-missing-model` | Error | Model name is missing or blank | Set an installed model such as `glm-ocr:latest` |
+| `param-glm-invalid-dpi` | Error | PDF render DPI is not a positive integer | Use a positive integer or omit it for the default |
+| `param-glm-invalid-num-ctx` | Error | Context size is not a positive integer | Use a positive integer or omit it for the default |
+| `param-glm-invalid-num-predict` | Error | Output-token limit is not a positive integer | Use a positive integer or omit it for the default |
+| `param-glm-invalid-timeout-seconds` | Error | Request timeout is not positive | Use a positive number or omit it for the default |
+| `param-glm-llamacloud-only` | Error | GLM task contains a LlamaCloud-only parameter | Remove cloud credentials and provider-only options |
+
 ## Review Gate Validation Error Codes
 
 | Code | Severity | Description | Fix |
