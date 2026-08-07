@@ -1518,11 +1518,100 @@
         `;
     }
 
+    function captureEditorFocus() {
+        const active = document.activeElement;
+        if (!active || !editorBody.contains(active)) {
+            return null;
+        }
+
+        const tagName = active.tagName.toLowerCase();
+        let selector = tagName;
+        if (active.dataset.paramAction) {
+            selector += `[data-param-action="${CSS.escape(active.dataset.paramAction)}"]`;
+            for (const attribute of [
+                "field-key",
+                "map-path",
+                "old-key",
+                "category-index",
+                "clause-index",
+                "item-key",
+                "schema-kind",
+                "param-path",
+            ]) {
+                if (active.hasAttribute(`data-${attribute}`)) {
+                    selector += `[data-${attribute}="${CSS.escape(active.getAttribute(`data-${attribute}`))}"]`;
+                }
+            }
+        } else if (active.dataset.paramPath) {
+            selector += `[data-param-path="${CSS.escape(active.dataset.paramPath)}"]`;
+        } else if (active.dataset.stepField) {
+            selector += `[data-step-field="${CSS.escape(active.dataset.stepField)}"]`;
+        } else {
+            return null;
+        }
+
+        if (active.hasAttribute("type")) {
+            selector += `[type="${CSS.escape(active.getAttribute("type"))}"]`;
+        }
+        if (["checkbox", "radio"].includes(active.type) && active.hasAttribute("value")) {
+            selector += `[value="${CSS.escape(active.getAttribute("value"))}"]`;
+        }
+
+        const matches = Array.from(editorBody.querySelectorAll(selector));
+        const matchIndex = Math.max(0, matches.indexOf(active));
+        const hasSelection = typeof active.selectionStart === "number";
+        return {
+            selector,
+            matchIndex,
+            selectionStart: hasSelection ? active.selectionStart : null,
+            selectionEnd: hasSelection ? active.selectionEnd : null,
+            selectionDirection: hasSelection ? active.selectionDirection : null,
+            bodyScrollLeft: editorBody.scrollLeft,
+            bodyScrollTop: editorBody.scrollTop,
+            windowScrollX: window.scrollX,
+            windowScrollY: window.scrollY,
+        };
+    }
+
+    function renderEditorWithFocusRestore() {
+        const focus = captureEditorFocus();
+        renderEditor();
+        if (!focus) {
+            return;
+        }
+
+        const matches = editorBody.querySelectorAll(focus.selector);
+        const restored = matches[focus.matchIndex] || matches[0];
+        if (!restored) {
+            return;
+        }
+
+        try {
+            restored.focus({ preventScroll: true });
+        } catch (error) {
+            restored.focus();
+        }
+        if (focus.selectionStart !== null && typeof restored.setSelectionRange === "function") {
+            try {
+                restored.setSelectionRange(
+                    focus.selectionStart,
+                    focus.selectionEnd,
+                    focus.selectionDirection,
+                );
+            } catch (error) {
+                // Some input types expose selectionStart but reject setSelectionRange.
+            }
+        }
+        editorBody.scrollLeft = focus.bodyScrollLeft;
+        editorBody.scrollTop = focus.bodyScrollTop;
+        window.scrollTo(focus.windowScrollX, focus.windowScrollY);
+    }
+
     function render() {
         renderActiveSteps();
         renderDraftSteps();
         renderTaskOptions();
-        renderEditor();
+        renderEditorWithFocusRestore();
         renderYamlPreview();
         renderValidation();
     }
@@ -2257,6 +2346,7 @@
             if (newKey !== oldKey) {
                 fields[newKey] = fields[oldKey] || { alias: "New field", type: "str" };
                 delete fields[oldKey];
+                field.dataset.fieldKey = newKey;
             }
             markDirty();
             return true;
@@ -2392,6 +2482,7 @@
             if (newKey !== oldKey) {
                 values[newKey] = values[oldKey];
                 delete values[oldKey];
+                field.dataset.oldKey = newKey;
             }
             markDirty();
             return true;

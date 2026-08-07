@@ -172,3 +172,24 @@ def test_extraction_editor_explains_its_single_table_limit() -> None:
     assert 'option.value === "List[Any]" && tableBlocked' in source
     assert "Extraction tasks support one List of objects field." in source
     assert "Review forms may contain multiple arrays of objects." in source
+
+
+def test_pipeline_and_schema_editors_restore_focus_after_dom_replacement() -> None:
+    pipeline_source = (ROOT / "web/static/js/pipeline_config.js").read_text(
+        encoding="utf-8"
+    )
+    schema_source = (ROOT / "web/static/js/schema_editor.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function captureEditorFocus()" in pipeline_source
+    assert "function renderEditorWithFocusRestore()" in pipeline_source
+    assert "renderEditorWithFocusRestore();" in pipeline_source
+    assert "field.dataset.fieldKey = newKey;" in pipeline_source
+    assert "field.dataset.oldKey = newKey;" in pipeline_source
+    assert "function captureFieldTreeFocus()" in schema_source
+    assert "function renderFieldTreeWithFocusRestore()" in schema_source
+    assert "renderFieldTreeWithFocusRestore();" in schema_source
+    assert "active.dataset.fieldPath = renamedPath;" in schema_source
+    assert "focus({ preventScroll: true })" in pipeline_source
+    assert "focus({ preventScroll: true })" in schema_source

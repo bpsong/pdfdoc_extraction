@@ -662,7 +662,7 @@
         const displayName = nameInput.value || currentName || "New schema";
         detailTitle.textContent = `${dirty ? "* " : ""}${displayName}`;
         localFindings = collectClientFindings();
-        fieldTree.innerHTML = renderFieldRows(draft.fields || {}, []);
+        renderFieldTreeWithFocusRestore();
         duplicateButton.disabled = !currentId || !currentRevision || currentTemplate && currentTemplate.status === "archived";
         exportButton.disabled = !currentId;
         statusSelect.disabled = !currentId;
@@ -678,6 +678,63 @@
         renderFieldOutline();
         renderActionState();
         renderValidationSummary();
+    }
+
+    function captureFieldTreeFocus() {
+        const active = document.activeElement;
+        if (!active || !fieldTree.contains(active) || !active.dataset.fieldPath || !active.dataset.fieldProp) {
+            return null;
+        }
+
+        const selector = `${active.tagName.toLowerCase()}[data-field-path="${CSS.escape(active.dataset.fieldPath)}"][data-field-prop="${CSS.escape(active.dataset.fieldProp)}"]`;
+        const matches = Array.from(fieldTree.querySelectorAll(selector));
+        const matchIndex = Math.max(0, matches.indexOf(active));
+        const hasSelection = typeof active.selectionStart === "number";
+        return {
+            selector,
+            matchIndex,
+            selectionStart: hasSelection ? active.selectionStart : null,
+            selectionEnd: hasSelection ? active.selectionEnd : null,
+            selectionDirection: hasSelection ? active.selectionDirection : null,
+            treeScrollLeft: fieldTree.scrollLeft,
+            treeScrollTop: fieldTree.scrollTop,
+            windowScrollX: window.scrollX,
+            windowScrollY: window.scrollY,
+        };
+    }
+
+    function renderFieldTreeWithFocusRestore() {
+        const focus = captureFieldTreeFocus();
+        fieldTree.innerHTML = renderFieldRows(draft.fields || {}, []);
+        if (!focus) {
+            return;
+        }
+
+        const matches = fieldTree.querySelectorAll(focus.selector);
+        const restored = matches[focus.matchIndex] || matches[0];
+        if (!restored) {
+            return;
+        }
+
+        try {
+            restored.focus({ preventScroll: true });
+        } catch (error) {
+            restored.focus();
+        }
+        if (focus.selectionStart !== null && typeof restored.setSelectionRange === "function") {
+            try {
+                restored.setSelectionRange(
+                    focus.selectionStart,
+                    focus.selectionEnd,
+                    focus.selectionDirection,
+                );
+            } catch (error) {
+                // Some input types expose selectionStart but reject setSelectionRange.
+            }
+        }
+        fieldTree.scrollLeft = focus.treeScrollLeft;
+        fieldTree.scrollTop = focus.treeScrollTop;
+        window.scrollTo(focus.windowScrollX, focus.windowScrollY);
     }
 
     function applySchemaPayload(payload) {
@@ -880,6 +937,7 @@
         pendingFindings = pendingFindings.filter((finding) => finding.path !== findingPath);
         const target = targetForProp(found.field, prop);
         const propName = prop.startsWith("items.") ? prop.slice("items.".length) : prop;
+        let renamedPath = "";
         if (prop === "key") {
             const nextKey = String(value || "").trim();
             if (!nextKey) {
@@ -898,6 +956,7 @@
             entries.forEach(([key, config]) => {
                 found.container[key === found.key ? nextKey : key] = config;
             });
+            renamedPath = fieldPath(pathText.split(".").slice(0, -1).join("."), nextKey);
         } else if (prop === "type") {
             found.field.type = value;
             if (value === "object") {
@@ -954,6 +1013,15 @@
         }
         if (prop.endsWith("pattern")) {
             patternResults.delete(findingPath);
+        }
+        const active = document.activeElement;
+        if (
+            renamedPath
+            && active
+            && active.dataset.fieldPath === pathText
+            && active.dataset.fieldProp === "key"
+        ) {
+            active.dataset.fieldPath = renamedPath;
         }
         setBox(errorBox, "");
         markDirty();

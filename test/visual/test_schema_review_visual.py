@@ -866,6 +866,72 @@ def test_schema_editor_visual_renders_rich_schema_controls(page: Page, visual_ap
     _assert_nonblank_screenshot(page)
 
 
+def test_pipeline_and_schema_field_edits_keep_focus_after_render(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    page.goto(f"{visual_app['base_url']}/app/admin/pipeline")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#pipeline-template-select option').length >= 4"
+    )
+    page.locator("#pipeline-template-select").select_option(
+        visual_app["active_template_id"]
+    )
+    page.wait_for_function(
+        "() => document.querySelector('#pipeline-version-history')?.textContent.includes('2 immutable')"
+    )
+    page.locator("#pipeline-draft-list .pipeline-step-main").nth(1).click()
+
+    field_type = page.locator(
+        '[data-param-action="field-type"][data-field-key="supplier"]'
+    )
+    field_type.wait_for()
+    field_type.focus()
+    field_type.select_option("int")
+    assert field_type.evaluate("node => document.activeElement === node")
+
+    alias = page.get_by_label("Alias for supplier")
+    alias.focus()
+    alias.fill("Supplier legal name")
+    alias.evaluate("node => node.setSelectionRange(8, 8)")
+    alias.dispatch_event("change")
+    assert alias.evaluate("node => document.activeElement === node")
+    assert alias.evaluate("node => node.selectionStart") == 8
+
+    field_key = page.locator(
+        '[data-param-action="rename-extract-field"][data-field-key="supplier"]'
+    )
+    field_key.focus()
+    field_key.fill("supplier_code")
+    field_key.dispatch_event("change")
+    renamed_field_key = page.locator(
+        '[data-param-action="rename-extract-field"][data-field-key="supplier_code"]'
+    )
+    assert renamed_field_key.evaluate("node => document.activeElement === node")
+
+    page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
+    page.locator("#schema-field-tree .schema-field-row").first.wait_for()
+    schema_key = page.locator(
+        '[data-field-path="supplier"][data-field-prop="key"]'
+    )
+    schema_key.focus()
+    schema_key.fill("supplier_name")
+    schema_key.dispatch_event("change")
+    renamed_schema_key = page.locator(
+        '[data-field-path="supplier_name"][data-field-prop="key"]'
+    )
+    assert renamed_schema_key.evaluate("node => document.activeElement === node")
+
+    help_input = page.locator(
+        '[data-field-path="supplier_name"][data-field-prop="help"]'
+    )
+    help_input.focus()
+    help_input.fill("Use the registered supplier name")
+    help_input.evaluate("node => node.setSelectionRange(12, 12)")
+    help_input.dispatch_event("change")
+    assert help_input.evaluate("node => document.activeElement === node")
+    assert help_input.evaluate("node => node.selectionStart") == 12
+
+
 def test_admin_panel_styles_match_and_wrap_without_clipping(page: Page, visual_app: dict[str, str]) -> None:
     panel_properties = ["backgroundColor", "borderColor", "borderRadius", "boxShadow", "overflow"]
     header_properties = ["minHeight", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]
