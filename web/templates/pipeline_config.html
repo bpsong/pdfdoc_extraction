@@ -26,11 +26,15 @@
                 <div class="flex flex-wrap content-end gap-2">
                     <button id="pipeline-template-create" class="btn btn-outline btn-sm" type="button">New</button>
                     <button id="pipeline-template-clone" class="btn btn-outline btn-sm" type="button" disabled>Clone</button>
-                    <select id="pipeline-template-status" class="select select-bordered select-sm" disabled>
-                        <option value="inactive">Inactive</option>
-                        <option value="active">Active</option>
-                        <option value="archived">Archived</option>
-                    </select>
+                    <label class="form-control min-w-36">
+                        <span class="label-text">Availability status</span>
+                        <select id="pipeline-template-status" class="select select-bordered select-sm" disabled>
+                            <option value="inactive">Inactive</option>
+                            <option value="active">Active</option>
+                            <option value="archived">Archived</option>
+                        </select>
+                    </label>
+                    <button id="pipeline-template-activate" class="btn btn-success btn-sm" type="button" disabled title="Make this pipeline available on Upload & Process">Activate for uploads</button>
                 </div>
             </div>
             <div class="mt-3 flex flex-wrap gap-3 text-xs text-base-content/60">
@@ -72,7 +76,7 @@
                 <p class="admin-panel-subtitle" id="pipeline-draft-summary">0 steps</p>
             </div>
             <div class="admin-panel-actions">
-                <button class="btn btn-ghost btn-sm" id="pipeline-reset-button" type="button">Reset to Active</button>
+                <button class="btn btn-outline btn-sm" id="pipeline-reset-button" type="button" title="Discard draft edits and restore the latest published version. This does not change pipeline availability.">Reset draft to published version</button>
                 <button class="btn btn-outline btn-sm" id="pipeline-save-draft-button" type="button">Save Draft</button>
                 <button class="btn btn-outline btn-sm" id="pipeline-validate-button" type="button">Validate</button>
             </div>
@@ -151,8 +155,8 @@
     </section>
 </div>
 <input id="pipeline-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">
-<dialog id="pipeline-template-dialog" class="modal" aria-labelledby="pipeline-template-dialog-title">
-    <form id="pipeline-template-form" class="modal-box">
+<div id="pipeline-template-dialog" class="fixed inset-0 z-50 hidden items-center justify-center bg-base-content/40 p-4" role="dialog" aria-modal="true" aria-labelledby="pipeline-template-dialog-title">
+    <form id="pipeline-template-form" class="w-full max-w-lg rounded-box border border-base-300 bg-base-100 p-6 shadow-lg">
         <h2 id="pipeline-template-dialog-title" class="text-lg font-semibold">New pipeline</h2>
         <p id="pipeline-template-dialog-description" class="mt-1 text-sm text-base-content/60">
             Create a new pipeline template and editable draft.
@@ -182,13 +186,10 @@
             <button id="pipeline-template-dialog-submit" class="btn btn-primary" type="submit">Create pipeline</button>
         </div>
     </form>
-    <form method="dialog" class="modal-backdrop">
-        <button aria-label="Close pipeline dialog">Close</button>
-    </form>
-</dialog>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script src="/static/js/pipeline_config.js?v=versioned-templates-2" defer></script>
+<script src="/static/js/pipeline_config.js?v=versioned-templates-3-modal" defer></script>
 {% endblock %}

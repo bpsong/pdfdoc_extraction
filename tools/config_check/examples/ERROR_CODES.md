@@ -116,6 +116,8 @@ fields rather than assume that this document contains every possible code.
 | `param-glm-invalid-num-predict` | Error | Output-token limit is not a positive integer | Use a positive integer or omit it for the default |
 | `param-glm-invalid-timeout-seconds` | Error | Request timeout is not positive | Use a positive number or omit it for the default |
 | `param-glm-llamacloud-only` | Error | GLM task contains a LlamaCloud-only parameter | Remove cloud credentials and provider-only options |
+| `param-glm-invalid-choices` | Error | A GLM text field has an empty, duplicate, non-string, or misplaced allowed-values list | Use unique non-empty strings under `choices` on a `str` field only |
+| `param-glm-invalid-normalizer` | Error | A GLM field requests an unsupported or misplaced value normalizer | Use `normalizer: iso_date` on a `str` field only, or remove it |
 
 ## Review Gate Validation Error Codes
 

@@ -425,6 +425,8 @@ def _validate_extraction_params(
 
         field_path = f"{params_path}.fields.{field_name}"
         _validate_field_spec(spec, field_path, errors, field_name)
+        if is_glm_ocr:
+            _validate_glm_field_constraints(spec, field_path, errors)
 
     if len(table_fields) > 1:
         errors.append(
@@ -734,6 +736,61 @@ def _validate_field_spec(
                             details={"field": child_name},
                         )
                     )
+
+
+def _validate_glm_field_constraints(
+    spec: Any,
+    path: str,
+    errors: List[ParameterIssue],
+) -> None:
+    """Validate GLM-only allowed values and deterministic normalizers."""
+    if not isinstance(spec, dict):
+        return
+    type_value = spec.get("type")
+    base_type = (
+        _unwrap_optional_field_type(type_value)
+        if isinstance(type_value, str)
+        else ""
+    )
+    choices = spec.get("choices")
+    if choices is not None and (
+        base_type != "str"
+        or not isinstance(choices, list)
+        or not choices
+        or any(not isinstance(choice, str) or not choice.strip() for choice in choices)
+        or len({choice.casefold() for choice in choices if isinstance(choice, str)})
+        != len(choices)
+    ):
+        errors.append(
+            ParameterIssue(
+                path=f"{path}.choices",
+                message="GLM choices require a string field and unique non-empty text values",
+                code="param-glm-invalid-choices",
+                details={"field": path.split(".")[-1]},
+            )
+        )
+    normalizer = spec.get("normalizer")
+    if normalizer is not None and (
+        normalizer != "iso_date" or base_type != "str"
+    ):
+        errors.append(
+            ParameterIssue(
+                path=f"{path}.normalizer",
+                message="GLM normalizer must be iso_date on a string field",
+                code="param-glm-invalid-normalizer",
+                details={"field": path.split(".")[-1]},
+            )
+        )
+    for child_key in ("object_fields", "item_fields"):
+        children = spec.get(child_key)
+        if not isinstance(children, dict):
+            continue
+        for name, child in children.items():
+            _validate_glm_field_constraints(
+                child,
+                f"{path}.{child_key}.{name}",
+                errors,
+            )
 
 def _validate_rules_params(
     params: Any, params_path: str, errors: List[ParameterIssue]

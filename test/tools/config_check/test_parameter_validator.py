@@ -873,6 +873,45 @@ def test_glm_runtime_numeric_options_may_use_task_defaults():
     assert result.errors == []
 
 
+def test_glm_choices_and_iso_date_normalizer_are_validated_recursively():
+    params = _glm_task_params()
+    params["fields"] = {
+        "note_type": {
+            "alias": "Note type",
+            "type": "str",
+            "choices": ["debit", "credit"],
+        },
+        "customer": {
+            "alias": "Customer",
+            "type": "Dict[str, Any]",
+            "object_fields": {
+                "start": {
+                    "alias": "Start",
+                    "type": "str",
+                    "normalizer": "iso_date",
+                }
+            },
+        },
+    }
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": params,
+            }
+        }
+    }
+
+    assert validate_parameters(config).errors == []
+
+    params["fields"]["note_type"]["choices"] = ["debit", "DEBIT"]
+    params["fields"]["customer"]["object_fields"]["start"]["normalizer"] = "unknown"
+    codes = {issue.code for issue in validate_parameters(config).errors}
+    assert "param-glm-invalid-choices" in codes
+    assert "param-glm-invalid-normalizer" in codes
+
+
 def test_glm_parameters_reject_credentials_bad_host_and_numeric_values():
     config = {
         "tasks": {

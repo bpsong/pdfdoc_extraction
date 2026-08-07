@@ -23,6 +23,23 @@ def test_schema_editor_unifies_validation_and_unsaved_change_guards() -> None:
     assert "dirty = true;" in source
 
 
+def test_schema_editor_creates_review_forms_with_an_accessible_modal() -> None:
+    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
+
+    assert 'id="schema-create-modal"' in template
+    assert 'role="dialog" aria-modal="true" aria-labelledby="schema-create-title"' in template
+    assert 'id="schema-create-form"' in template
+    assert 'id="schema-create-key"' in template
+    assert 'id="schema-create-name"' in template
+    assert 'createModal.classList.remove("hidden");' in source
+    assert 'createModal.classList.add("flex");' in source
+    assert "function closeCreateModal()" in source
+    assert 'createForm.addEventListener("submit"' in source
+    assert 'window.DocFlow.apiPost("/api/admin/review-schemas"' in source
+    assert "window.prompt" not in source
+
+
 def test_schema_editor_has_accessible_guidance_outline_and_responsive_rules() -> None:
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
     styles = (ROOT / "web/static/css/app.css").read_text(encoding="utf-8")
@@ -79,6 +96,37 @@ def test_pipeline_template_and_publish_guide_use_distinct_grid_rows() -> None:
     assert '"guide guide"' in styles
     assert '"template"' in styles
     assert '"guide"' in styles
+
+
+def test_pipeline_activation_is_distinct_from_draft_reset() -> None:
+    """Keep upload availability separate from restoring a published draft."""
+    template = (ROOT / "web/templates/pipeline_config.html").read_text(
+        encoding="utf-8"
+    )
+    source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+
+    assert 'id="pipeline-template-activate"' in template
+    assert ">Activate for uploads</button>" in template
+    assert "Availability status" in template
+    assert "Reset draft to published version" in template
+    assert "This does not change pipeline availability." in template
+    assert "function syncTemplateLifecycleControls()" in source
+    assert 'templateMetadataPayload({ status: "active" })' in source
+    assert "Pipeline activated. It is now available on Upload & Process." in source
+    assert "does not change pipeline availability" in source
+
+
+def test_pipeline_creation_uses_an_accessible_in_page_modal() -> None:
+    template = (ROOT / "web/templates/pipeline_config.html").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+
+    assert 'id="pipeline-template-dialog"' in template
+    assert 'role="dialog" aria-modal="true"' in template
+    assert 'id="pipeline-template-form"' in template
+    assert "function closeTemplateDialog()" in source
+    assert 'templateDialog.classList.remove("hidden");' in source
+    assert 'templateDialog.classList.add("flex");' in source
+    assert "templateDialog.showModal()" not in source
 
 
 def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:

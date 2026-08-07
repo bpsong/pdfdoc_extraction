@@ -56,6 +56,7 @@
     const templateDescription = document.getElementById("pipeline-template-description");
     const templateDocumentType = document.getElementById("pipeline-template-document-type");
     const templateStatus = document.getElementById("pipeline-template-status");
+    const templateActivate = document.getElementById("pipeline-template-activate");
     const templateCreate = document.getElementById("pipeline-template-create");
     const templateClone = document.getElementById("pipeline-template-clone");
     const revisionLabel = document.getElementById("pipeline-draft-revision");
@@ -139,6 +140,36 @@
             throw error;
         }
         return response.json();
+    }
+
+    function templateMetadataPayload(extra = {}) {
+        return {
+            name: templateName.value.trim(),
+            description: templateDescription.value.trim(),
+            document_type: templateDocumentType.value.trim() || null,
+            ...extra,
+        };
+    }
+
+    function syncTemplateLifecycleControls() {
+        const status = state.template?.status || "inactive";
+        const hasPublishedVersion = state.versions.length > 0;
+        const canActivate = Boolean(state.templateId) && hasPublishedVersion && status === "inactive";
+
+        templateActivate.disabled = !canActivate;
+        if (status === "active") {
+            templateActivate.textContent = "Active for uploads";
+            templateActivate.title = "This pipeline is available on Upload & Process.";
+        } else if (status === "archived") {
+            templateActivate.textContent = "Archived";
+            templateActivate.title = "Archived templates cannot be activated.";
+        } else if (!hasPublishedVersion) {
+            templateActivate.textContent = "Publish before activating";
+            templateActivate.title = "Publish a version before making this pipeline available on Upload & Process.";
+        } else {
+            templateActivate.textContent = "Activate for uploads";
+            templateActivate.title = "Make this pipeline available on Upload & Process.";
+        }
     }
 
     async function loadBindings() {
@@ -532,9 +563,15 @@
         templateDialogKey.value = cloning ? `${sourceKey}-copy` : "new-pipeline";
         templateDialogName.value = cloning ? `${sourceName} copy` : "New pipeline";
         templateDialogSubmit.textContent = cloning ? "Clone pipeline" : "Create pipeline";
-        templateDialog.showModal();
+        templateDialog.classList.remove("hidden");
+        templateDialog.classList.add("flex");
         templateDialogKey.focus();
         templateDialogKey.select();
+    }
+
+    function closeTemplateDialog() {
+        templateDialog.classList.add("hidden");
+        templateDialog.classList.remove("flex");
     }
 
     function numberControl(label, path, value, attrs, findings) {
@@ -763,6 +800,21 @@
                     <button class="btn btn-outline btn-xs" type="button" data-param-action="edit-field-schema" data-field-key="${escapeHtml(fieldKey)}" data-schema-kind="${isTable ? "row" : "object"}">Edit ${isTable ? "row schema" : "object properties"}</button>
                 </div>
             ` : "";
+            const constraintControls = polishedLayout && baseType === "str" ? `
+                <label class="form-control">
+                    <span class="label-text">Allowed values</span>
+                    <input class="input input-bordered input-sm" aria-label="Allowed values for ${escapeHtml(fieldKey)}" placeholder="Optional, comma-separated" data-param-action="field-choices" data-field-key="${escapeHtml(fieldKey)}" value="${controlValue(Array.isArray(fieldValue.choices) ? fieldValue.choices.join(", ") : "")}">
+                    <span class="mt-1 text-xs text-base-content/50">Constrains Ollama to one configured text value.</span>
+                </label>
+                <label class="form-control">
+                    <span class="label-text">Value normalization</span>
+                    <select class="select select-bordered select-sm" aria-label="Value normalization for ${escapeHtml(fieldKey)}" data-param-action="field-normalizer" data-field-key="${escapeHtml(fieldKey)}">
+                        <option value="" ${fieldValue.normalizer ? "" : "selected"}>None</option>
+                        <option value="iso_date" ${fieldValue.normalizer === "iso_date" ? "selected" : ""}>Date to YYYY-MM-DD</option>
+                    </select>
+                    <span class="mt-1 text-xs text-base-content/50">Date cleanup runs locally after source transcription.</span>
+                </label>
+            ` : "";
             const renderedTypeOptions = typeOptions.some((option) => option.value === baseType)
                 ? typeOptions
                 : [{ value: baseType, label: `Legacy type (${baseType})`, disabled: true }, ...typeOptions];
@@ -793,6 +845,7 @@
                             </span>
                         </label>
                         ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: !polishedLayout, ariaLabel: `Extraction guidance for ${fieldKey}` })}
+                        ${constraintControls}
                         ${schemaControls}
                     </div>
                     ${tableBlocked && !polishedLayout ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review forms may contain multiple arrays of objects.</div>' : ""}
@@ -822,6 +875,7 @@
             return "";
         }
         const configKey = schemaKind === "object" ? "object_fields" : "item_fields";
+        const glmConstraints = step.class === "GlmOcrExtractTask";
         const configuredFields = state.fieldSchemaDraft && typeof state.fieldSchemaDraft === "object"
             ? state.fieldSchemaDraft
             : (fieldConfig[configKey] && typeof fieldConfig[configKey] === "object" ? fieldConfig[configKey] : {});
@@ -847,6 +901,13 @@
                     <button class="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label="Remove field ${escapeHtml(itemKey)}" data-param-action="remove-schema-draft-field" data-item-key="${escapeHtml(itemKey)}">Remove</button>
                     <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Alias for ${escapeHtml(itemKey)}" placeholder="Field alias" data-param-action="schema-draft-alias" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.alias || "")}">
                     <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Extraction guidance for ${escapeHtml(itemKey)}" placeholder="Extraction guidance (optional)" data-param-action="schema-draft-guidance" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.description || "")}">
+                    ${glmConstraints && baseType === "str" ? `
+                        <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Allowed values for ${escapeHtml(itemKey)}" placeholder="Allowed values (optional, comma-separated)" data-param-action="schema-draft-choices" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(Array.isArray(itemConfig.choices) ? itemConfig.choices.join(", ") : "")}">
+                        <select class="select select-bordered select-sm col-span-full min-w-0" aria-label="Value normalization for ${escapeHtml(itemKey)}" data-param-action="schema-draft-normalizer" data-item-key="${escapeHtml(itemKey)}">
+                            <option value="" ${itemConfig.normalizer ? "" : "selected"}>No value normalization</option>
+                            <option value="iso_date" ${itemConfig.normalizer === "iso_date" ? "selected" : ""}>Normalize date to YYYY-MM-DD</option>
+                        </select>
+                    ` : ""}
                 </div>
             `;
         }).join("");
@@ -1526,6 +1587,12 @@
             state.template = null;
             state.active = { steps: [] };
             state.draft = { steps: [] };
+            state.versions = [];
+            templateStatus.value = "inactive";
+            templateStatus.disabled = true;
+            templateClone.disabled = true;
+            templateActivate.disabled = true;
+            templateActivate.textContent = "Activate for uploads";
             render();
             return;
         }
@@ -1547,6 +1614,7 @@
         templateStatus.value = state.template.status || "inactive";
         templateStatus.disabled = false;
         templateClone.disabled = !state.versions.length;
+        syncTemplateLifecycleControls();
         revisionLabel.textContent = `Draft revision ${state.revision}`;
         baseVersionLabel.textContent = state.baseVersionId ? `Base version ${state.versions.find((item) => item.id === state.baseVersionId)?.version_number || "—"}` : "No published base";
         versionHistoryLabel.textContent = state.versions.length ? `${state.versions.length} immutable version(s); latest v${state.versions[0].version_number}` : "No published versions";
@@ -2212,12 +2280,33 @@
             if (baseType !== "Dict[str, Any]") {
                 delete fieldConfig.object_fields;
             }
+            if (baseType !== "str") {
+                delete fieldConfig.choices;
+                delete fieldConfig.normalizer;
+            }
             setParam(params, ["fields", field.dataset.fieldKey], fieldConfig);
             if (baseType === "List[Any]" || baseType === "Dict[str, Any]") {
                 state.editingFieldSchema = field.dataset.fieldKey;
                 state.fieldSchemaKind = baseType === "List[Any]" ? "row" : "object";
                 state.fieldSchemaDraft = clone(baseType === "List[Any]" ? fieldConfig.item_fields || {} : fieldConfig.object_fields || {});
             }
+            markDirty();
+            return true;
+        }
+        if (action === "field-choices") {
+            const fieldConfig = getParam(params, ["fields", field.dataset.fieldKey], {});
+            const choices = field.value.split(",").map((value) => value.trim()).filter(Boolean);
+            if (choices.length) fieldConfig.choices = [...new Set(choices)];
+            else delete fieldConfig.choices;
+            setParam(params, ["fields", field.dataset.fieldKey], fieldConfig);
+            markDirty();
+            return true;
+        }
+        if (action === "field-normalizer") {
+            const fieldConfig = getParam(params, ["fields", field.dataset.fieldKey], {});
+            if (field.value) fieldConfig.normalizer = field.value;
+            else delete fieldConfig.normalizer;
+            setParam(params, ["fields", field.dataset.fieldKey], fieldConfig);
             markDirty();
             return true;
         }
@@ -2248,6 +2337,10 @@
             const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
             const required = field.dataset.required !== "false";
             itemConfig.type = withRequiredState(field.value, required);
+            if (unwrapOptionalType(itemConfig.type) !== "str") {
+                delete itemConfig.choices;
+                delete itemConfig.normalizer;
+            }
             state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
             render();
             return true;
@@ -2270,6 +2363,23 @@
             const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
             if (field.value) itemConfig.description = field.value;
             else delete itemConfig.description;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
+            render();
+            return true;
+        }
+        if (action === "schema-draft-choices") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
+            const choices = field.value.split(",").map((value) => value.trim()).filter(Boolean);
+            if (choices.length) itemConfig.choices = [...new Set(choices)];
+            else delete itemConfig.choices;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
+            render();
+            return true;
+        }
+        if (action === "schema-draft-normalizer") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
+            if (field.value) itemConfig.normalizer = field.value;
+            else delete itemConfig.normalizer;
             state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
             render();
             return true;
@@ -2449,7 +2559,7 @@
         loadPipelineConfig().catch((error) => window.DocFlow.showToast(error.message, "error"));
     });
     document.getElementById("pipeline-reset-button").addEventListener("click", () => {
-        if (!window.confirm("Reset the draft pipeline to the active configuration?")) {
+        if (!window.confirm("Reset this draft to the latest published version? This discards unsaved draft edits and does not change pipeline availability.")) {
             return;
         }
         state.draft = clone(state.active);
@@ -2492,7 +2602,13 @@
         }
     });
     templateDialogCancel.addEventListener("click", () => {
-        templateDialog.close();
+        closeTemplateDialog();
+    });
+    templateDialog.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            closeTemplateDialog();
+            templateCreate.focus();
+        }
     });
     templateForm.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -2503,7 +2619,7 @@
         const name = templateDialogName.value.trim() || templateKey;
         const cloning = state.templateDialogMode === "clone";
         if (cloning && !state.templateId) {
-            templateDialog.close();
+            closeTemplateDialog();
             return;
         }
         templateDialogSubmit.disabled = true;
@@ -2512,7 +2628,7 @@
                 ? `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/clone`
                 : "/api/admin/pipeline-templates";
             const result = await window.DocFlow.apiPost(url, { template_key: templateKey, name });
-            templateDialog.close();
+            closeTemplateDialog();
             state.templateId = result.template.id;
             await loadPipelineConfig();
         } catch (error) {
@@ -2524,27 +2640,42 @@
     templateStatus.addEventListener("change", async () => {
         if (!state.templateId) return;
         try {
-            await apiPatch(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`, {
-                status: templateStatus.value,
-                name: templateName.value.trim(),
-                description: templateDescription.value.trim(),
-                document_type: templateDocumentType.value.trim() || null,
-            });
+            await apiPatch(
+                `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`,
+                templateMetadataPayload({ status: templateStatus.value }),
+            );
             await loadPipelineConfig();
         } catch (error) {
             templateStatus.value = state.template.status;
             window.DocFlow.showToast(error.message, "error");
         }
     });
+    templateActivate.addEventListener("click", async () => {
+        if (!state.templateId || templateActivate.disabled) return;
+        try {
+            templateActivate.disabled = true;
+            await apiPatch(
+                `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`,
+                templateMetadataPayload({ status: "active" }),
+            );
+            window.DocFlow.showToast(
+                "Pipeline activated. It is now available on Upload & Process.",
+                "success",
+            );
+            await loadPipelineConfig();
+        } catch (error) {
+            window.DocFlow.showToast(error.message, "error");
+            syncTemplateLifecycleControls();
+        }
+    });
     [templateName, templateDescription, templateDocumentType].forEach((input) => {
         input.addEventListener("change", async () => {
             if (!state.templateId) return;
             try {
-                await apiPatch(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`, {
-                    name: templateName.value.trim(),
-                    description: templateDescription.value.trim(),
-                    document_type: templateDocumentType.value.trim() || null,
-                });
+                await apiPatch(
+                    `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}`,
+                    templateMetadataPayload(),
+                );
                 await loadPipelineConfig();
             } catch (error) {
                 window.DocFlow.showToast(error.message, "error");

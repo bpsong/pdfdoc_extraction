@@ -45,6 +45,7 @@ def build_glm_ocr_schemas(fields: dict[str, Any]) -> GlmOcrSchemaBundle:
     table_key, table_field = table_entries[0] if table_entries else (None, None)
 
     canonical_schema = build_data_schema(fields, strict_objects=True)
+    _apply_glm_field_constraints(canonical_schema, fields)
     _allow_configured_optional_values(canonical_schema, fields)
 
     scalar_schema = None
@@ -54,6 +55,7 @@ def build_glm_ocr_schemas(fields: dict[str, Any]) -> GlmOcrSchemaBundle:
             strict_objects=True,
             include_required=False,
         )
+        _apply_glm_field_constraints(scalar_schema, scalar_fields)
         _require_nullable_page_values(scalar_schema, scalar_fields)
 
     table_schema = None
@@ -63,6 +65,7 @@ def build_glm_ocr_schemas(fields: dict[str, Any]) -> GlmOcrSchemaBundle:
             strict_objects=True,
             include_required=False,
         )
+        _apply_glm_field_constraints(table_schema, {table_key: table_field})
         _require_page_table(table_schema, table_key, table_field)
 
     return GlmOcrSchemaBundle(
@@ -99,6 +102,10 @@ def validate_glm_ocr_fields(fields: Any) -> None:
                     f"Table field '{field_key}' must use type 'List[Any]'"
                 )
             _validate_children(field_key, field_config.get("item_fields"), "item")
+            if "choices" in field_config or "normalizer" in field_config:
+                raise ValueError(
+                    f"Table field '{field_key}' cannot define scalar constraints"
+                )
             if "object_fields" in field_config:
                 raise ValueError(
                     f"Table field '{field_key}' cannot define object_fields"
@@ -111,6 +118,10 @@ def validate_glm_ocr_fields(fields: Any) -> None:
                 field_config.get("object_fields"),
                 "object",
             )
+            if "choices" in field_config or "normalizer" in field_config:
+                raise ValueError(
+                    f"Object field '{field_key}' cannot define scalar constraints"
+                )
             continue
         if "object_fields" in field_config:
             raise ValueError(
@@ -121,6 +132,7 @@ def validate_glm_ocr_fields(fields: Any) -> None:
                 f"Non-table field '{field_key}' cannot define item_fields"
             )
         _validate_supported_type(field_type, f"Field '{field_key}'")
+        _validate_field_constraints(field_config, field_type, f"Field '{field_key}'")
 
 
 def build_scalar_object_prompt(
@@ -163,6 +175,9 @@ def build_scalar_object_prompt(
             "Preserve leading zeros for fields whose configured type is string.",
             "For numeric fields, return JSON numbers without currency symbols "
             "or thousands separators.",
+            "For a field whose normalizer is iso_date, transcribe the selected "
+            "source date text faithfully; local processing converts it to YYYY-MM-DD.",
+            "For a field with configured choices, return exactly one of those values.",
             "Do not include commentary, Markdown, code fences, or properties "
             "outside the schema.",
             f"Document instructions: {instructions}",
@@ -205,6 +220,9 @@ def build_table_prompt(
             "Preserve leading zeros for row fields whose configured type is string.",
             "For numeric row fields, return JSON numbers without currency "
             "symbols or thousands separators.",
+            "For a row field whose normalizer is iso_date, transcribe the "
+            "source date text faithfully; local processing converts it to YYYY-MM-DD.",
+            "For a row field with configured choices, return exactly one of those values.",
             "Return every configured row key in every row object and use JSON "
             "null when that row does not visibly support a configured value.",
             "Always return the top-level table property. When no logical rows "
@@ -246,6 +264,11 @@ def _validate_children(parent_key: str, children: Any, kind: str) -> None:
                 f"Nested structured child '{parent_key}.{child_key}' is not supported"
             )
         _validate_supported_type(child_type, f"Child '{parent_key}.{child_key}'")
+        _validate_field_constraints(
+            child_config,
+            child_type,
+            f"Child '{parent_key}.{child_key}'",
+        )
 
 
 def _allow_configured_optional_values(
@@ -325,6 +348,9 @@ def _allow_null(schema: dict[str, Any]) -> None:
         schema["type"] = [type_value, "null"]
     elif isinstance(type_value, list) and "null" not in type_value:
         schema["type"] = [*type_value, "null"]
+    enum_value = schema.get("enum")
+    if isinstance(enum_value, list) and None not in enum_value:
+        schema["enum"] = [*enum_value, None]
 
 
 def _validate_field_key(field_key: Any, location: str) -> None:
@@ -338,6 +364,66 @@ def _validate_text_metadata(field_key: str, config: dict[str, Any]) -> None:
         if value is not None and not isinstance(value, str):
             raise ValueError(
                 f"Field '{field_key}' {property_name} must be a string"
+            )
+
+
+def _validate_field_constraints(
+    field_config: dict[str, Any],
+    field_type: str,
+    location: str,
+) -> None:
+    """Validate GLM-only enum and post-extraction normalization options."""
+    clean_type = unwrap_optional(field_type.strip())
+    choices = field_config.get("choices")
+    if choices is not None:
+        if clean_type != "str":
+            raise ValueError(f"{location} choices require type 'str'")
+        if (
+            not isinstance(choices, list)
+            or not choices
+            or any(not isinstance(choice, str) or not choice.strip() for choice in choices)
+        ):
+            raise ValueError(f"{location} choices must be non-empty strings")
+        folded = [choice.casefold() for choice in choices]
+        if len(set(folded)) != len(folded):
+            raise ValueError(f"{location} choices must be unique")
+
+    normalizer = field_config.get("normalizer")
+    if normalizer is not None:
+        if normalizer != "iso_date":
+            raise ValueError(f"{location} has unsupported normalizer '{normalizer}'")
+        if clean_type != "str":
+            raise ValueError(f"{location} iso_date normalizer requires type 'str'")
+
+
+def _apply_glm_field_constraints(
+    schema: dict[str, Any],
+    fields: dict[str, Any],
+) -> None:
+    """Add GLM-only field constraints without changing shared schema defaults."""
+    properties = schema.get("properties")
+    if not isinstance(properties, dict):
+        return
+    for field_key, field_config in fields.items():
+        if not isinstance(field_config, dict):
+            continue
+        property_schema = properties.get(field_key)
+        if not isinstance(property_schema, dict):
+            continue
+        choices = field_config.get("choices")
+        if isinstance(choices, list):
+            property_schema["enum"] = list(choices)
+        if field_config.get("is_table", False):
+            item_schema = property_schema.get("items")
+            if isinstance(item_schema, dict):
+                _apply_glm_field_constraints(
+                    item_schema,
+                    field_config.get("item_fields", {}),
+                )
+        elif has_object_fields(field_config):
+            _apply_glm_field_constraints(
+                property_schema,
+                field_config.get("object_fields", {}),
             )
 
 
@@ -372,13 +458,20 @@ def _field_descriptor(
     field_key: str,
     field_config: dict[str, Any],
 ) -> dict[str, Any]:
-    return {
+    descriptor = {
         "alias": str(field_config.get("alias", field_key)),
         "description": str(field_config.get("description", "")),
         "key": field_key,
         "required": not is_optional_type(str(field_config.get("type", "str"))),
         "type": str(field_config.get("type", "str")),
     }
+    choices = field_config.get("choices")
+    if isinstance(choices, list):
+        descriptor["choices"] = list(choices)
+    normalizer = field_config.get("normalizer")
+    if isinstance(normalizer, str) and normalizer:
+        descriptor["normalizer"] = normalizer
+    return descriptor
 
 
 def _stable_json(value: Any) -> str:

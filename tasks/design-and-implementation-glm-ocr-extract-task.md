@@ -923,28 +923,46 @@ export completes after review.
   - [x] Test multi-page null merging and the existing two-calls-per-page contract.
   - [x] Run focused extraction/integration tests, the full suite, and Pyright.
 
-- [ ] **11.3 Retest the SuperStore GLM pipeline visually**
-  - [ ] Trigger a new unused, non-merged SuperStore invoice through the portal.
-  - [ ] Confirm header values and totals are populated before operator edits.
-  - [ ] Complete review and confirm downstream CSV output.
+- [x] **11.3 Retest the SuperStore GLM pipeline visually**
+  - [x] Trigger a new unused, non-merged SuperStore invoice through the portal.
+  - [x] Confirm header values and totals are populated before operator edits.
+  - [x] Complete review and confirm downstream CSV output.
 
-- [ ] **11.4 Create and test a separate insurance GLM pipeline visually**
-  - [ ] Create and publish an insurance review schema for `sample_invoice.pdf`.
-  - [ ] Create and publish a separate GLM pipeline with review and JSON or CSV
-    metadata export.
-  - [ ] Configure scalar/object-only visual field definitions and guidance for
-    insurer, debit/credit type, customer, premium, and coverage dates; do not
-    configure a table field.
-  - [ ] Confirm the insurance extraction makes one structured Ollama call per
-    page because no table field is configured.
-  - [ ] Upload `sample_invoice.pdf`, inspect the unedited extraction, complete
-    review, and confirm the downstream export artifact.
+- [x] **11.4 Create and test a separate insurance GLM pipeline visually**
+  - [x] Replace the native-prompt review-form creation flow with an accessible
+    in-page dialog, add a focused regression test, and visually verify it.
+  - [x] Create and publish an insurance review schema for `sample_invoice.pdf`.
+  - [x] Create and publish a separate GLM pipeline with review, JSON metadata
+    export, and local-PDF storage after review.
+  - [x] Configure scalar-only visual field definitions and generic guidance for
+    insurer, policy number, debit/credit note type, total premium, and coverage
+    start/end dates; do not configure an object or table field.
+  - [x] Require `YYYY-MM-DD` coverage dates and a numeric premium. Include the
+    requested Liberty-specific rule that strips leading asterisks from a masked
+    premium such as `SGD ********100.00` before returning `100`.
+  - [x] Configure collision-safe local filenames as
+    `insurance_{policy_number}_{insurance_start_date}_{id}.pdf`, preserving the
+    original upload separately as the document source.
+  - [x] Confirm the insurance extraction makes one initial scalar structured
+    Ollama call per page and no table call. If a required scalar is null, record
+    the adapter's conditional focused-recovery call rather than misreporting it
+    as a second table/structure pass.
+  - [x] Upload `sample_invoice.pdf`, inspect the unedited extraction, complete
+    review, and confirm the downstream JSON and renamed-PDF artifacts.
 
-- [ ] **11.5 Record evidence and complete the remediation audit**
-  - [ ] Save ignored screenshots for configuration, unedited extraction,
+- [x] **11.5 Record evidence and complete the remediation audit**
+  - [x] Save ignored screenshots for configuration, unedited extraction,
     completed review, and export artifacts.
-  - [ ] Update maintained documentation and these implementation notes.
-  - [ ] Audit the diff for credentials, customer content, runtime databases,
+  - [x] Add generic GLM-only allowed-value constraints for scalar text fields,
+    including nested object and table-row properties.
+  - [x] Add opt-in deterministic ISO-date normalization after source-date
+    transcription; do not add insurance-template-specific parsing.
+  - [x] Expose both options only in the separate GLM visual properties editor
+    and preserve the LlamaCloud editor byte contract.
+  - [x] Retest `sample_invoice.pdf` with the customer object, debit/credit
+    choices, ISO-date normalizers, and the experimental script's runtime sizes.
+  - [x] Update maintained documentation and these implementation notes.
+  - [x] Audit the diff for credentials, customer content, runtime databases,
     generated exports, logs, and screenshots.
 
 ## Final requirement audit
@@ -1145,3 +1163,41 @@ Record during execution:
   row at desktop, tablet, and mobile breakpoints. Live browser measurements at
   1224px, 900px, and 375px reported zero overlap with a 16px inter-panel gap;
   the focused visual regression matrix passed with 25 tests.
+- Phase 11 insurance visual result (2026-08-06): Review schema
+  `insurance-glm-phase11` v1 and separate pipeline `glm-phase11-insurance` v1
+  were published visually. Portal batch `cb696222-1348-4bcd-9fb5-5054fc75644b`
+  paused for review, accepted corrected insurer, ISO coverage dates, note type,
+  policy number, and premium, then completed JSON and renamed-PDF storage. The
+  exported PDF SHA-256 matched `sample_invoice.pdf` exactly. The GLM metadata
+  recorded one `scalar_object` call and no recovery or table call.
+- Phase 11 prompt comparison (2026-08-06): The original prompt already said not
+  to use the invoice issue date. A visually imported and validated v2 added
+  prioritized spatial rules for the insurer header and the `Period of
+  Insurance` `FROM`/`TO` block. Portal batch
+  `92945900-7d22-4918-93fc-175f886f81a8` still returned the insured company,
+  issue date as start date, non-ISO end date, and full document title as note
+  type; policy number and premium were correct. The prompt hash changed from
+  v1, proving the revised prompt was sent, but the raw values were otherwise
+  identical. The v2 run is intentionally paused at Review Gate so the unedited
+  result remains inspectable.
+- The specialized experimental script differs in more than prompt wording: its
+  schema includes a customer object that anchors the insured name/address block,
+  constrains debit/credit with an enum, and applies Python date/value validation
+  after the model response. Those generic capabilities should be designed as
+  field constraints and normalizers in the GLM task rather than copied as
+  insurance-template-specific code. Prompting alone is not a reliable semantic
+  validator for this sample.
+- The JSON storage task does not expose the context-only `{id}` token to its
+  filename formatter and therefore rendered it as `unknown` in the v1 artifact.
+  Pipeline v2 removes `{id}` from the JSON filename while retaining it for the
+  PDF storage task, which supports the document id. Both storage tasks reserve
+  collision-safe output paths.
+- Phase 11.5 insurance visual result (2026-08-07): Pipeline v5 was configured,
+  validated, published, and submitted through the portal. The customer object
+  kept the insured name and address together and separate from the insurer;
+  allowed values reduced the note heading to `debit`; and the end date was
+  normalized to ISO. GLM-OCR still selected the invoice issue date for the
+  coverage start despite explicit guidance, so the administrator corrected that
+  one value in Review Gate. JSON and renamed-PDF storage then completed. The
+  extraction provenance recorded exactly one `scalar_object` call and no table
+  or focused-recovery call.

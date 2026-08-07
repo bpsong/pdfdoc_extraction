@@ -894,6 +894,12 @@ invalid files as validator fixtures, not production templates.
 - **`param-glm-llamacloud-only`**: A cloud-only parameter was supplied to GLM-OCR
   - Fix: Remove LlamaCloud credentials and options from the local extraction task
 
+- **`param-glm-invalid-choices`**: A GLM-OCR text field has an invalid allowed-values list
+  - Fix: Use a non-empty list of unique, non-empty strings; remove `choices` from non-text fields
+
+- **`param-glm-invalid-normalizer`**: A GLM-OCR field has an unsupported value normalizer
+  - Fix: Use `normalizer: iso_date` only on text fields, or remove the setting
+
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path
   - Fix: Ensure the module is installed or the path is correct

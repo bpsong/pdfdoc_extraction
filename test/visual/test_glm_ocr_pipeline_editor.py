@@ -103,6 +103,43 @@ def test_glm_renderer_reuses_scalar_object_and_table_field_primitives() -> None:
     assert "params.extraction = { fields: clone(sourceFields) };" in storage_copy
 
 
+def test_glm_editor_exposes_choices_and_date_normalization_without_llama_controls() -> None:
+    source = _source()
+    neutral_fields = _between(
+        source,
+        "    function extractionFieldControls(step, hint) {",
+        "    function structuredFieldSchemaDrawer(step) {",
+    )
+    drawer = _between(
+        source,
+        "    function structuredFieldSchemaDrawer(step) {",
+        "    function extractControls(step) {",
+    )
+
+    for marker in (
+        'polishedLayout && baseType === "str"',
+        "Allowed values",
+        'data-param-action="field-choices"',
+        'data-param-action="field-normalizer"',
+        "Date to YYYY-MM-DD",
+    ):
+        assert marker in neutral_fields
+    for marker in (
+        'step.class === "GlmOcrExtractTask"',
+        'data-param-action="schema-draft-choices"',
+        'data-param-action="schema-draft-normalizer"',
+    ):
+        assert marker in drawer
+
+    llama_renderer = _between(
+        source,
+        "    function extractControls(step) {",
+        "    function glmOcrExtractControls(step) {",
+    )
+    assert "Allowed values" not in llama_renderer
+    assert "iso_date" not in llama_renderer
+
+
 def test_glm_field_rows_use_polished_alignment_and_destructive_action() -> None:
     """Keep the GLM field row aligned while preserving the Llama renderer."""
     source = _source()

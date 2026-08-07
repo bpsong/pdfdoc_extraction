@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -376,9 +377,9 @@ def normalize_configured_object(
             continue
         if isinstance(child_value, str):
             child_value = re.sub(r"\n+", " ", child_value.strip())
-        processed[str(child_key)] = coerce_value(
+        processed[str(child_key)] = normalize_primitive_field(
             child_value,
-            str(child_config.get("type", "str")),
+            child_config,
             logger=logger,
             path=_join_path(path, str(child_key)),
             findings=target_findings,
@@ -408,13 +409,54 @@ def normalize_scalar_field(
             findings=findings,
             include_missing=include_missing,
         )
-    return coerce_value(
+    return normalize_primitive_field(
         value,
-        field_type,
+        field_config,
         logger=logger,
         path=path,
         findings=findings,
     )
+
+
+def normalize_primitive_field(
+    value: Any,
+    field_config: dict[str, Any],
+    *,
+    logger: logging.Logger | None = None,
+    path: str = "",
+    findings: list[FieldNormalizationFinding] | None = None,
+) -> Any:
+    """Coerce one primitive value and apply configured deterministic rules."""
+    target_findings = findings if findings is not None else []
+    normalized = coerce_value(
+        value,
+        str(field_config.get("type", "str")),
+        logger=logger,
+        path=path,
+        findings=target_findings,
+    )
+    if normalized is None:
+        return None
+
+    normalizer = field_config.get("normalizer")
+    if normalizer == "iso_date":
+        normalized = _normalize_iso_date(
+            normalized,
+            logger=logger,
+            path=path,
+            findings=target_findings,
+        )
+
+    choices = field_config.get("choices")
+    if isinstance(normalized, str) and isinstance(choices, list):
+        normalized = _normalize_choice(
+            normalized,
+            choices,
+            logger=logger,
+            path=path,
+            findings=target_findings,
+        )
+    return normalized
 
 
 def normalize_table_field(
@@ -473,9 +515,9 @@ def normalize_table_field(
                 continue
             if isinstance(item_value, str):
                 item_value = re.sub(r"\n+", " ", item_value.strip())
-            processed_item[str(subfield_key)] = coerce_value(
+            processed_item[str(subfield_key)] = normalize_primitive_field(
                 item_value,
-                str(subfield_config.get("type", "str")),
+                subfield_config,
                 logger=logger,
                 path=f"{field_key}.{item_index}.{subfield_key}",
                 findings=target_findings,
@@ -530,3 +572,78 @@ def normalize_configured_fields(
 
 def _join_path(prefix: str, part: str) -> str:
     return f"{prefix}.{part}" if prefix else part
+
+
+def _normalize_iso_date(
+    value: Any,
+    *,
+    logger: logging.Logger | None,
+    path: str,
+    findings: list[FieldNormalizationFinding],
+) -> Any:
+    """Normalize common unambiguous document-date strings to ISO format."""
+    if not isinstance(value, str):
+        findings.append(
+            FieldNormalizationFinding(
+                path=path,
+                code="invalid_iso_date",
+                message="ISO date normalizer requires a text value",
+            )
+        )
+        return value
+    text = " ".join(value.strip().split())
+    for date_format in (
+        "%Y-%m-%d",
+        "%d %b %Y",
+        "%d %B %Y",
+        "%d/%m/%Y",
+        "%d-%m-%Y",
+        "%d.%m.%Y",
+    ):
+        try:
+            return datetime.strptime(text, date_format).date().isoformat()
+        except ValueError:
+            continue
+    findings.append(
+        FieldNormalizationFinding(
+            path=path,
+            code="invalid_iso_date",
+            message="Value could not be normalized to an ISO date",
+        )
+    )
+    if logger:
+        logger.warning("Value could not be normalized to an ISO date at %s", path)
+    return value
+
+
+def _normalize_choice(
+    value: str,
+    choices: list[Any],
+    *,
+    logger: logging.Logger | None,
+    path: str,
+    findings: list[FieldNormalizationFinding],
+) -> str:
+    """Return the configured spelling for an exact or unique token match."""
+    text = " ".join(value.strip().split())
+    string_choices = [choice for choice in choices if isinstance(choice, str)]
+    exact = [choice for choice in string_choices if choice.casefold() == text.casefold()]
+    if len(exact) == 1:
+        return exact[0]
+    token_matches = [
+        choice
+        for choice in string_choices
+        if re.search(rf"(?<!\w){re.escape(choice)}(?!\w)", text, re.IGNORECASE)
+    ]
+    if len(token_matches) == 1:
+        return token_matches[0]
+    findings.append(
+        FieldNormalizationFinding(
+            path=path,
+            code="invalid_choice",
+            message="Value did not match exactly one configured choice",
+        )
+    )
+    if logger:
+        logger.warning("Value did not match a configured choice at %s", path)
+    return value

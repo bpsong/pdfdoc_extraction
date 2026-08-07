@@ -1178,7 +1178,10 @@ pipeline:
   - `timeout_seconds`: positive request timeout; default `300`.
   - `fields`: the same stable extraction-field mapping used by downstream
     review and storage. Scalar fields, scalar lists, flat objects, and one
-    `List[Any]` table with `item_fields` are supported.
+    `List[Any]` table with `item_fields` are supported. Text fields may define
+    `choices` to constrain the Ollama JSON schema, and may opt into the
+    `iso_date` normalizer to convert a transcribed source date to `YYYY-MM-DD`
+    after extraction.
 
 Configure this task from **Admin > Pipeline** by adding **Glm Ocr Extract**.
 Its properties panel is separate from the LlamaCloud Extract editor. Set the
@@ -1187,6 +1190,18 @@ schema** for invoice lines. Add and configure **Review Gate** after extraction,
 pin an exact published review-form version, then add CSV or JSON storage. Save,
 validate, and publish the pipeline before assigning it to an upload or
 watch-folder binding.
+
+Use an **Object with defined fields** when several values must come from the
+same visual block. This is important for documents that contain multiple
+organizations or addresses. For example, configure the insured or billed
+customer as one `customer` object with `name` and `address` properties, while
+keeping `insurance_company` as a separate scalar. The object tells GLM-OCR that
+the customer name and address belong together; two independent scalar fields
+can otherwise be selected from different parties on the page. Objects are flat:
+their properties may be text, integer, number, or yes/no fields, but cannot
+contain another object or list. The same technique can group a coverage
+period's `start_date` and `end_date` when both must come from one labelled date
+range rather than from unrelated issue or due dates elsewhere on the page.
 
 The task renders pages locally in memory and makes schema-directed vision calls.
 Scalar/object fields and the object-array table use separate calls so table
@@ -1225,6 +1240,28 @@ tasks:
       timeout_seconds: 300
       fields:
         invoice_number: { alias: Invoice number, type: str }
+        customer:
+          alias: Customer
+          type: Dict[str, Any]
+          object_fields:
+            name: { alias: Customer name, type: str }
+            address: { alias: Customer address, type: str }
+        note_type:
+          alias: Note type
+          type: str
+          choices: [debit, credit]
+        coverage_period:
+          alias: Coverage period
+          type: Dict[str, Any]
+          object_fields:
+            start_date:
+              alias: Coverage start date
+              type: str
+              normalizer: iso_date
+            end_date:
+              alias: Coverage end date
+              type: str
+              normalizer: iso_date
         total: { alias: Total, type: float }
         line_items:
           alias: Line items

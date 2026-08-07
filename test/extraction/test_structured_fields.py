@@ -174,3 +174,67 @@ def test_normalization_can_preserve_missing_configured_keys() -> None:
     assert result.data["items"] == [
         {"sku": None, "quantity": None, "discount": None}
     ]
+
+
+def test_glm_constraints_normalize_dates_and_canonical_choice_tokens() -> None:
+    fields = {
+        "note_type": {
+            "alias": "Note type",
+            "type": "str",
+            "choices": ["debit", "credit"],
+        },
+        "coverage": {
+            "alias": "Coverage",
+            "type": "Dict[str, Any]",
+            "object_fields": {
+                "start": {
+                    "alias": "Start",
+                    "type": "str",
+                    "normalizer": "iso_date",
+                },
+                "end": {
+                    "alias": "End",
+                    "type": "str",
+                    "normalizer": "iso_date",
+                },
+            },
+        },
+    }
+
+    result = normalize_configured_fields(
+        {
+            "Note type": "Tax Invoice/Debit Note",
+            "Coverage": {"Start": "25 NOV 2024", "End": "24/11/2026"},
+        },
+        fields,
+    )
+
+    assert result.data == {
+        "note_type": "debit",
+        "coverage": {"start": "2024-11-25", "end": "2026-11-24"},
+    }
+    assert result.findings == []
+
+
+def test_invalid_date_and_ambiguous_choice_remain_reviewable() -> None:
+    result = normalize_configured_fields(
+        {"Date": "late November", "Type": "debit / credit"},
+        {
+            "date": {
+                "alias": "Date",
+                "type": "str",
+                "normalizer": "iso_date",
+            },
+            "type": {
+                "alias": "Type",
+                "type": "str",
+                "choices": ["debit", "credit"],
+            },
+        },
+    )
+
+    assert result.data == {"date": "late November", "type": "debit / credit"}
+    assert [(item.path, item.code) for item in result.findings] == [
+        ("date", "invalid_iso_date"),
+        ("type", "invalid_choice"),
+    ]

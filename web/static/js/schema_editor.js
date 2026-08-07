@@ -23,6 +23,13 @@
     const warningBox = document.getElementById("schema-warning");
     const errorBox = document.getElementById("schema-error");
     const createButton = document.getElementById("schema-create-button");
+    const createModal = document.getElementById("schema-create-modal");
+    const createForm = document.getElementById("schema-create-form");
+    const createKeyInput = document.getElementById("schema-create-key");
+    const createNameInput = document.getElementById("schema-create-name");
+    const createCancelButton = document.getElementById("schema-create-cancel");
+    const createSubmitButton = document.getElementById("schema-create-submit");
+    const createErrorBox = document.getElementById("schema-create-error");
     const duplicateButton = document.getElementById("schema-duplicate-button");
     const saveButton = document.getElementById("schema-save-button");
     const validateButton = document.getElementById("schema-validate-button");
@@ -55,6 +62,11 @@
 
     function emptySchema() {
         return { title: "", description: "", fields: {} };
+    }
+
+    function closeCreateModal() {
+        createModal.classList.add("hidden");
+        createModal.classList.remove("flex");
     }
 
     function readLastSchemaName() {
@@ -1163,18 +1175,48 @@
         if (!confirmDiscardChanges()) {
             return;
         }
-        const schemaKey = window.prompt("Stable review form key", "new-review-form");
-        if (!schemaKey) return;
-        const name = window.prompt("Review form name", "New review form") || schemaKey;
-        window.DocFlow.apiPost("/api/admin/review-schemas", {
-            schema_key: schemaKey,
-            name,
-            schema: emptySchema(),
-        }).then((result) => {
+        setBox(createErrorBox, "");
+        createKeyInput.value = "new-review-form";
+        createNameInput.value = "New review form";
+        createModal.classList.remove("hidden");
+        createModal.classList.add("flex");
+        createKeyInput.focus();
+        createKeyInput.select();
+    });
+    createCancelButton.addEventListener("click", closeCreateModal);
+    createModal.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            closeCreateModal();
+            createButton.focus();
+        }
+    });
+    createForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const schemaKey = createKeyInput.value.trim();
+        const name = createNameInput.value.trim() || schemaKey;
+        if (!schemaKey) {
+            setBox(createErrorBox, "Stable key is required.");
+            createKeyInput.focus();
+            return;
+        }
+        setBox(createErrorBox, "");
+        createSubmitButton.disabled = true;
+        try {
+            const result = await window.DocFlow.apiPost("/api/admin/review-schemas", {
+                schema_key: schemaKey,
+                name,
+                schema: emptySchema(),
+            });
             currentId = result.template.id;
             currentName = result.template.schema_key;
-            return loadSchemas();
-        }).catch((error) => setBox(errorBox, error.message));
+            closeCreateModal();
+            await loadSchemas();
+            window.DocFlow.showToast("Review form draft created", "success");
+        } catch (error) {
+            setBox(createErrorBox, error.message);
+        } finally {
+            createSubmitButton.disabled = false;
+        }
     });
     duplicateButton.addEventListener("click", async () => {
         if (!currentId) {

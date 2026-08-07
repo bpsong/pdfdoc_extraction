@@ -199,6 +199,54 @@ def test_scalar_recovery_prompt_is_focused_without_changing_schema() -> None:
     assert '"invoice_number"' in prompt
 
 
+def test_choices_and_date_normalizer_are_glm_only_schema_prompt_constraints() -> None:
+    fields = {
+        "note_type": {
+            "alias": "Note type",
+            "type": "str",
+            "choices": ["debit", "credit"],
+        },
+        "coverage_start": {
+            "alias": "Coverage start",
+            "type": "str",
+            "normalizer": "iso_date",
+        },
+        "customer": {
+            "alias": "Customer",
+            "type": "Dict[str, Any]",
+            "object_fields": {
+                "kind": {
+                    "alias": "Kind",
+                    "type": "Optional[str]",
+                    "choices": ["business", "person"],
+                }
+            },
+        },
+    }
+
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+    canonical = bundle.canonical_schema["properties"]
+    page = bundle.scalar_page_schema["properties"]
+
+    assert canonical["note_type"]["enum"] == ["debit", "credit"]
+    assert page["note_type"]["enum"] == ["debit", "credit", None]
+    assert canonical["customer"]["properties"]["kind"]["enum"] == [
+        "business",
+        "person",
+        None,
+    ]
+    assert page["customer"]["properties"]["kind"]["enum"] == [
+        "business",
+        "person",
+        None,
+    ]
+    prompt = build_scalar_object_prompt(fields, bundle.scalar_page_schema)
+    assert '"choices":["debit","credit"]' in prompt
+    assert '"normalizer":"iso_date"' in prompt
+    assert "transcribe the selected source date text faithfully" in prompt
+
+
 def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:
     bundle = build_glm_ocr_schemas(_mixed_fields())
     assert bundle.table_field_key is not None
@@ -294,6 +342,18 @@ def test_prompts_do_not_gain_runtime_document_values() -> None:
                 },
             },
             "at most one table",
+        ),
+        (
+            {"amount": {"type": "float", "choices": ["one"]}},
+            "choices require type 'str'",
+        ),
+        (
+            {"status": {"type": "str", "choices": ["debit", "DEBIT"]}},
+            "choices must be unique",
+        ),
+        (
+            {"date": {"type": "str", "normalizer": "template_date"}},
+            "unsupported normalizer",
         ),
     ],
 )

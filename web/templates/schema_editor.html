@@ -106,9 +106,32 @@
     </section>
 </div>
 <input id="schema-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">
+
+<div id="schema-create-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-base-content/40 p-4" role="dialog" aria-modal="true" aria-labelledby="schema-create-title">
+    <div class="w-full max-w-lg rounded-box border border-base-300 bg-base-100 p-6 shadow-lg">
+        <h2 id="schema-create-title" class="text-lg font-semibold">New review form</h2>
+        <p class="mt-1 text-sm text-base-content/60">Create a separate draft with a stable key. Published pipeline versions will remain unchanged.</p>
+        <div id="schema-create-error" class="alert alert-error mt-4 hidden text-sm" role="alert"></div>
+        <form id="schema-create-form" class="mt-4 space-y-4">
+            <label class="form-control">
+                <span class="label-text">Stable key</span>
+                <input id="schema-create-key" class="input input-bordered" type="text" value="new-review-form" autocomplete="off" required>
+                <span class="label-text-alt">Use a durable lowercase key, for example insurance-review.</span>
+            </label>
+            <label class="form-control">
+                <span class="label-text">Review form name</span>
+                <input id="schema-create-name" class="input input-bordered" type="text" value="New review form" autocomplete="off">
+            </label>
+            <div class="modal-action">
+                <button id="schema-create-cancel" class="btn btn-ghost" type="button">Cancel</button>
+                <button id="schema-create-submit" class="btn btn-primary" type="submit">Create review form</button>
+            </div>
+        </form>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script src="/static/js/schema_editor.js?v=versioned-review-forms" defer></script>
+<script src="/static/js/schema_editor.js?v=versioned-review-forms-schema-modal-2" defer></script>
 {% endblock %}
