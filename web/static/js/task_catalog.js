@@ -27,7 +27,7 @@
 
     function configuredBadge(task) {
         if (!task.is_configured) {
-            return '<span class="badge badge-ghost badge-sm">Not in pipeline</span>';
+            return '<span class="badge badge-ghost badge-sm">Not in config.yaml</span>';
         }
         return (task.configured_keys || [])
             .map((key) => `<span class="badge badge-primary badge-sm">${escapeHtml(key)}</span>`)
@@ -137,7 +137,7 @@
         const params = task.configured_params || {};
         const keys = Object.keys(params);
         if (!keys.length) {
-            return '<div class="text-sm text-base-content/50">This task is not configured in the active pipeline.</div>';
+            return '<div class="text-sm text-base-content/50">This task is not configured in the running config.yaml. Versioned pipeline drafts are managed in Pipeline.</div>';
         }
         return keys.map((key) => `
             <div class="collapse collapse-arrow bg-base-200">
@@ -177,7 +177,7 @@
         body.innerHTML = `
             <div class="flex flex-wrap gap-2">
                 ${statusBadge(task)}
-                ${task.is_configured ? '<span class="badge badge-primary badge-sm">Configured</span>' : '<span class="badge badge-outline badge-sm">Available</span>'}
+                ${task.is_configured ? '<span class="badge badge-primary badge-sm">Used in config.yaml</span>' : '<span class="badge badge-outline badge-sm">Available to add</span>'}
                 <span class="badge badge-ghost badge-sm">${escapeHtml(task.category)}</span>
                 ${task.import_status === "ok" ? '<a class="btn btn-outline btn-xs ml-auto" href="/app/admin/pipeline">Add in Pipeline</a>' : ""}
             </div>

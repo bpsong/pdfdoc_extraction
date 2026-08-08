@@ -54,4 +54,4 @@ def test_named_schema_route_resolves_to_versioned_template_identity() -> None:
     assert "function initialSchemaName()" in source
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
     assert "/api/admin/review-schemas/${encodeURIComponent(templateId)}" in source
-    assert "schema_editor.js?v=versioned-review-forms" in template
+    assert "schema_editor.js?v=ui-clarity-1" in template

@@ -1,9 +1,9 @@
 {% extends "app_base.html" %}
 
 {% block header_actions %}
-<button class="btn btn-outline btn-sm" id="validation-active-button" type="button" title="Checks the running config.yaml">Validate Config File</button>
-<button class="btn btn-outline btn-sm" id="validation-pipeline-button" type="button" title="Checks the active pipeline configuration">Validate Pipeline</button>
-<button class="btn btn-outline btn-sm" id="validation-schemas-button" type="button" title="Checks all schema YAML files on disk">Validate Schemas</button>
+<button class="btn btn-outline btn-sm" id="validation-active-button" type="button" title="Checks the running config.yaml">Check config.yaml</button>
+<button class="btn btn-outline btn-sm" id="validation-pipeline-button" type="button" title="Checks the current pipeline draft">Check pipeline draft</button>
+<button class="btn btn-outline btn-sm" id="validation-schemas-button" type="button" title="Checks all saved review-form schemas">Check review forms</button>
 {% endblock %}
 
 {% block content %}
@@ -11,13 +11,13 @@
     <section class="card bg-base-100 shadow-sm validation-controls-panel">
         <div class="panel-header">
             <div>
-                <h2 class="font-semibold">Run Validation</h2>
-                <p class="text-xs text-base-content/50" id="validation-source-label">Active configuration</p>
+                <h2 class="font-semibold">Validation results</h2>
+                <p class="text-xs text-base-content/50" id="validation-source-label">Loading validation target</p>
             </div>
         </div>
         <div class="card-body gap-4">
             <p class="text-sm text-base-content/70">
-                Choose what to validate. Config File checks the running config.yaml. Pasted YAML checks a draft below without saving. Pipeline checks the active task sequence. Schemas checks schema files on disk.
+                Choose a target. Results always identify whether they apply to config.yaml, the current pipeline draft, review forms, or pasted YAML.
             </p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label class="label cursor-pointer justify-start gap-3">
@@ -30,12 +30,12 @@
                 </label>
             </div>
             <label class="form-control">
-                <span class="label-text">Pasted YAML draft</span>
+                <span class="label-text">Paste YAML to validate (not saved)</span>
                 <textarea class="textarea textarea-bordered font-mono text-xs validation-draft-yaml"
                     id="validation-draft-yaml"
                     placeholder="Paste config YAML to validate without saving"></textarea>
             </label>
-            <button class="btn btn-primary btn-sm self-start" id="validation-draft-button" type="button">Validate Pasted YAML</button>
+            <button class="btn btn-primary btn-sm self-start" id="validation-draft-button" type="button">Check pasted YAML</button>
             <div class="alert alert-info text-sm">
                 Validation runs do not save or auto-fix YAML. Secret-like keys are redacted in displayed details.
             </div>
@@ -56,7 +56,7 @@
             <div class="stat-value text-2xl" id="validation-info-count">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Readiness</div>
+            <div class="stat-title">Selected target</div>
             <div class="stat-value text-2xl" id="validation-readiness">Not run</div>
         </div>
     </section>
@@ -101,5 +101,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/config_validation.js?v=task23" defer></script>
+<script src="/static/js/config_validation.js?v=ui-clarity-1" defer></script>
 {% endblock %}

@@ -39,6 +39,17 @@
         return `<span class="badge badge-sm ${badgeClass}">${escapeHtml(titleCase(status))}</span>`;
     }
 
+    function workflowState(batch) {
+        const status = String(batch.status || "").toLowerCase();
+        if (status.includes("review")) {
+            return '<span class="text-warning text-xs font-medium">Awaiting review</span>';
+        }
+        if (status.includes("complete")) {
+            return '<span class="text-success text-xs font-medium">Processing complete</span>';
+        }
+        return `${escapeHtml(batch.progress_percent || 0)}%`;
+    }
+
     function formatDuration(startedAt, endedAt) {
         if (!startedAt || !endedAt) {
             return "n/a";
@@ -124,7 +135,7 @@
                 <td>${escapeHtml(titleCase(batch.source))}</td>
                 <td class="font-mono text-xs">${escapeHtml(batch.id)}</td>
                 <td>${statusBadge(batch.status)}</td>
-                <td class="text-right">${escapeHtml(batch.progress_percent || 0)}%</td>
+                <td class="text-right">${workflowState(batch)}</td>
             </tr>
         `).join("");
     }
@@ -150,8 +161,8 @@
                     <div class="text-sm">${escapeHtml(formatDateTime(batch.updated_at))}</div>
                 </div>
                 <div>
-                    <div class="text-xs text-base-content/50">Progress</div>
-                    <div class="font-medium">${escapeHtml(state.progress_percent ?? batch.progress_percent ?? 0)}%</div>
+                    <div class="text-xs text-base-content/50">Workflow state</div>
+                    <div class="font-medium">${workflowState({ ...batch, progress_percent: state.progress_percent ?? batch.progress_percent })}</div>
                 </div>
             </div>
         `;

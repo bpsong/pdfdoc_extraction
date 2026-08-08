@@ -92,3 +92,36 @@ def test_binding_api_enforces_admin_role_and_cookie_csrf(tmp_path, monkeypatch):
 
     assert missing.status_code == 403
     assert accepted.status_code == 200
+
+
+def test_binding_api_explains_inactive_pipeline_requirement(tmp_path, monkeypatch):
+    client, config = _admin_client(tmp_path, monkeypatch)
+    folder = tmp_path / "incoming"
+    folder.mkdir()
+    with connect(config) as conn:
+        conn.execute(
+            """
+            UPDATE pipeline_templates
+            SET status = 'inactive'
+            WHERE id = (
+                SELECT template_id FROM pipeline_versions WHERE id = ?
+            )
+            """,
+            (config.pipeline_version_id,),
+        )
+        conn.commit()
+
+    response = client.post(
+        "/api/admin/watch-folder-bindings",
+        json={
+            "folder_path": str(folder),
+            "pipeline_version_id": config.pipeline_version_id,
+            "enabled": True,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "The pipeline template must be active before a watch-folder binding can "
+        "be enabled. Publish a version and activate the template first."
+    )

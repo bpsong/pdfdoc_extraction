@@ -60,8 +60,8 @@
     <section class="admin-panel pipeline-active-panel">
         <div class="admin-panel-header">
             <div class="admin-panel-heading">
-                <h2 class="admin-panel-title">Active Pipeline</h2>
-                <p class="admin-panel-subtitle" id="pipeline-active-summary">0 steps</p>
+                <h2 class="admin-panel-title">Live pipeline</h2>
+                <p class="admin-panel-subtitle" id="pipeline-active-summary">Read-only published version</p>
             </div>
         </div>
         <div class="pipeline-active-list" id="pipeline-active-list">
@@ -72,8 +72,8 @@
     <section class="admin-panel pipeline-draft-panel">
         <div class="admin-panel-header">
             <div class="admin-panel-heading">
-                <h2 class="admin-panel-title">Draft Pipeline</h2>
-                <p class="admin-panel-subtitle" id="pipeline-draft-summary">0 steps</p>
+                <h2 class="admin-panel-title">Editing draft</h2>
+                <p class="admin-panel-subtitle" id="pipeline-draft-summary">Changes remain private until published</p>
             </div>
             <div class="admin-panel-actions">
                 <button class="btn btn-outline btn-sm" id="pipeline-reset-button" type="button" title="Discard draft edits and restore the latest published version. This does not change pipeline availability.">Reset draft to published version</button>
@@ -140,7 +140,7 @@
         <div class="admin-panel-header">
             <div class="admin-panel-heading">
                 <h2 class="admin-panel-title">Watch-folder bindings</h2>
-                <p class="admin-panel-subtitle">Each enabled folder pins one exact published version for later claims.</p>
+                <p class="admin-panel-subtitle">Enabled bindings require one exact published version from an active pipeline.</p>
             </div>
         </div>
         <div class="p-4">
@@ -191,5 +191,5 @@
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script src="/static/js/pipeline_config.js?v=versioned-templates-3-modal" defer></script>
+<script src="/static/js/pipeline_config.js?v=ui-clarity-1" defer></script>
 {% endblock %}

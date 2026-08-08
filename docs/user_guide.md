@@ -284,7 +284,7 @@ Use an operator account for normal daily work. Use the administrator account onl
 
 **How to check completion:**
 
-- Select **Reports**, find the watch-folder batch, and open **Processing** to
+- Select **Reports**, find the watch-folder batch, and select **Open processing dashboard** to
   confirm the batch, document, and task statuses.
 - Select **Extraction** for a document to compare extracted and final values,
   confidence, the raw provider payload, the PDF preview, and registered files.
@@ -327,7 +327,7 @@ Unless an administrator changes the upload settings, the web interface accepts u
 
 1. After an upload, use the batch page that opens automatically to monitor its documents and processing steps.
 2. To find an earlier batch, select **Reports** and locate it under **Recent Batches**.
-3. Select the batch row to view its details, then select **Processing** for the full processing view.
+3. Select the batch row to view its details, then select **Open processing dashboard** for the full processing view.
 4. If processing fails, select **Failures** from the left navigation menu for the reason and suggested action.
 
 The application displays the original filename, current status, timestamps, and processing progress. You do not need to manage the temporary filenames or internal records used by the system.
@@ -356,15 +356,15 @@ Administrators also see **Overview**, **Users**, **Pipeline**, **Review Forms**,
 **How to use the remaining operator pages:**
 
 - **Processing Overview** is reached automatically after upload or through
-  **Reports** > **Processing**. It shows pipeline steps, batch/document status,
+  **Reports** > **Open processing dashboard**. It shows pipeline steps, batch/document status,
   and links to extraction, split, review, or failure details as applicable.
 - **Extraction** shows the source or stored PDF, registered artifacts,
   extracted versus final values, confidence bands, review status, and the raw
   provider payload. **Previous** and **Next** move among documents in the same
   batch. This page is evidence of processing, not an editing screen.
 - **Reports** summarizes batches and documents, persisted statuses, ingestion
-  sources, review counts, completed/failed totals, average task-run span, and
-  recent batches. Select a recent batch for details and its **Processing** link.
+  sources, review counts, completed/failed totals, average processing time, and
+  recent batches. Select a recent batch for details and its **Open processing dashboard** link.
 - **Settings** is read-only for operators. It exposes safe deployment paths and
   runtime summaries with secret-like values redacted. In a multi-pipeline
   deployment, a zero or empty legacy pipeline summary on this page does not
@@ -426,7 +426,7 @@ Administrators should use the unified Review Form Editor to maintain review sche
 
 When split processing is enabled, one uploaded PDF may create several child documents. The system processes each child separately after the split. One child may finish while another is still processing or waiting in **Review Queue**. Finishing the split does not mean that all child documents have finished; the original PDF is complete only after every child has reached a final status.
 
-To check progress, select **Reports**, open the batch's **Processing** view, and
+To check progress, select **Reports**, open the batch's **Open processing dashboard** view, and
 select **View Split Results**. This page shows:
 
 - source document status
@@ -903,11 +903,16 @@ constraints and patterns, use the [review schema administrator guide](review_sch
 
 ##### Add a watch-folder binding visually
 
+The binding fields become available only after the selected pipeline has at
+least one published version and is **Active**. The panel explains whether
+publishing or activation is still required.
+
 1. Create the real incoming folder on disk and grant the application account
    read, move/delete, and directory-list permissions. Do not bind a drive root.
-2. On **Pipeline**, select the active template whose version will process the
-   folder. In **Watch-folder bindings**, enter the absolute folder path, choose
-   an exact published version, and select **Add binding**.
+2. On **Pipeline**, select the template whose version will process the folder.
+   Save and validate the draft, select **Publish**, then set the template to
+   **Active**. In **Watch-folder bindings**, enter the absolute folder path,
+   choose an exact published version, and select **Add binding**.
 3. Confirm the list shows the normalized path, **enabled**, pipeline name, and
    version. Resolve any accessibility or eligibility finding before adding a PDF.
 4. Place a test PDF in the folder and verify its watch-folder batch in
@@ -2246,8 +2251,8 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Interface area | Path | Access | How to navigate to this area |
 |----------------|------|--------|------------------------------|
 | Upload & Process | `/app/upload` | Operator and administrator | Select **Upload & Process** from the left navigation menu. |
-| Processing Overview | `/app/processing` | Operator and administrator | Start an upload from **Upload & Process**; its processing page opens automatically. To view other processing activity, select **Reports**, then **Processing**. |
-| Batch details | `/app/batches/{batch_id}` | Operator and administrator | Select **Reports**, choose a batch under **Recent Batches**, then select **Processing** in the batch details window. |
+| Processing Overview | `/app/processing` | Operator and administrator | Start an upload from **Upload & Process**; its processing page opens automatically. To view other processing activity, select **Reports**, then **Open processing dashboard**. |
+| Batch details | `/app/batches/{batch_id}` | Operator and administrator | Select **Reports**, choose a batch under **Recent Batches**, then select **Open processing dashboard** in the batch details window. |
 | Split results | `/app/batches/{batch_id}/split-results` | Operator and administrator | Open the batch's **Processing Overview**, then select **View Split Results**. |
 | Extraction results | `/app/documents/{document_id}/extraction` | Operator and administrator | Open **Processing Overview** and select **Extraction** beside the document. For a split PDF, open **Split Results** and select **Extraction** beside a child document. |
 | Review Queue | `/app/review` | Operator and administrator | Select **Review Queue** from the left navigation menu. |

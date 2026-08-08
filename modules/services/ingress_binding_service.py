@@ -156,7 +156,17 @@ class IngressBindingService:
                 "pipeline_template_id": executable.template_id,
                 "pipeline_version_id": executable.version_id,
             }
-        except (IngestionAssignmentError, RuntimeError, KeyError) as exc:
+        except IngestionAssignmentError as exc:
+            if str(exc) == "Selected pipeline template is not active.":
+                raise IngressBindingConflictError(
+                    "The pipeline template must be active before a watch-folder "
+                    "binding can be enabled. Publish a version and activate the "
+                    "template first."
+                ) from exc
+            raise IngressBindingConflictError(
+                "Selected pipeline version is not eligible for this binding."
+            ) from exc
+        except (RuntimeError, KeyError) as exc:
             raise IngressBindingConflictError(
                 "Selected pipeline version is not eligible for this binding."
             ) from exc

@@ -246,8 +246,9 @@ After a successful import, remove the legacy `authentication` block. Passwords m
 
 ### Watch Folder
 
-1. **Create a binding**: In the bottom of `/app/admin/pipeline`, bind an
-   existing, non-overlapping incoming folder to one exact published version
+1. **Create a binding**: In the bottom of `/app/admin/pipeline`, publish and
+   activate the pipeline, then bind an existing, non-overlapping incoming
+   folder to one exact published version
 2. **Drop PDFs** into that bound directory; `watch_folder.dir` alone is only a
    required startup-compatibility path and does not assign a workflow
 3. **Automatic Processing**: Enabled bindings are scanned and files are pinned

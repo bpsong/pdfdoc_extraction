@@ -322,6 +322,17 @@ fields:
             },
             user="admin",
         )
+        inactive_published = pipelines.clone(
+            active["template"]["id"],
+            template_key="phase14-inactive-published",
+            name="Phase 14 Inactive Published Pipeline",
+            user="admin",
+        )
+        pipelines.publish(
+            inactive_published["template"]["id"],
+            expected_revision=1,
+            user="admin",
+        )
         archived = pipelines.clone(
             active["template"]["id"],
             template_key="phase14-archived-copy",
@@ -483,6 +494,7 @@ fields:
         "active_template_id": str(active["template"]["id"]),
         "pipeline_version_id": str(published_pipeline["version"]["id"]),
         "inactive_template_id": str(inactive["template"]["id"]),
+        "inactive_published_template_id": str(inactive_published["template"]["id"]),
         "archived_version_id": str(archived_published["version"]["id"]),
     }
 
@@ -558,6 +570,15 @@ def _assert_no_horizontal_overflow(page: Page) -> None:
     assert overflow <= 4
 
 
+def _open_schema_field(page: Page, path: str) -> None:
+    """Open one compact schema field editor before exercising its controls."""
+    page.locator(
+        f'[data-row-path="{path}"] > .schema-field-details > summary'
+    ).locator("xpath=ancestor::details").evaluate_all(
+        "nodes => nodes.forEach(node => { node.open = true; })"
+    )
+
+
 def _computed_style(page: Page, selector: str, properties: list[str]) -> dict[str, str]:
     return page.locator(selector).first.evaluate(
         """(node, names) => {
@@ -631,6 +652,9 @@ def test_phase14_review_form_history_validation_and_responsive_evidence(
     page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
     page.locator("#schema-field-tree .schema-field-row").first.wait_for()
     assert page.locator("#schema-version-history").get_by_text("Version 2").count() == 1
+    page.locator('[data-field-prop="array_item_type"]').first.locator(
+        "xpath=ancestor::details[1]/summary"
+    ).click()
     assert page.locator('[data-field-prop="array_item_type"]').first.is_visible()
     assert page.locator("#schema-field-outline [data-outline-path]").count() >= 7
     _capture_phase14(page, "01-review-form-desktop")
@@ -639,6 +663,7 @@ def test_phase14_review_form_history_validation_and_responsive_evidence(
     maximum_length = page.locator(
         '[data-field-path="supplier"][data-field-prop="max_length"]'
     )
+    _open_schema_field(page, "supplier")
     maximum_length.fill("1")
     maximum_length.press("Tab")
     assert page.get_by_text(
@@ -706,6 +731,46 @@ def test_phase14_pipeline_admin_versioning_diff_bindings_and_errors(
     )
     page.get_by_text("Synthetic server error").wait_for()
     _capture_phase14(page, "07-pipeline-admin-server-error")
+
+
+def test_pipeline_binding_controls_explain_lifecycle_requirements(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Disable bindings until the selected pipeline is published and active."""
+    page.goto(f"{visual_app['base_url']}/app/admin/pipeline")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#pipeline-template-select option').length >= 4"
+    )
+
+    page.locator("#pipeline-template-select").select_option(
+        visual_app["inactive_template_id"]
+    )
+    page.get_by_text(
+        "To add a watch-folder binding, publish a version first, then activate this pipeline."
+    ).wait_for()
+    assert page.locator("#pipeline-binding-path").is_disabled()
+    assert page.locator("#pipeline-binding-version").is_disabled()
+    assert page.locator("#pipeline-binding-add").is_disabled()
+
+    page.locator("#pipeline-template-select").select_option(
+        visual_app["inactive_published_template_id"]
+    )
+    page.get_by_text(
+        "To add a watch-folder binding, activate this pipeline first."
+    ).wait_for()
+    assert page.locator("#pipeline-binding-path").is_disabled()
+    assert page.locator("#pipeline-binding-version").is_disabled()
+    assert page.locator("#pipeline-binding-add").is_disabled()
+
+    page.locator("#pipeline-template-select").select_option(
+        visual_app["active_template_id"]
+    )
+    page.wait_for_function(
+        "() => document.querySelector('#pipeline-binding-version option')?.value === '' && document.querySelectorAll('#pipeline-binding-version option').length > 1"
+    )
+    assert not page.locator("#pipeline-binding-path").is_disabled()
+    assert not page.locator("#pipeline-binding-version").is_disabled()
+    assert not page.locator("#pipeline-binding-add").is_disabled()
 
 
 def test_phase14_upload_selection_validation_and_success(
@@ -853,6 +918,9 @@ def test_schema_editor_visual_renders_rich_schema_controls(page: Page, visual_ap
     page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
     page.locator("#schema-field-tree .schema-field-row").first.wait_for()
     assert page.locator("#schema-error").text_content() == ""
+    page.locator(".schema-field-details").evaluate_all(
+        "nodes => nodes.forEach(node => { node.open = true; })"
+    )
     assert page.locator('[data-field-prop="step"]').first.is_visible()
     assert page.locator('[data-field-prop="decimal_places"]').first.is_visible()
     assert page.locator('[data-field-prop="pattern"]').first.is_visible()
@@ -884,11 +952,15 @@ def test_pipeline_and_schema_field_edits_keep_focus_after_render(
     field_type = page.locator(
         '[data-param-action="field-type"][data-field-key="supplier"]'
     )
+    field_type.locator("xpath=ancestor::details[1]").evaluate("node => { node.open = true; }")
     field_type.wait_for()
     field_type.focus()
     field_type.select_option("int")
     assert field_type.evaluate("node => document.activeElement === node")
 
+    page.locator('[data-param-action="field-type"][data-field-key="supplier"]').locator(
+        "xpath=ancestor::details[1]"
+    ).evaluate("node => { node.open = true; }")
     alias = page.get_by_label("Alias for supplier")
     alias.focus()
     alias.fill("Supplier legal name")
@@ -897,6 +969,9 @@ def test_pipeline_and_schema_field_edits_keep_focus_after_render(
     assert alias.evaluate("node => document.activeElement === node")
     assert alias.evaluate("node => node.selectionStart") == 8
 
+    page.locator('[data-param-action="rename-extract-field"][data-field-key="supplier"]').locator(
+        "xpath=ancestor::details[1]"
+    ).evaluate("node => { node.open = true; }")
     field_key = page.locator(
         '[data-param-action="rename-extract-field"][data-field-key="supplier"]'
     )
@@ -910,6 +985,7 @@ def test_pipeline_and_schema_field_edits_keep_focus_after_render(
 
     page.goto(f"{visual_app['base_url']}/app/schemas/invoice.yaml")
     page.locator("#schema-field-tree .schema-field-row").first.wait_for()
+    _open_schema_field(page, "supplier")
     schema_key = page.locator(
         '[data-field-path="supplier"][data-field-prop="key"]'
     )
@@ -921,6 +997,7 @@ def test_pipeline_and_schema_field_edits_keep_focus_after_render(
     )
     assert renamed_schema_key.evaluate("node => document.activeElement === node")
 
+    _open_schema_field(page, "supplier_name")
     help_input = page.locator(
         '[data-field-path="supplier_name"][data-field-prop="help"]'
     )
@@ -986,6 +1063,7 @@ def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app
     assert delete_supplier.text_content() == "Delete field"
     assert "btn-error" in (delete_supplier.get_attribute("class") or "")
 
+    _open_schema_field(page, "address")
     page.locator('[data-move-field="address"][data-move-direction="down"]').click()
     assert top_level_paths()[:2] == ["approved", "address"]
     page.locator("#schema-field-status").wait_for()
@@ -999,11 +1077,13 @@ def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app
     preview = page.locator("#schema-yaml-preview").text_content() or ""
     assert preview.index("approved:") < preview.index("address:")
 
+    _open_schema_field(page, "address")
     page.locator('[data-move-field="address"][data-move-direction="up"]').click()
     assert top_level_paths()[:2] == ["address", "approved"]
     assert page.evaluate("document.activeElement?.dataset.moveField") == "address"
     assert page.evaluate("document.activeElement?.dataset.moveDirection") == "down"
 
+    _open_schema_field(page, "line_items.sku")
     page.locator('[data-move-field="line_items.sku"][data-move-direction="up"]').click()
     nested_paths = page.locator(
         '[data-row-path="line_items"] .schema-field-children > .schema-field-row'
@@ -1020,6 +1100,7 @@ def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app
         dialog.dismiss()
 
     page.once("dialog", dismiss_delete)
+    _open_schema_field(page, "approved")
     page.locator('[data-delete-field="approved"]').click()
     assert page.locator('[data-row-path="approved"]').count() == 1
     assert dialog_messages == [
@@ -1028,6 +1109,7 @@ def test_schema_editor_reorders_and_safely_deletes_fields(page: Page, visual_app
     ]
 
     page.once("dialog", lambda dialog: dialog.accept())
+    _open_schema_field(page, "approved")
     page.locator('[data-delete-field="approved"]').click()
     assert page.locator('[data-row-path="approved"]').count() == 0
     page.locator("#schema-field-status").wait_for()

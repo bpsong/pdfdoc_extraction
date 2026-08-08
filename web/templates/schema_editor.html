@@ -38,6 +38,7 @@
         </div>
 
         <div id="schema-warning" class="alert alert-warning hidden text-sm"></div>
+        <div id="schema-identity-warning" class="alert alert-warning hidden text-sm"></div>
         <div id="schema-error" class="alert alert-error hidden text-sm"></div>
         <p id="schema-action-guidance" class="schema-action-guidance text-xs text-base-content/60" aria-live="polite"></p>
         <p id="schema-field-status" class="schema-field-status" role="status" aria-live="polite"></p>
@@ -80,7 +81,13 @@
             <button class="btn btn-outline btn-xs" type="button" data-add-field="array">Array</button>
         </div>
 
-        <nav id="schema-field-outline" class="schema-field-outline hidden" aria-label="Schema field outline"></nav>
+        <div class="schema-field-navigation hidden" id="schema-field-navigation">
+            <label class="form-control schema-field-search-control">
+                <span class="label-text">Find a field</span>
+                <input id="schema-field-search" class="input input-bordered input-sm" type="search" placeholder="Search fields by name or key">
+            </label>
+            <nav id="schema-field-outline" class="schema-field-outline" aria-label="Schema field outline"></nav>
+        </div>
 
         <div id="schema-field-tree" class="schema-field-tree">
             <div class="empty-panel">No fields</div>
@@ -133,5 +140,5 @@
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script src="/static/js/schema_editor.js?v=versioned-review-forms-schema-modal-2" defer></script>
+<script src="/static/js/schema_editor.js?v=ui-clarity-1" defer></script>
 {% endblock %}

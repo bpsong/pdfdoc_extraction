@@ -172,10 +172,51 @@
         }
     }
 
+    function bindingEligibility() {
+        if (!state.templateId || !state.template) {
+            return {
+                canBind: false,
+                message: "Select a pipeline template before adding a watch-folder binding.",
+            };
+        }
+        if (!state.versions.length) {
+            return {
+                canBind: false,
+                message: "To add a watch-folder binding, publish a version first, then activate this pipeline.",
+            };
+        }
+        if (state.template.status === "archived") {
+            return {
+                canBind: false,
+                message: "Archived pipelines cannot have enabled watch-folder bindings.",
+            };
+        }
+        if (state.template.status !== "active") {
+            return {
+                canBind: false,
+                message: "To add a watch-folder binding, activate this pipeline first.",
+            };
+        }
+        return { canBind: true, message: "" };
+    }
+
+    function renderBindingVersionOptions() {
+        bindingVersion.innerHTML = '<option value="">Select version</option>' + state.versions.map((version) => `<option value="${escapeHtml(version.id)}">v${escapeHtml(version.version_number)} · ${escapeHtml(String(version.content_hash || "").slice(0, 10))}</option>`).join("");
+    }
+
+    function syncBindingControls() {
+        const eligibility = bindingEligibility();
+        bindingPath.disabled = !eligibility.canBind;
+        bindingVersion.disabled = !eligibility.canBind;
+        bindingAdd.disabled = !eligibility.canBind;
+        bindingFindings.textContent = eligibility.message;
+    }
+
     async function loadBindings() {
         const payload = await window.DocFlow.apiGet("/api/admin/watch-folder-bindings");
         const bindings = payload.bindings || [];
-        bindingVersion.innerHTML = '<option value="">Select version</option>' + state.versions.map((version) => `<option value="${escapeHtml(version.id)}">v${escapeHtml(version.version_number)} · ${escapeHtml(String(version.content_hash || "").slice(0, 10))}</option>`).join("");
+        renderBindingVersionOptions();
+        syncBindingControls();
         bindingList.innerHTML = bindings.length ? bindings.map((binding) => `
             <div class="flex flex-wrap items-center gap-2 rounded-lg border border-base-300 p-2 text-sm">
                 <span class="font-mono">${escapeHtml(binding.folder_path)}</span>
@@ -347,7 +388,12 @@
     }
 
     function renderActiveSteps() {
-        activeSummary.textContent = summaryText(state.active);
+        const publishedVersion = state.baseVersionId
+            ? state.versions.find((version) => version.id === state.baseVersionId)?.version_number
+            : null;
+        activeSummary.textContent = publishedVersion
+            ? `Published v${publishedVersion} · ${summaryText(state.active)} · Read only`
+            : "No published version is available";
         const steps = stepsOf(state.active);
         if (!steps.length) {
             activeList.innerHTML = '<div class="empty-panel">No active steps</div>';
@@ -366,7 +412,7 @@
     }
 
     function renderDraftSteps() {
-        draftSummary.textContent = summaryText(state.draft);
+        draftSummary.textContent = `Draft r${state.revision || "—"} · ${summaryText(state.draft)} · Publish to make changes live`;
         const steps = stepsOf(state.draft);
         if (!steps.length) {
             draftList.innerHTML = '<div class="empty-panel">No draft steps</div>';
@@ -820,6 +866,14 @@
                 : [{ value: baseType, label: `Legacy type (${baseType})`, disabled: true }, ...typeOptions];
             return `
                 <div class="field-editor ${polishedLayout ? "extraction-field-editor-polished" : ""}">
+                    <details class="extraction-field-details">
+                        <summary class="extraction-field-summary">
+                            <span class="font-medium">${escapeHtml(fieldValue.alias || fieldKey)}</span>
+                            <span class="font-mono text-base-content/50">${escapeHtml(fieldKey)}</span>
+                            <span class="badge badge-ghost badge-xs">${escapeHtml(baseType)}</span>
+                            ${required ? '<span class="badge badge-primary badge-xs">Required</span>' : ""}
+                        </summary>
+                        <div class="extraction-field-editor-content">
                     <div class="property-field-grid ${polishedLayout ? "property-field-grid-polished" : ""}">
                         <label class="form-control">
                             <span class="label-text">Field key</span>
@@ -848,7 +902,8 @@
                         ${constraintControls}
                         ${schemaControls}
                     </div>
-                    ${tableBlocked && !polishedLayout ? '<div class="mt-2 text-xs text-base-content/55">Extraction tasks support one List of objects field. Review forms may contain multiple arrays of objects.</div>' : ""}
+                        </div>
+                    </details>
                 </div>
             `;
         }).join("");
@@ -857,6 +912,7 @@
                 <p class="text-xs text-base-content/60">${escapeHtml(hint || "Define scalar fields and one optional table-style field for extraction. Review schemas are configured separately and may contain multiple arrays of objects.")}</p>
                 <button class="btn btn-outline btn-xs" type="button" data-param-action="add-extract-field">Add field</button>
             </div>
+            <div class="alert alert-info py-2 text-xs">Each extraction task supports one List of objects field. The additional table option stays unavailable once one is configured.</div>
             <div class="space-y-3">${controls || '<div class="empty-panel">No extraction fields configured</div>'}</div>
         `)}`;
     }
@@ -1585,6 +1641,10 @@
         if (!restored) {
             return;
         }
+        const compactEditor = restored.closest("details.extraction-field-details");
+        if (compactEditor) {
+            compactEditor.open = true;
+        }
 
         try {
             restored.focus({ preventScroll: true });
@@ -1682,6 +1742,9 @@
             templateClone.disabled = true;
             templateActivate.disabled = true;
             templateActivate.textContent = "Activate for uploads";
+            renderBindingVersionOptions();
+            syncBindingControls();
+            bindingList.innerHTML = '<div class="empty-panel py-3">No watch-folder bindings</div>';
             render();
             return;
         }
@@ -2622,6 +2685,12 @@
     });
 
     workspace.addEventListener("input", (event) => {
+        const liveParamField = event.target.closest("textarea[data-param-path], input[data-param-path]:not([type]), input[type='text'][data-param-path]");
+        if (liveParamField) {
+            updateParamControl(liveParamField);
+            return;
+        }
+
         const search = event.target.closest("[data-token-search]");
         if (!search) {
             return;
@@ -2682,6 +2751,10 @@
             return;
         }
         state.templateId = templateSelect.value;
+        state.template = null;
+        state.versions = [];
+        renderBindingVersionOptions();
+        syncBindingControls();
         loadPipelineConfig().catch((error) => window.DocFlow.showToast(error.message, "error"));
     });
     templateCreate.addEventListener("click", () => {
@@ -2810,6 +2883,11 @@
     });
     bindingAdd.addEventListener("click", async () => {
         bindingFindings.textContent = "";
+        const eligibility = bindingEligibility();
+        if (!eligibility.canBind) {
+            bindingFindings.textContent = eligibility.message;
+            return;
+        }
         if (!bindingPath.value.trim() || !bindingVersion.value) {
             bindingFindings.textContent = "Choose a folder and exact published version.";
             return;

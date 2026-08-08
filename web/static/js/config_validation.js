@@ -22,6 +22,7 @@
     const state = {
         result: null,
         rawVisible: false,
+        target: "config.yaml",
     };
 
     function escapeHtml(value) {
@@ -93,7 +94,9 @@
         document.getElementById("validation-warnings-count").textContent = String(summary.warnings);
         document.getElementById("validation-info-count").textContent = String(summary.info);
         const readiness = document.getElementById("validation-readiness");
-        readiness.textContent = summary.errors > 0 ? "Blocked" : state.result ? "Ready" : "Not run";
+        readiness.textContent = state.result
+            ? `${state.target}: ${summary.errors > 0 ? "blocked" : "ready"}`
+            : "Not run";
         readiness.classList.toggle("text-error", summary.errors > 0);
         readiness.classList.toggle("text-success", state.result && summary.errors === 0);
     }
@@ -102,9 +105,9 @@
         const body = document.getElementById("validation-findings-body");
         const successBanner = document.getElementById("validation-success-banner");
         document.getElementById("validation-findings-summary").textContent = findings.length
-            ? `${findings.length} findings`
+            ? `${state.target} · ${findings.length} findings`
             : state.result
-                ? "Validation passed"
+                ? `${state.target} passed`
                 : "No validation run";
         successBanner.className = "px-4 pt-4 hidden";
         successBanner.innerHTML = "";
@@ -112,7 +115,7 @@
         if (!findings.length) {
             if (state.result) {
                 successBanner.className = "px-4 pt-4";
-                successBanner.innerHTML = '<div class="alert alert-success text-sm">Validation passed with no findings.</div>';
+                successBanner.innerHTML = `<div class="alert alert-success text-sm">${escapeHtml(state.target)} passed with no findings.</div>`;
             }
             body.innerHTML = state.result
                 ? '<tr><td colspan="6" class="text-center text-base-content/50 py-4">No findings to display</td></tr>'
@@ -147,18 +150,21 @@
         renderValidationSummary(summary);
         renderFindings(findings);
         renderRawJson();
-        document.getElementById("validation-source-label").textContent = state.result && state.result.source
-            ? `Source: ${state.result.source}`
-            : "Active configuration";
+        const source = state.result && state.result.source ? ` · Source: ${state.result.source}` : "";
+        document.getElementById("validation-source-label").textContent = state.result
+            ? `Target: ${state.target}${source}`
+            : "Choose a validation target";
     }
 
     async function loadActiveValidation() {
         state.result = await window.DocFlow.apiGet("/api/config/validation");
+        state.target = "config.yaml";
         render();
     }
 
     async function validateAllSchemas() {
         state.result = await window.DocFlow.apiPost("/api/admin/schemas/validate-all", {});
+        state.target = "review forms";
         render();
     }
 
@@ -169,6 +175,7 @@
             : payload.active && payload.active.model;
         state.result = await window.DocFlow.apiPost("/api/admin/pipeline/validate", { model });
         state.result.source = "pipeline";
+        state.target = "pipeline draft";
         render();
     }
 
@@ -183,6 +190,7 @@
             strict: document.getElementById("validation-strict-toggle").checked,
             import_checks: document.getElementById("validation-import-toggle").checked,
         });
+        state.target = "pasted YAML";
         render();
     }
 

@@ -170,8 +170,45 @@ def test_extraction_editor_explains_its_single_table_limit() -> None:
 
     assert "tableKeys.length >= 1" in source
     assert 'option.value === "List[Any]" && tableBlocked' in source
-    assert "Extraction tasks support one List of objects field." in source
-    assert "Review forms may contain multiple arrays of objects." in source
+    assert "Each extraction task supports one List of objects field." in source
+    assert "The additional table option stays unavailable once one is configured." in source
+
+
+def test_pipeline_text_parameters_update_while_typing() -> None:
+    """Keep draft text edits available when the user saves without changing focus."""
+    source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+
+    assert 'workspace.addEventListener("input", (event) => {' in source
+    assert (
+        'textarea[data-param-path], input[data-param-path]:not([type]), '
+        'input[type=\'text\'][data-param-path]'
+    ) in source
+    assert "updateParamControl(liveParamField);" in source
+
+
+def test_pipeline_editor_distinguishes_live_and_draft_states() -> None:
+    template = (ROOT / "web/templates/pipeline_config.html").read_text(
+        encoding="utf-8"
+    )
+    source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+
+    assert "Live pipeline" in template
+    assert "Editing draft" in template
+    assert "Read-only published version" in template
+    assert "Publish to make changes live" in source
+    assert "Each extraction task supports one List of objects field." in source
+    assert "extraction-field-details" in source
+
+
+def test_review_form_editor_warns_without_renaming_mismatched_names() -> None:
+    template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+
+    assert 'id="schema-identity-warning"' in template
+    assert 'id="schema-field-search"' in template
+    assert "They remain unchanged; confirm the intended form before publishing." in source
+    assert "schema-field-details" in source
+    assert "fieldSearchInput.addEventListener" in source
 
 
 def test_pipeline_and_schema_editors_restore_focus_after_dom_replacement() -> None:

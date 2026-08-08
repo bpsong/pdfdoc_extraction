@@ -15,12 +15,15 @@
     const titleInput = document.getElementById("schema-title-input");
     const descriptionInput = document.getElementById("schema-description-input");
     const fieldTree = document.getElementById("schema-field-tree");
+    const fieldNavigation = document.getElementById("schema-field-navigation");
     const fieldOutline = document.getElementById("schema-field-outline");
+    const fieldSearchInput = document.getElementById("schema-field-search");
     const fieldStatus = document.getElementById("schema-field-status");
     const yamlPreview = document.getElementById("schema-yaml-preview");
     const validationResults = document.getElementById("schema-validation-results");
     const actionGuidance = document.getElementById("schema-action-guidance");
     const warningBox = document.getElementById("schema-warning");
+    const identityWarningBox = document.getElementById("schema-identity-warning");
     const errorBox = document.getElementById("schema-error");
     const createButton = document.getElementById("schema-create-button");
     const createModal = document.getElementById("schema-create-modal");
@@ -53,6 +56,7 @@
     let draft = emptySchema();
     let dirty = false;
     let schemaSearch = "";
+    let fieldSearch = "";
     let pendingFindings = [];
     let localFindings = [];
     let serverFindings = [];
@@ -376,6 +380,14 @@
                 : null;
         return `
             <div class="schema-field-row" data-row-path="${escapeHtml(fullPath)}">
+                <details class="schema-field-details">
+                    <summary class="schema-field-summary">
+                        <span class="font-medium">${escapeHtml(fieldName)}</span>
+                        <span class="font-mono text-base-content/50">${escapeHtml(key)}</span>
+                        <span class="badge badge-ghost badge-xs">${escapeHtml(config.type || "string")}</span>
+                        ${config.required ? '<span class="badge badge-primary badge-xs">Required</span>' : ""}
+                    </summary>
+                    <div class="schema-field-editor-grid">
                 <div class="schema-field-actions">
                     <div class="schema-field-order-actions" role="group" aria-label="Reorder ${escapeHtml(fieldName)}">
                         <button class="btn btn-outline btn-xs" type="button" data-move-field="${escapeHtml(fullPath)}" data-move-direction="up" aria-label="Move ${escapeHtml(fieldName)} up" ${movement.canMoveUp ? "" : "disabled"}>Move up</button>
@@ -418,6 +430,8 @@
                         ${renderFieldRows(childContainer, [...path, key])}
                     </div>
                 ` : ""}
+                    </div>
+                </details>
             </div>
         `;
     }
@@ -505,16 +519,20 @@
 
     function renderFieldOutline() {
         const links = [];
+        const query = fieldSearch.trim().toLowerCase();
         function visit(fields, parentPath = "", depth = 0) {
             fieldEntries(fields).forEach(([key, config]) => {
                 const path = parentPath ? `${parentPath}.${key}` : key;
                 const depthClass = `schema-outline-depth-${Math.min(depth, 4)}`;
-                links.push(`
-                    <button class="schema-outline-link ${depthClass}" type="button" data-outline-path="${escapeHtml(path)}">
-                        <span class="font-medium">${escapeHtml(config.label || key)}</span>
-                        <span class="font-mono text-base-content/50">${escapeHtml(key)}</span>
-                    </button>
-                `);
+                const label = config.label || key;
+                if (!query || `${label} ${key}`.toLowerCase().includes(query)) {
+                    links.push(`
+                        <button class="schema-outline-link ${depthClass}" type="button" data-outline-path="${escapeHtml(path)}">
+                            <span class="font-medium">${escapeHtml(label)}</span>
+                            <span class="font-mono text-base-content/50">${escapeHtml(key)}</span>
+                        </button>
+                    `);
+                }
                 if (config.type === "object") {
                     visit(config.properties || {}, path, depth + 1);
                 } else if (config.type === "array" && config.items && config.items.type === "object") {
@@ -523,8 +541,8 @@
             });
         }
         visit(draft.fields || {});
-        fieldOutline.innerHTML = links.join("");
-        fieldOutline.classList.toggle("hidden", links.length < 4);
+        fieldOutline.innerHTML = links.length ? links.join("") : '<p class="schema-outline-empty">No matching fields</p>';
+        fieldNavigation.classList.toggle("hidden", links.length < 2 && !query);
     }
 
     function focusFinding(path) {
@@ -659,8 +677,19 @@
 
     function render() {
         renderSchemaList();
-        const displayName = nameInput.value || currentName || "New schema";
+        const displayName = titleInput.value || nameInput.value || currentName || "New review form";
         detailTitle.textContent = `${dirty ? "* " : ""}${displayName}`;
+        detailHash.textContent = currentName
+            ? `Stable key: ${currentName}${detailHash.dataset.hash ? ` Â· ${detailHash.dataset.hash}` : ""}`
+            : "";
+        const listedName = schemas.find((schema) => schema.id === currentId)?.name
+            || currentTemplate && currentTemplate.name
+            || "";
+        const draftTitle = titleInput.value.trim();
+        const namesDiffer = listedName && draftTitle && listedName.trim().toLowerCase() !== draftTitle.toLowerCase();
+        setBox(identityWarningBox, namesDiffer
+            ? `The list name “${listedName}” and this draft title “${draftTitle}” differ. They remain unchanged; confirm the intended form before publishing.`
+            : "");
         localFindings = collectClientFindings();
         renderFieldTreeWithFocusRestore();
         duplicateButton.disabled = !currentId || !currentRevision || currentTemplate && currentTemplate.status === "archived";
@@ -682,11 +711,20 @@
 
     function captureFieldTreeFocus() {
         const active = document.activeElement;
-        if (!active || !fieldTree.contains(active) || !active.dataset.fieldPath || !active.dataset.fieldProp) {
+        if (!active || !fieldTree.contains(active)) {
             return null;
         }
 
-        const selector = `${active.tagName.toLowerCase()}[data-field-path="${CSS.escape(active.dataset.fieldPath)}"][data-field-prop="${CSS.escape(active.dataset.fieldProp)}"]`;
+        let selector = "";
+        if (active.dataset.fieldPath && active.dataset.fieldProp) {
+            selector = `${active.tagName.toLowerCase()}[data-field-path="${CSS.escape(active.dataset.fieldPath)}"][data-field-prop="${CSS.escape(active.dataset.fieldProp)}"]`;
+        } else if (active.dataset.moveField && active.dataset.moveDirection) {
+            selector = `${active.tagName.toLowerCase()}[data-move-field="${CSS.escape(active.dataset.moveField)}"][data-move-direction="${CSS.escape(active.dataset.moveDirection)}"]`;
+        } else if (active.dataset.deleteField) {
+            selector = `${active.tagName.toLowerCase()}[data-delete-field="${CSS.escape(active.dataset.deleteField)}"]`;
+        } else {
+            return null;
+        }
         const matches = Array.from(fieldTree.querySelectorAll(selector));
         const matchIndex = Math.max(0, matches.indexOf(active));
         const hasSelection = typeof active.selectionStart === "number";
@@ -714,6 +752,11 @@
         const restored = matches[focus.matchIndex] || matches[0];
         if (!restored) {
             return;
+        }
+        let compactEditor = restored.closest("details.schema-field-details");
+        while (compactEditor) {
+            compactEditor.open = true;
+            compactEditor = compactEditor.parentElement?.closest("details.schema-field-details");
         }
 
         try {
@@ -749,7 +792,7 @@
         nameInput.value = currentName;
         titleInput.value = draft.title || "";
         descriptionInput.value = draft.description || payload.template.description || "";
-        detailHash.textContent = payload.draft.content_hash || "";
+        detailHash.dataset.hash = payload.draft.content_hash || "";
         statusSelect.value = payload.template.status || "inactive";
         setBox(warningBox, currentVersions.length ? "Publishing this draft creates a new immutable version. Existing pipelines keep their exact schema version." : "Publish this draft before activating it or selecting it in a pipeline.");
         dirty = false;
@@ -894,6 +937,11 @@
             ? preferred
             : row && (row.querySelector("[data-move-field]:not([disabled])") || row.querySelector("[data-delete-field]"));
         if (control) {
+            let compactEditor = control.closest("details.schema-field-details");
+            while (compactEditor) {
+                compactEditor.open = true;
+                compactEditor = compactEditor.parentElement?.closest("details.schema-field-details");
+            }
             control.focus();
         }
     }
@@ -1135,6 +1183,11 @@
         if (focusPath) {
             const nextInput = fieldTree.querySelector(`[data-row-path="${CSS.escape(focusPath)}"] [data-field-prop="key"]`);
             if (nextInput) {
+                let compactEditor = nextInput.closest("details.schema-field-details");
+                while (compactEditor) {
+                    compactEditor.open = true;
+                    compactEditor = compactEditor.parentElement?.closest("details.schema-field-details");
+                }
                 nextInput.focus();
             }
         } else {
@@ -1382,12 +1435,21 @@
         }
         const row = fieldTree.querySelector(`[data-row-path="${CSS.escape(button.dataset.outlinePath)}"]`);
         if (row) {
+            const details = row.querySelector(".schema-field-details");
+            if (details) {
+                details.open = true;
+            }
             row.scrollIntoView({ behavior: "smooth", block: "start" });
             const input = row.querySelector("[data-field-prop='key']");
             if (input) {
                 input.focus({ preventScroll: true });
             }
         }
+    });
+
+    fieldSearchInput.addEventListener("input", (event) => {
+        fieldSearch = event.target.value || "";
+        renderFieldOutline();
     });
 
     validationResults.addEventListener("click", (event) => {

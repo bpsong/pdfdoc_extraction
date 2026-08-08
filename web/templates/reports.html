@@ -33,9 +33,9 @@
             <div class="stat-desc">Documents with completed review</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Avg Time</div>
+            <div class="stat-title">Average processing time</div>
             <div class="stat-value text-2xl" id="reports-average-processing">n/a</div>
-            <div class="stat-desc">Task-run span</div>
+            <div class="stat-desc">From first task start to last task end</div>
         </div>
     </div>
 
@@ -118,7 +118,7 @@
                     <h2 class="font-semibold">Recent Batches</h2>
                     <p class="text-xs text-base-content/50">Latest persisted batch records</p>
                 </div>
-                <a class="btn btn-outline btn-sm" href="/app/processing">Processing</a>
+                <a class="btn btn-outline btn-sm" href="/app/processing">Open processing dashboard</a>
             </div>
             <div class="overflow-x-auto">
                 <table class="table table-sm reports-recent-table">
@@ -126,9 +126,9 @@
                         <tr>
                             <th>Created</th>
                             <th>Source</th>
-                            <th>Batch</th>
+                            <th>Batch ID</th>
                             <th>Status</th>
-                            <th class="text-right">Progress</th>
+                            <th class="text-right">Workflow state</th>
                         </tr>
                     </thead>
                     <tbody id="reports-recent-body">
@@ -152,7 +152,7 @@
                     <p class="text-xs text-base-content/50 truncate" id="batch-detail-subtitle"></p>
                 </div>
                 <div class="reports-batch-modal-actions">
-                    <a class="btn btn-outline btn-sm hidden" id="batch-detail-processing-link" href="/app/processing">Processing</a>
+                    <a class="btn btn-outline btn-sm hidden" id="batch-detail-processing-link" href="/app/processing">Open batch in processing</a>
                 </div>
             </div>
             <div id="batch-detail-body">
@@ -164,5 +164,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/reports.js?v=task25-h01" defer></script>
+<script src="/static/js/reports.js?v=ui-clarity-1" defer></script>
 {% endblock %}

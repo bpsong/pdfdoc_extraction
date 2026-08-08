@@ -109,7 +109,10 @@ def test_binding_enable_requires_active_template_but_disabled_history_survives(
         enabled=False,
         user="admin",
     )
-    with pytest.raises(IngressBindingConflictError):
+    with pytest.raises(
+        IngressBindingConflictError,
+        match="pipeline template must be active",
+    ):
         service.update(disabled["id"], enabled=True, user="admin")
 
 

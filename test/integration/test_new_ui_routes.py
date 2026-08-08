@@ -381,8 +381,9 @@ def test_config_validation_page_includes_task_23_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="config-validation-workspace"' in response.text
     assert "/static/js/config_validation.js" in response.text
-    assert "Validate Config File" in response.text
-    assert "Validate Pipeline" in response.text
+    assert "Check config.yaml" in response.text
+    assert "Check pipeline draft" in response.text
+    assert "Check review forms" in response.text
 
 
 def test_task_catalog_page_includes_task_20_assets(monkeypatch) -> None:
@@ -407,7 +408,7 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert 'id="pipeline-publish-button"' in response.text
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 7
-    assert "/static/js/pipeline_config.js?v=versioned-templates" in response.text
+    assert "/static/js/pipeline_config.js?v=ui-clarity-1" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:
