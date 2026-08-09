@@ -985,7 +985,7 @@ export completes after review.
   - [ ] Record the exact prompt/schema sent, call count, pipeline version,
     batch/document identifiers, and final verification evidence.
 
-- [ ] **11.7 Preserve learned GLM schema order and prove a separate pipeline**
+- [x] **11.7 Preserve learned GLM schema order and prove a separate pipeline**
   - [x] Add optional positive, sibling-unique `schema_order` metadata for GLM
     top-level fields, object properties, and table-row properties.
   - [x] Apply explicit positions before GLM schema/prompt construction while
@@ -994,15 +994,15 @@ export completes after review.
     validate positions in runtime and config-check paths.
   - [x] Add focused schema, recursive-validation, config-check, editor, and
     LlamaCloud-isolation regression coverage.
-  - [ ] Run the broader GLM suite, frontend build, and Pyright.
-  - [ ] Create a separate learned insurance pipeline rather than replacing
+  - [x] Run the broader GLM suite, frontend build, and Pyright.
+  - [x] Create a separate learned insurance pipeline rather than replacing
     `glm-phase11-insurance`; reuse its exact published review-form version.
-  - [ ] Configure the concise successful experimental guidance, retain
+  - [x] Configure the concise successful experimental guidance, retain
     `note_type` for review-schema compatibility, omit policy-specific prompt
     guidance, and set the proven top-level/customer-property schema positions.
-  - [ ] Publish and submit `sample_invoice.pdf`; verify every unedited value,
+  - [x] Publish and submit `sample_invoice.pdf`; verify every unedited value,
     exact schema order, and one scalar/object call with no table call.
-  - [ ] Complete review only if the unedited extraction is correct, then verify
+  - [x] Complete review only if the unedited extraction is correct, then verify
     JSON and renamed-PDF artifacts and record the live evidence below.
 
 ## Final requirement audit
@@ -1241,3 +1241,40 @@ Record during execution:
   one value in Review Gate. JSON and renamed-PDF storage then completed. The
   extraction provenance recorded exactly one `scalar_object` call and no table
   or focused-recovery call.
+- Phase 11.7 learned-order implementation (2026-08-09): GLM field definitions
+  now accept positive sibling-unique `schema_order` values recursively, and the
+  separate GLM editor exposes them as **Schema position** controls. The advanced
+  `verbatim` prompt style sends the configured document instructions unchanged
+  while continuing to pass the independently generated JSON Schema through
+  Ollama's native `format` parameter. LlamaCloud rendering and extraction were
+  not changed. The focused final matrix passed with 114 tests; the broader GLM
+  matrix passed with 141 tests before the final focused additions. `node
+  --check web/static/js/pipeline_config.js`, `npm run build:css`, and Pyright
+  all passed, with Pyright reporting 0 errors, 0 warnings, and 0 informational
+  findings.
+- Phase 11.7 live learned pipeline (2026-08-09): Administrator UI import,
+  validation, publication, and activation created the separate
+  `glm-phase12-insurance-learned` v1 (pipeline version
+  `1e161625-61ba-4b9d-a7a8-0eef45058f8e`, content hash prefix
+  `a2084ac1a4c6`) without replacing `glm-phase11-insurance`. Its review gate
+  reuses immutable review schema `insurance-glm-phase11` v2, content hash
+  `b46efdc7c776f129e9604a1a8994ec43908fb35fbc1331f3e74f0357158e91e0`.
+  The generated top-level property order was `insurance_company`, `note_type`,
+  `customer`, `total_premium`, `insurance_start_date`, `insurance_end_date`,
+  `policy_number`; the customer-property order was `name`, `address`. There was
+  no table schema. The actual verbatim prompt hash was
+  `d1458e2e85ae9ac6c368b46f4122fc2e65449864bbb8b1672a2ba2fc16489669`.
+- Phase 11.7 live extraction evidence (2026-08-09): Portal batch
+  `b869a9cc-4a11-4795-b1ad-38732b6529ba`, document
+  `a4900d95-884b-417f-bd3e-a053141e124f`, and review item
+  `fe3dac83-0fc1-44d9-813f-08635fe25f90` extracted every unedited value
+  correctly: Liberty Insurance Pte Ltd; debit; Kim Bock Contractor Private
+  Limited and its address; premium 70; coverage 2024-11-25 through 2026-11-24;
+  and policy `SD24B39161/R 0`. Metadata recorded exactly one page-1
+  `scalar_object` call, no recovery call, and no table call. After unchanged
+  review completion, all four configured steps completed. The registered JSON
+  contained the reviewed structured values, and the collision-safe renamed PDF
+  had SHA-256
+  `ED6EC181EB4C5757088F9791D21EAFD6FD2B4F9631DC1EFB8C10A35A0E795A51`,
+  exactly matching `sample_invoice.pdf`. Runtime evidence remains under the
+  ignored `output/playwright/phase10_glm_live` tree.
