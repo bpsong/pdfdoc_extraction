@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.0
-Release Date: 2026-08-02
+Version: 3.1
+Release Date: 2026-08-09
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 3.0
-Release Date: 2026-08-02
+Version: 3.1
+Release Date: 2026-08-09
 Author: [Your Organization/Name]
 
 ---
@@ -50,6 +50,7 @@ Author: [Your Organization/Name]
   - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
        - [4.8.1. extraction](#481-extraction)
          - [GLM-OCR extraction (local Ollama)](#glm-ocr-extraction-local-ollama)
+           - [Prompt and schema-order sensitivity](#prompt-and-schema-order-sensitivity)
        - [4.8.2. split.llamacloud_split](#482-splitllamacloud_split)
        - [4.8.3. storage.store_metadata_as_csv](#483-storagestore_metadata_as_csv)
        - [4.8.4. storage.store_metadata_as_json](#484-storagestore_metadata_as_json)
@@ -89,6 +90,7 @@ Author: [Your Organization/Name]
 | 2.8     | 2026-06-28 | [Your Organization] | Added typed scalar-list options and flat structured-object extraction with Pipeline editor, validation, review-schema mapping, and operator documentation |
 | 2.9     | 2026-07-26 | [Your Organization] | Documented SQLite-backed, immutable pipeline and review-schema versions, explicit upload selection, watch-folder bindings, exact-version execution, migration, recovery, and stored-definition validation |
 | 3.0     | 2026-08-02 | [Your Organization] | Completed the operator and administrator procedures for multi-pipeline routing, review forms, watch-folder bindings, outputs, validation, settings, audit visibility, and portable definitions; corrected remaining single-pipeline and task-behavior guidance |
+| 3.1     | 2026-08-09 | [Your Organization] | Documented GLM-OCR sensitivity to JSON Schema property order and prompt construction, with controlled-testing and review guidance |
 
 ---
 
@@ -1230,6 +1232,46 @@ same JSON Schema is still enforced through Ollama; it is simply not duplicated
 inside the text prompt. Put precise, document-specific selection rules in
 `document_instructions`, and avoid literal example values that a small model
 could copy into its answer.
+
+###### Prompt and schema-order sensitivity
+
+GLM-OCR is a small local vision-language model and can be highly sensitive to
+both prompt construction and JSON Schema property order. Do not assume that two
+schemas containing the same fields are equivalent for model behaviour. Changing
+the order of top-level fields or object properties can change which visual value
+the model assigns to a field. Adding, removing, or renaming a field can also
+change the effective order of the generated schema and affect unrelated values.
+
+More instructions are not always better. A longer prompt, repeated schema
+descriptions, or an additional rule for one field can distract the model and
+degrade other fields that previously extracted correctly. Start with concise,
+meaning-based instructions. Add only the disambiguation needed for the tested
+document type, avoid repeating the same rule in several forms, and avoid literal
+example values. Try `compact` prompt style when the detailed prompt is too long
+or repeats information already enforced by Ollama's native schema parameter.
+
+Treat field order, object grouping, prompt style, and document instructions as
+model-affecting configuration. Before publishing a changed pipeline:
+
+1. Inspect the YAML preview or exported definition to confirm the effective
+   top-level and object-property order.
+2. Change one variable at a time so that a regression can be attributed to a
+   schema-order, field, object, or prompt change.
+3. Test several representative PDFs for the document type using the same model
+   tag, DPI, context size, and output-token limit as production.
+4. Repeat important samples because a successful result from one invocation is
+   not sufficient evidence that the configuration is stable.
+5. Compare every extracted field with the source PDF, not only the field whose
+   rule changed. Keep a known-good result as a regression baseline.
+6. Publish the change as a new immutable pipeline version and retain a Review
+   Gate when operators must verify local-model output. GLM-OCR supplies no field
+   confidence, so the review workflow should treat all extracted values as
+   requiring human confirmation.
+
+Objects remain useful for keeping values from one visual block together, but
+their child-property order must also be tested. If reordering fixes one field
+while degrading another, restore the last known-good version and simplify the
+prompt or schema in a separate draft instead of accumulating more instructions.
 
 When a review gate follows GLM extraction, the task's structured unscored-output
 flag makes every configured top-level field reviewable. Use document review
