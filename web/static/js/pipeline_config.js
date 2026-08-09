@@ -812,7 +812,14 @@
         const polishedLayout = step.class === "GlmOcrExtractTask";
         const params = step.params || {};
         const fields = params.fields && typeof params.fields === "object" && !Array.isArray(params.fields) ? params.fields : {};
-        const fieldEntries = Object.entries(fields);
+        const naturalFieldEntries = Object.entries(fields);
+        const fieldEntries = polishedLayout
+            ? naturalFieldEntries.map((entry, index) => ({ entry, index })).sort((first, second) => {
+                const firstOrder = Number.isInteger(first.entry[1] && first.entry[1].schema_order) ? first.entry[1].schema_order : Number.MAX_SAFE_INTEGER;
+                const secondOrder = Number.isInteger(second.entry[1] && second.entry[1].schema_order) ? second.entry[1].schema_order : Number.MAX_SAFE_INTEGER;
+                return firstOrder - secondOrder || first.index - second.index;
+            }).map(({ entry }) => entry)
+            : naturalFieldEntries;
         const tableKeys = fieldEntries.filter(([, field]) => field && (field.is_table || unwrapOptionalType(field.type) === "List[Any]")).map(([key]) => key);
         const typeOptions = [
             { value: "str", label: "Text" },
@@ -826,7 +833,7 @@
             { value: "Dict[str, Any]", label: "Object with defined fields" },
             { value: "List[Any]", label: "List of objects" },
         ];
-        const controls = fieldEntries.map(([fieldKey, field]) => {
+        const controls = fieldEntries.map(([fieldKey, field], fieldIndex) => {
             const fieldValue = field && typeof field === "object" ? field : {};
             const fieldType = fieldValue.type || "str";
             const baseType = unwrapOptionalType(fieldType);
@@ -900,6 +907,7 @@
                             </span>
                         </label>
                         ${textareaControl("Extraction guidance", ["fields", fieldKey, "description"], fieldValue.description || "", { full: !polishedLayout, ariaLabel: `Extraction guidance for ${fieldKey}` })}
+                        ${polishedLayout ? numberControl("Schema position", ["fields", fieldKey, "schema_order"], fieldValue.schema_order ?? fieldIndex + 1, 'min="1" step="1"', inlineFindings(step, `fields.${fieldKey}.schema_order`)) : ""}
                         ${constraintControls}
                         ${schemaControls}
                     </div>
@@ -942,7 +950,15 @@
             { value: "float", label: "Number" },
             { value: "bool", label: "Yes / No" },
         ];
-        const rows = Object.entries(configuredFields).map(([itemKey, itemField]) => {
+        const naturalConfiguredEntries = Object.entries(configuredFields);
+        const configuredEntries = glmConstraints
+            ? naturalConfiguredEntries.map((entry, index) => ({ entry, index })).sort((first, second) => {
+                const firstOrder = Number.isInteger(first.entry[1] && first.entry[1].schema_order) ? first.entry[1].schema_order : Number.MAX_SAFE_INTEGER;
+                const secondOrder = Number.isInteger(second.entry[1] && second.entry[1].schema_order) ? second.entry[1].schema_order : Number.MAX_SAFE_INTEGER;
+                return firstOrder - secondOrder || first.index - second.index;
+            }).map(({ entry }) => entry)
+            : naturalConfiguredEntries;
+        const rows = configuredEntries.map(([itemKey, itemField], itemIndex) => {
             const itemConfig = itemField && typeof itemField === "object" ? itemField : {};
             const baseType = fieldOptions.some((option) => option.value === unwrapOptionalType(itemConfig.type)) ? unwrapOptionalType(itemConfig.type) : "str";
             const required = isRequiredType(itemConfig.type || "str");
@@ -958,6 +974,7 @@
                     <button class="btn btn-ghost btn-square btn-sm text-error" type="button" aria-label="Remove field ${escapeHtml(itemKey)}" data-param-action="remove-schema-draft-field" data-item-key="${escapeHtml(itemKey)}">Remove</button>
                     <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Alias for ${escapeHtml(itemKey)}" placeholder="Field alias" data-param-action="schema-draft-alias" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.alias || "")}">
                     <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Extraction guidance for ${escapeHtml(itemKey)}" placeholder="Extraction guidance (optional)" data-param-action="schema-draft-guidance" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(itemConfig.description || "")}">
+                    ${glmConstraints ? `<input class="input input-bordered input-sm col-span-full min-w-0" type="number" min="1" step="1" aria-label="Schema position for ${escapeHtml(itemKey)}" data-param-action="schema-draft-order" data-item-key="${escapeHtml(itemKey)}" value="${escapeHtml(numberValue(itemConfig.schema_order ?? itemIndex + 1))}">` : ""}
                     ${glmConstraints && baseType === "str" ? `
                         <input class="input input-bordered input-sm col-span-full min-w-0" aria-label="Allowed values for ${escapeHtml(itemKey)}" placeholder="Allowed values (optional, comma-separated)" data-param-action="schema-draft-choices" data-item-key="${escapeHtml(itemKey)}" value="${controlValue(Array.isArray(itemConfig.choices) ? itemConfig.choices.join(", ") : "")}">
                         <select class="select select-bordered select-sm col-span-full min-w-0" aria-label="Value normalization for ${escapeHtml(itemKey)}" data-param-action="schema-draft-normalizer" data-item-key="${escapeHtml(itemKey)}">
@@ -968,7 +985,7 @@
                 </div>
             `;
         }).join("");
-        const preview = Object.fromEntries(Object.entries(configuredFields).map(([itemKey, itemField]) => [itemKey, sampleValueForType(itemField && itemField.type)]));
+        const preview = Object.fromEntries(configuredEntries.map(([itemKey, itemField]) => [itemKey, sampleValueForType(itemField && itemField.type)]));
         const invalidKeys = Object.keys(configuredFields).some((key) => !String(key).trim()) || new Set(Object.keys(configuredFields)).size !== Object.keys(configuredFields).length;
         const isObject = schemaKind === "object";
         return `
@@ -1194,7 +1211,8 @@
                         ${selectControl("Prompt construction", ["prompt_style"], params.prompt_style || "detailed", [
                             { value: "detailed", label: "Detailed (compatibility default)" },
                             { value: "compact", label: "Compact (schema sent once)" },
-                        ], "Compact keeps the JSON Schema in Ollama's native format parameter and avoids repeating it in the text prompt.", inlineFindings(step, "prompt_style"))}
+                            { value: "verbatim", label: "Verbatim instructions (advanced)" },
+                        ], "Compact uses a short framework contract. Verbatim sends Document instructions exactly as written while still enforcing Ollama's native JSON Schema.", inlineFindings(step, "prompt_style"))}
                     </div>
                 `)}
                 ${detailsSection("Local runtime settings", `
@@ -2523,6 +2541,15 @@
             const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
             if (field.value) itemConfig.description = field.value;
             else delete itemConfig.description;
+            state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
+            render();
+            return true;
+        }
+        if (action === "schema-draft-order") {
+            const itemConfig = state.fieldSchemaDraft[field.dataset.itemKey] || {};
+            const value = Number(field.value);
+            if (Number.isInteger(value) && value > 0) itemConfig.schema_order = value;
+            else delete itemConfig.schema_order;
             state.fieldSchemaDraft[field.dataset.itemKey] = itemConfig;
             render();
             return true;

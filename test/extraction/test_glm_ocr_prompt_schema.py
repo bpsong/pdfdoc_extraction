@@ -235,6 +235,35 @@ def test_compact_recovery_prompt_retains_recovery_contract() -> None:
     assert "JSON Schema:" not in prompt
 
 
+def test_verbatim_prompt_returns_document_instructions_exactly() -> None:
+    fields = {"invoice_number": _mixed_fields()["invoice_number"]}
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+    instructions = "Extract this invoice.\nReturn only the configured values."
+
+    prompt = build_scalar_object_prompt(
+        fields,
+        bundle.scalar_page_schema,
+        document_instructions=instructions,
+        prompt_style="verbatim",
+    )
+
+    assert prompt == instructions
+
+
+def test_verbatim_prompt_requires_non_empty_document_instructions() -> None:
+    fields = {"invoice_number": _mixed_fields()["invoice_number"]}
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+
+    with pytest.raises(ValueError, match="requires document instructions"):
+        build_scalar_object_prompt(
+            fields,
+            bundle.scalar_page_schema,
+            prompt_style="verbatim",
+        )
+
+
 def test_choices_and_date_normalizer_are_glm_only_schema_prompt_constraints() -> None:
     fields = {
         "note_type": {
@@ -281,6 +310,84 @@ def test_choices_and_date_normalizer_are_glm_only_schema_prompt_constraints() ->
     assert '"choices":["debit","credit"]' in prompt
     assert '"normalizer":"iso_date"' in prompt
     assert "transcribe the selected source date text faithfully" in prompt
+
+
+def test_schema_order_controls_top_level_object_and_table_properties() -> None:
+    fields = {
+        "customer": {
+            "alias": "Customer",
+            "type": "Dict[str, Any]",
+            "schema_order": 3,
+            "object_fields": {
+                "address": {"type": "str", "schema_order": 2},
+                "name": {"type": "str", "schema_order": 1},
+            },
+        },
+        "insurance_company": {"type": "str", "schema_order": 1},
+        "line_items": {
+            "type": "List[Any]",
+            "is_table": True,
+            "schema_order": 4,
+            "item_fields": {
+                "amount": {"type": "float", "schema_order": 2},
+                "description": {"type": "str", "schema_order": 1},
+            },
+        },
+        "tax_type": {"type": "str", "schema_order": 2},
+    }
+
+    bundle = build_glm_ocr_schemas(fields)
+
+    assert list(bundle.canonical_schema["properties"]) == [
+        "insurance_company",
+        "tax_type",
+        "customer",
+        "line_items",
+    ]
+    assert bundle.canonical_schema["required"] == [
+        "insurance_company",
+        "tax_type",
+        "customer",
+        "line_items",
+    ]
+    customer_schema = bundle.canonical_schema["properties"]["customer"]
+    assert list(customer_schema["properties"]) == ["name", "address"]
+    assert customer_schema["required"] == ["name", "address"]
+    assert bundle.table_page_schema is not None
+    row_schema = bundle.table_page_schema["properties"]["line_items"]["items"]
+    assert list(row_schema["properties"]) == ["description", "amount"]
+    assert row_schema["required"] == ["description", "amount"]
+
+
+@pytest.mark.parametrize(
+    ("fields", "message"),
+    [
+        ({"name": {"type": "str", "schema_order": 0}}, "positive integer"),
+        ({"name": {"type": "str", "schema_order": True}}, "positive integer"),
+        (
+            {
+                "first": {"type": "str", "schema_order": 1},
+                "second": {"type": "str", "schema_order": 1},
+            },
+            "cannot share schema_order",
+        ),
+        (
+            {
+                "customer": {
+                    "type": "Dict[str, Any]",
+                    "object_fields": {
+                        "name": {"type": "str", "schema_order": 1},
+                        "address": {"type": "str", "schema_order": 1},
+                    },
+                }
+            },
+            "cannot share schema_order",
+        ),
+    ],
+)
+def test_invalid_schema_order_is_rejected(fields: dict, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        validate_glm_ocr_fields(fields)
 
 
 def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:

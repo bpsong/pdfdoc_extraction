@@ -889,7 +889,10 @@ invalid files as validator fixtures, not production templates.
   - Fix: Set a non-empty installed model name such as `glm-ocr:latest`
 
 - **`param-glm-invalid-prompt-style`**: GLM-OCR prompt construction mode is unsupported
-  - Fix: Use `detailed` (the compatibility default) or `compact`
+  - Fix: Use `detailed` (the compatibility default), `compact`, or `verbatim`
+
+- **`param-glm-missing-verbatim-instructions`**: Verbatim prompt mode has no complete prompt text
+  - Fix: Supply non-empty `document_instructions`, or use `compact`/`detailed`
 
 - **`param-glm-invalid-dpi` / `param-glm-invalid-num-ctx` / `param-glm-invalid-num-predict` / `param-glm-invalid-timeout-seconds`**: Runtime value is not positive
   - Fix: Use positive numeric values or omit the setting to use its default
@@ -902,6 +905,9 @@ invalid files as validator fixtures, not production templates.
 
 - **`param-glm-invalid-normalizer`**: A GLM-OCR field has an unsupported value normalizer
   - Fix: Use `normalizer: iso_date` only on text fields, or remove the setting
+
+- **`param-glm-invalid-schema-order` / `param-glm-duplicate-schema-order`**: A GLM-OCR schema position is non-positive, non-integer, or reused by a sibling field
+  - Fix: Use a positive integer that is unique among the top-level fields or properties in the same object/table row
 
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path

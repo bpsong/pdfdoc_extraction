@@ -1185,6 +1185,10 @@ pipeline:
     parameter and sends the document instructions with a short extraction
     contract. Compact mode can work better with smaller local models when a
     long duplicated prompt distracts from the document's visual relationships.
+    `verbatim` is an advanced option that sends non-empty
+    `document_instructions` exactly as written, with no framework prompt text,
+    while still enforcing the native JSON Schema. Use it only after controlled
+    testing because the instructions become the complete model prompt.
   - `dpi`: positive integer PDF render resolution; default `216`.
   - `num_ctx`: positive integer model context size; default `8192`.
   - `num_predict`: positive integer output-token limit; default `2048`.
@@ -1194,7 +1198,10 @@ pipeline:
     `List[Any]` table with `item_fields` are supported. Text fields may define
     `choices` to constrain the Ollama JSON schema, and may opt into the
     `iso_date` normalizer to convert a transcribed source date to `YYYY-MM-DD`
-    after extraction.
+    after extraction. A field or flat child property may set a positive,
+    sibling-unique `schema_order`; the GLM editor exposes this as **Schema
+    position**. Explicit positions control JSON Schema property order even
+    though versioned JSON mappings are stored canonically.
 
 Configure this task from **Admin > Pipeline** by adding **Glm Ocr Extract**.
 Its properties panel is separate from the LlamaCloud Extract editor. Set the
@@ -1249,12 +1256,16 @@ meaning-based instructions. Add only the disambiguation needed for the tested
 document type, avoid repeating the same rule in several forms, and avoid literal
 example values. Try `compact` prompt style when the detailed prompt is too long
 or repeats information already enforced by Ollama's native schema parameter.
+Use `verbatim` only when a concise prompt has been tested as a complete unit and
+the compact framework wrapper itself changes model behaviour.
 
 Treat field order, object grouping, prompt style, and document instructions as
 model-affecting configuration. Before publishing a changed pipeline:
 
-1. Inspect the YAML preview or exported definition to confirm the effective
-   top-level and object-property order.
+1. Set **Schema position** for every top-level field and structured child whose
+   order matters, then inspect the YAML preview or exported definition to
+   confirm the effective order. Positions must be positive and unique among
+   siblings.
 2. Change one variable at a time so that a regression can be attributed to a
    schema-order, field, object, or prompt change.
 3. Test several representative PDFs for the document type using the same model

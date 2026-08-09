@@ -258,6 +258,17 @@ def test_task_rejects_unknown_prompt_style(tmp_path) -> None:
         task.on_start(context)
 
 
+def test_task_rejects_verbatim_prompt_without_instructions(tmp_path) -> None:
+    config, context, _document_id = _persisted_context(tmp_path)
+    task = GlmOcrExtractTask(
+        config,
+        **_params(prompt_style="verbatim", document_instructions=""),
+    )
+
+    with pytest.raises(TaskError, match="requires document instructions"):
+        task.on_start(context)
+
+
 def test_task_dict_flags_are_extended_without_overwriting_existing_entries(
     tmp_path, monkeypatch
 ) -> None:

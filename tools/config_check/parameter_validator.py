@@ -428,6 +428,13 @@ def _validate_extraction_params(
         if is_glm_ocr:
             _validate_glm_field_constraints(spec, field_path, errors)
 
+    if is_glm_ocr:
+        _validate_glm_schema_orders(
+            fields,
+            f"{params_path}.fields",
+            errors,
+        )
+
     if len(table_fields) > 1:
         errors.append(
             ParameterIssue(
@@ -531,15 +538,31 @@ def _validate_glm_ocr_runtime_options(
             )
         )
     prompt_style = params.get("prompt_style", "detailed")
-    if prompt_style not in {"detailed", "compact"}:
+    if prompt_style not in {"detailed", "compact", "verbatim"}:
         errors.append(
             ParameterIssue(
                 path=f"{params_path}.prompt_style",
                 message=(
-                    "GLM-OCR prompt_style must be either 'detailed' or 'compact'."
+                    "GLM-OCR prompt_style must be 'detailed', 'compact', or "
+                    "'verbatim'."
                 ),
                 code="param-glm-invalid-prompt-style",
                 details={"config_key": f"{params_path}.prompt_style"},
+            )
+        )
+    elif prompt_style == "verbatim" and (
+        not isinstance(params.get("document_instructions"), str)
+        or not params.get("document_instructions", "").strip()
+    ):
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.document_instructions",
+                message=(
+                    "GLM-OCR verbatim prompt style requires non-empty document "
+                    "instructions."
+                ),
+                code="param-glm-missing-verbatim-instructions",
+                details={"config_key": f"{params_path}.document_instructions"},
             )
         )
     for key in _GLM_POSITIVE_INTEGER_PARAMS:
@@ -803,6 +826,53 @@ def _validate_glm_field_constraints(
                 f"{path}.{child_key}.{name}",
                 errors,
             )
+
+
+def _validate_glm_schema_orders(
+    fields: Any,
+    path: str,
+    errors: List[ParameterIssue],
+) -> None:
+    """Validate positive, unique GLM schema positions at every flat level."""
+    if not isinstance(fields, dict):
+        return
+    seen: dict[int, str] = {}
+    for name, spec in fields.items():
+        if not isinstance(spec, dict):
+            continue
+        if "schema_order" in spec:
+            value = spec.get("schema_order")
+            field_path = f"{path}.{name}.schema_order"
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                errors.append(
+                    ParameterIssue(
+                        path=field_path,
+                        message="GLM schema_order must be a positive integer",
+                        code="param-glm-invalid-schema-order",
+                        details={"field": name},
+                    )
+                )
+            elif value in seen:
+                errors.append(
+                    ParameterIssue(
+                        path=field_path,
+                        message=(
+                            "GLM schema_order must be unique among sibling fields"
+                        ),
+                        code="param-glm-duplicate-schema-order",
+                        details={"field": name, "conflicts_with": seen[value]},
+                    )
+                )
+            else:
+                seen[value] = str(name)
+        for child_key in ("object_fields", "item_fields"):
+            children = spec.get(child_key)
+            if isinstance(children, dict):
+                _validate_glm_schema_orders(
+                    children,
+                    f"{path}.{name}.{child_key}",
+                    errors,
+                )
 
 def _validate_rules_params(
     params: Any, params_path: str, errors: List[ParameterIssue]

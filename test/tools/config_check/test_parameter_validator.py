@@ -892,6 +892,27 @@ def test_glm_prompt_style_accepts_compact_and_rejects_unknown_value():
     assert "param-glm-invalid-prompt-style" in codes
 
 
+def test_glm_verbatim_prompt_style_requires_instructions():
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": _glm_task_params(
+                    prompt_style="verbatim",
+                    document_instructions="Extract only configured values.",
+                ),
+            }
+        }
+    }
+
+    assert validate_parameters(config).errors == []
+
+    config["tasks"]["glm_extract"]["params"]["document_instructions"] = ""
+    codes = {issue.code for issue in validate_parameters(config).errors}
+    assert "param-glm-missing-verbatim-instructions" in codes
+
+
 def test_glm_choices_and_iso_date_normalizer_are_validated_recursively():
     params = _glm_task_params()
     params["fields"] = {
@@ -929,6 +950,53 @@ def test_glm_choices_and_iso_date_normalizer_are_validated_recursively():
     codes = {issue.code for issue in validate_parameters(config).errors}
     assert "param-glm-invalid-choices" in codes
     assert "param-glm-invalid-normalizer" in codes
+
+
+def test_glm_schema_order_is_positive_unique_and_recursive():
+    params = _glm_task_params()
+    params["fields"] = {
+        "insurance_company": {
+            "alias": "Insurance company",
+            "type": "str",
+            "schema_order": 1,
+        },
+        "customer": {
+            "alias": "Customer",
+            "type": "Dict[str, Any]",
+            "schema_order": 2,
+            "object_fields": {
+                "name": {
+                    "alias": "Customer name",
+                    "type": "str",
+                    "schema_order": 1,
+                },
+                "address": {
+                    "alias": "Customer address",
+                    "type": "str",
+                    "schema_order": 2,
+                },
+            },
+        },
+    }
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": params,
+            }
+        }
+    }
+
+    assert validate_parameters(config).errors == []
+
+    params["fields"]["customer"]["schema_order"] = 1
+    params["fields"]["customer"]["object_fields"]["address"][
+        "schema_order"
+    ] = 0
+    codes = {issue.code for issue in validate_parameters(config).errors}
+    assert "param-glm-duplicate-schema-order" in codes
+    assert "param-glm-invalid-schema-order" in codes
 
 
 def test_glm_parameters_reject_credentials_bad_host_and_numeric_values():

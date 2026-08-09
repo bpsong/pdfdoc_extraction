@@ -15,7 +15,7 @@ from standard_step.extraction.structured_fields import (
 
 
 SUPPORTED_SCALAR_TYPES = {"str", "int", "float", "bool", "Decimal", "Any"}
-SUPPORTED_PROMPT_STYLES = {"detailed", "compact"}
+SUPPORTED_PROMPT_STYLES = {"detailed", "compact", "verbatim"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +33,7 @@ class GlmOcrSchemaBundle:
 def build_glm_ocr_schemas(fields: dict[str, Any]) -> GlmOcrSchemaBundle:
     """Validate configured fields and build strict final/page schemas."""
     validate_glm_ocr_fields(fields)
+    fields = _ordered_glm_fields(fields)
     scalar_fields = {
         key: config
         for key, config in fields.items()
@@ -84,6 +85,7 @@ def validate_glm_ocr_fields(fields: Any) -> None:
     if not isinstance(fields, dict) or not fields:
         raise ValueError("GLM-OCR fields must be a non-empty object")
 
+    _validate_unique_schema_orders(fields, "top-level")
     table_count = 0
     for field_key, field_config in fields.items():
         _validate_field_key(field_key, "top-level")
@@ -150,6 +152,12 @@ def build_scalar_object_prompt(
     validate_glm_ocr_prompt_style(prompt_style)
     field_lines = [_describe_field(key, config) for key, config in fields.items()]
     instructions = document_instructions.strip() or "None."
+    if prompt_style == "verbatim":
+        if instructions == "None.":
+            raise ValueError(
+                "GLM-OCR verbatim prompt style requires document instructions"
+            )
+        return instructions
     recovery_lines = (
         [
             "This is a focused recovery pass for configured required values "
@@ -228,6 +236,12 @@ def build_table_prompt(
     ]
     table_descriptor = _field_descriptor(table_field_key, table_field)
     instructions = document_instructions.strip() or "None."
+    if prompt_style == "verbatim":
+        if instructions == "None.":
+            raise ValueError(
+                "GLM-OCR verbatim prompt style requires document instructions"
+            )
+        return instructions
     if prompt_style == "compact":
         return "\n".join(
             [
@@ -290,6 +304,7 @@ def _validate_children(parent_key: str, children: Any, kind: str) -> None:
         raise ValueError(
             f"Field '{parent_key}' must define non-empty {kind}_fields"
         )
+    _validate_unique_schema_orders(children, f"{kind} field '{parent_key}'")
     for child_key, child_config in children.items():
         _validate_field_key(child_key, f"{kind} child")
         if not isinstance(child_config, dict):
@@ -316,6 +331,55 @@ def _validate_children(parent_key: str, children: Any, kind: str) -> None:
             child_type,
             f"Child '{parent_key}.{child_key}'",
         )
+
+
+def _validate_unique_schema_orders(fields: dict[str, Any], location: str) -> None:
+    """Require optional schema positions to be positive and unique per object."""
+    seen: dict[int, str] = {}
+    for field_key, field_config in fields.items():
+        if not isinstance(field_config, dict) or "schema_order" not in field_config:
+            continue
+        value = field_config.get("schema_order")
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(
+                f"Field '{field_key}' schema_order must be a positive integer"
+            )
+        previous = seen.get(value)
+        if previous is not None:
+            raise ValueError(
+                f"Fields '{previous}' and '{field_key}' in {location} "
+                f"cannot share schema_order {value}"
+            )
+        seen[value] = str(field_key)
+
+
+def _ordered_glm_fields(fields: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy ordered by explicit schema positions at each flat level."""
+    indexed = list(enumerate(fields.items()))
+
+    def sort_key(item: tuple[int, tuple[str, Any]]) -> tuple[int, int, int]:
+        original_index, (_, field_config) = item
+        order = (
+            field_config.get("schema_order")
+            if isinstance(field_config, dict)
+            else None
+        )
+        if isinstance(order, int) and not isinstance(order, bool):
+            return (0, order, original_index)
+        return (1, original_index, original_index)
+
+    ordered: dict[str, Any] = {}
+    for _, (field_key, field_config) in sorted(indexed, key=sort_key):
+        if not isinstance(field_config, dict):
+            ordered[field_key] = field_config
+            continue
+        config = dict(field_config)
+        for child_key in ("object_fields", "item_fields"):
+            children = config.get(child_key)
+            if isinstance(children, dict):
+                config[child_key] = _ordered_glm_fields(children)
+        ordered[field_key] = config
+    return ordered
 
 
 def _allow_configured_optional_values(

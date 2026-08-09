@@ -985,6 +985,26 @@ export completes after review.
   - [ ] Record the exact prompt/schema sent, call count, pipeline version,
     batch/document identifiers, and final verification evidence.
 
+- [ ] **11.7 Preserve learned GLM schema order and prove a separate pipeline**
+  - [x] Add optional positive, sibling-unique `schema_order` metadata for GLM
+    top-level fields, object properties, and table-row properties.
+  - [x] Apply explicit positions before GLM schema/prompt construction while
+    leaving canonical SQLite storage and LlamaCloud extraction unchanged.
+  - [x] Expose **Schema position** only in the separate GLM visual editor and
+    validate positions in runtime and config-check paths.
+  - [x] Add focused schema, recursive-validation, config-check, editor, and
+    LlamaCloud-isolation regression coverage.
+  - [ ] Run the broader GLM suite, frontend build, and Pyright.
+  - [ ] Create a separate learned insurance pipeline rather than replacing
+    `glm-phase11-insurance`; reuse its exact published review-form version.
+  - [ ] Configure the concise successful experimental guidance, retain
+    `note_type` for review-schema compatibility, omit policy-specific prompt
+    guidance, and set the proven top-level/customer-property schema positions.
+  - [ ] Publish and submit `sample_invoice.pdf`; verify every unedited value,
+    exact schema order, and one scalar/object call with no table call.
+  - [ ] Complete review only if the unedited extraction is correct, then verify
+    JSON and renamed-PDF artifacts and record the live evidence below.
+
 ## Final requirement audit
 
 - [x] New GLM task follows the standard-task creation guideline.

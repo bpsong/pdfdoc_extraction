@@ -140,6 +140,33 @@ def test_glm_editor_exposes_choices_and_date_normalization_without_llama_control
     assert "iso_date" not in llama_renderer
 
 
+def test_glm_editor_exposes_schema_position_without_changing_llama_renderer() -> None:
+    source = _source()
+    neutral_fields = _between(
+        source,
+        "    function extractionFieldControls(step, hint) {",
+        "    function structuredFieldSchemaDrawer(step) {",
+    )
+    drawer = _between(
+        source,
+        "    function structuredFieldSchemaDrawer(step) {",
+        "    function extractControls(step) {",
+    )
+
+    assert 'numberControl("Schema position"' in neutral_fields
+    assert 'fieldValue.schema_order ?? fieldIndex + 1' in neutral_fields
+    assert 'aria-label="Schema position for' in drawer
+    assert 'data-param-action="schema-draft-order"' in drawer
+    assert "itemConfig.schema_order ?? itemIndex + 1" in drawer
+
+    llama_renderer = _between(
+        source,
+        "    function extractControls(step) {",
+        "    function glmOcrExtractControls(step) {",
+    )
+    assert "Schema position" not in llama_renderer
+
+
 def test_glm_field_rows_use_polished_alignment_and_destructive_action() -> None:
     """Keep the GLM field row aligned while preserving the Llama renderer."""
     source = _source()
@@ -190,6 +217,7 @@ def test_glm_defaults_and_summary_are_local_and_non_secret() -> None:
         assert label in renderer
     assert "Prompt construction" in renderer
     assert "Compact (schema sent once)" in renderer
+    assert "Verbatim instructions (advanced)" in renderer
     assert "secretControl(" not in renderer
 
 

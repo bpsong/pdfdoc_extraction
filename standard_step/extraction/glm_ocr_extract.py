@@ -110,6 +110,10 @@ class GlmOcrExtractTask(BaseTask):
             validate_glm_ocr_prompt_style(self.prompt_style)
         except ValueError as error:
             raise TaskError("GLM-OCR prompt_style is invalid.") from error
+        if self.prompt_style == "verbatim" and not self.document_instructions.strip():
+            raise TaskError(
+                "GLM-OCR verbatim prompt style requires document instructions."
+            )
         for key, value in {
             "dpi": self.dpi,
             "num_ctx": self.num_ctx,
