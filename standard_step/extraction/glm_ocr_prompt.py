@@ -15,6 +15,7 @@ from standard_step.extraction.structured_fields import (
 
 
 SUPPORTED_SCALAR_TYPES = {"str", "int", "float", "bool", "Decimal", "Any"}
+SUPPORTED_PROMPT_STYLES = {"detailed", "compact"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,10 +142,12 @@ def build_scalar_object_prompt(
     *,
     document_instructions: str = "",
     recovery_pass: bool = False,
+    prompt_style: str = "detailed",
 ) -> str:
     """Build a stable prompt for one page's scalar and object fields."""
     if not fields:
         raise ValueError("Scalar/object prompt requires at least one field")
+    validate_glm_ocr_prompt_style(prompt_style)
     field_lines = [_describe_field(key, config) for key, config in fields.items()]
     instructions = document_instructions.strip() or "None."
     recovery_lines = (
@@ -158,6 +161,24 @@ def build_scalar_object_prompt(
         if recovery_pass
         else []
     )
+    if prompt_style == "compact":
+        return "\n".join(
+            [
+                "Extract the requested fields from this single PDF page.",
+                *recovery_lines,
+                "Use only information visible in the document image.",
+                "Return only one JSON object matching the supplied JSON Schema; "
+                "do not add Markdown or explanations.",
+                "Use the configured field keys exactly and return every "
+                "configured top-level field once.",
+                "Use JSON null when a configured value is not visibly supported; "
+                "do not omit its key.",
+                "For a configured object, return every configured child key and "
+                "use JSON null for a child not visible on this page.",
+                "Do not invent, infer, or copy an example value.",
+                f"Document instructions: {instructions}",
+            ]
+        )
     return "\n".join(
         [
             "Extract configured scalar and object values from this single PDF page.",
@@ -195,9 +216,11 @@ def build_table_prompt(
     schema: dict[str, Any],
     *,
     document_instructions: str = "",
+    prompt_style: str = "detailed",
 ) -> str:
     """Build a stable prompt for one page's configured logical table."""
     validate_glm_ocr_fields({table_field_key: table_field})
+    validate_glm_ocr_prompt_style(prompt_style)
     item_fields = table_field["item_fields"]
     item_lines = [
         _describe_field(key, config, prefix="row field")
@@ -205,6 +228,23 @@ def build_table_prompt(
     ]
     table_descriptor = _field_descriptor(table_field_key, table_field)
     instructions = document_instructions.strip() or "None."
+    if prompt_style == "compact":
+        return "\n".join(
+            [
+                "Extract the requested logical table from this single PDF page.",
+                "Use only information visible in the document image.",
+                "Return only one JSON object matching the supplied JSON Schema; "
+                "do not add Markdown or explanations.",
+                "Return one JSON object per logical visual row and keep values "
+                "from the same visual row together.",
+                "Exclude headers, footers, subtotals, totals, blank rows, and "
+                "duplicate rows unless the document instructions say otherwise.",
+                "Return every configured row key. Use JSON null for a missing "
+                "row value and an empty array when no logical rows are visible.",
+                "Do not invent, infer, or copy an example value.",
+                f"Document instructions: {instructions}",
+            ]
+        )
     return "\n".join(
         [
             "Extract the configured logical table from this single PDF page.",
@@ -236,6 +276,13 @@ def build_table_prompt(
             _stable_json(schema),
         ]
     )
+
+
+def validate_glm_ocr_prompt_style(value: Any) -> None:
+    """Reject prompt construction modes outside the supported GLM contract."""
+    if not isinstance(value, str) or value not in SUPPORTED_PROMPT_STYLES:
+        allowed = ", ".join(sorted(SUPPORTED_PROMPT_STYLES))
+        raise ValueError(f"GLM-OCR prompt_style must be one of: {allowed}")
 
 
 def _validate_children(parent_key: str, children: Any, kind: str) -> None:

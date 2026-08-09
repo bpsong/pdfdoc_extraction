@@ -1,0 +1,103 @@
+{
+  "type": "object",
+  "properties": {
+    "insurance_company": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Full legal name of the issuing insurer or underwriter shown in the header. Do not return the insured, policyholder, broker, agent, payment recipient, or customer.name."
+    },
+    "customer": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The insured or policyholder name from the labelled customer block. Never return the issuing insurer."
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "All address lines belonging to the same insured or policyholder block, combined into one string. Never return the issuing insurer's header address."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "address"
+      ],
+      "description": "One labelled insured, policyholder, customer, or Bill To identity block. Keep its name and address together and do not use the issuing insurer header."
+    },
+    "coverage_period": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "start_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The date printed beside FROM inside this same Period of Insurance block. Transcribe it exactly as printed; never use Date of Issue."
+        },
+        "end_date": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The date printed beside TO inside this same Period of Insurance block. Transcribe it exactly as printed and preserve its printed year."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "start_date",
+        "end_date"
+      ],
+      "description": "The single visibly labelled Period of Insurance date-range block. Return start_date and end_date together from its FROM and TO rows; never use Date of Issue, invoice date, document date, payment date, or due date."
+    },
+    "total_premium": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Final Total Premium as a JSON number without currency codes, symbols, separators, or masking asterisks. Do not select gross premium, tax, or a line amount. If and only if the insurer is Liberty Insurance Pte Ltd and the printed value has leading asterisks after its currency code, remove only those asterisks before parsing; SGD ********100.00 must return 100."
+    },
+    "policy_number": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Main Policy No. or certificate number. Preserve all visible letters, digits, spaces, slashes, hyphens, and leading zeros. Do not use a document, invoice, debit-note, reference, endorsement, previous-policy, or account number."
+    },
+    "note_type": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "From the document-level invoice or note heading, return exactly debit for Debit Note or exactly credit for Credit Note. Never return a line-item table heading such as Description of Goods or Services.",
+      "enum": [
+        "debit",
+        "credit",
+        null
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "insurance_company",
+    "customer",
+    "coverage_period",
+    "total_premium",
+    "policy_number",
+    "note_type"
+  ]
+}

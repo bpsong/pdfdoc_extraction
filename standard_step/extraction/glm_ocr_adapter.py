@@ -138,6 +138,7 @@ class GlmOcrAdapter:
         fields: dict[str, Any],
         *,
         document_instructions: str = "",
+        prompt_style: str = "detailed",
     ) -> GlmOcrAdapterResult:
         """Extract and merge configured values from all pages of one PDF."""
         schemas = build_glm_ocr_schemas(fields)
@@ -163,6 +164,7 @@ class GlmOcrAdapter:
                 schemas.scalar_fields,
                 schemas.scalar_page_schema,
                 document_instructions=document_instructions,
+                prompt_style=prompt_style,
             )
         table_prompt = None
         if (
@@ -175,6 +177,7 @@ class GlmOcrAdapter:
                 schemas.table_field,
                 schemas.table_page_schema,
                 document_instructions=document_instructions,
+                prompt_style=prompt_style,
             )
 
         for page_number, image_bytes in enumerate(page_images, start=1):
@@ -223,6 +226,7 @@ class GlmOcrAdapter:
                         recovery_schemas.scalar_page_schema,
                         document_instructions=document_instructions,
                         recovery_pass=True,
+                        prompt_style=prompt_style,
                     )
                     recovery_data, recovery_record = self._call_model(
                         client,

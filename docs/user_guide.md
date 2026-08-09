@@ -1177,6 +1177,12 @@ pipeline:
   - `model`: installed Ollama model name, normally `glm-ocr:latest`.
   - `document_instructions`: optional document-level extraction guidance. Do not
     place secrets in instructions.
+  - `prompt_style`: `detailed` (default) repeats deterministic field descriptors
+    and the schema in the text prompt for compatibility with existing
+    pipelines. `compact` keeps the schema only in Ollama's native `format`
+    parameter and sends the document instructions with a short extraction
+    contract. Compact mode can work better with smaller local models when a
+    long duplicated prompt distracts from the document's visual relationships.
   - `dpi`: positive integer PDF render resolution; default `216`.
   - `num_ctx`: positive integer model context size; default `8192`.
   - `num_predict`: positive integer output-token limit; default `2048`.
@@ -1215,6 +1221,15 @@ instructions can focus on visible rows. Results are normalized under
 available to every downstream task. The task does not provide field confidence,
 citations, or PP-DocLayout output. Confidence therefore remains null; no score
 is invented.
+
+Prompt style does not change the call strategy. A document with scalar/object
+fields and no table receives one initial GLM call per page. A required value
+returned as null may cause one focused scalar recovery call. A configured
+array-of-objects table adds its own table call per page. In compact mode the
+same JSON Schema is still enforced through Ollama; it is simply not duplicated
+inside the text prompt. Put precise, document-specific selection rules in
+`document_instructions`, and avoid literal example values that a small model
+could copy into its answer.
 
 When a review gate follows GLM extraction, the task's structured unscored-output
 flag makes every configured top-level field reviewable. Use document review

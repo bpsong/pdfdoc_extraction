@@ -22,7 +22,10 @@ from standard_step.extraction.glm_ocr_adapter import (
     GlmOcrTimeoutError,
     GlmOcrUnavailableError,
 )
-from standard_step.extraction.glm_ocr_prompt import validate_glm_ocr_fields
+from standard_step.extraction.glm_ocr_prompt import (
+    validate_glm_ocr_fields,
+    validate_glm_ocr_prompt_style,
+)
 
 
 MAX_TOP_LEVEL_FIELDS = 100
@@ -51,6 +54,7 @@ class GlmOcrExtractTask(BaseTask):
         self.ollama_host = ""
         self.model = ""
         self.document_instructions = ""
+        self.prompt_style = "detailed"
         self.dpi = 216
         self.num_ctx = 8192
         self.num_predict = 2048
@@ -102,6 +106,10 @@ class GlmOcrExtractTask(BaseTask):
             raise TaskError("GLM-OCR model must be a non-empty string.")
         if not isinstance(self.document_instructions, str):
             raise TaskError("GLM-OCR document instructions must be text.")
+        try:
+            validate_glm_ocr_prompt_style(self.prompt_style)
+        except ValueError as error:
+            raise TaskError("GLM-OCR prompt_style is invalid.") from error
         for key, value in {
             "dpi": self.dpi,
             "num_ctx": self.num_ctx,
@@ -134,6 +142,7 @@ class GlmOcrExtractTask(BaseTask):
                 str(context["file_path"]),
                 self.fields,
                 document_instructions=self.document_instructions,
+                prompt_style=self.prompt_style,
             )
             processed_data = self._processed_data(result)
             data = context.get("data")
@@ -177,10 +186,12 @@ class GlmOcrExtractTask(BaseTask):
         host = self.params.get("ollama_host", "http://127.0.0.1:11434")
         model = self.params.get("model", "glm-ocr:latest")
         instructions = self.params.get("document_instructions", "")
+        prompt_style = self.params.get("prompt_style", "detailed")
         fields = self.params.get("fields", {})
         self.ollama_host = host.strip() if isinstance(host, str) else ""
         self.model = model.strip() if isinstance(model, str) else ""
         self.document_instructions = instructions
+        self.prompt_style = prompt_style
         self.dpi = self.params.get("dpi", 216)
         self.num_ctx = self.params.get("num_ctx", 8192)
         self.num_predict = self.params.get("num_predict", 2048)

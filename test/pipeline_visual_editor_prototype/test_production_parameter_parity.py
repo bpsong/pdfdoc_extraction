@@ -11,7 +11,7 @@ PRODUCTION_CSS = PROJECT_ROOT / "web" / "static" / "css" / "app.css"
 TASK_PARAMETERS: dict[str, set[str]] = {
     "LlamaCloudSplitTask": {"enabled", "categories", "api_key", "configuration_id", "project_id", "organization_id", "allow_uncategorized", "fail_on_confidence_levels", "fail_on_unknown_category", "allowed_categories", "poll_interval_seconds", "timeout_seconds", "split_dir"},
     "ExtractPdfTask": {"api_key", "configuration_id", "tier", "parse_tier", "extraction_target", "cite_sources", "confidence_scores", "project_id", "organization_id", "poll_interval_seconds", "timeout_seconds", "fields", "description", "is_table", "item_fields"},
-    "GlmOcrExtractTask": {"ollama_host", "model", "document_instructions", "dpi", "num_ctx", "num_predict", "timeout_seconds", "fields", "description", "is_table", "item_fields", "object_fields"},
+    "GlmOcrExtractTask": {"ollama_host", "model", "document_instructions", "prompt_style", "dpi", "num_ctx", "num_predict", "timeout_seconds", "fields", "description", "is_table", "item_fields", "object_fields"},
     "ReviewGateTask": {"confidence_threshold", "per_document_type_thresholds", "field_threshold_overrides", "split_confidence_levels_requiring_review", "require_review_when_missing_confidence", "require_review_for_missing_required_fields", "always_review", "schema_version_id", "queue_name", "review_scope", "allow_operator_to_edit_high_confidence_fields", "resume_policy"},
     "StoreMetadataAsCsv": {"data_dir", "filename", "storage", "extraction"},
     "StoreMetadataAsJson": {"data_dir", "filename"},

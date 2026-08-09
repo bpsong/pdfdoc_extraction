@@ -885,6 +885,7 @@
                             <select class="select select-bordered select-sm" aria-label="Type for ${escapeHtml(fieldKey)}" data-param-action="field-type" data-field-key="${escapeHtml(fieldKey)}" data-required="${required ? "true" : "false"}">
                                 ${renderedTypeOptions.map((option) => `<option value="${escapeHtml(option.value)}" ${baseType === option.value ? "selected" : ""} ${(option.value === "List[Any]" && tableBlocked) || option.disabled ? "disabled" : ""}>${escapeHtml(option.label)}</option>`).join("")}
                             </select>
+                            ${tableBlocked && !polishedLayout ? '<span class="mt-1 text-xs text-warning">Only one List of objects field is supported.</span>' : ""}
                             <span class="mt-1 text-xs text-base-content/50">Python type: ${escapeHtml(withRequiredState(baseType, required))}${isTable ? " · flat row objects" : ""}</span>
                         </label>
                         <button class="btn ${polishedLayout ? "btn-outline extraction-field-remove" : "btn-ghost btn-square self-end"} btn-sm text-error" type="button" title="Remove field" aria-label="Remove field ${escapeHtml(fieldKey)}" data-param-action="remove-extract-field" data-field-key="${escapeHtml(fieldKey)}">Remove</button>
@@ -912,7 +913,7 @@
                 <p class="text-xs text-base-content/60">${escapeHtml(hint || "Define scalar fields and one optional table-style field for extraction. Review schemas are configured separately and may contain multiple arrays of objects.")}</p>
                 <button class="btn btn-outline btn-xs" type="button" data-param-action="add-extract-field">Add field</button>
             </div>
-            <div class="alert alert-info py-2 text-xs">Each extraction task supports one List of objects field. The additional table option stays unavailable once one is configured.</div>
+            ${polishedLayout ? "" : '<div class="alert alert-info py-2 text-xs">Each extraction task supports one List of objects field. The additional table option stays unavailable once one is configured.</div>'}
             <div class="space-y-3">${controls || '<div class="empty-panel">No extraction fields configured</div>'}</div>
         `)}`;
     }
@@ -1188,6 +1189,12 @@
                     </div>
                     <div class="mt-3">
                         ${textareaControl("Document instructions", ["document_instructions"], params.document_instructions || "", { full: true, findings: inlineFindings(step, "document_instructions") })}
+                    </div>
+                    <div class="mt-3">
+                        ${selectControl("Prompt construction", ["prompt_style"], params.prompt_style || "detailed", [
+                            { value: "detailed", label: "Detailed (compatibility default)" },
+                            { value: "compact", label: "Compact (schema sent once)" },
+                        ], "Compact keeps the JSON Schema in Ollama's native format parameter and avoids repeating it in the text prompt.", inlineFindings(step, "prompt_style"))}
                     </div>
                 `)}
                 ${detailsSection("Local runtime settings", `
@@ -1709,7 +1716,7 @@
         const defaults = {
             LlamaCloudSplitTask: { enabled: true, api_key: "", allow_uncategorized: "include", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
             ExtractPdfTask: { api_key: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
-            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
+            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
             AssignNanoidTask: { length: 10 },
             StoreMetadataAsCsv: { data_dir: "data", filename: "{id}" },
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },

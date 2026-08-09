@@ -530,6 +530,18 @@ def _validate_glm_ocr_runtime_options(
                 details={"config_key": f"{params_path}.document_instructions"},
             )
         )
+    prompt_style = params.get("prompt_style", "detailed")
+    if prompt_style not in {"detailed", "compact"}:
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.prompt_style",
+                message=(
+                    "GLM-OCR prompt_style must be either 'detailed' or 'compact'."
+                ),
+                code="param-glm-invalid-prompt-style",
+                details={"config_key": f"{params_path}.prompt_style"},
+            )
+        )
     for key in _GLM_POSITIVE_INTEGER_PARAMS:
         if key not in params:
             continue

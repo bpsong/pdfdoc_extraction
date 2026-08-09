@@ -1,0 +1,11 @@
+Extract the requested fields from this insurance invoice image.
+
+Use only information visible in the document. Return only JSON matching the provided schema; do not add Markdown or explanations.
+
+Field rules:
+- insurance_company: the issuing insurer or underwriter. Prefer its full legal entity name from the header; do not return the insured, policyholder, broker, or payment recipient.
+- note_type: debit or credit from the document's invoice or note type.
+- customer: the insured, policyholder, or billed customer. Locate the labelled Name and Address of Insured, Insured, Policyholder, Customer, or Bill To block. customer.name is the first non-label line in that block. customer.address is every following address line in that same block. Never use the issuing insurer's header address.
+- total_premium: the final Total Premium as a number without currency text or masking asterisks. Do not select Gross Premium, an individual line amount, or tax.
+- insurance_start_date and insurance_end_date: the coverage-period FROM and TO dates. Do not use Date of Issue, invoice date, document date, payment date, or due date. Transcribe both dates exactly as printed.
+- policy_number: the main value beside Policy No.; not a document, account, reference, endorsement, or previous-policy number.

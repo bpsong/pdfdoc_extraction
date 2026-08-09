@@ -888,6 +888,9 @@ invalid files as validator fixtures, not production templates.
 - **`param-glm-missing-model`**: GLM-OCR model is missing
   - Fix: Set a non-empty installed model name such as `glm-ocr:latest`
 
+- **`param-glm-invalid-prompt-style`**: GLM-OCR prompt construction mode is unsupported
+  - Fix: Use `detailed` (the compatibility default) or `compact`
+
 - **`param-glm-invalid-dpi` / `param-glm-invalid-num-ctx` / `param-glm-invalid-num-predict` / `param-glm-invalid-timeout-seconds`**: Runtime value is not positive
   - Fix: Use positive numeric values or omit the setting to use its default
 

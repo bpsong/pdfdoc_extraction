@@ -58,6 +58,7 @@ def _params(**overrides) -> dict:
         "ollama_host": "http://127.0.0.1:11434",
         "model": "glm-ocr:latest",
         "document_instructions": "Read the invoice labels.",
+        "prompt_style": "detailed",
         "dpi": 216,
         "num_ctx": 8192,
         "num_predict": 2048,
@@ -230,6 +231,31 @@ def test_task_success_preserves_context_merges_flags_and_persists_safe_rows(
         assert runtime_parameter not in context
     assert "Read the invoice labels" not in result["metadata_json"]
     assert artifact_count == 1  # The ingestion source only; extraction creates none.
+
+
+def test_task_passes_compact_prompt_style_to_adapter(tmp_path, monkeypatch) -> None:
+    config, context, _document_id = _persisted_context(tmp_path)
+    task = GlmOcrExtractTask(config, **_params(prompt_style="compact"))
+    calls: list[dict[str, Any]] = []
+
+    def extract(*args: Any, **kwargs: Any) -> GlmOcrAdapterResult:
+        calls.append(kwargs)
+        return _adapter_result()
+
+    monkeypatch.setattr(task, "_build_adapter", lambda: SimpleNamespace(extract=extract))
+
+    task.on_start(context)
+    task.run(context)
+
+    assert calls[0]["prompt_style"] == "compact"
+
+
+def test_task_rejects_unknown_prompt_style(tmp_path) -> None:
+    config, context, _document_id = _persisted_context(tmp_path)
+    task = GlmOcrExtractTask(config, **_params(prompt_style="raw"))
+
+    with pytest.raises(TaskError, match="prompt_style is invalid"):
+        task.on_start(context)
 
 
 def test_task_dict_flags_are_extended_without_overwriting_existing_entries(

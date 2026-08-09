@@ -183,11 +183,13 @@ def test_glm_defaults_and_summary_are_local_and_non_secret() -> None:
 
     assert (
         'GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", '
-        'model: "glm-ocr:latest", document_instructions: "", dpi: 216, '
+        'model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", dpi: 216, '
         "num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} }"
     ) in source
     for label in ("Model", "Ollama host", "Fields", "Table status"):
         assert label in renderer
+    assert "Prompt construction" in renderer
+    assert "Compact (schema sent once)" in renderer
     assert "secretControl(" not in renderer
 
 

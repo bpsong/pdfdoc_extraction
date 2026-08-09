@@ -157,6 +157,34 @@ def test_one_page_mixed_requests_use_native_ollama_payloads(tmp_path: Path) -> N
     assert "Read the billing invoice only." in table_request["prompt"]
 
 
+def test_compact_prompt_style_is_used_for_scalar_and_table_calls(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "invoice.pdf")
+    client = _client(
+        _response(
+            {
+                "invoice_number": "000123",
+                "summary": {"currency": "USD", "tax": 2.5},
+            }
+        ),
+        _response({"items": [{"sku": "A01", "quantity": 2}]}),
+    )
+
+    _adapter(client).extract(
+        str(pdf_path),
+        _fields(),
+        document_instructions="Read the invoice.",
+        prompt_style="compact",
+    )
+
+    scalar_request, table_request = [call.kwargs for call in client.generate.call_args_list]
+    for request in (scalar_request, table_request):
+        assert request["format"]["type"] == "object"
+        assert "JSON Schema:" not in request["prompt"]
+        assert "Read the invoice." in request["prompt"]
+
+
 def test_multi_page_merges_objects_records_conflicts_and_deduplicates_rows(
     tmp_path: Path,
 ) -> None:

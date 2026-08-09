@@ -803,6 +803,7 @@ def _glm_task_params(**overrides):
         "ollama_host": "http://127.0.0.1:11434",
         "model": "glm-ocr:latest",
         "document_instructions": "",
+        "prompt_style": "detailed",
         "dpi": 216,
         "num_ctx": 8192,
         "num_predict": 2048,
@@ -871,6 +872,24 @@ def test_glm_runtime_numeric_options_may_use_task_defaults():
     )
 
     assert result.errors == []
+
+
+def test_glm_prompt_style_accepts_compact_and_rejects_unknown_value():
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": _glm_task_params(prompt_style="compact"),
+            }
+        }
+    }
+
+    assert validate_parameters(config).errors == []
+
+    config["tasks"]["glm_extract"]["params"]["prompt_style"] = "raw"
+    codes = {issue.code for issue in validate_parameters(config).errors}
+    assert "param-glm-invalid-prompt-style" in codes
 
 
 def test_glm_choices_and_iso_date_normalizer_are_validated_recursively():

@@ -199,6 +199,42 @@ def test_scalar_recovery_prompt_is_focused_without_changing_schema() -> None:
     assert '"invoice_number"' in prompt
 
 
+def test_compact_scalar_prompt_uses_native_schema_without_text_duplication() -> None:
+    fields = {"invoice_number": _mixed_fields()["invoice_number"]}
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+
+    prompt = build_scalar_object_prompt(
+        fields,
+        bundle.scalar_page_schema,
+        document_instructions="Use the value beside Invoice Number.",
+        prompt_style="compact",
+    )
+
+    assert "Use the value beside Invoice Number." in prompt
+    assert "matching the supplied JSON Schema" in prompt
+    assert "Configured fields:" not in prompt
+    assert "JSON Schema:" not in prompt
+    assert '"invoice_number"' not in prompt
+
+
+def test_compact_recovery_prompt_retains_recovery_contract() -> None:
+    fields = {"invoice_number": _mixed_fields()["invoice_number"]}
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+
+    prompt = build_scalar_object_prompt(
+        fields,
+        bundle.scalar_page_schema,
+        recovery_pass=True,
+        prompt_style="compact",
+    )
+
+    assert "focused recovery pass" in prompt
+    assert "Search the complete page carefully" in prompt
+    assert "JSON Schema:" not in prompt
+
+
 def test_choices_and_date_normalizer_are_glm_only_schema_prompt_constraints() -> None:
     fields = {
         "note_type": {
@@ -270,6 +306,40 @@ def test_table_prompt_keeps_key_and_row_integrity_rules() -> None:
     for excluded in ("headers", "footers", "subtotals", "blank rows", "duplicate rows"):
         assert excluded in prompt
     assert "Only product rows." in prompt
+
+
+def test_compact_table_prompt_uses_native_schema_without_text_duplication() -> None:
+    bundle = build_glm_ocr_schemas(_mixed_fields())
+    assert bundle.table_field_key is not None
+    assert bundle.table_field is not None
+    assert bundle.table_page_schema is not None
+
+    prompt = build_table_prompt(
+        bundle.table_field_key,
+        bundle.table_field,
+        bundle.table_page_schema,
+        document_instructions="Only product rows.",
+        prompt_style="compact",
+    )
+
+    assert "Only product rows." in prompt
+    assert "one JSON object per logical visual row" in prompt
+    assert "Configured row fields:" not in prompt
+    assert "JSON Schema:" not in prompt
+    assert '"line_items"' not in prompt
+
+
+def test_prompt_style_rejects_unknown_values() -> None:
+    fields = {"invoice_number": _mixed_fields()["invoice_number"]}
+    bundle = build_glm_ocr_schemas(fields)
+    assert bundle.scalar_page_schema is not None
+
+    with pytest.raises(ValueError, match="prompt_style"):
+        build_scalar_object_prompt(
+            fields,
+            bundle.scalar_page_schema,
+            prompt_style="raw",
+        )
 
 
 def test_prompts_do_not_gain_runtime_document_values() -> None:

@@ -111,6 +111,7 @@ fields rather than assume that this document contains every possible code.
 | `param-glm-invalid-host` | Error | Ollama host is not an HTTP(S) base URL or contains a path, query, fragment, or invalid port | Use a base URL such as `http://127.0.0.1:11434` |
 | `param-glm-host-credentials` | Error | Ollama host contains embedded credentials | Remove the username/password; GLM-OCR does not use an API key |
 | `param-glm-missing-model` | Error | Model name is missing or blank | Set an installed model such as `glm-ocr:latest` |
+| `param-glm-invalid-prompt-style` | Error | Prompt construction mode is unsupported | Use `detailed` or `compact` |
 | `param-glm-invalid-dpi` | Error | PDF render DPI is not a positive integer | Use a positive integer or omit it for the default |
 | `param-glm-invalid-num-ctx` | Error | Context size is not a positive integer | Use a positive integer or omit it for the default |
 | `param-glm-invalid-num-predict` | Error | Output-token limit is not a positive integer | Use a positive integer or omit it for the default |

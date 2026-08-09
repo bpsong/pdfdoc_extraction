@@ -965,6 +965,26 @@ export completes after review.
   - [x] Audit the diff for credentials, customer content, runtime databases,
     generated exports, logs, and screenshots.
 
+- [ ] **11.6 Add and prove compact prompt construction for small local models**
+  - [x] Add a GLM-only `prompt_style` setting with `detailed` as the
+    compatibility default and `compact` as an explicit opt-in.
+  - [x] Keep the JSON Schema in Ollama's native `format` request while compact
+    mode omits the duplicate field-descriptor and schema text from the prompt.
+  - [x] Apply compact construction consistently to scalar/object, focused
+    recovery, and table prompts without changing the number of model calls.
+  - [x] Expose the setting only in the separate GLM visual properties editor;
+    leave the LlamaCloud renderer and defaults byte-identical.
+  - [ ] Add prompt, adapter, task, config-check, editor, and compatibility unit
+    coverage, then run the focused suite and Pyright.
+  - [ ] Publish a new version of the existing insurance GLM pipeline using one
+    customer object, flat coverage dates, and compact field rules with no
+    literal premium example that the model could copy.
+  - [ ] Submit `sample_invoice.pdf` through the portal, verify every unedited
+    extracted value against the PDF, complete Review Gate, and confirm JSON and
+    renamed-PDF artifacts.
+  - [ ] Record the exact prompt/schema sent, call count, pipeline version,
+    batch/document identifiers, and final verification evidence.
+
 ## Final requirement audit
 
 - [x] New GLM task follows the standard-task creation guideline.
