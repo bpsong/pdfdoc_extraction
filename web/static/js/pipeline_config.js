@@ -1184,6 +1184,8 @@
         }).length;
         const host = params.ollama_host || "http://127.0.0.1:11434";
         const model = params.model || "glm-ocr:latest";
+        const resolutionMode = params.resolution_mode || "page_merge";
+        const resolverModel = params.resolver_model || "qwen3.5:9b-q4_K_M";
         const tableStatus = tableCount === 0 ? "No table" : tableCount === 1 ? "One table" : `${tableCount} tables (fix required)`;
         return `
             <div class="space-y-3" data-glm-ocr-controls>
@@ -1194,6 +1196,8 @@
                         <div><span class="text-base-content/55">Ollama host</span><div class="font-mono break-all">${escapeHtml(host)}</div></div>
                         <div><span class="text-base-content/55">Fields</span><div>${fieldEntries.length}</div></div>
                         <div><span class="text-base-content/55">Table status</span><div>${escapeHtml(tableStatus)}</div></div>
+                        <div><span class="text-base-content/55">Resolution</span><div>${resolutionMode === "document" ? "Complete document" : "Page merge"}</div></div>
+                        ${resolutionMode === "document" ? `<div><span class="text-base-content/55">Resolver</span><div class="font-mono break-all">${escapeHtml(resolverModel)}</div></div>` : ""}
                     </div>
                 </div>
                 <div class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">
@@ -1214,6 +1218,25 @@
                             { value: "verbatim", label: "Verbatim instructions (advanced)" },
                         ], "Compact uses a short framework contract. Verbatim sends Document instructions exactly as written while still enforcing Ollama's native JSON Schema.", inlineFindings(step, "prompt_style"))}
                     </div>
+                `)}
+                ${section("Document resolution", `
+                    ${selectControl("Resolution mode", ["resolution_mode"], resolutionMode, [
+                        { value: "document", label: "Complete document (recommended)" },
+                        { value: "page_merge", label: "Page merge (legacy)" },
+                    ], "Complete document resolves scalar and object fields against bounded page images, then reconciles tables from structured GLM-OCR evidence. Page merge keeps the first supported page value.", inlineFindings(step, "resolution_mode"))}
+                    ${resolutionMode === "document" ? `
+                        <div class="mt-3">
+                            ${textControl("Resolver model", ["resolver_model"], resolverModel, { mono: true, hint: "A local vision-capable instruction model installed in Ollama.", findings: inlineFindings(step, "resolver_model") })}
+                        </div>
+                        ${detailsSection("Resolver runtime settings", `
+                            <div class="grid gap-3 md:grid-cols-2">
+                                ${numberControl("Resolver image max dimension", ["resolver_max_dimension"], params.resolver_max_dimension ?? 1280, 'min="256" max="4096" step="1"', inlineFindings(step, "resolver_max_dimension"))}
+                                ${numberControl("Resolver context length", ["resolver_num_ctx"], params.resolver_num_ctx ?? 8192, 'min="1" step="1"', inlineFindings(step, "resolver_num_ctx"))}
+                                ${numberControl("Resolver prediction length", ["resolver_num_predict"], params.resolver_num_predict ?? 1536, 'min="1" step="1"', inlineFindings(step, "resolver_num_predict"))}
+                                ${numberControl("Resolver attempts", ["resolver_max_attempts"], params.resolver_max_attempts ?? 2, 'min="1" max="5" step="1"', inlineFindings(step, "resolver_max_attempts"))}
+                            </div>
+                        `)}
+                    ` : ""}
                 `)}
                 ${detailsSection("Local runtime settings", `
                     <div class="grid gap-3 md:grid-cols-2">
@@ -1734,7 +1757,7 @@
         const defaults = {
             LlamaCloudSplitTask: { enabled: true, api_key: "", allow_uncategorized: "include", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
             ExtractPdfTask: { api_key: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
-            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
+            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", resolution_mode: "document", resolver_model: "qwen3.5:9b-q4_K_M", resolver_max_dimension: 1280, resolver_num_ctx: 8192, resolver_num_predict: 1536, resolver_max_attempts: 2, dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
             AssignNanoidTask: { length: 10 },
             StoreMetadataAsCsv: { data_dir: "data", filename: "{id}" },
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },
@@ -1985,6 +2008,10 @@
             setParam(params, path, parseControlValue(field));
             setParamsError("");
             markDirty();
+            if (path.join(".") === "resolution_mode") {
+                render();
+                return;
+            }
             if (path.join(".") === "reference_file") {
                 loadCsvMetadata(field.value).catch(() => {});
             }

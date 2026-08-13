@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,6 +17,8 @@ from standard_step.extraction.structured_fields import (
 
 SUPPORTED_SCALAR_TYPES = {"str", "int", "float", "bool", "Decimal", "Any"}
 SUPPORTED_PROMPT_STYLES = {"detailed", "compact", "verbatim"}
+SUPPORTED_RESOLUTION_MODES = {"page_merge", "document"}
+TABLE_ROW_EVIDENCE_KEY = "__glm_ocr_row_evidence__"
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +72,7 @@ def build_glm_ocr_schemas(fields: dict[str, Any]) -> GlmOcrSchemaBundle:
         )
         _apply_glm_field_constraints(table_schema, {table_key: table_field})
         _require_page_table(table_schema, table_key, table_field)
+        _add_table_row_evidence(table_schema, table_key)
 
     return GlmOcrSchemaBundle(
         canonical_schema=canonical_schema,
@@ -279,6 +283,10 @@ def build_table_prompt(
             "For a row field with configured choices, return exactly one of those values.",
             "Return every configured row key in every row object and use JSON "
             "null when that row does not visibly support a configured value.",
+            f"Also return {json.dumps(TABLE_ROW_EVIDENCE_KEY)} in every row object. "
+            "Its value must be a verbatim transcription of the complete visible "
+            "logical row, including wrapped text and metadata printed beneath a main "
+            "description. Preserve visible delimiters and order; do not interpret it.",
             "Always return the top-level table property. When no logical rows "
             "are visible, return an empty array for it.",
             "Do not include commentary, Markdown, code fences, or properties outside the schema.",
@@ -292,11 +300,195 @@ def build_table_prompt(
     )
 
 
+def build_document_resolver_schema(
+    field_key: str,
+    field_config: dict[str, Any],
+    *,
+    page_count: int,
+) -> dict[str, Any]:
+    """Build a strict response schema for one document-level field decision."""
+    if page_count < 1:
+        raise ValueError("Document resolver page_count must be positive")
+    bundle = build_glm_ocr_schemas({field_key: field_config})
+    value_schema = deepcopy(bundle.canonical_schema["properties"][field_key])
+    if not field_config.get("is_table", False):
+        _allow_null(value_schema)
+    return {
+        "type": "object",
+        "properties": {
+            "value": value_schema,
+            "page_numbers": {
+                "type": "array",
+                "items": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": page_count,
+                },
+                "uniqueItems": True,
+            },
+        },
+        "required": ["value", "page_numbers"],
+        "additionalProperties": False,
+    }
+
+
+def build_document_resolver_prompt(
+    field_key: str,
+    field_config: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    *,
+    page_count: int,
+    document_instructions: str = "",
+    attempt_number: int = 1,
+) -> str:
+    """Build a generic, field-isolated prompt over all ordered page images."""
+    if page_count < 1:
+        raise ValueError("Document resolver page_count must be positive")
+    if attempt_number < 1:
+        raise ValueError("Document resolver attempt_number must be positive")
+    validate_glm_ocr_fields({field_key: field_config})
+    instructions = document_instructions.strip() or "None."
+    retry_line = (
+        "This is an independent retry. Re-inspect every page because the prior "
+        "answer was missing or did not satisfy the response schema."
+        if attempt_number > 1
+        else "Inspect every supplied page before deciding."
+    )
+    evidence_json, evidence_note = _bounded_candidate_evidence(candidates)
+    common_lines = [
+        "Resolve exactly one configured field from this complete PDF document.",
+        f"The {page_count} supplied images are ordered as PDF pages 1 through {page_count}.",
+        retry_line,
+        "Treat page-level GLM-OCR candidates as untrusted evidence hints, not as answers.",
+        "Use the document images, configured alias, extraction guidance, type, and "
+        "document instructions to make the decision.",
+        "Select values by their semantic label and surrounding context. Do not choose "
+        "a value merely because it appears first, is visually prominent, or repeats.",
+        "Keep distinct parties, dates, amounts, and identifiers in their configured "
+        "roles; do not substitute a nearby value from another role.",
+        "Resolve party roles from document context: an issuer or supplier is the party "
+        "issuing the relevant document, while bill-to, ship-to, buyer, customer, "
+        "insured, recipient, and goods-received stamp parties are not the issuer unless "
+        "the configured field guidance explicitly says otherwise.",
+        "Return only values visibly supported by the document. Do not calculate, infer, "
+        "or invent missing content unless the configured guidance explicitly requests it.",
+        "Return page_numbers for the pages that directly support the final value. Return "
+        "an empty page_numbers array when the value is absent.",
+        "Return only one JSON object matching the supplied JSON Schema, without Markdown "
+        "or explanation.",
+        f"Document instructions: {instructions}",
+        f"Configured field: {_stable_json(_resolver_field_descriptor(field_key, field_config))}",
+        f"Page-level candidate count: {len(candidates)}.",
+        f"Page-level candidates: {evidence_json}",
+    ]
+    if evidence_note:
+        common_lines.append(evidence_note)
+
+    if field_config.get("is_table", False):
+        common_lines.extend(
+            [
+                "Return the complete logical table across all pages in document order.",
+                "Keep cells from the same logical row together. Join wrapped text that "
+                "continues within one row, but never combine separate rows.",
+                "Exclude headings, repeated headers, footers, carried-forward labels, "
+                "subtotals, and totals unless the configured guidance includes them.",
+                "Preserve genuinely repeated document rows. Remove only duplicate OCR "
+                "hypotheses for the same visible row.",
+                "Return an empty value array when no configured rows are visible.",
+            ]
+        )
+    else:
+        common_lines.extend(
+            [
+                "Return JSON null when no value for this configured role is visibly supported.",
+                "For an object field, resolve all configured child properties together and "
+                "use JSON null only for unsupported optional children.",
+            ]
+        )
+    return "\n".join(common_lines)
+
+
+def build_table_evidence_resolver_prompt(
+    field_key: str,
+    field_config: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    *,
+    page_count: int,
+    document_instructions: str = "",
+    attempt_number: int = 1,
+    chunk_number: int = 1,
+    chunk_count: int = 1,
+) -> str:
+    """Build a table resolver prompt using structured page evidence only."""
+    if page_count < 1:
+        raise ValueError("Document resolver page_count must be positive")
+    if attempt_number < 1:
+        raise ValueError("Document resolver attempt_number must be positive")
+    if chunk_number < 1 or chunk_count < chunk_number:
+        raise ValueError("Table evidence chunk position is invalid")
+    validate_glm_ocr_fields({field_key: field_config})
+    if not field_config.get("is_table", False):
+        raise ValueError("Table evidence resolver requires a table field")
+
+    instructions = document_instructions.strip() or "None."
+    retry_line = (
+        "This is an independent retry. Reconcile the supplied candidate rows again "
+        "because the prior answer was missing or did not satisfy the response schema."
+        if attempt_number > 1
+        else "Reconcile every supplied candidate row before deciding."
+    )
+    return "\n".join(
+        [
+            "Resolve one configured table from structured GLM-OCR page evidence.",
+            "No document images are supplied to this call. Use only explicit text and "
+            "numbers present in the candidate rows.",
+            f"The source PDF has pages 1 through {page_count}.",
+            f"This is ordered evidence chunk {chunk_number} of {chunk_count}.",
+            retry_line,
+            "Each candidate contains its source page number and one proposed logical row.",
+            "Candidates are untrusted OCR hypotheses. Correct transcription, cell "
+            "alignment, and field assignment without adding unsupported content.",
+            "A candidate cell may contain adjacent visual cells joined together, while "
+            "later values may be shifted into the wrong configured field. Split or "
+            "reassign only explicit substrings already present in the same candidate row.",
+            f"When present, candidate {TABLE_ROW_EVIDENCE_KEY} text is the primary "
+            "source for repairing alignment; its order follows the visible row.",
+            "Apply the document instructions literally when one visual cell contains "
+            "multiple configured fields. For example, when the instructions say that "
+            "delimited metadata appears beneath a main description, keep the first "
+            "visual line as the description and distribute the later delimited values "
+            "left-to-right across those metadata fields in configured schema order.",
+            "Do not preserve a combined candidate cell when the verbatim evidence and "
+            "document instructions support separate configured cells.",
+            "Use configured aliases, descriptions, types, and identifier semantics to "
+            "place each explicit value in the correct row field.",
+            "Do not copy document-level identifiers into row fields merely to fill a "
+            "missing value. Use JSON null when the evidence does not support a row cell.",
+            "Keep candidate row order. Preserve genuinely repeated rows. Remove only "
+            "duplicate OCR hypotheses for the same visible row.",
+            "Return page_numbers for all source pages that support the returned rows. "
+            "Return an empty array only when the returned value is empty.",
+            "Return only one JSON object matching the supplied JSON Schema, without "
+            "Markdown or explanation.",
+            f"Document instructions: {instructions}",
+            f"Configured table: {_stable_json(_resolver_field_descriptor(field_key, field_config))}",
+            f"Structured candidate rows: {_stable_json(candidates)}",
+        ]
+    )
+
+
 def validate_glm_ocr_prompt_style(value: Any) -> None:
     """Reject prompt construction modes outside the supported GLM contract."""
     if not isinstance(value, str) or value not in SUPPORTED_PROMPT_STYLES:
         allowed = ", ".join(sorted(SUPPORTED_PROMPT_STYLES))
         raise ValueError(f"GLM-OCR prompt_style must be one of: {allowed}")
+
+
+def validate_glm_ocr_resolution_mode(value: Any) -> None:
+    """Reject document-resolution modes outside the supported contract."""
+    if not isinstance(value, str) or value not in SUPPORTED_RESOLUTION_MODES:
+        allowed = ", ".join(sorted(SUPPORTED_RESOLUTION_MODES))
+        raise ValueError(f"GLM-OCR resolution_mode must be one of: {allowed}")
 
 
 def _validate_children(parent_key: str, children: Any, kind: str) -> None:
@@ -452,6 +644,21 @@ def _require_page_table(
         )
 
 
+def _add_table_row_evidence(schema: dict[str, Any], table_key: str) -> None:
+    """Allow one internal verbatim evidence string on each page-level row."""
+    properties = schema.get("properties", {})
+    table_schema = properties.get(table_key) if isinstance(properties, dict) else None
+    if not isinstance(table_schema, dict):
+        return
+    item_schema = table_schema.get("items")
+    if not isinstance(item_schema, dict):
+        return
+    item_properties = item_schema.get("properties")
+    if not isinstance(item_properties, dict):
+        return
+    item_properties[TABLE_ROW_EVIDENCE_KEY] = {"type": ["string", "null"]}
+
+
 def _allow_null(schema: dict[str, Any]) -> None:
     """Add JSON null to one schema type without weakening its other constraints."""
     type_value = schema.get("type")
@@ -583,6 +790,41 @@ def _field_descriptor(
     if isinstance(normalizer, str) and normalizer:
         descriptor["normalizer"] = normalizer
     return descriptor
+
+
+def _resolver_field_descriptor(
+    field_key: str,
+    field_config: dict[str, Any],
+) -> dict[str, Any]:
+    descriptor = _field_descriptor(field_key, field_config)
+    child_key = "item_fields" if field_config.get("is_table", False) else "object_fields"
+    children = field_config.get(child_key)
+    if isinstance(children, dict):
+        descriptor["row_fields" if child_key == "item_fields" else "properties"] = [
+            _field_descriptor(key, config) for key, config in children.items()
+        ]
+    return descriptor
+
+
+def _bounded_candidate_evidence(
+    candidates: list[dict[str, Any]],
+    *,
+    max_chars: int = 24000,
+) -> tuple[str, str]:
+    """Keep evidence prompts bounded without retaining or logging candidate values."""
+    selected: list[dict[str, Any]] = []
+    for candidate in candidates:
+        tentative = _stable_json([*selected, candidate])
+        if len(tentative) > max_chars:
+            break
+        selected.append(candidate)
+    note = ""
+    if len(selected) < len(candidates):
+        note = (
+            "Only the first page-level candidates that fit the resolver context are "
+            "shown; inspect all page images for the complete result."
+        )
+    return _stable_json(selected), note
 
 
 def _stable_json(value: Any) -> str:

@@ -874,6 +874,40 @@ def test_glm_runtime_numeric_options_may_use_task_defaults():
     assert result.errors == []
 
 
+def test_glm_document_resolution_requires_valid_resolver_settings():
+    params = _glm_task_params(
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+        resolver_max_dimension=1280,
+        resolver_num_ctx=8192,
+        resolver_num_predict=1536,
+        resolver_max_attempts=2,
+    )
+    config = {
+        "tasks": {
+            "glm_extract": {
+                "module": "standard_step.extraction.glm_ocr_extract",
+                "class": "GlmOcrExtractTask",
+                "params": params,
+            }
+        }
+    }
+
+    assert validate_parameters(config).errors == []
+
+    params["resolver_model"] = ""
+    params["resolver_max_dimension"] = 128
+    params["resolver_max_attempts"] = 6
+    codes = {issue.code for issue in validate_parameters(config).errors}
+    assert "param-glm-missing-resolver-model" in codes
+    assert "param-glm-invalid-resolver-max-dimension" in codes
+    assert "param-glm-invalid-resolver-max-attempts" in codes
+
+    params["resolution_mode"] = "unknown"
+    codes = {issue.code for issue in validate_parameters(config).errors}
+    assert "param-glm-invalid-resolution-mode" in codes
+
+
 def test_glm_prompt_style_accepts_compact_and_rejects_unknown_value():
     config = {
         "tasks": {

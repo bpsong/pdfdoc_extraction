@@ -90,7 +90,15 @@ _GLM_OCR_TASK = (
     "standard_step.extraction.glm_ocr_extract",
     "GlmOcrExtractTask",
 )
-_GLM_POSITIVE_INTEGER_PARAMS = ("dpi", "num_ctx", "num_predict")
+_GLM_POSITIVE_INTEGER_PARAMS = (
+    "dpi",
+    "num_ctx",
+    "num_predict",
+    "resolver_max_dimension",
+    "resolver_num_ctx",
+    "resolver_num_predict",
+    "resolver_max_attempts",
+)
 _GLM_LLAMACLOUD_ONLY_PARAMS = (
     "api_key",
     "configuration_id",
@@ -526,6 +534,26 @@ def _validate_glm_ocr_runtime_options(
         errors,
         code="param-glm-missing-model",
     )
+    resolution_mode = params.get("resolution_mode", "page_merge")
+    if resolution_mode not in {"page_merge", "document"}:
+        errors.append(
+            ParameterIssue(
+                path=f"{params_path}.resolution_mode",
+                message=(
+                    "GLM-OCR resolution_mode must be 'page_merge' or 'document'."
+                ),
+                code="param-glm-invalid-resolution-mode",
+                details={"config_key": f"{params_path}.resolution_mode"},
+            )
+        )
+    elif resolution_mode == "document":
+        _validate_required_string(
+            params,
+            params_path,
+            "resolver_model",
+            errors,
+            code="param-glm-missing-resolver-model",
+        )
     if "document_instructions" in params and not isinstance(
         params.get("document_instructions"), str
     ):
@@ -575,6 +603,29 @@ def _validate_glm_ocr_runtime_options(
                     path=f"{params_path}.{key}",
                     message=f"GLM-OCR {key} must be a positive integer.",
                     code=f"param-glm-invalid-{key.replace('_', '-')}",
+                    details={"config_key": f"{params_path}.{key}"},
+                )
+            )
+        elif key == "resolver_max_attempts" and value > 5:
+            errors.append(
+                ParameterIssue(
+                    path=f"{params_path}.{key}",
+                    message=(
+                        "GLM-OCR resolver_max_attempts must be between 1 and 5."
+                    ),
+                    code="param-glm-invalid-resolver-max-attempts",
+                    details={"config_key": f"{params_path}.{key}"},
+                )
+            )
+        elif key == "resolver_max_dimension" and not 256 <= value <= 4096:
+            errors.append(
+                ParameterIssue(
+                    path=f"{params_path}.{key}",
+                    message=(
+                        "GLM-OCR resolver_max_dimension must be between 256 "
+                        "and 4096."
+                    ),
+                    code="param-glm-invalid-resolver-max-dimension",
                     details={"config_key": f"{params_path}.{key}"},
                 )
             )

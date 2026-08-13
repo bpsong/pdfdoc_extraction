@@ -5,11 +5,126 @@ import json
 import pytest
 
 from standard_step.extraction.glm_ocr_prompt import (
+    build_document_resolver_prompt,
+    build_document_resolver_schema,
     build_glm_ocr_schemas,
     build_scalar_object_prompt,
+    build_table_evidence_resolver_prompt,
     build_table_prompt,
     validate_glm_ocr_fields,
+    validate_glm_ocr_resolution_mode,
 )
+
+
+def test_document_resolver_schema_is_field_isolated_and_page_bounded() -> None:
+    field = {
+        "alias": "Invoice number",
+        "description": "The identifier issued by the document supplier",
+        "type": "str",
+    }
+
+    schema = build_document_resolver_schema(
+        "invoice_number",
+        field,
+        page_count=6,
+    )
+
+    assert schema["required"] == ["value", "page_numbers"]
+    assert schema["additionalProperties"] is False
+    assert schema["properties"]["value"]["type"] == ["string", "null"]
+    page_schema = schema["properties"]["page_numbers"]
+    assert page_schema["uniqueItems"] is True
+    assert page_schema["items"] == {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 6,
+    }
+
+
+def test_document_resolver_prompt_uses_generic_candidates_and_field_guidance() -> None:
+    field = {
+        "alias": "Supplier name",
+        "description": "The party that issued the document",
+        "type": "str",
+    }
+
+    prompt = build_document_resolver_prompt(
+        "supplier_name",
+        field,
+        [
+            {"page_number": 1, "value": "Candidate A"},
+            {"page_number": 2, "value": "Candidate B"},
+        ],
+        page_count=2,
+        document_instructions="Resolve business roles from labels and context.",
+    )
+
+    assert "complete PDF document" in prompt
+    assert "untrusted evidence hints" in prompt
+    assert "semantic label and surrounding context" in prompt
+    assert "goods-received stamp parties are not the issuer" in prompt
+    assert "Supplier name" in prompt
+    assert "The party that issued the document" in prompt
+    assert "Candidate A" in prompt
+    assert "Candidate B" in prompt
+    assert "pages 1 through 2" in prompt
+
+
+def test_document_resolver_prompt_bounds_large_candidate_evidence() -> None:
+    candidates = [
+        {"page_number": 1, "value": f"candidate-{index}-" + ("x" * 500)}
+        for index in range(100)
+    ]
+
+    prompt = build_document_resolver_prompt(
+        "reference",
+        {"alias": "Reference", "type": "Optional[str]"},
+        candidates,
+        page_count=1,
+    )
+
+    assert "candidate-0-" in prompt
+    assert "candidate-99-" not in prompt
+    assert "inspect all page images for the complete result" in prompt
+    assert len(prompt) < 27000
+
+
+def test_table_evidence_resolver_prompt_is_image_independent_and_repairs_cells() -> None:
+    prompt = build_table_evidence_resolver_prompt(
+        "items",
+        {
+            "alias": "Line items",
+            "type": "List[Any]",
+            "is_table": True,
+            "item_fields": {
+                "category": {"alias": "Category", "type": "str"},
+                "product_id": {"alias": "Product ID", "type": "str"},
+            },
+        },
+        [
+            {
+                "page_number": 1,
+                "value": {
+                    "category": "Furniture, FUR-CH-4421",
+                    "product_id": None,
+                },
+            }
+        ],
+        page_count=2,
+    )
+
+    assert "No document images are supplied" in prompt
+    assert "structured GLM-OCR page evidence" in prompt
+    assert "joined together" in prompt
+    assert "reassign only explicit substrings" in prompt
+    assert "Furniture, FUR-CH-4421" in prompt
+    assert "pages 1 through 2" in prompt
+
+
+@pytest.mark.parametrize("value", ["raw", "", None])
+def test_document_resolution_mode_rejects_unknown_values(value) -> None:
+    with pytest.raises(ValueError, match="resolution_mode"):
+        validate_glm_ocr_resolution_mode(value)
 
 
 def _mixed_fields() -> dict:
@@ -355,7 +470,11 @@ def test_schema_order_controls_top_level_object_and_table_properties() -> None:
     assert customer_schema["required"] == ["name", "address"]
     assert bundle.table_page_schema is not None
     row_schema = bundle.table_page_schema["properties"]["line_items"]["items"]
-    assert list(row_schema["properties"]) == ["description", "amount"]
+    assert list(row_schema["properties"]) == [
+        "description",
+        "amount",
+        "__glm_ocr_row_evidence__",
+    ]
     assert row_schema["required"] == ["description", "amount"]
 
 

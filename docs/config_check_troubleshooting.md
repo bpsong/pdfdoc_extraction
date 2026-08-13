@@ -219,6 +219,9 @@ custom_steps:
 [ERROR] tasks.glm_extract.params.ollama_host: GLM-OCR ollama_host must be an HTTP(S) base URL without a path, query, fragment, or invalid port.
 [ERROR] tasks.glm_extract.params.model: Required parameter 'model' must be a non-empty string.
 [ERROR] tasks.glm_extract.params.dpi: GLM-OCR dpi must be a positive integer.
+[ERROR] tasks.glm_extract.params.resolver_model: GLM-OCR resolver_model must be a non-empty string in document mode.
+[ERROR] tasks.glm_extract.params.resolver_max_dimension: GLM-OCR resolver_max_dimension must be between 256 and 4096.
+[ERROR] tasks.glm_extract.params.resolver_max_attempts: GLM-OCR resolver_max_attempts must be between 1 and 5.
 ```
 
 **Fixes**
@@ -229,6 +232,11 @@ custom_steps:
   `glm-ocr:latest`.
 - Keep `dpi`, `num_ctx`, and `num_predict` as positive integers and
   `timeout_seconds` as a positive number, or omit them to use task defaults.
+- Use `resolution_mode: document` for complete-PDF field resolution and install
+  the non-empty `resolver_model` named by that published pipeline. Keep
+  `resolver_num_ctx` and `resolver_num_predict` positive, image dimension from
+  256 through 4096, and attempts from 1 through 5. Use `page_merge` only when
+  preserving the legacy first-supported-page behavior is intentional.
 - Remove LlamaCloud-only parameters such as `api_key`, `configuration_id`,
   `tier`, `cite_sources`, and `confidence_scores` from the GLM task.
 - Keep at most one table field and give it non-empty `item_fields`.

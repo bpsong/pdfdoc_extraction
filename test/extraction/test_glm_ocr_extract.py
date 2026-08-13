@@ -250,6 +250,89 @@ def test_task_passes_compact_prompt_style_to_adapter(tmp_path, monkeypatch) -> N
     assert calls[0]["prompt_style"] == "compact"
 
 
+def test_task_builds_document_resolver_from_versioned_parameters(
+    tmp_path,
+) -> None:
+    config, context, _document_id = _persisted_context(tmp_path)
+    task = GlmOcrExtractTask(
+        config,
+        **_params(
+            resolution_mode="document",
+            resolver_model="qwen3.5:9b-q4_K_M",
+            resolver_max_dimension=1024,
+            resolver_num_ctx=8192,
+            resolver_num_predict=1536,
+            resolver_max_attempts=3,
+        ),
+    )
+
+    task.on_start(context)
+    adapter = task._build_adapter()
+
+    assert adapter.resolution_mode == "document"
+    assert adapter.resolver_model == "qwen3.5:9b-q4_K_M"
+    assert adapter.resolver_max_dimension == 1024
+    assert adapter.resolver_num_ctx == 8192
+    assert adapter.resolver_num_predict == 1536
+    assert adapter.resolver_max_attempts == 3
+
+
+def test_document_resolution_metadata_excludes_prompts_values_and_runtime_limits(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    config, context, _document_id = _persisted_context(tmp_path)
+    task = GlmOcrExtractTask(
+        config,
+        **_params(
+            resolution_mode="document",
+            resolver_model="qwen3.5:9b-q4_K_M",
+            resolver_num_ctx=8192,
+            resolver_num_predict=1536,
+            resolver_max_attempts=2,
+        ),
+    )
+    monkeypatch.setattr(
+        task,
+        "_build_adapter",
+        lambda: SimpleNamespace(extract=lambda *args, **kwargs: _adapter_result()),
+    )
+
+    task.on_start(context)
+    task.run(context)
+
+    metadata = context["metadata"]["glm_ocr"]
+    assert metadata["resolution_mode"] == "document"
+    assert metadata["resolver_model"] == "qwen3.5:9b-q4_K_M"
+    assert metadata["call_strategy"] == (
+        "per_page_evidence_then_bounded_field_resolution"
+    )
+    serialized = str(metadata)
+    for excluded in (
+        "resolver_num_ctx",
+        "resolver_num_predict",
+        "resolver_max_attempts",
+        "resolver_max_dimension",
+        "Read the invoice labels",
+        "INV-7",
+        "Paper",
+    ):
+        assert excluded not in serialized
+
+
+def test_task_keeps_legacy_page_merge_when_resolution_params_are_absent(
+    tmp_path,
+) -> None:
+    config, context, _document_id = _persisted_context(tmp_path)
+    task = GlmOcrExtractTask(config, **_params())
+
+    task.on_start(context)
+    adapter = task._build_adapter()
+
+    assert adapter.resolution_mode == "page_merge"
+    assert adapter.resolver_model == ""
+
+
 def test_task_rejects_unknown_prompt_style(tmp_path) -> None:
     config, context, _document_id = _persisted_context(tmp_path)
     task = GlmOcrExtractTask(config, **_params(prompt_style="raw"))
@@ -360,6 +443,15 @@ def test_gate_free_glm_context_continues_directly_to_storage(
         ({"dpi": 0}, "dpi"),
         ({"num_ctx": True}, "num_ctx"),
         ({"num_predict": -1}, "num_predict"),
+        ({"resolution_mode": "unknown"}, "resolution_mode"),
+        (
+            {"resolution_mode": "document", "resolver_model": ""},
+            "resolver_model",
+        ),
+        ({"resolver_num_ctx": 0}, "resolver_num_ctx"),
+        ({"resolver_max_dimension": 128}, "resolver_max_dimension"),
+        ({"resolver_num_predict": False}, "resolver_num_predict"),
+        ({"resolver_max_attempts": 6}, "resolver_max_attempts"),
         ({"timeout_seconds": 0}, "timeout_seconds"),
         ({"api_key": "not-used"}, "LlamaCloud-only"),
         (

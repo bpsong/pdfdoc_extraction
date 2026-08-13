@@ -110,9 +110,25 @@ Extraction providers are independent implementations behind the same workflow
 boundary. LlamaCloud owns its cloud API, saved-configuration, citation, and
 confidence behavior. `GlmOcrExtractTask` calls an administrator-configured
 Ollama HTTP endpoint, renders PDF pages locally in memory, and normalizes its
-result to the same top-level `context["data"]` field contract. It does not start
-or supervise Ollama. The first GLM integration uses the native Ollama API only;
-PP-DocLayout and the full GLM-OCR SDK are not runtime components.
+result to the same top-level `context["data"]` field contract. In document
+resolution mode, GLM-OCR produces page-level candidates and a separately
+configured local model resolves scalar and object fields independently against
+bounded copies of all ordered page images. Tables are reconciled from bounded
+chunks of structured GLM-OCR row evidence without attaching page images to the
+resolver call. Legacy page-merge mode remains available for published pipelines
+that do not opt in. The task does not start or supervise Ollama. It uses the
+native Ollama API only; PP-DocLayout and the full GLM-OCR SDK are not runtime
+components.
+
+The GLM-OCR implementation has no invoice-specific output contract. Versioned
+pipeline configuration supplies document instructions and dynamic scalar, flat
+object, and table fields, so the same task boundary can serve invoices,
+insurance documents, bills of lading, and other PDF classes. The pipeline
+schema remains document-specific and its review-form keys must match. The
+current structured boundary permits at most 100 top-level fields, flat objects,
+and one logical array-of-objects table per extraction task; it is not a generic
+representation for documents requiring several independent repeated tables or
+arbitrarily nested structures.
 
 ## Component boundaries
 

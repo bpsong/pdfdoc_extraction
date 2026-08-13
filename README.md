@@ -9,6 +9,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 
 ### AI-Powered Data Extraction
 - **Llama Cloud Integration**: Advanced AI service for intelligent document understanding
+- **Local GLM-OCR Integration**: Schema-directed extraction through an administrator-managed Ollama server, with optional complete-document resolution across ordered PDF pages
 - **Structured Data Extraction**: Converts PDF content into structured JSON/CSV format
 - **Multi-format Support**: Handles invoices, receipts, forms, and various document types
 - **Typed Scalar Lists**: Normalize lists of text, integers, numbers, and yes/no values
@@ -66,7 +67,8 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 
 ### Prerequisites
 - Python 3.13+
-- Llama Cloud API access
+- At least one extraction provider: Llama Cloud API access, or a separately
+  installed Ollama server with the models configured by a GLM-OCR pipeline
 
 ### Installation
 
@@ -117,6 +119,9 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 Key dependencies:
 - **FastAPI**: Modern web framework for the API and web interface
 - **LlamaCloud SDK (`llama-cloud`)**: AI-powered document extraction through Extract v2
+- **Ollama Python client (`ollama`)**: Native local API access for GLM-OCR and
+  its optional document resolver
+- **PyMuPDF**: In-memory PDF page rendering for local vision extraction
 - **Prefect**: Workflow orchestration engine
 - **Pandas**: Data manipulation and CSV processing
 - **Uvicorn**: ASGI server for production deployment
@@ -155,6 +160,15 @@ review-form version when schema-driven review is needed, add tasks to a pipeline
 draft, reference secrets as `{ "$secret": "llamacloud-primary" }`, save,
 validate, publish, and activate the pipeline. `config.yaml` does not need
 top-level `tasks` or `pipeline` sections after migration.
+
+The local GLM-OCR task is document-generic: each pipeline supplies its own field
+schema and semantic instructions. Complete-document resolution can reconcile
+scalar and flat-object values across multi-page PDFs and one configured logical
+table from structured page evidence. A bill of lading, insurance document, or
+invoice therefore uses the same task implementation but should use a dedicated
+pipeline and matching review form. Published definitions that omit
+`resolution_mode` retain legacy page-merge behavior; newly added GLM-OCR tasks
+in the visual editor default to complete-document resolution.
 
 Output folders are task-owned in the exact SQLite pipeline version. CSV/JSON
 tasks use `data_dir`, local PDF storage uses `files_dir`, archive tasks use

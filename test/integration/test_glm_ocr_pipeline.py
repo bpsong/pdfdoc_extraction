@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,7 @@ from modules.db.repositories import (
 )
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.ingress_binding_service import IngressBindingService
+from modules.services.pipeline_definition_service import PipelineDefinitionService
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from modules.services.review_service import ReviewService
@@ -102,6 +104,8 @@ def _publish_pipeline(
     output_dir: Path,
     include_review: bool,
     key: str,
+    output_format: str = "csv",
+    resolution_mode: str = "page_merge",
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     with connect(config) as conn:
         schema_version = None
@@ -133,6 +137,12 @@ def _publish_pipeline(
                     "ollama_host": "http://127.0.0.1:11434",
                     "model": "glm-ocr:latest",
                     "document_instructions": "Extract the SuperStore invoice.",
+                    "resolution_mode": resolution_mode,
+                    "resolver_model": "qwen3.5:9b-q4_K_M",
+                    "resolver_max_dimension": 1280,
+                    "resolver_num_ctx": 8192,
+                    "resolver_num_predict": 1536,
+                    "resolver_max_attempts": 2,
                     "dpi": 216,
                     "num_ctx": 8192,
                     "num_predict": 2048,
@@ -156,10 +166,17 @@ def _publish_pipeline(
                 },
                 "on_error": "stop",
             }
-        pipeline.append("save_csv")
-        tasks["save_csv"] = {
-            "module": "standard_step.storage.store_metadata_as_csv",
-            "class": "StoreMetadataAsCsv",
+        storage_task_key = f"save_{output_format}"
+        storage_module = f"standard_step.storage.store_metadata_as_{output_format}"
+        storage_class = (
+            "StoreMetadataAsJson"
+            if output_format == "json"
+            else "StoreMetadataAsCsv"
+        )
+        pipeline.append(storage_task_key)
+        tasks[storage_task_key] = {
+            "module": storage_module,
+            "class": storage_class,
             "params": {
                 "data_dir": str(output_dir),
                 "filename": "{id}",
@@ -459,3 +476,154 @@ def test_gate_free_glm_pipeline_exports_without_creating_review_state(
     assert len(rows) == 1
     assert rows[0]["Supplier"] == "SuperStore Direct"
     assert rows[0]["item_Description"] == "Paper"
+
+
+def test_document_mode_pipeline_publishes_reviews_resumes_and_exports_json(
+    tmp_path: Path,
+    glm_runtime: TempConfig,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = glm_runtime
+    output_dir = tmp_path / "reviewed-json"
+    version, schema_version = _publish_pipeline(
+        config,
+        output_dir=output_dir,
+        include_review=True,
+        key="glm-document-json",
+        output_format="json",
+        resolution_mode="document",
+    )
+    assert schema_version is not None
+
+    with connect(config) as conn:
+        executable = PipelineDefinitionService(conn, config).load_version(
+            version["id"]
+        )
+    assert executable.pipeline == ["glm_extract", "review_gate", "save_json"]
+    glm_params = executable.tasks["glm_extract"]["params"]
+    assert {
+        "resolution_mode": glm_params["resolution_mode"],
+        "resolver_model": glm_params["resolver_model"],
+        "resolver_max_dimension": glm_params["resolver_max_dimension"],
+        "resolver_num_ctx": glm_params["resolver_num_ctx"],
+        "resolver_num_predict": glm_params["resolver_num_predict"],
+        "resolver_max_attempts": glm_params["resolver_max_attempts"],
+    } == {
+        "resolution_mode": "document",
+        "resolver_model": "qwen3.5:9b-q4_K_M",
+        "resolver_max_dimension": 1280,
+        "resolver_num_ctx": 8192,
+        "resolver_num_predict": 1536,
+        "resolver_max_attempts": 2,
+    }
+    review_params = executable.tasks["review_gate"]["params"]
+    assert review_params["schema_version_id"] == schema_version["id"]
+    assert review_params["_review_schema"] == REVIEW_SCHEMA
+
+    observed_adapter_params: dict[str, Any] = {}
+
+    class _DocumentAdapter:
+        def extract(
+            self,
+            pdf_path: str,
+            fields: dict[str, Any],
+            **_: Any,
+        ) -> GlmOcrAdapterResult:
+            assert Path(pdf_path).read_bytes().startswith(b"%PDF-1.4")
+            return GlmOcrAdapterResult(
+                data={
+                    "supplier": "Misread Supplier",
+                    "invoice_number": "MULTI-004",
+                    "invoice_total": 52.0,
+                    "line_items": [
+                        {"description": "Service", "quantity": 2, "amount": 52.0}
+                    ],
+                },
+                page_count=6,
+                field_pages={key: [1, 6] for key in fields},
+                calls=[],
+            )
+
+    def build_document_adapter(task: Any) -> _DocumentAdapter:
+        observed_adapter_params.update(
+            {
+                "resolution_mode": task.resolution_mode,
+                "resolver_model": task.resolver_model,
+                "resolver_max_dimension": task.resolver_max_dimension,
+                "resolver_max_attempts": task.resolver_max_attempts,
+            }
+        )
+        return _DocumentAdapter()
+
+    monkeypatch.setattr(
+        "standard_step.extraction.glm_ocr_extract.GlmOcrExtractTask._build_adapter",
+        build_document_adapter,
+    )
+
+    pdf_path = tmp_path / "six-page-synthetic.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4\n% synthetic six-page input")
+    created = _ingest_upload(config, version["id"], pdf_path)
+    document = created["documents"][0]
+    assert WorkflowManager(config).trigger_workflow_for_file(
+        str(pdf_path),
+        document["id"],
+        pdf_path.name,
+        "web",
+        batch_id=created["batch"]["id"],
+        document_id=document["id"],
+    )
+
+    with connect(config) as conn:
+        result = ExtractionRepository(conn).get_latest_result(document["id"])
+        review = ReviewRepository(conn).find_open_for_document(document["id"])
+        files_before_review = DocumentRepository(conn).list_files(document["id"])
+        runs_before_review = TaskRunRepository(conn).list_by_document(document["id"])
+    assert observed_adapter_params == {
+        "resolution_mode": "document",
+        "resolver_model": "qwen3.5:9b-q4_K_M",
+        "resolver_max_dimension": 1280,
+        "resolver_max_attempts": 2,
+    }
+    assert result is not None
+    result_metadata = json_loads(result["metadata_json"], {})
+    assert result_metadata["page_count"] == 6
+    assert result_metadata["resolution_mode"] == "document"
+    assert review is not None
+    assert review["review_schema_version_id"] == schema_version["id"]
+    assert not any(item["file_type"] == "export_json" for item in files_before_review)
+    assert [(run["task_key"], run["status"]) for run in runs_before_review] == [
+        ("glm_extract", "completed"),
+        ("review_gate", "paused"),
+    ]
+
+    _, completed = _complete_review(
+        config,
+        document["id"],
+        {"supplier": "Reviewed Supplier"},
+    )
+    assert completed["resume_triggered"] is True
+
+    with connect(config) as conn:
+        files = DocumentRepository(conn).list_files(document["id"])
+        runs = TaskRunRepository(conn).list_by_document(document["id"])
+        stored_document = DocumentRepository(conn).get(document["id"])
+    json_file = next(item for item in files if item["file_type"] == "export_json")
+    with Path(json_file["file_path"]).open(encoding="utf-8") as handle:
+        payload = json.load(handle)
+    assert payload == {
+        "Supplier": "Reviewed Supplier",
+        "Invoice number": "MULTI-004",
+        "Invoice total": 52.0,
+        "Line items": [
+            {"description": "Service", "quantity": 2, "amount": 52.0}
+        ],
+    }
+    assert [run["task_key"] for run in runs] == [
+        "glm_extract",
+        "review_gate",
+        "save_json",
+        "cleanup_task",
+    ]
+    assert all(run["pipeline_version_id"] == version["id"] for run in runs)
+    assert stored_document is not None
+    assert stored_document["status"] == "completed"

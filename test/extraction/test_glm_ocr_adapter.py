@@ -65,6 +65,19 @@ def _response(data: dict, *, reason: str = "stop", done: bool = True) -> dict:
     }
 
 
+def _chat_response(
+    data: dict,
+    *,
+    reason: str = "stop",
+    done: bool = True,
+) -> dict:
+    return {
+        "message": {"content": json.dumps(data)},
+        "done": done,
+        "done_reason": reason,
+    }
+
+
 def _client(*responses: dict) -> Mock:
     client = Mock()
     client.list.return_value = {"models": [{"model": "glm-ocr:latest"}]}
@@ -244,6 +257,503 @@ def test_multi_page_merges_objects_records_conflicts_and_deduplicates_rows(
         ("invoice_number", 1, 2)
     ]
     assert client.generate.call_count == 4
+
+
+def test_document_mode_resolves_each_field_against_all_ordered_pages(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "resolved.pdf", page_count=2)
+    client = _client(
+        _response(
+            {
+                "invoice_number": "FIRST",
+                "summary": {"currency": "USD", "tax": None},
+            }
+        ),
+        _response({"items": [{"sku": "A", "quantity": 1}]}),
+        _response(
+            {
+                "invoice_number": "SECOND",
+                "summary": {"currency": "SGD", "tax": 3.5},
+            }
+        ),
+        _response({"items": [{"sku": "B", "quantity": 2}]}),
+    )
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = [
+        _chat_response({"value": "SECOND", "page_numbers": [2]}),
+        _chat_response(
+            {
+                "value": {"currency": "SGD", "tax": 3.5},
+                "page_numbers": [1, 2],
+            }
+        ),
+        _chat_response(
+            {
+                "value": [
+                    {"sku": "A", "quantity": 1},
+                    {"sku": "B", "quantity": 2},
+                ],
+                "page_numbers": [1, 2],
+            }
+        ),
+    ]
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+        resolver_num_ctx=8192,
+        resolver_num_predict=1536,
+        resolver_max_attempts=2,
+    ).extract(
+        str(pdf_path),
+        _fields(),
+        document_instructions="Use the configured business roles.",
+    )
+
+    assert result.data == {
+        "invoice_number": "SECOND",
+        "summary": {"currency": "SGD", "tax": 3.5},
+        "items": [
+            {"sku": "A", "quantity": 1},
+            {"sku": "B", "quantity": 2},
+        ],
+    }
+    assert result.field_pages == {
+        "invoice_number": [2],
+        "summary": [1, 2],
+        "items": [1, 2],
+    }
+    assert [record.call_type for record in result.calls[-3:]] == [
+        "document_scalar",
+        "document_object",
+        "document_table",
+    ]
+    assert all(record.page_number is None for record in result.calls[-3:])
+    assert client.chat.call_count == 3
+    requests = [call.kwargs for call in client.chat.call_args_list]
+    for request in requests:
+        assert request["model"] == "qwen3.5:9b-q4_K_M"
+        assert request["think"] is False
+        assert request["stream"] is False
+        assert request["options"] == {
+            "temperature": 0,
+            "num_ctx": 8192,
+            "num_predict": 1536,
+        }
+        assert request["format"]["required"] == ["value", "page_numbers"]
+        assert "Use the configured business roles." in request["messages"][0]["content"]
+    for request in requests[:2]:
+        assert len(request["messages"][0]["images"]) == 2
+        for image in request["messages"][0]["images"]:
+            pixmap = pymupdf.Pixmap(image)
+            assert max(pixmap.width, pixmap.height) <= 1280
+    assert "images" not in requests[2]["messages"][0]
+    assert "No document images are supplied" in requests[2]["messages"][0]["content"]
+
+
+def test_document_mode_retries_an_unresolved_required_field(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "resolver-retry.pdf")
+    client = _client(_response({"invoice_number": "INV-7"}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = [
+        _chat_response({"value": None, "page_numbers": []}),
+        _chat_response({"value": "INV-7", "page_numbers": [1]}),
+    ]
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(
+        str(pdf_path),
+        {"invoice_number": {"alias": "Invoice number", "type": "str"}},
+    )
+
+    assert result.data == {"invoice_number": "INV-7"}
+    assert result.field_pages == {"invoice_number": [1]}
+    assert client.chat.call_count == 2
+    assert any(item.code == "resolver_retry" for item in result.findings)
+    assert "independent retry" in client.chat.call_args_list[1].kwargs["messages"][0]["content"]
+
+
+def test_document_mode_accepts_an_empty_required_table_without_retry(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "empty-resolved-table.pdf")
+    client = _client(_response({"items": []}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(str(pdf_path), {"items": _fields()["items"]})
+
+    assert result.data == {"items": []}
+    assert result.field_pages == {"items": []}
+    client.chat.assert_not_called()
+    assert not any(item.code == "resolver_unresolved" for item in result.findings)
+
+
+def test_document_mode_recovers_value_when_glm_has_no_candidate(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "image-recovery.pdf")
+    client = _client(_response({"supplier_name": None}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.return_value = _chat_response(
+        {"value": "Visible Issuer Ltd", "page_numbers": [1]}
+    )
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(
+        str(pdf_path),
+        {
+            "supplier_name": {
+                "alias": "Supplier name",
+                "type": "Optional[str]",
+            }
+        },
+    )
+
+    assert result.data == {"supplier_name": "Visible Issuer Ltd"}
+    assert result.field_pages == {"supplier_name": [1]}
+    prompt = client.chat.call_args.kwargs["messages"][0]["content"]
+    assert "Page-level candidate count: 0" in prompt
+
+
+def test_document_mode_retries_schema_invalid_object_response(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "invalid-object.pdf")
+    client = _client(
+        _response({"summary": {"currency": "SGD", "tax": 2.5}})
+    )
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = [
+        _chat_response({"value": {"tax": 2.5}, "page_numbers": [1]}),
+        _chat_response(
+            {
+                "value": {"currency": "SGD", "tax": 2.5},
+                "page_numbers": [1],
+            }
+        ),
+    ]
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(str(pdf_path), {"summary": _fields()["summary"]})
+
+    assert result.data == {"summary": {"currency": "SGD", "tax": 2.5}}
+    assert client.chat.call_count == 2
+    assert any(item.code == "resolver_retry" for item in result.findings)
+    assert not any(item.code.startswith("schema_") for item in result.findings)
+
+
+def test_document_mode_exhausts_malformed_json_retries_safely(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "resolver-malformed.pdf")
+    client = _client(_response({"name": "Acme"}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = [
+        {"message": {"content": "not-json"}, "done": True},
+        {"message": {"content": "still-not-json"}, "done": True},
+    ]
+
+    with pytest.raises(GlmOcrResponseError, match="not valid JSON"):
+        _adapter(
+            client,
+            resolution_mode="document",
+            resolver_model="qwen3.5:9b-q4_K_M",
+            resolver_max_attempts=2,
+        ).extract(str(pdf_path), {"name": {"type": "str"}})
+
+    assert client.chat.call_count == 2
+
+
+def test_document_mode_retries_truncated_response_and_skips_optional_absence_retry(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "resolver-truncated.pdf")
+    client = _client(_response({"note": None}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = [
+        _chat_response(
+            {"value": None, "page_numbers": []},
+            reason="length",
+        ),
+        _chat_response({"value": None, "page_numbers": []}),
+    ]
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+        resolver_max_attempts=2,
+    ).extract(str(pdf_path), {"note": {"type": "Optional[str]"}})
+
+    assert result.data == {"note": None}
+    assert client.chat.call_count == 2
+    assert sum(item.code == "resolver_retry" for item in result.findings) == 1
+
+
+def test_document_mode_uses_candidate_page_when_citation_is_invalid(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "invalid-pages.pdf")
+    client = _client(_response({"name": "Acme"}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.return_value = _chat_response(
+        {"value": "Acme", "page_numbers": [2, 2]}
+    )
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+        resolver_max_attempts=1,
+    ).extract(str(pdf_path), {"name": {"type": "str"}})
+
+    assert result.data == {"name": "Acme"}
+    assert result.field_pages == {"name": [1]}
+    assert any(item.path == "name.page_numbers" for item in result.findings)
+
+
+def test_document_mode_preserves_legitimate_duplicate_rows(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "duplicate-rows.pdf")
+    row = {"sku": "A", "quantity": 1}
+    client = _client(_response({"items": [row]}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.return_value = _chat_response(
+        {"value": [row, row], "page_numbers": [1]}
+    )
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(str(pdf_path), {"items": _fields()["items"]})
+
+    assert result.data == {"items": [row, row]}
+    assert result.field_pages == {"items": [1]}
+    message = client.chat.call_args.kwargs["messages"][0]
+    assert "images" not in message
+    assert "Structured candidate rows" in message["content"]
+
+
+def test_document_table_reassigns_only_structured_candidate_cells(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "shifted-table.pdf")
+    client = _client(
+        _response(
+            {
+                "items": [
+                    {
+                        "sku": "Furniture, FUR-CH-4421",
+                        "quantity": 1,
+                        "__glm_ocr_row_evidence__": (
+                            "Furniture | FUR-CH-4421 | 1"
+                        ),
+                    }
+                ]
+            }
+        )
+    )
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.return_value = _chat_response(
+        {
+            "value": [{"sku": "FUR-CH-4421", "quantity": 1}],
+            "page_numbers": [1],
+        }
+    )
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(str(pdf_path), {"items": _fields()["items"]})
+
+    assert result.data == {
+        "items": [{"sku": "FUR-CH-4421", "quantity": 1}]
+    }
+    request = client.chat.call_args.kwargs
+    assert "images" not in request["messages"][0]
+    assert "Furniture | FUR-CH-4421 | 1" in request["messages"][0]["content"]
+
+
+def test_document_table_grounds_hallucinations_and_realigns_delimited_cells(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "delimited-table.pdf")
+    table = {
+        "alias": "Items",
+        "type": "List[Any]",
+        "is_table": True,
+        "item_fields": {
+            "product_name": {"alias": "Product", "type": "str"},
+            "sub_category": {"alias": "Sub-category", "type": "str"},
+            "category": {"alias": "Category", "type": "str"},
+            "product_id": {"alias": "Product ID", "type": "str"},
+            "quantity": {"alias": "Quantity", "type": "int"},
+        },
+    }
+    client = _client(
+        _response(
+            {
+                "items": [
+                    {
+                        "product_name": "Manager Chair, Indigo",
+                        "sub_category": "Chairs, Furniture",
+                        "category": "FUR-CH-4421",
+                        "product_id": "ORDER-99",
+                        "quantity": 1,
+                    }
+                ]
+            }
+        )
+    )
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.return_value = _chat_response(
+        {
+            "value": [
+                {
+                    "product_name": "Unsupported footer",
+                    "sub_category": "Chairs, Furniture",
+                    "category": "FUR-CH-4421",
+                    "product_id": "ORDER-99",
+                    "quantity": 1,
+                }
+            ],
+            "page_numbers": [1],
+        }
+    )
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(str(pdf_path), {"items": table})
+
+    assert result.data == {
+        "items": [
+            {
+                "product_name": "Manager Chair, Indigo",
+                "sub_category": "Chairs",
+                "category": "Furniture",
+                "product_id": "FUR-CH-4421",
+                "quantity": 1,
+            }
+        ]
+    }
+    assert any(
+        item.code == "table_evidence_realign" for item in result.findings
+    )
+
+
+def test_document_runtime_requires_both_configured_models(tmp_path: Path) -> None:
+    pdf_path = _make_pdf(tmp_path / "missing-resolver.pdf")
+    client = _client()
+
+    with pytest.raises(GlmOcrModelNotFoundError, match="resolver model"):
+        _adapter(
+            client,
+            resolution_mode="document",
+            resolver_model="qwen3.5:9b-q4_K_M",
+        ).extract(str(pdf_path), {"name": {"type": "str"}})
+
+    client.generate.assert_not_called()
+    client.chat.assert_not_called()
+
+
+def test_document_resolver_timeout_is_redacted_and_not_retried(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "resolver-timeout.pdf")
+    client = _client(_response({"name": "Acme"}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = TimeoutError("private resolver endpoint")
+
+    with pytest.raises(GlmOcrTimeoutError, match="document resolution") as exc:
+        _adapter(
+            client,
+            resolution_mode="document",
+            resolver_model="qwen3.5:9b-q4_K_M",
+        ).extract(str(pdf_path), {"name": {"type": "str"}})
+
+    assert "private resolver endpoint" not in str(exc.value)
+    assert client.chat.call_count == 1
 
 
 @pytest.mark.parametrize(
@@ -476,6 +986,23 @@ def test_render_pdf_uses_normalized_path_and_returns_in_memory_pngs(
     normalized.assert_called_once_with(str(pdf_path))
     assert len(images) == 2
     assert all(image.startswith(b"\x89PNG") for image in images)
+
+
+def test_render_pdf_bounds_resolver_images_without_changing_ocr_dpi(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "bounded-render.pdf")
+    adapter = _adapter(Mock(), dpi=216, resolver_max_dimension=960)
+
+    ocr_image = pymupdf.Pixmap(adapter.render_pdf(str(pdf_path))[0])
+    resolver_image = pymupdf.Pixmap(
+        adapter.render_pdf(str(pdf_path), max_dimension=960)[0]
+    )
+
+    assert max(ocr_image.width, ocr_image.height) > 960
+    assert max(resolver_image.width, resolver_image.height) <= 960
+    assert resolver_image.width < ocr_image.width
+    assert resolver_image.height < ocr_image.height
 
 
 def test_missing_and_invalid_pdf_raise_safe_errors(tmp_path: Path) -> None:

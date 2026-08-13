@@ -53,6 +53,11 @@ def test_glm_renderer_has_an_independent_dom_contract() -> None:
         'numberControl("Context length"',
         'numberControl("Prediction length"',
         'numberControl("Timeout (seconds)"',
+        'selectControl("Resolution mode"',
+        'textControl("Resolver model"',
+        'numberControl("Resolver context length"',
+        'numberControl("Resolver prediction length"',
+        'numberControl("Resolver attempts"',
         "extractionFieldControls(step",
         "structuredFieldSchemaDrawer(step)",
         "does not provide confidence scores",
@@ -210,15 +215,21 @@ def test_glm_defaults_and_summary_are_local_and_non_secret() -> None:
 
     assert (
         'GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", '
-        'model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", dpi: 216, '
+        'model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", '
+        'resolution_mode: "document", resolver_model: "qwen3.5:9b-q4_K_M", '
+        'resolver_max_dimension: 1280, resolver_num_ctx: 8192, resolver_num_predict: 1536, resolver_max_attempts: 2, dpi: 216, '
         "num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} }"
     ) in source
-    for label in ("Model", "Ollama host", "Fields", "Table status"):
+    for label in ("Model", "Ollama host", "Fields", "Table status", "Resolution", "Resolver"):
         assert label in renderer
     assert "Prompt construction" in renderer
     assert "Compact (schema sent once)" in renderer
     assert "Verbatim instructions (advanced)" in renderer
     assert "secretControl(" not in renderer
+    assert "Complete document (recommended)" in renderer
+    assert "Page merge (legacy)" in renderer
+    assert "Resolver image max dimension" in renderer
+    assert 'path.join(".") === "resolution_mode"' in source
 
 
 def test_existing_llamacloud_renderer_and_defaults_are_byte_unchanged() -> None:

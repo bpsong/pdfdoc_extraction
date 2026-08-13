@@ -25,6 +25,7 @@ from standard_step.extraction.glm_ocr_adapter import (
 from standard_step.extraction.glm_ocr_prompt import (
     validate_glm_ocr_fields,
     validate_glm_ocr_prompt_style,
+    validate_glm_ocr_resolution_mode,
 )
 
 
@@ -58,6 +59,12 @@ class GlmOcrExtractTask(BaseTask):
         self.dpi = 216
         self.num_ctx = 8192
         self.num_predict = 2048
+        self.resolution_mode = "page_merge"
+        self.resolver_model = ""
+        self.resolver_max_dimension = 1280
+        self.resolver_num_ctx = 8192
+        self.resolver_num_predict = 1536
+        self.resolver_max_attempts = 2
         self.timeout_seconds = 300.0
         self.fields: dict[str, Any] = {}
         self._parameters_loaded = False
@@ -114,13 +121,33 @@ class GlmOcrExtractTask(BaseTask):
             raise TaskError(
                 "GLM-OCR verbatim prompt style requires document instructions."
             )
+        try:
+            validate_glm_ocr_resolution_mode(self.resolution_mode)
+        except ValueError as error:
+            raise TaskError("GLM-OCR resolution_mode is invalid.") from error
+        if self.resolution_mode == "document" and not self.resolver_model:
+            raise TaskError(
+                "GLM-OCR resolver_model must be a non-empty string in document mode."
+            )
         for key, value in {
             "dpi": self.dpi,
             "num_ctx": self.num_ctx,
             "num_predict": self.num_predict,
+            "resolver_max_dimension": self.resolver_max_dimension,
+            "resolver_num_ctx": self.resolver_num_ctx,
+            "resolver_num_predict": self.resolver_num_predict,
+            "resolver_max_attempts": self.resolver_max_attempts,
         }.items():
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise TaskError(f"GLM-OCR {key} must be a positive integer.")
+        if self.resolver_max_attempts > 5:
+            raise TaskError(
+                "GLM-OCR resolver_max_attempts must be between 1 and 5."
+            )
+        if not 256 <= self.resolver_max_dimension <= 4096:
+            raise TaskError(
+                "GLM-OCR resolver_max_dimension must be between 256 and 4096."
+            )
         if (
             isinstance(self.timeout_seconds, bool)
             or not isinstance(self.timeout_seconds, (int, float))
@@ -199,6 +226,27 @@ class GlmOcrExtractTask(BaseTask):
         self.dpi = self.params.get("dpi", 216)
         self.num_ctx = self.params.get("num_ctx", 8192)
         self.num_predict = self.params.get("num_predict", 2048)
+        self.resolution_mode = self.params.get(
+            "resolution_mode",
+            "page_merge",
+        )
+        resolver_model = self.params.get("resolver_model", "")
+        self.resolver_model = (
+            resolver_model.strip() if isinstance(resolver_model, str) else ""
+        )
+        self.resolver_num_ctx = self.params.get("resolver_num_ctx", 8192)
+        self.resolver_max_dimension = self.params.get(
+            "resolver_max_dimension",
+            1280,
+        )
+        self.resolver_num_predict = self.params.get(
+            "resolver_num_predict",
+            1536,
+        )
+        self.resolver_max_attempts = self.params.get(
+            "resolver_max_attempts",
+            2,
+        )
         self.timeout_seconds = self.params.get("timeout_seconds", 300)
         self.fields = dict(fields) if isinstance(fields, dict) else {}
         self._parameters_loaded = True
@@ -211,6 +259,12 @@ class GlmOcrExtractTask(BaseTask):
             dpi=self.dpi,
             num_ctx=self.num_ctx,
             num_predict=self.num_predict,
+            resolution_mode=self.resolution_mode,
+            resolver_model=self.resolver_model,
+            resolver_max_dimension=self.resolver_max_dimension,
+            resolver_num_ctx=self.resolver_num_ctx,
+            resolver_num_predict=self.resolver_num_predict,
+            resolver_max_attempts=self.resolver_max_attempts,
             timeout_seconds=float(self.timeout_seconds),
         )
 
@@ -235,9 +289,19 @@ class GlmOcrExtractTask(BaseTask):
         return {
             "provider": "glm_ocr_ollama",
             "model": self.model,
+            "resolution_mode": self.resolution_mode,
+            "resolver_model": (
+                self.resolver_model
+                if self.resolution_mode == "document"
+                else None
+            ),
             "host_classification": _host_classification(self.ollama_host),
             "page_count": result.page_count,
-            "call_strategy": "per_page_scalar_object_optional_recovery_and_table",
+            "call_strategy": (
+                "per_page_evidence_then_bounded_field_resolution"
+                if self.resolution_mode == "document"
+                else "per_page_scalar_object_optional_recovery_and_table"
+            ),
             "calls": calls,
             "field_pages": {
                 str(key): list(pages) for key, pages in result.field_pages.items()

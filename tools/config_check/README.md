@@ -148,7 +148,12 @@ The admin validation endpoints reuse the shared config-check validator and then 
 For `standard_step.extraction.glm_ocr_extract.GlmOcrExtractTask`, validation also
 requires an HTTP(S) `ollama_host` without credentials, query, or fragment and a
 non-empty `model`. `dpi`, `num_ctx`, and `num_predict` must be positive integers;
-`timeout_seconds` must be positive. LlamaCloud-only parameters are rejected.
+`timeout_seconds` must be positive. `resolution_mode: document` also requires a
+non-empty `resolver_model`, positive resolver context/prediction settings, and
+`resolver_max_attempts` from 1 through 5. `resolver_max_dimension` bounds the
+longest scalar/object resolver image edge and must be from 256 through 4096;
+tables use structured GLM-OCR row evidence instead of resolver images.
+LlamaCloud-only parameters are rejected.
 For example:
 
 ```yaml
@@ -158,6 +163,12 @@ glm_extract:
   params:
     ollama_host: http://127.0.0.1:11434
     model: glm-ocr:latest
+    resolution_mode: document
+    resolver_model: qwen3.5:9b-q4_K_M
+    resolver_max_dimension: 1280
+    resolver_num_ctx: 8192
+    resolver_num_predict: 1536
+    resolver_max_attempts: 2
     dpi: 216
     num_ctx: 8192
     num_predict: 2048

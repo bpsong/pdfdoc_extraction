@@ -91,6 +91,7 @@ Author: [Your Organization/Name]
 | 2.9     | 2026-07-26 | [Your Organization] | Documented SQLite-backed, immutable pipeline and review-schema versions, explicit upload selection, watch-folder bindings, exact-version execution, migration, recovery, and stored-definition validation |
 | 3.0     | 2026-08-02 | [Your Organization] | Completed the operator and administrator procedures for multi-pipeline routing, review forms, watch-folder bindings, outputs, validation, settings, audit visibility, and portable definitions; corrected remaining single-pipeline and task-behavior guidance |
 | 3.1     | 2026-08-09 | [Your Organization] | Documented GLM-OCR sensitivity to JSON Schema property order and prompt construction, with controlled-testing and review guidance |
+| 3.2     | 2026-08-12 | [Your Organization] | Documented generic multi-page GLM-OCR document resolution, resolver configuration, schema boundaries, and document-specific pipeline guidance |
 
 ---
 
@@ -1167,11 +1168,13 @@ pipeline:
 
 - **Module/class:** `standard_step.extraction.glm_ocr_extract` /
   `GlmOcrExtractTask`
-- **Purpose:** Extracts schema-directed structured data through a locally
-  reachable Ollama server and the `glm-ocr:latest` vision model.
+- **Purpose:** Extracts configured structured data from PDF document types
+  through a locally reachable Ollama server and the `glm-ocr:latest` vision
+  model.
 - **Prerequisites:** Install Ollama separately, pull `glm-ocr:latest`, start
-  Ollama, and confirm the configured HTTP endpoint is reachable. The application
-  does not install, start, or stop Ollama.
+  Ollama, and confirm the configured HTTP endpoint is reachable. Document mode
+  also requires its configured resolver model to be installed.
+  The application does not install, start, stop, or pull models from Ollama.
 - **Parameters:**
   - `ollama_host`: HTTP(S) base URL, normally
     `http://127.0.0.1:11434`. Embedded credentials, query strings, and fragments
@@ -1189,6 +1192,23 @@ pipeline:
     `document_instructions` exactly as written, with no framework prompt text,
     while still enforcing the native JSON Schema. Use it only after controlled
     testing because the instructions become the complete model prompt.
+  - `resolution_mode`: `document` resolves each scalar or flat object against
+    the complete ordered PDF and reconciles the configured table from page-level
+    GLM-OCR evidence. `page_merge` retains the first supported page value and is
+    the compatibility default when an older published definition omits this
+    parameter. Newly added visual-editor tasks default to `document`.
+  - `resolver_model`: installed local model used in `document` mode. It is
+    required in that mode; the visual editor initially suggests
+    `qwen3.5:9b-q4_K_M`.
+  - `resolver_max_dimension`: longest edge, in pixels, for page images sent to
+    scalar/object resolver calls; default `1280`, allowed range 256 through
+    4096. Table resolution uses structured row evidence rather than these page
+    images.
+  - `resolver_num_ctx`: positive resolver context size; default `8192`.
+  - `resolver_num_predict`: positive resolver output-token limit; default
+    `1536`.
+  - `resolver_max_attempts`: maximum attempts for a field or table evidence
+    chunk; default `2`, allowed range 1 through 5.
   - `dpi`: positive integer PDF render resolution; default `216`.
   - `num_ctx`: positive integer model context size; default `8192`.
   - `num_predict`: positive integer output-token limit; default `2048`.
@@ -1205,11 +1225,26 @@ pipeline:
 
 Configure this task from **Admin > Pipeline** by adding **Glm Ocr Extract**.
 Its properties panel is separate from the LlamaCloud Extract editor. Set the
-local model values, add scalar fields, and use **List of objects > Edit row
-schema** for invoice lines. Add and configure **Review Gate** after extraction,
-pin an exact published review-form version, then add CSV or JSON storage. Save,
-validate, and publish the pipeline before assigning it to an upload or
-watch-folder binding.
+local model values, choose **Complete document** for multi-page resolution, add
+scalar fields, and use **List of objects > Edit row schema** for repeated logical
+rows. Add and configure **Review Gate** after extraction, pin an exact published
+review-form version, then add CSV or JSON storage. Save, validate, and publish
+the pipeline before assigning it to an upload or watch-folder binding.
+
+The task does not contain invoice-specific fields or parsing rules. Field keys,
+aliases, descriptions, types, constraints, and document instructions define the
+document semantics for each pipeline. For example, a bill-of-lading pipeline can
+request a bill-of-lading number, shipper, consignee, notify party, carrier,
+vessel/voyage, ports, and one containers or cargo table. Do not submit it to an
+invoice pipeline and expect those fields to change automatically; create a
+dedicated pipeline and matching review form using the same GLM-OCR task.
+
+The current task supports at most 100 top-level fields, flat structured objects,
+and one logical array-of-objects table. Documents requiring separate container,
+cargo, and charges tables do not fit that schema in one extraction task. Keep
+only the business-critical repeated section as the table and model other values
+as supported scalar or flat-object fields, or reassess the task boundary before
+production use.
 
 Use an **Object with defined fields** when several values must come from the
 same visual block. This is important for documents that contain multiple
@@ -1224,19 +1259,24 @@ period's `start_date` and `end_date` when both must come from one labelled date
 range rather than from unrelated issue or due dates elsewhere on the page.
 
 The task renders pages locally in memory and makes schema-directed vision calls.
-Scalar/object fields and the object-array table use separate calls so table
-instructions can focus on visible rows. Results are normalized under
-`context["data"]`, persisted to SQLite with provider `glm_ocr_ollama`, and are
-available to every downstream task. The task does not provide field confidence,
-citations, or PP-DocLayout output. Confidence therefore remains null; no score
-is invented.
+GLM-OCR first produces scalar/object candidates and table rows per page. In
+`document` mode, the resolver then evaluates one scalar or flat object at a time
+against bounded copies of all ordered page images; it reconciles a table from
+bounded structured row-evidence chunks. This field isolation helps prevent a
+prominent value from one page or party from replacing a differently labelled
+role elsewhere in the document. Results are normalized under `context["data"]`,
+persisted to SQLite with provider `glm_ocr_ollama`, and are available to every
+downstream task. The task does not provide field confidence, citations, or
+PP-DocLayout output. Confidence therefore remains null; no score is invented.
 
-Prompt style does not change the call strategy. A document with scalar/object
-fields and no table receives one initial GLM call per page. A required value
-returned as null may cause one focused scalar recovery call. A configured
-array-of-objects table adds its own table call per page. In compact mode the
-same JSON Schema is still enforced through Ollama; it is simply not duplicated
-inside the text prompt. Put precise, document-specific selection rules in
+Prompt style does not select the resolution strategy. Every mode first makes one
+scalar/object GLM call per page; a required null may cause one focused recovery
+call, and a configured array-of-objects table adds one table call per page.
+`page_merge` stops after deterministic page merging. `document` additionally
+runs isolated resolver calls for configured scalars/objects and one or more
+bounded evidence-resolution calls for the table. In compact mode the same JSON
+Schema is still enforced through Ollama; it is simply not duplicated inside the
+text prompt. Put precise, document-specific selection rules in
 `document_instructions`, and avoid literal example values that a small model
 could copy into its answer.
 
@@ -1306,7 +1346,13 @@ tasks:
     params:
       ollama_host: http://127.0.0.1:11434
       model: glm-ocr:latest
-      document_instructions: Extract only values printed on the invoice.
+      document_instructions: Extract only values visibly supported by the document.
+      resolution_mode: document
+      resolver_model: qwen3.5:9b-q4_K_M
+      resolver_max_dimension: 1280
+      resolver_num_ctx: 8192
+      resolver_num_predict: 1536
+      resolver_max_attempts: 2
       dpi: 216
       num_ctx: 8192
       num_predict: 2048
