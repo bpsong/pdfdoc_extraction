@@ -1128,8 +1128,8 @@ Record during execution:
 - Phase 10 live environment: Ollama 0.32.6 exposed its native API at
   `http://127.0.0.1:11434`, `glm-ocr:latest` was installed, and a harmless model
   request completed. The application ran on isolated port 8765 with an ignored
-  SQLite database and runtime tree under
-  `output/playwright/phase10_glm_live`; no customer/runtime database was used.
+  temporary SQLite database and runtime tree; no customer/runtime database was
+  used.
 - Phase 10 visual configuration: Administrator UI creation published review
   form `superstore-glm-phase10` v1 (schema version
   `82774063-af10-4b6a-b310-a31ec07231d6`) and pipeline
@@ -1159,9 +1159,8 @@ Record during execution:
   operator corrections. This does not block the design: confidence stayed null,
   the review gate exposed every configured field, and only corrected SQLite
   values flowed to CSV.
-- GLM visual evidence directory:
-  `D:\python_code\pdfdoc_extraction\output\playwright\phase10_glm_live\evidence\screenshots`.
-  Evidence covers review-form and pipeline publication, portal and watch runs,
+- GLM visual verification covered review-form and pipeline publication, portal
+  and watch runs,
   completed reviews and CSV artifacts, desktop/tablet/mobile layouts, long-value
   containment, and the mobile object-array editor. Keyboard focus followed host,
   model, instructions, and runtime settings; accessible names were present and
@@ -1276,5 +1275,5 @@ Record during execution:
   contained the reviewed structured values, and the collision-safe renamed PDF
   had SHA-256
   `ED6EC181EB4C5757088F9791D21EAFD6FD2B4F9631DC1EFB8C10A35A0E795A51`,
-  exactly matching `sample_invoice.pdf`. Runtime evidence remains under the
-  ignored `output/playwright/phase10_glm_live` tree.
+  exactly matching `sample_invoice.pdf`. Runtime evidence was removed during
+  post-validation housekeeping.
