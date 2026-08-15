@@ -21,6 +21,8 @@ def test_admin_pages_render_versioned_workspace_contracts(monkeypatch):
     assert 'id="pipeline-draft-revision"' in pipelines.text
     assert 'id="pipeline-template-dialog"' in pipelines.text
     assert 'id="pipeline-template-dialog-key"' in pipelines.text
+    assert 'id="pipeline-publish-dialog"' in pipelines.text
+    assert 'id="pipeline-publish-dialog-confirm"' in pipelines.text
     assert 'versioned_admin_view_models.js' in pipelines.text
 
 

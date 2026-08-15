@@ -78,6 +78,10 @@
     const templateDialogName = document.getElementById("pipeline-template-dialog-name");
     const templateDialogCancel = document.getElementById("pipeline-template-dialog-cancel");
     const templateDialogSubmit = document.getElementById("pipeline-template-dialog-submit");
+    const publishDialog = document.getElementById("pipeline-publish-dialog");
+    const publishForm = document.getElementById("pipeline-publish-form");
+    const publishDialogCancel = document.getElementById("pipeline-publish-dialog-cancel");
+    const publishDialogConfirm = document.getElementById("pipeline-publish-dialog-confirm");
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -618,6 +622,21 @@
     function closeTemplateDialog() {
         templateDialog.classList.add("hidden");
         templateDialog.classList.remove("flex");
+    }
+
+    function openPublishDialog() {
+        if (publishButton.disabled) {
+            return;
+        }
+        publishDialog.classList.remove("hidden");
+        publishDialog.classList.add("flex");
+        publishDialogConfirm.focus();
+    }
+
+    function closePublishDialog() {
+        publishDialog.classList.add("hidden");
+        publishDialog.classList.remove("flex");
+        publishButton.focus();
     }
 
     function numberControl(label, path, value, attrs, findings) {
@@ -1872,9 +1891,6 @@
         if (publishButton.disabled) {
             return;
         }
-        if (!window.confirm("Publish this immutable pipeline version? Existing batches keep their assigned version.")) {
-            return;
-        }
         if (state.dirty) await saveDraft();
         await window.DocFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/publish`, { expected_revision: state.revision });
         window.DocFlow.showToast("Immutable pipeline version published", "success");
@@ -2804,7 +2820,32 @@
     });
     document.getElementById("pipeline-add-task-button").addEventListener("click", addTaskFromCatalog);
     publishButton.addEventListener("click", () => {
-        publishDraftPipeline().catch((error) => window.DocFlow.showToast(error.message, "error"));
+        openPublishDialog();
+    });
+    publishDialogCancel.addEventListener("click", closePublishDialog);
+    publishDialog.addEventListener("click", (event) => {
+        if (event.target === publishDialog && !publishDialogConfirm.disabled) {
+            closePublishDialog();
+        }
+    });
+    publishDialog.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !publishDialogConfirm.disabled) {
+            closePublishDialog();
+        }
+    });
+    publishForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        publishDialogCancel.disabled = true;
+        publishDialogConfirm.disabled = true;
+        try {
+            await publishDraftPipeline();
+            closePublishDialog();
+        } catch (error) {
+            window.DocFlow.showToast(error.message, "error");
+        } finally {
+            publishDialogCancel.disabled = false;
+            publishDialogConfirm.disabled = false;
+        }
     });
     templateSelect.addEventListener("change", () => {
         if (state.dirty && !window.confirm("Discard unsaved draft changes and switch templates?")) {

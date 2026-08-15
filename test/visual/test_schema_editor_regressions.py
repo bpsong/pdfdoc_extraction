@@ -129,6 +129,24 @@ def test_pipeline_creation_uses_an_accessible_in_page_modal() -> None:
     assert "templateDialog.showModal()" not in source
 
 
+def test_pipeline_publish_uses_an_accessible_in_page_modal() -> None:
+    template = (ROOT / "web/templates/pipeline_config.html").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+
+    assert 'id="pipeline-publish-dialog"' in template
+    assert 'aria-labelledby="pipeline-publish-dialog-title"' in template
+    assert 'aria-describedby="pipeline-publish-dialog-description"' in template
+    assert 'id="pipeline-publish-form"' in template
+    assert 'id="pipeline-publish-dialog-cancel"' in template
+    assert 'id="pipeline-publish-dialog-confirm"' in template
+    assert "Publishing creates a new immutable version." in template
+    assert "function openPublishDialog()" in source
+    assert "function closePublishDialog()" in source
+    assert 'publishDialogConfirm.focus();' in source
+    assert 'publishForm.addEventListener("submit"' in source
+    assert 'window.confirm("Publish this immutable pipeline version?' not in source
+
+
 def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:
     source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")

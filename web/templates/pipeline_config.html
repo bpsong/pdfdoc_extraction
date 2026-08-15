@@ -187,9 +187,28 @@
         </div>
     </form>
 </div>
+<div
+    id="pipeline-publish-dialog"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-base-content/40 p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="pipeline-publish-dialog-title"
+    aria-describedby="pipeline-publish-dialog-description"
+>
+    <form id="pipeline-publish-form" class="w-full max-w-lg rounded-box border border-base-300 bg-base-100 p-6 shadow-lg">
+        <h2 id="pipeline-publish-dialog-title" class="text-lg font-semibold">Publish immutable pipeline version?</h2>
+        <p id="pipeline-publish-dialog-description" class="mt-2 text-sm text-base-content/70">
+            Publishing creates a new immutable version. Existing batches keep their assigned version.
+        </p>
+        <div class="modal-action">
+            <button id="pipeline-publish-dialog-cancel" class="btn btn-ghost" type="button">Cancel</button>
+            <button id="pipeline-publish-dialog-confirm" class="btn btn-primary" type="submit">Publish version</button>
+        </div>
+    </form>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script src="/static/js/pipeline_config.js?v=ui-clarity-1" defer></script>
+<script src="/static/js/pipeline_config.js?v=publish-confirmation-modal-1" defer></script>
 {% endblock %}

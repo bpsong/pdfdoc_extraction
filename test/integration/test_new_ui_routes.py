@@ -406,9 +406,11 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="pipeline-config-workspace"' in response.text
     assert 'id="pipeline-publish-button"' in response.text
+    assert 'id="pipeline-publish-dialog"' in response.text
+    assert 'id="pipeline-publish-dialog-confirm"' in response.text
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 7
-    assert "/static/js/pipeline_config.js?v=ui-clarity-1" in response.text
+    assert "/static/js/pipeline_config.js?v=publish-confirmation-modal-1" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:

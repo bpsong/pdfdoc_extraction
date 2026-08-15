@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.1
-Release Date: 2026-08-09
+Version: 3.3
+Release Date: 2026-08-15
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 3.1
-Release Date: 2026-08-09
+Version: 3.3
+Release Date: 2026-08-15
 Author: [Your Organization/Name]
 
 ---
@@ -50,6 +50,7 @@ Author: [Your Organization/Name]
   - [4.8. Task System: Standard Steps and Parameters](#48-task-system-standard-steps-and-parameters)
        - [4.8.1. extraction](#481-extraction)
          - [GLM-OCR extraction (local Ollama)](#glm-ocr-extraction-local-ollama)
+           - [Multiline field extraction guidance](#multiline-field-extraction-guidance)
            - [Prompt and schema-order sensitivity](#prompt-and-schema-order-sensitivity)
        - [4.8.2. split.llamacloud_split](#482-splitllamacloud_split)
        - [4.8.3. storage.store_metadata_as_csv](#483-storagestore_metadata_as_csv)
@@ -92,6 +93,7 @@ Author: [Your Organization/Name]
 | 3.0     | 2026-08-02 | [Your Organization] | Completed the operator and administrator procedures for multi-pipeline routing, review forms, watch-folder bindings, outputs, validation, settings, audit visibility, and portable definitions; corrected remaining single-pipeline and task-behavior guidance |
 | 3.1     | 2026-08-09 | [Your Organization] | Documented GLM-OCR sensitivity to JSON Schema property order and prompt construction, with controlled-testing and review guidance |
 | 3.2     | 2026-08-12 | [Your Organization] | Documented generic multi-page GLM-OCR document resolution, resolver configuration, schema boundaries, and document-specific pipeline guidance |
+| 3.3     | 2026-08-15 | [Your Organization] | Added visual-editor guidance for multiline extraction values, labelled-block boundaries, adjacent-field exclusions, and focused regression testing |
 
 ---
 
@@ -1238,6 +1240,77 @@ request a bill-of-lading number, shipper, consignee, notify party, carrier,
 vessel/voyage, ports, and one containers or cargo table. Do not submit it to an
 invoice pipeline and expect those fields to change automatically; create a
 dedicated pipeline and matching review form using the same GLM-OCR task.
+
+###### Multiline field extraction guidance
+
+Use field-level **Extraction guidance** when one text value occupies several
+printed lines or sits next to a visually similar field. Typical examples include
+addresses, consignee blocks, notify-party details, cargo descriptions, payment
+instructions, and free-text notes. The guidance is part of that pipeline's
+document schema; it does not change the generic GLM-OCR task for other document
+types.
+
+Configure the field in the visual editor:
+
+1. Open **Admin > Pipeline**, select the intended pipeline template, and select
+   its **Glm Ocr Extract** task.
+2. Under **Extraction fields**, expand the text field that needs adjustment.
+3. In **Extraction guidance**, identify the printed label or visual anchor,
+   state that the value may span multiple lines, define where extraction must
+   stop, say which lines must be retained, and exclude nearby fields that must
+   not be copied.
+4. Review **Document instructions** in the same task. Make its field definition
+   consistent with the field-level rule. For example, do not describe `billTo`
+   as a name and address at document level while its field guidance requests a
+   name only.
+5. Select **Save Draft**, then **Validate**. Resolve every blocking finding and
+   publish a new immutable pipeline version.
+6. Submit representative PDFs against the new version one at a time. At Review
+   Gate, compare the entire field value with the source PDF, including embedded
+   line breaks, and check every other field for prompt regressions before
+   completing review.
+
+Use this general pattern and replace each placeholder with document-specific
+semantics:
+
+> Extract the complete `<value>` block directly under the `<printed label>`
+> label. The value may span multiple lines. Continue until `<clear stopping
+> boundary>`. Preserve `<required line types>` and join the lines with `, `.
+> Do not include `<adjacent or unrelated fields>`.
+
+For a shipping destination printed over several lines:
+
+> Extract the complete shipping destination block directly under the "Ship To"
+> label. The value may span multiple lines. Continue reading until the next
+> labelled field or document section. Preserve every visible address line,
+> including repeated city or region lines and the country, and join the lines
+> with ", ". Do not substitute the Bill To customer or customer name.
+
+When an adjacent field must contain a name only, use a separate and explicit
+boundary rule:
+
+> Extract only the person name directly beneath the "Bill To" label. Do not
+> include any address, city, region, country, or values from the adjacent "Ship
+> To" block. Stop after the name.
+
+Do not copy literal names, addresses, invoice numbers, or other sample values
+into production guidance. Describe the label, role, layout boundary, and value
+shape instead. Keep the rule as short as the document permits; local models can
+degrade unrelated fields when prompts become repetitive or contradictory. If a
+field legitimately contains both a name and address and downstream systems need
+them separately, prefer an **Object with defined fields** containing `name` and
+`address` rather than forcing both into one scalar string.
+
+The review form's `multiline: true` option only displays a larger editing box.
+It does not make extraction capture additional lines. Configure extraction in
+the GLM-OCR field guidance, and configure `multiline` separately in the matching
+review form when operators need to inspect or edit a long value comfortably.
+
+Treat every guidance change as model-affecting configuration. Keep a fixed
+regression set that includes short values, long multiline values, repeated
+city/region lines, adjacent labelled blocks, and documents where the optional
+field is absent. A successful result from one PDF or one invocation is not
+sufficient evidence for production use.
 
 The current task supports at most 100 top-level fields, flat structured objects,
 and one logical array-of-objects table. Documents requiring separate container,
