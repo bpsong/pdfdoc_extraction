@@ -57,6 +57,7 @@ test/files/
 
 # Generated output
 output/playwright/
+tmp/
 node_modules/
 
 # Standard Python ignores
