@@ -56,6 +56,10 @@ class GlmOcrResponseError(GlmOcrAdapterError):
     """Raised for invalid or incomplete Ollama response envelopes."""
 
 
+class GlmOcrTokenLimitError(GlmOcrResponseError):
+    """Raised when an Ollama resolver response reaches its output limit."""
+
+
 class GlmOcrPdfError(GlmOcrAdapterError):
     """Raised when a PDF cannot be safely opened or rendered."""
 
@@ -122,7 +126,7 @@ class GlmOcrAdapter:
         resolver_model: str = "",
         resolver_max_dimension: int = 1280,
         resolver_num_ctx: int = 8192,
-        resolver_num_predict: int = 1536,
+        resolver_num_predict: int = 10000,
         resolver_max_attempts: int = 2,
         timeout_seconds: float = 300,
         client: Any | None = None,
@@ -336,19 +340,14 @@ class GlmOcrAdapter:
             )
 
         if self.resolution_mode == "document":
-            resolver_page_images: list[bytes] = []
-            if any(
-                not field_config.get("is_table", False)
-                for field_config in fields.values()
-            ):
-                resolver_page_images = self.render_pdf(
-                    file_path,
-                    max_dimension=self.resolver_max_dimension,
+            resolver_page_images = self.render_pdf(
+                file_path,
+                max_dimension=self.resolver_max_dimension,
+            )
+            if len(resolver_page_images) != len(page_images):
+                raise GlmOcrPdfError(
+                    "Resolver page rendering did not match the source PDF"
                 )
-                if len(resolver_page_images) != len(page_images):
-                    raise GlmOcrPdfError(
-                        "Resolver page rendering did not match the source PDF"
-                    )
             merged, field_pages = self._resolve_document_fields(
                 client,
                 page_images=resolver_page_images,
@@ -542,6 +541,7 @@ class GlmOcrAdapter:
             if field_config.get("is_table", False):
                 table_rows, table_pages = self._resolve_document_table(
                     client,
+                    page_images=page_images,
                     field_key=field_key,
                     field_config=field_config,
                     candidates=candidates.get(field_key, []),
@@ -676,6 +676,7 @@ class GlmOcrAdapter:
         self,
         client: Any,
         *,
+        page_images: list[bytes],
         field_key: str,
         field_config: dict[str, Any],
         candidates: list[dict[str, Any]],
@@ -685,9 +686,9 @@ class GlmOcrAdapter:
         findings: list[GlmOcrAdapterFinding],
         normalization_findings: list[FieldNormalizationFinding],
     ) -> tuple[list[dict[str, Any]], list[int]]:
-        """Reconcile table rows from bounded structured evidence chunks."""
-        chunks = _table_candidate_chunks(candidates)
-        if not chunks:
+        """Reconcile table rows from bounded evidence and source page images."""
+        pending_chunks = _table_candidate_chunks(candidates)
+        if not pending_chunks:
             return [], []
 
         schema = build_document_resolver_schema(
@@ -697,9 +698,27 @@ class GlmOcrAdapter:
         )
         resolved_rows: list[dict[str, Any]] = []
         resolved_pages: set[int] = set()
-        for chunk_number, chunk in enumerate(chunks, start=1):
+        completed_chunks = 0
+        while pending_chunks:
+            chunk = pending_chunks.pop(0)
+            image_page_numbers = [
+                page_number
+                for page_number in _candidate_page_numbers(chunk)
+                if page_number <= page_count
+            ]
+            if not image_page_numbers or len(page_images) != page_count:
+                raise GlmOcrResponseError(
+                    "Document table evidence did not map to source page images"
+                )
+            chunk_images = [
+                page_images[page_number - 1]
+                for page_number in image_page_numbers
+            ]
+            chunk_number = completed_chunks + 1
+            chunk_count = chunk_number + len(pending_chunks)
             final_data: dict[str, Any] | None = None
             final_schema_findings: list[GlmOcrAdapterFinding] = []
+            split_chunk = False
             for attempt_number in range(1, self.resolver_max_attempts + 1):
                 prompt = build_table_evidence_resolver_prompt(
                     field_key,
@@ -709,16 +728,51 @@ class GlmOcrAdapter:
                     document_instructions=document_instructions,
                     attempt_number=attempt_number,
                     chunk_number=chunk_number,
-                    chunk_count=len(chunks),
+                    chunk_count=chunk_count,
+                    image_page_numbers=image_page_numbers,
                 )
                 try:
                     response_data, record = self._call_resolver_model(
                         client,
                         call_type="document_table",
-                        image_bytes=[],
+                        image_bytes=chunk_images,
                         prompt=prompt,
                         schema=schema,
                     )
+                except GlmOcrTokenLimitError:
+                    if len(chunk) > 1:
+                        midpoint = len(chunk) // 2
+                        pending_chunks[0:0] = [
+                            chunk[:midpoint],
+                            chunk[midpoint:],
+                        ]
+                        findings.append(
+                            GlmOcrAdapterFinding(
+                                path=field_key,
+                                code="resolver_chunk_split",
+                                message=(
+                                    "Document table evidence was split after the "
+                                    "resolver reached its output limit"
+                                ),
+                                call_type="document_table",
+                            )
+                        )
+                        split_chunk = True
+                        break
+                    if attempt_number >= self.resolver_max_attempts:
+                        raise
+                    findings.append(
+                        GlmOcrAdapterFinding(
+                            path=field_key,
+                            code="resolver_retry",
+                            message=(
+                                "Document table resolver reached its output limit "
+                                "for one candidate row and was retried"
+                            ),
+                            call_type="document_table",
+                        )
+                    )
+                    continue
                 except GlmOcrResponseError:
                     if attempt_number >= self.resolver_max_attempts:
                         raise
@@ -760,6 +814,8 @@ class GlmOcrAdapter:
                     continue
                 break
 
+            if split_chunk:
+                continue
             if final_data is None:
                 raise GlmOcrResponseError(
                     "Document table resolver returned no parseable structured response"
@@ -798,6 +854,7 @@ class GlmOcrAdapter:
             if not pages and normalized_rows:
                 pages = _candidate_page_numbers(chunk)
             resolved_pages.update(pages)
+            completed_chunks += 1
         return resolved_rows, sorted(resolved_pages)
 
     def _call_resolver_model(
@@ -843,7 +900,7 @@ class GlmOcrAdapter:
             "max_tokens",
             "token_limit",
         }:
-            raise GlmOcrResponseError(
+            raise GlmOcrTokenLimitError(
                 "Document resolver response was incomplete because the token limit was reached"
             )
         message = _response_value(response, "message")

@@ -63,7 +63,7 @@ class GlmOcrExtractTask(BaseTask):
         self.resolver_model = ""
         self.resolver_max_dimension = 1280
         self.resolver_num_ctx = 8192
-        self.resolver_num_predict = 1536
+        self.resolver_num_predict = 10000
         self.resolver_max_attempts = 2
         self.timeout_seconds = 300.0
         self.fields: dict[str, Any] = {}
@@ -241,7 +241,7 @@ class GlmOcrExtractTask(BaseTask):
         )
         self.resolver_num_predict = self.params.get(
             "resolver_num_predict",
-            1536,
+            10000,
         )
         self.resolver_max_attempts = self.params.get(
             "resolver_max_attempts",
@@ -419,7 +419,12 @@ class GlmOcrExtractTask(BaseTask):
                 GlmOcrPdfError: "glm_ocr_pdf_error",
                 GlmOcrResponseError: "glm_ocr_protocol_error",
             }
-            failure_type = provider_failure_types.get(type(error), failure_type)
+            for error_type, provider_failure_type in (
+                provider_failure_types.items()
+            ):
+                if isinstance(error, error_type):
+                    failure_type = provider_failure_type
+                    break
         context["fatal_failure"] = {
             "failure_type": failure_type,
             "message": task_error.message,

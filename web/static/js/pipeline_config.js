@@ -1251,7 +1251,7 @@
                             <div class="grid gap-3 md:grid-cols-2">
                                 ${numberControl("Resolver image max dimension", ["resolver_max_dimension"], params.resolver_max_dimension ?? 1280, 'min="256" max="4096" step="1"', inlineFindings(step, "resolver_max_dimension"))}
                                 ${numberControl("Resolver context length", ["resolver_num_ctx"], params.resolver_num_ctx ?? 8192, 'min="1" step="1"', inlineFindings(step, "resolver_num_ctx"))}
-                                ${numberControl("Resolver prediction length", ["resolver_num_predict"], params.resolver_num_predict ?? 1536, 'min="1" step="1"', inlineFindings(step, "resolver_num_predict"))}
+                                ${numberControl("Resolver prediction length", ["resolver_num_predict"], params.resolver_num_predict ?? 10000, 'min="1" step="1"', inlineFindings(step, "resolver_num_predict"))}
                                 ${numberControl("Resolver attempts", ["resolver_max_attempts"], params.resolver_max_attempts ?? 2, 'min="1" max="5" step="1"', inlineFindings(step, "resolver_max_attempts"))}
                             </div>
                         `)}
@@ -1776,7 +1776,7 @@
         const defaults = {
             LlamaCloudSplitTask: { enabled: true, api_key: "", allow_uncategorized: "include", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
             ExtractPdfTask: { api_key: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
-            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", resolution_mode: "document", resolver_model: "qwen3.5:9b-q4_K_M", resolver_max_dimension: 1280, resolver_num_ctx: 8192, resolver_num_predict: 1536, resolver_max_attempts: 2, dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
+            GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", resolution_mode: "document", resolver_model: "qwen3.5:9b-q4_K_M", resolver_max_dimension: 1280, resolver_num_ctx: 8192, resolver_num_predict: 10000, resolver_max_attempts: 2, dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
             AssignNanoidTask: { length: 10 },
             StoreMetadataAsCsv: { data_dir: "data", filename: "{id}" },
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },

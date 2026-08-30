@@ -89,7 +89,7 @@ def test_document_resolver_prompt_bounds_large_candidate_evidence() -> None:
     assert len(prompt) < 27000
 
 
-def test_table_evidence_resolver_prompt_is_image_independent_and_repairs_cells() -> None:
+def test_table_evidence_resolver_prompt_maps_images_and_repairs_cells() -> None:
     prompt = build_table_evidence_resolver_prompt(
         "items",
         {
@@ -111,14 +111,36 @@ def test_table_evidence_resolver_prompt_is_image_independent_and_repairs_cells()
             }
         ],
         page_count=2,
+        image_page_numbers=[1],
     )
 
-    assert "No document images are supplied" in prompt
-    assert "structured GLM-OCR page evidence" in prompt
+    assert "source page images" in prompt
+    assert "PDF pages [1]" in prompt
+    assert "authoritative evidence" in prompt
+    assert "different tables" in prompt
     assert "joined together" in prompt
     assert "reassign only explicit substrings" in prompt
     assert "Furniture, FUR-CH-4421" in prompt
     assert "pages 1 through 2" in prompt
+
+
+@pytest.mark.parametrize("image_pages", [[], [0], [3], [1, 1], [True]])
+def test_table_evidence_resolver_prompt_rejects_invalid_image_pages(
+    image_pages,
+) -> None:
+    with pytest.raises(ValueError, match="image pages"):
+        build_table_evidence_resolver_prompt(
+            "items",
+            {
+                "alias": "Items",
+                "type": "List[Any]",
+                "is_table": True,
+                "item_fields": {"name": {"alias": "Name", "type": "str"}},
+            },
+            [{"page_number": 1, "value": {"name": "A"}}],
+            page_count=2,
+            image_page_numbers=image_pages,
+        )
 
 
 @pytest.mark.parametrize("value", ["raw", "", None])

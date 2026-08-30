@@ -1203,14 +1203,18 @@ pipeline:
     required in that mode; the visual editor initially suggests
     `qwen3.5:9b-q4_K_M`.
   - `resolver_max_dimension`: longest edge, in pixels, for page images sent to
-    scalar/object resolver calls; default `1280`, allowed range 256 through
-    4096. Table resolution uses structured row evidence rather than these page
-    images.
+    resolver calls; default `1280`, allowed range 256 through 4096. Scalar and
+    object fields use all ordered pages. Each table evidence chunk uses only its
+    referenced source pages so the resolver can inspect visible table and
+    section boundaries without loading unrelated pages.
   - `resolver_num_ctx`: positive resolver context size; default `8192`.
   - `resolver_num_predict`: positive resolver output-token limit; default
-    `1536`.
+    `10000`. The resolver context must still be large enough for the prompt and
+    requested output; increase `resolver_num_ctx` separately when required.
   - `resolver_max_attempts`: maximum attempts for a field or table evidence
-    chunk; default `2`, allowed range 1 through 5.
+    chunk; default `2`, allowed range 1 through 5. A table chunk that reaches the
+    resolver output limit is split into smaller evidence chunks instead of
+    repeating the same oversized request.
   - `dpi`: positive integer PDF render resolution; default `216`.
   - `num_ctx`: positive integer model context size; default `8192`.
   - `num_predict`: positive integer output-token limit; default `2048`.
@@ -1424,7 +1428,7 @@ tasks:
       resolver_model: qwen3.5:9b-q4_K_M
       resolver_max_dimension: 1280
       resolver_num_ctx: 8192
-      resolver_num_predict: 1536
+      resolver_num_predict: 10000
       resolver_max_attempts: 2
       dpi: 216
       num_ctx: 8192

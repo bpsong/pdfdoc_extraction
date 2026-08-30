@@ -315,6 +315,11 @@ Dynamic task imports are allow-listed by exact module/class pair.
 - **Configuration validation:** Update the runtime/config-check validators,
   schemas, examples, and documentation when a task introduces new parameters
   or pipeline-order constraints.
+- **Bounded multimodal evidence:** When a local resolver combines structured
+  candidates with source images, map each image to its source page explicitly
+  and send only the pages needed for that decision. If an output-token limit is
+  reached, reduce or split the evidence before retrying rather than repeating an
+  unchanged oversized request.
 
 ---
 

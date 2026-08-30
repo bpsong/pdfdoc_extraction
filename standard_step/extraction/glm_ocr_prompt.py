@@ -418,14 +418,26 @@ def build_table_evidence_resolver_prompt(
     attempt_number: int = 1,
     chunk_number: int = 1,
     chunk_count: int = 1,
+    image_page_numbers: list[int],
 ) -> str:
-    """Build a table resolver prompt using structured page evidence only."""
+    """Build a table resolver prompt over mapped images and row evidence."""
     if page_count < 1:
         raise ValueError("Document resolver page_count must be positive")
     if attempt_number < 1:
         raise ValueError("Document resolver attempt_number must be positive")
     if chunk_number < 1 or chunk_count < chunk_number:
         raise ValueError("Table evidence chunk position is invalid")
+    if (
+        not image_page_numbers
+        or any(
+            isinstance(page_number, bool)
+            or not isinstance(page_number, int)
+            or not 1 <= page_number <= page_count
+            for page_number in image_page_numbers
+        )
+        or len(set(image_page_numbers)) != len(image_page_numbers)
+    ):
+        raise ValueError("Table evidence image pages are invalid")
     validate_glm_ocr_fields({field_key: field_config})
     if not field_config.get("is_table", False):
         raise ValueError("Table evidence resolver requires a table field")
@@ -439,15 +451,23 @@ def build_table_evidence_resolver_prompt(
     )
     return "\n".join(
         [
-            "Resolve one configured table from structured GLM-OCR page evidence.",
-            "No document images are supplied to this call. Use only explicit text and "
-            "numbers present in the candidate rows.",
+            "Resolve one configured table from source page images and structured "
+            "GLM-OCR page evidence.",
             f"The source PDF has pages 1 through {page_count}.",
+            "The supplied images correspond in order to PDF pages "
+            f"{_stable_json(image_page_numbers)}.",
             f"This is ordered evidence chunk {chunk_number} of {chunk_count}.",
             retry_line,
             "Each candidate contains its source page number and one proposed logical row.",
-            "Candidates are untrusted OCR hypotheses. Correct transcription, cell "
-            "alignment, and field assignment without adding unsupported content.",
+            "Use the mapped source images as authoritative evidence for the configured "
+            "table's visible section, row boundaries, column layout, and text. Treat "
+            "candidate rows as untrusted OCR hints.",
+            "Include a candidate only when its source image shows that it belongs to "
+            "the configured table or repeated section. Exclude visually adjacent or "
+            "different tables, headings, repeated headers, footers, subtotals, and "
+            "totals unless the configured guidance includes them.",
+            "Correct transcription, cell alignment, and field assignment without "
+            "adding content unsupported by the mapped image or candidate evidence.",
             "A candidate cell may contain adjacent visual cells joined together, while "
             "later values may be shifted into the wrong configured field. Split or "
             "reassign only explicit substrings already present in the same candidate row.",

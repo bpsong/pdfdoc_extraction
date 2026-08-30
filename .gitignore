@@ -58,6 +58,7 @@ test/files/
 # Generated output
 output/playwright/
 tmp/
+experimenta/results/
 node_modules/
 
 # Standard Python ignores

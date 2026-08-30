@@ -354,8 +354,91 @@ def test_document_mode_resolves_each_field_against_all_ordered_pages(
         for image in request["messages"][0]["images"]:
             pixmap = pymupdf.Pixmap(image)
             assert max(pixmap.width, pixmap.height) <= 1280
-    assert "images" not in requests[2]["messages"][0]
-    assert "No document images are supplied" in requests[2]["messages"][0]["content"]
+    assert len(requests[2]["messages"][0]["images"]) == 2
+    assert "PDF pages [1,2]" in requests[2]["messages"][0]["content"]
+
+
+def test_document_table_sends_only_candidate_source_page_images(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "selected-table-pages.pdf", page_count=3)
+    rows = [
+        {"sku": "A", "quantity": 1},
+        {"sku": "C", "quantity": 3},
+    ]
+    client = _client(
+        _response({"items": [rows[0]]}),
+        _response({"items": []}),
+        _response({"items": [rows[1]]}),
+    )
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.return_value = _chat_response(
+        {"value": rows, "page_numbers": [1, 3]}
+    )
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+    ).extract(str(pdf_path), {"items": _fields()["items"]})
+
+    assert result.data == {"items": rows}
+    assert result.field_pages == {"items": [1, 3]}
+    message = client.chat.call_args.kwargs["messages"][0]
+    assert len(message["images"]) == 2
+    assert "PDF pages [1,3]" in message["content"]
+
+
+def test_document_table_splits_evidence_after_resolver_token_limit(
+    tmp_path: Path,
+) -> None:
+    pdf_path = _make_pdf(tmp_path / "split-table-evidence.pdf")
+    rows = [
+        {"sku": "A", "quantity": 1},
+        {"sku": "B", "quantity": 2},
+        {"sku": "C", "quantity": 3},
+    ]
+    client = _client(_response({"items": rows}))
+    client.list.return_value = {
+        "models": [
+            {"model": "glm-ocr:latest"},
+            {"model": "qwen3.5:9b-q4_K_M"},
+        ]
+    }
+    client.chat.side_effect = [
+        _chat_response({}, reason="length"),
+        _chat_response({"value": rows[:1], "page_numbers": [1]}),
+        _chat_response({"value": rows[1:], "page_numbers": [1]}),
+    ]
+
+    result = _adapter(
+        client,
+        resolution_mode="document",
+        resolver_model="qwen3.5:9b-q4_K_M",
+        resolver_max_attempts=1,
+    ).extract(str(pdf_path), {"items": _fields()["items"]})
+
+    assert result.data == {"items": rows}
+    assert client.chat.call_count == 3
+    assert [record.call_type for record in result.calls[-2:]] == [
+        "document_table",
+        "document_table",
+    ]
+    assert any(
+        item.code == "resolver_chunk_split" for item in result.findings
+    )
+    prompts = [
+        call.kwargs["messages"][0]["content"]
+        for call in client.chat.call_args_list
+    ]
+    assert "chunk 1 of 1" in prompts[0]
+    assert "chunk 1 of 2" in prompts[1]
+    assert "chunk 2 of 2" in prompts[2]
 
 
 def test_document_mode_retries_an_unresolved_required_field(
@@ -593,7 +676,8 @@ def test_document_mode_preserves_legitimate_duplicate_rows(
     assert result.data == {"items": [row, row]}
     assert result.field_pages == {"items": [1]}
     message = client.chat.call_args.kwargs["messages"][0]
-    assert "images" not in message
+    assert len(message["images"]) == 1
+    assert "PDF pages [1]" in message["content"]
     assert "Structured candidate rows" in message["content"]
 
 
@@ -639,7 +723,7 @@ def test_document_table_reassigns_only_structured_candidate_cells(
         "items": [{"sku": "FUR-CH-4421", "quantity": 1}]
     }
     request = client.chat.call_args.kwargs
-    assert "images" not in request["messages"][0]
+    assert len(request["messages"][0]["images"]) == 1
     assert "Furniture | FUR-CH-4421 | 1" in request["messages"][0]["content"]
 
 

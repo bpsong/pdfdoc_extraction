@@ -114,11 +114,12 @@ result to the same top-level `context["data"]` field contract. In document
 resolution mode, GLM-OCR produces page-level candidates and a separately
 configured local model resolves scalar and object fields independently against
 bounded copies of all ordered page images. Tables are reconciled from bounded
-chunks of structured GLM-OCR row evidence without attaching page images to the
-resolver call. Legacy page-merge mode remains available for published pipelines
-that do not opt in. The task does not start or supervise Ollama. It uses the
-native Ollama API only; PP-DocLayout and the full GLM-OCR SDK are not runtime
-components.
+chunks of structured GLM-OCR row evidence plus bounded copies of only the source
+pages represented by each chunk. If a table resolver reaches its output-token
+limit, the task splits that evidence chunk before trying again. Legacy page-merge
+mode remains available for published pipelines that do not opt in. The task does
+not start or supervise Ollama. It uses the native Ollama API only; PP-DocLayout
+and the full GLM-OCR SDK are not runtime components.
 
 The GLM-OCR implementation has no invoice-specific output contract. Versioned
 pipeline configuration supplies document instructions and dynamic scalar, flat
