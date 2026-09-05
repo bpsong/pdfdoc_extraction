@@ -241,7 +241,7 @@ def test_active_yaml_and_schemas_import_idempotently_with_collisions(
     assert stat.S_IMODE(config._config_path.stat().st_mode) == original_mode
     assert (first / "invoice.yaml").exists()
     assert (second / "invoice.json").exists()
-    assert migration_versions == {2, 3}
+    assert migration_versions == {2, 3, 4}
     assert SECRET_VALUE not in caplog.text
 
 
@@ -279,7 +279,7 @@ def test_committed_partial_attempt_with_matching_hash_resumes_without_duplicates
     _prepare_v2(config)
     initialize_database(config)
     with connect(config) as conn:
-        conn.execute("DELETE FROM schema_migrations WHERE version = 3")
+        conn.execute("DELETE FROM schema_migrations WHERE version >= 3")
         conn.commit()
         before = (
             conn.execute("SELECT COUNT(*) FROM pipeline_templates").fetchone()[0],

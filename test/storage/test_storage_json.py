@@ -275,7 +275,11 @@ def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager, pa
     config_manager_with_table = DummyConfigManager(config_with_table)
 
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
-    task = StoreMetadataAsJson(cast(ConfigManager, config_manager_with_table), **params)
+    task = StoreMetadataAsJson(
+        cast(ConfigManager, config_manager_with_table),
+        extraction={"fields": config_with_table["extract_document_data"]["params"]["fields"]},
+        **params,
+    )
 
     # Include non-dict items in the table
     context = {

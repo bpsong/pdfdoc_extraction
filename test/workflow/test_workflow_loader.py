@@ -17,8 +17,20 @@ def reset_singletons():
     yield
 
 @pytest.fixture
-def config_path():
-    return "test/data/workflow_loader_config.yaml"
+def config_path(tmp_path):
+    """Build synthetic task definitions instead of loading ignored local YAML."""
+    names = ["mock_extraction_task", "mock_storage_task", "mock_cleanup_task", "unreal_task", "error_task"]
+    classes = ["MockExtractionTask", "MockStorageTask", "MockCleanupTask", "UnrealTask", "ErrorTask"]
+    definition = {
+        "pipeline": names,
+        "tasks": {
+            name: {"module": "tests", "class": cls, "params": {}, "on_error": "stop"}
+            for name, cls in zip(names, classes)
+        },
+    }
+    path = tmp_path / "workflow.yaml"
+    path.write_text(yaml.safe_dump(definition), encoding="utf-8")
+    return path
 
 @pytest.fixture
 def initial_context():
@@ -51,7 +63,9 @@ def mock_all_dependencies(mocker, config_path, reset_singletons):
     mock_config_manager.get_all.return_value = test_config_data # Mock get_all for the new ConfigManager method
 
     # Instantiate WorkflowLoader *here* after all mocks are set up
-    loader = WorkflowLoader(mock_config_manager)
+    loader = WorkflowLoader(
+        mock_config_manager, definition=test_config_data, pipeline_version_id="test-version"
+    )
 
     # Test-only: Patch the Prefect `task` decorator used in modules.workflow_loader
     # so wrapped task functions return a plain dict with a 'result' key. In the

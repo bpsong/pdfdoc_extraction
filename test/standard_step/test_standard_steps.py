@@ -41,7 +41,7 @@ def archive_dir_param():
 
 # Archiver Tests
 @patch("standard_step.archiver.archive_pdf.windows_long_path", side_effect=lambda x: x)
-def test_init_with_param_and_fallback(mock_windows_long_path, config_manager_mock, archive_dir_param):
+def test_init_uses_explicit_params_without_yaml_fallback(mock_windows_long_path, config_manager_mock, archive_dir_param):
     # archive_dir provided in params
     task = ArchivePdfTask(config_manager_mock, archive_dir=archive_dir_param)
     assert task.archive_dir == archive_dir_param
@@ -50,8 +50,8 @@ def test_init_with_param_and_fallback(mock_windows_long_path, config_manager_moc
     # archive_dir fallback to config manager
     config_manager_mock.get.return_value = r"C:\config_archive_dir"
     task2 = ArchivePdfTask(config_manager_mock)
-    assert task2.archive_dir == r"C:\config_archive_dir"
-    mock_windows_long_path.assert_called_with(r"C:\config_archive_dir")
+    assert task2.archive_dir == ""
+    mock_windows_long_path.assert_called_with("")
 
     # archive_dir fallback to empty string if none provided
     config_manager_mock.get.return_value = None

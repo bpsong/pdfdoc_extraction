@@ -5,7 +5,7 @@ from modules.services.batch_service import BatchService
 from modules.services.review_service import ReviewService
 from modules.workflow_loader import WorkflowLoader
 from standard_step.review.review_gate import ReviewGateTask
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline, assign_pipeline
 from test.workflow.test_workflow_task_run_tracking import _patch_prefect
 
 
@@ -29,12 +29,27 @@ def test_review_pause_and_completion_resumes_from_next_task(tmp_path, monkeypatc
         },
     )
     initialize_database(config)
+    from modules.services.review_schema_version_service import ReviewSchemaVersionService
+    from modules.services.pipeline_definition_service import PipelineDefinitionService
+    with connect(config) as conn:
+        schemas = ReviewSchemaVersionService(conn)
+        template = schemas.create_template(
+            schema_key="supplier",
+            name="Supplier",
+            initial_schema={"fields": {"supplier": {"type": "string", "required": True}}},
+            user="admin",
+        )
+        schema = schemas.publish(template["template"]["id"], expected_revision=1, user="admin")["version"]
+    config._values["tasks"]["review_gate"]["params"]["schema_version_id"] = schema["id"]
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(pdf_path),
             original_filename="invoice.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
 
     stored_contexts = []
 
@@ -85,7 +100,11 @@ def test_review_pause_and_completion_resumes_from_next_task(tmp_path, monkeypatc
     )
     WorkflowLoader._instance = None
 
-    workflow = WorkflowLoader(config).load_workflow()
+    with connect(config) as conn:
+        executable = PipelineDefinitionService(conn, config).load_version(version["id"])
+    workflow = WorkflowLoader(
+        config, definition=executable.definition, pipeline_version_id=version["id"], pipeline_template_id=version["template_id"]
+    ).load_workflow()
     assert workflow is not None
     paused_context = workflow(
         {

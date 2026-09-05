@@ -12,7 +12,7 @@ from modules.workflow_loader import WorkflowLoader
 from modules.workflow_manager import WorkflowManager
 from standard_step.split.llamacloud_split import LlamaCloudSplitTask
 from standard_step.split.llamacloud_split_adapter import SplitResult, SplitSegment
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline, assign_pipeline
 from test.workflow.test_workflow_task_run_tracking import _patch_prefect
 
 
@@ -67,7 +67,6 @@ def test_split_fan_in_finalizes_root_and_batch_after_child_workflows(tmp_path, m
                     "class": "LlamaCloudSplitTask",
                     "params": {
                         "enabled": True,
-                        "adapter": FakeSplitAdapter(),
                         "categories": [{"name": "invoice"}],
                         "split_dir": str(tmp_path / "split"),
                     },
@@ -83,12 +82,15 @@ def test_split_fan_in_finalizes_root_and_batch_after_child_workflows(tmp_path, m
         },
     )
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(source),
             original_filename="bundle.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
 
     class FakeLeafDoneTask:
         def __init__(self, config_manager, **params):
@@ -119,7 +121,9 @@ def test_split_fan_in_finalizes_root_and_batch_after_child_workflows(tmp_path, m
         WorkflowLoader,
         "_import_task_class",
         lambda self, module_name, class_name: {
-            "LlamaCloudSplitTask": LlamaCloudSplitTask,
+            "LlamaCloudSplitTask": lambda config_manager, **params: LlamaCloudSplitTask(
+                config_manager, adapter=FakeSplitAdapter(), **params
+            ),
             "FakeLeafDoneTask": FakeLeafDoneTask,
         }[class_name],
     )

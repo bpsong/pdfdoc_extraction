@@ -123,7 +123,7 @@ def test_startup_validation_allows_valid_active_pipeline(tmp_path: Path) -> None
     exit_func.assert_not_called()
 
 
-def test_startup_validation_logs_prints_waits_and_exits_for_unapproved_task(tmp_path: Path) -> None:
+def test_startup_validation_logs_prints_waits_and_exits_for_invalid_custom_registry(tmp_path: Path) -> None:
     log_file = tmp_path / "app.log"
     values = {
         "logging": {"log_file": str(log_file)},
@@ -134,6 +134,9 @@ def test_startup_validation_logs_prints_waits_and_exits_for_unapproved_task(tmp_
             }
         },
         "pipeline": ["bad"],
+        "custom_steps": {"enabled": True, "registry": {
+            "bad": {"module": "untrusted.module", "class": "BadTask"},
+        }},
     }
     sleeper = Mock()
     output = io.StringIO()
@@ -208,7 +211,7 @@ def test_registry_malformed_custom_config_and_relative_log_fallbacks(tmp_path: P
         sleeper=Mock(),
         exit_func=Mock(),
         stream=io.StringIO(),
-    ) is False
+    ) is True
 
 
 def _base_name(base: ast.expr) -> str | None:

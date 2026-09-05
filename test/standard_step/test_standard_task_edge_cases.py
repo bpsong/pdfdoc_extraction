@@ -440,12 +440,14 @@ def test_split_child_creation_and_rollback_compensation(tmp_path, monkeypatch):
     documents.list_children.return_value = [{"id": "remaining", "status": "queued"}, {"id": "done", "status": "completed"}]
     monkeypatch.setattr(split_module, "release_reserved_filepath", lambda _path: False)
     monkeypatch.setattr(split_module, "BatchRepository", lambda _conn: Mock(recompute_counts=Mock()))
+    state = Mock()
+    monkeypatch.setattr(split_module, "WorkflowStateService", lambda _conn: state)
     task._rollback_partial_children(
         documents=documents, document={"id": "root", "batch_id": "batch"},
         child_ids=["child"], reserved_paths=[tmp_path / "reserved.pdf"],
     )
-    documents.update_status.assert_any_call("remaining", "failed")
-    documents.update_status.assert_any_call("root", "failed")
+    state.transition_document.assert_any_call("remaining", "failed", reason="split_failed")
+    state.transition_document.assert_any_call("root", "failed", reason="split_failed")
 
 
 def test_split_adapter_errors_normalization_and_json_helpers(monkeypatch):

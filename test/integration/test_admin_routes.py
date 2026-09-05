@@ -116,9 +116,16 @@ def test_admin_task_catalog_api_requires_admin(monkeypatch) -> None:
     assert response.json()["detail"] == "Admin role required"
 
 
-def test_admin_task_catalog_api_returns_catalog(monkeypatch) -> None:
+def test_admin_task_catalog_api_returns_catalog(monkeypatch, tmp_path) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
+
+    from modules.db.migrations import initialize_database
+    from test.helpers_sqlite import TempConfig
+    import modules.api_router as api_router
+    dependencies = api_router.get_dependencies()
+    dependencies[0].values["database"]["path"] = str(tmp_path / "catalog.sqlite3")
+    initialize_database(TempConfig(tmp_path / "catalog.sqlite3"))
 
     response = client.get("/api/admin/task-catalog")
 

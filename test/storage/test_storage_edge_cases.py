@@ -35,7 +35,7 @@ def test_storage_constructors_reject_missing_parameters(tmp_path):
     with pytest.raises(TaskError, match="filename"):
         StoreFileToLocaldrive(config, files_dir=str(tmp_path))
 
-    csv_task = StoreMetadataAsCsv(config)
+    csv_task = StoreMetadataAsCsv(config, **config.get_all())
     with pytest.raises(TaskError, match="data_dir"):
         csv_task.validate_required_fields({"data": {}})
     csv_task.data_dir_template = str(tmp_path)
@@ -63,7 +63,7 @@ def test_csv_helpers_cover_detection_cleaning_and_aliases(tmp_path):
 
 def test_csv_run_handles_missing_invalid_and_irregular_table_data(tmp_path, monkeypatch):
     config = Config({"data_dir": str(tmp_path), "filename": "{missing}"})
-    task = StoreMetadataAsCsv(config)
+    task = StoreMetadataAsCsv(config, **config.get_all())
 
     context = {"id": "doc", "data": None}
     assert task.run(context) is context
@@ -99,7 +99,7 @@ def test_csv_run_handles_missing_invalid_and_irregular_table_data(tmp_path, monk
     assert failed["error_step"] == "StoreMetadataAsCsv"
     monkeypatch.setattr("standard_step.storage.store_metadata_as_csv.csv.DictWriter", original_dict_writer)
 
-    scalar_task = StoreMetadataAsCsv(Config({"data_dir": str(tmp_path), "filename": "{empty}"}))
+    scalar_task = StoreMetadataAsCsv(Config(), data_dir=str(tmp_path), filename="{empty}")
     scalar_task.filename_template = "{empty}"
     scalar_task._detect_table_field = Mock(return_value=None)
     monkeypatch.setattr(csv_module, "sanitize_filename", lambda _value: "")
@@ -108,7 +108,7 @@ def test_csv_run_handles_missing_invalid_and_irregular_table_data(tmp_path, monk
     empty_list_result = scalar_task.run({"id": "empty-list", "data": {"empty_list": []}})
     assert Path(empty_list_result["output_path"]).exists()
 
-    table_task = StoreMetadataAsCsv(Config({"data_dir": str(tmp_path), "filename": "{id}"}))
+    table_task = StoreMetadataAsCsv(Config(), data_dir=str(tmp_path), filename="{id}")
     table_task.extraction_fields = {"items": {"is_table": True}}
     empty_table = table_task.run({"id": "empty", "data": {"items": [], "value": 1}})
     assert Path(empty_table["output_path"]).exists()
@@ -185,7 +185,7 @@ def test_json_helpers_and_error_paths(tmp_path, monkeypatch):
 
 
 def test_csv_defensive_table_and_header_shape_branches(tmp_path, monkeypatch):
-    task = StoreMetadataAsCsv(Config({"data_dir": str(tmp_path), "filename": "{id}"}))
+    task = StoreMetadataAsCsv(Config(), data_dir=str(tmp_path), filename="{id}")
     task.extraction_fields = {
         "items": {"is_table": True, "item_fields": {"value": {"type": "str"}}},
         "scalar": {"alias": "Scalar"},

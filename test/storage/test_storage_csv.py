@@ -66,7 +66,7 @@ def test_scalar_only_fallback_writes_single_row(tmp_path, sample_extraction_conf
     cfg["extraction"]["fields"].pop("items")
     
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {
         "id": "test-1",
@@ -117,7 +117,7 @@ def test_versioned_pipeline_does_not_inherit_yaml_extraction_fields(tmp_path):
             }
         ),
     )
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
     context = {
         "id": "versioned-csv",
         "pipeline_version_id": "pipeline-version-1",
@@ -158,6 +158,8 @@ def test_versioned_pipeline_uses_explicit_csv_extraction_fields(tmp_path):
     )
     task = StoreMetadataAsCsv(
         config_manager,
+        data_dir=str(tmp_path),
+        filename="{supplier_name}",
         extraction={
             "fields": {
                 "supplier_name": {
@@ -187,7 +189,7 @@ def test_table_expands_rows_per_item_and_prefixes_item_columns(tmp_path, sample_
     cfg = dict(sample_extraction_config)
     cfg["data_dir"] = str(tmp_path)
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {
         "id": "test-2",
@@ -228,7 +230,7 @@ def test_empty_table_fallbacks_to_single_row(tmp_path, sample_extraction_config)
     cfg = dict(sample_extraction_config)
     cfg["data_dir"] = str(tmp_path)
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {
         "id": "test-3",
@@ -255,7 +257,7 @@ def test_filename_generation_template_and_uniqueness(tmp_path, sample_extraction
     cfg["data_dir"] = str(tmp_path)
     cfg["filename"] = "{supplier_name}_{invoice_amount}"
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {
         "id": "test-4",
@@ -285,7 +287,7 @@ def test_error_handling_updates_context_and_status_on_exception(tmp_path, sample
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
     
     # Create a task but patch its _generate_unique_filepath to raise
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     def raise_err(*args, **kwargs):
         raise RuntimeError("disk error")
@@ -331,7 +333,7 @@ def test_empty_data_dict_creates_minimal_csv(tmp_path, sample_extraction_config)
     cfg = dict(sample_extraction_config)
     cfg["data_dir"] = str(tmp_path)
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {"id": "empty-data", "data": {}}
 
@@ -349,7 +351,7 @@ def test_non_list_table_field_treated_as_scalar(tmp_path, sample_extraction_conf
     cfg = dict(sample_extraction_config)
     cfg["data_dir"] = str(tmp_path)
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     # Make the table field a string instead of a list
     context = {
@@ -388,7 +390,7 @@ def test_mixed_table_items_converts_non_dicts(tmp_path, sample_extraction_config
     }
 
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {
         "id": "mixed-items",
@@ -448,7 +450,7 @@ def test_special_characters_and_newlines_in_csv_data(tmp_path, sample_extraction
     # Use a simpler filename template to avoid special character issues
     cfg["filename"] = "{supplier_name}_{invoice_amount}"
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     context = {
         "id": "special-chars",
@@ -485,7 +487,7 @@ def test_large_dataset_csv_handling(tmp_path, sample_extraction_config):
     cfg = dict(sample_extraction_config)
     cfg["data_dir"] = str(tmp_path)
     config_manager = cast(ConfigManager, DummyConfigManager(cfg))
-    task = StoreMetadataAsCsv(config_manager, params={})
+    task = StoreMetadataAsCsv(config_manager, **config_manager.get_all())
 
     # Create large dataset
     large_items = [{"description": f"Item {i}", "quantity": str(i), "value": str(i * 1.5)} for i in range(100)]

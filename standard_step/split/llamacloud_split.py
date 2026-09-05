@@ -467,10 +467,10 @@ class LlamaCloudSplitTask(BaseTask):
 
         for child in remaining_children:
             if child.get("status") not in {"completed", "failed"}:
-                    WorkflowStateService(conn).transition_document(
-                        str(child["id"]), "failed", reason="split_failed"
-                    )
-        WorkflowStateService(conn).transition_document(
+                WorkflowStateService(documents.conn).transition_document(
+                    str(child["id"]), "failed", reason="split_failed"
+                )
+        WorkflowStateService(documents.conn).transition_document(
             str(document["id"]), "failed", reason="split_failed"
         )
         BatchRepository(documents.conn).recompute_counts(str(document["batch_id"]))

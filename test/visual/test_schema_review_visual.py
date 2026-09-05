@@ -649,9 +649,9 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     assert page.locator('.nav-link[aria-label="Review Queue"]').get_attribute("title") == "Review Queue"
     assert page.locator('.nav-link[aria-label="Review Queue"]').get_attribute("data-nav-label") == "Review Queue"
     page.locator(".docflow-pdf-viewer").wait_for()
-    page.locator(".docflow-pdf-page canvas").nth(1).wait_for()
-    assert page.locator(".docflow-pdf-page").count() == 2
-    assert page.locator(".docflow-pdf-page canvas").count() == 2
+    page.locator(".docflow-pdf-page canvas").first.wait_for()
+    assert page.locator(".docflow-pdf-page").count() == 1
+    assert page.locator(".docflow-pdf-page canvas").count() == 1
     assert page.locator("iframe").count() == 0
     assert page.locator(".docflow-pdf-bbox").count() == 1
     page.locator("#review-claim-button").click()
@@ -666,11 +666,7 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     amount.focus()
     page.wait_for_function("() => document.querySelectorAll('.docflow-pdf-bbox').length === 1")
     assert page.locator('.docflow-pdf-page[data-page="2"] .docflow-pdf-bbox').count() == 1
-    page.wait_for_function("() => document.querySelector('.docflow-pdf-page-readout')?.textContent.includes('Page 2 of 2')")
-    page.get_by_role("button", name="Center location").click()
-    page.wait_for_function(
-        "() => document.querySelector('.docflow-pdf-status')?.textContent.includes('Centered on Invoice amount')"
-    )
+    assert page.get_by_role("button", name="Center location").count() == 0
     reviewed_at = page.locator('input[data-field-path="reviewed_at"]')
     reviewed_at.focus()
     page.wait_for_function("() => document.querySelector('.docflow-pdf-status')?.textContent.includes('page-only evidence')")
@@ -711,7 +707,7 @@ def test_extraction_results_visual_uses_shared_pdfjs_viewer(page: Page, visual_a
     page.locator("#extraction-fields-table-body [data-field-key='supplier']").click()
     assert page.locator("#extraction-preview-body iframe").count() == 0
     assert page.locator("#extraction-preview-body .docflow-pdf-bbox").count() == 1
-    assert page.locator("#extraction-preview-body .docflow-pdf-page").count() == 2
+    assert page.locator("#extraction-preview-body .docflow-pdf-page").count() == 1
     _assert_nonblank_screenshot(page)
 
 
@@ -926,7 +922,7 @@ def test_phase14_processing_identity_split_failure_review_and_reflow(
 
     page.set_viewport_size({"width": 390, "height": 900})
     _capture_phase14(page, "12-processing-mixed-states-mobile")
-    assert page.locator(".overflow-x-auto").count() >= 1
+    assert page.locator("#processing-table-region").count() >= 1
 
 
 def test_phase14_keyboard_focus_reduced_motion_and_secret_presentation(

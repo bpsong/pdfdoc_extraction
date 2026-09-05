@@ -1,8 +1,8 @@
 # Change summary — 2026-09-05
 
 This checkpoint records the accumulated local changes and the previously
-unpushed `b41de23` commit ("experiment a"). It is a work-in-progress snapshot:
-the full test run has failures, recorded below, and is not a release certification.
+unpushed `b41de23` commit ("experiment a"). The associated test suite repairs
+are included in the follow-up commit after this checkpoint.
 
 ## Processing and workflow state
 
@@ -68,8 +68,9 @@ the full test run has failures, recorded below, and is not a release certificati
   2 passed.
 - `.\.venv\Scripts\python.exe -m pytest -v`: interrupted after reaching the
   live third-party connection test. The replacement run explicitly excludes it.
-- `.\.venv\Scripts\python.exe -m pytest -v --ignore=test/third_party/llamacloud_connection_test.py --tb=no`: **1305 passed, 73 failed, 4 skipped, 1 error, 1 warning**
-  in 297.72 seconds. Failures remain unresolved in this snapshot.
+- `.\.venv\Scripts\python.exe -m pytest -q --tb=short --ignore=test/third_party/llamacloud_connection_test.py`:
+  **1379 passed, 4 skipped, 1 warning** in 168.70 seconds. The warning is a
+  Python `runpy` warning from a config-check CLI branch test.
 - `git -c core.safecrlf=false diff --check`: passed before staging.
 - Reviewed changed/new file paths and credential-pattern matches; matches were
   documentation placeholders or synthetic test values. Raw extraction data was
@@ -79,8 +80,9 @@ the full test run has failures, recorded below, and is not a release certificati
 
 ## Follow-up
 
-- [ ] Resolve the full-suite failures before treating this checkpoint as a
-  validated release.
+- [x] Update stale tests for version-pinned workflow execution, durable queue
+  processing, explicit task configuration, and active-page PDF rendering.
+- [x] Repair child-workflow rollback to use the active SQLite connection.
 
 ## File inventory for this checkpoint
 
@@ -217,10 +219,11 @@ and related GLM-OCR adapter/prompt changes described above.
 - `web/templates/split_results.html`
 - `web/templates/upload_process.html`
 
-## Failing checks requiring follow-up
+## Initial failing checks repaired in the follow-up
 
-These are test identifiers from the completed run. Root causes have not been
-established; private payloads and traceback contents are excluded.
+These test identifiers failed in the original checkpoint run. They now pass in
+the complete offline suite recorded above; this list is retained as the repair
+scope, without private payloads or traceback contents.
 
 - `FAILED test/core/test_core_components.py::test_file_processor_initialization_and_process_file`
 - `FAILED test/core/test_misc_edge_coverage.py::test_file_processor_configuration_and_io_failures`

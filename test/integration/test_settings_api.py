@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
 from modules.db.migrations import initialize_database
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline
 
 
 def _config(tmp_path: Path) -> TempConfig:
@@ -70,6 +70,7 @@ def _config(tmp_path: Path) -> TempConfig:
         },
     )
     initialize_database(config)
+    seed_pipeline(config)
     return config
 
 

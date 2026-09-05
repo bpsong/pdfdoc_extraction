@@ -90,9 +90,10 @@ def test_auth_token_default_expiration_and_base_task_contract() -> None:
     assert timedelta(minutes=5)
 
 
-def test_config_manager_missing_and_invalid_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_config_manager_missing_and_invalid_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     manager = object.__new__(config_module.ConfigManager)
     manager.logger = Mock()
+    manager._config_path = tmp_path / "config.yaml"
     manager.config = {"nested": "scalar"}
     assert manager.get("nested.value", "fallback") == "fallback"
 
@@ -117,13 +118,14 @@ def test_connection_json_invalid_text_and_batch_empty_progress() -> None:
 def test_document_artifact_user_and_portable_defensive_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     service = document_service.DocumentService.__new__(document_service.DocumentService)
     service.documents = Mock()
+    service.state = Mock()
     service.task_runs = Mock()
     service.extractions = Mock()
     service.reviews = Mock()
     service.documents.get.return_value = None
     assert service.get_document("missing") is None
     service.update_status("doc", "queued")
-    service.documents.update_status.assert_called_once_with("doc", "queued")
+    service.state.transition_document.assert_called_once_with("doc", "queued")
     assert service.get_details("missing") is None
 
     monkeypatch.setattr(artifact_service, "connect", lambda _config: nullcontext(object()))
@@ -531,8 +533,10 @@ def test_workflow_loader_and_manager_defensive_child_paths(monkeypatch) -> None:
     manager._mark_document_failed("doc", "reason")
     repository.get.side_effect = None
     repository.get.return_value = {"id": "doc"}
+    state = Mock()
+    monkeypatch.setattr(workflow_manager_module, "WorkflowStateService", lambda _conn: state)
     manager._mark_document_failed("doc", "reason")
-    repository.update_status.assert_called_once_with("doc", "failed")
+    state.transition_document.assert_called_once_with("doc", "failed", reason="reason")
     manager.config_manager.get.return_value = []
     assert manager._task_at_index(0) == (None, {})
     assert manager._task_at_index(0, definition={"pipeline": ["x"], "tasks": "bad"}) == ("x", {})

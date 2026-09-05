@@ -12,7 +12,7 @@ from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.services.batch_service import BatchService
 from modules.workflow_manager import WorkflowManager
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline, assign_pipeline
 
 
 @dataclass
@@ -120,6 +120,7 @@ def test_configured_workflow_uses_sqlite_state_without_status_text_files(
 ) -> None:
     config = _config(tmp_path)
     initialize_database(config)
+    version = seed_pipeline(config)
     source_pdf = tmp_path / "processing" / "doc-1.pdf"
     source_pdf.write_bytes(b"%PDF-1.4\n% test")
 
@@ -130,6 +131,8 @@ def test_configured_workflow_uses_sqlite_state_without_status_text_files(
             original_filename="invoice.pdf",
             document_id="doc-1",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
     batch_id = created["batch"]["id"]
     document_id = created["document"]["id"]
 

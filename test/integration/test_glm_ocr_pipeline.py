@@ -25,6 +25,7 @@ from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from modules.services.review_service import ReviewService
 from modules.services.watch_folder_coordinator import WatchFolderCoordinator
+from modules.services.processing_worker import ProcessingWorker
 from modules.workflow_manager import WorkflowManager
 from standard_step.extraction.glm_ocr_adapter import GlmOcrAdapterResult
 from test.helpers_sqlite import TempConfig
@@ -322,14 +323,7 @@ def test_upload_and_watch_workflows_pause_review_resume_and_export_separately(
     upload_pdf.write_bytes(b"%PDF-1.4\n% upload")
     uploaded = _ingest_upload(config, version["id"], upload_pdf)
     upload_document = uploaded["documents"][0]
-    assert WorkflowManager(config).trigger_workflow_for_file(
-        str(upload_pdf),
-        upload_document["id"],
-        upload_pdf.name,
-        "web",
-        batch_id=uploaded["batch"]["id"],
-        document_id=upload_document["id"],
-    )
+    assert ProcessingWorker(config, file_processor=_WorkflowProcessor(config)).run_once()
 
     with connect(config) as conn:
         upload_result = ExtractionRepository(conn).get_latest_result(
@@ -397,6 +391,8 @@ def test_upload_and_watch_workflows_pause_review_resume_and_export_separately(
     watch_pdf.write_bytes(b"%PDF-1.4\n% watch")
     coordinator = WatchFolderCoordinator(config, _WorkflowProcessor(config))
     assert coordinator.scan_once() == 1
+    worker = ProcessingWorker(config, file_processor=_WorkflowProcessor(config))
+    assert worker.run_once() is True
 
     with connect(config) as conn:
         watched_documents = conn.execute(

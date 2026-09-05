@@ -61,16 +61,11 @@ def test_file_processor_configuration_and_io_failures(tmp_path, monkeypatch):
         processor.process_web_upload(io.BytesIO(b"%PDF-"))
 
     monkeypatch.undo()
-    monkeypatch.setattr(
-        "modules.file_processor.initialize_database",
-        Mock(side_effect=RuntimeError("database failed")),
-    )
-    assert processor._create_sqlite_ingestion_state(
-        filepath="file.pdf",
-        unique_id="id",
-        source="web",
-        original_filename="file.pdf",
-    ) == (None, None)
+    with pytest.raises(ValueError, match="exact published pipeline assignment"):
+        processor._create_sqlite_ingestion_state(
+            filepath="file.pdf", unique_id="id", source="web", original_filename="file.pdf",
+        )
+
 
 
 def test_config_validation_payload_shapes(tmp_path):
@@ -130,6 +125,7 @@ def test_reports_helpers_and_invalid_table():
 
 def test_runtime_settings_invalid_pipeline_and_redaction():
     service = object.__new__(RuntimeSettingsService)
+    service.conn = None
     service.config_manager = Config()
     service.config = {"tasks": [], "pipeline": "bad"}
     assert service._get("tasks.missing", "default") == "default"

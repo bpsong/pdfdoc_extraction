@@ -6,7 +6,7 @@ from modules.db.repositories import DocumentRepository, TaskRunRepository
 from modules.exceptions import TaskError, TaskSetupError
 from modules.services.batch_service import BatchService
 from modules.workflow_loader import INTERNAL_CLEANUP_TASK_KEY, WorkflowLoader
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline, assign_pipeline
 
 
 def _patch_prefect(monkeypatch):
@@ -90,7 +90,11 @@ def test_workflow_loader_records_task_runs_and_stops_when_paused(tmp_path, monke
     )
     WorkflowLoader._instance = None
 
-    workflow = WorkflowLoader(config).load_workflow()
+    version = seed_pipeline(config)
+    assign_pipeline(config, created["document"]["id"], version)
+    workflow = WorkflowLoader(
+        config, definition=config.get_all(), pipeline_version_id=version["id"]
+    ).load_workflow()
     assert workflow is not None
     result = workflow(
         {
@@ -143,7 +147,11 @@ def test_workflow_loader_contains_runtime_task_import_failure(tmp_path, monkeypa
     )
     WorkflowLoader._instance = None
 
-    workflow = WorkflowLoader(config).load_workflow()
+    version = seed_pipeline(config)
+    assign_pipeline(config, created["document"]["id"], version)
+    workflow = WorkflowLoader(
+        config, definition=config.get_all(), pipeline_version_id=version["id"]
+    ).load_workflow()
     assert workflow is not None
     result = workflow(
         {
@@ -218,7 +226,11 @@ def test_workflow_loader_records_internal_cleanup_without_moving_pipeline_cursor
     monkeypatch.setattr(WorkflowLoader, "_import_task_class", lambda *args: ConfiguredTask)
     WorkflowLoader._instance = None
 
-    workflow = WorkflowLoader(config).load_workflow()
+    version = seed_pipeline(config)
+    assign_pipeline(config, created["document"]["id"], version)
+    workflow = WorkflowLoader(
+        config, definition=config.get_all(), pipeline_version_id=version["id"]
+    ).load_workflow()
     assert workflow is not None
     result = workflow(
         {
@@ -274,7 +286,11 @@ def test_workflow_loader_records_failed_internal_cleanup(tmp_path, monkeypatch):
     monkeypatch.setattr("modules.workflow_loader.CleanupTask", FailingCleanupTask)
     WorkflowLoader._instance = None
 
-    workflow = WorkflowLoader(config).load_workflow()
+    version = seed_pipeline(config)
+    assign_pipeline(config, created["document"]["id"], version)
+    workflow = WorkflowLoader(
+        config, definition=config.get_all(), pipeline_version_id=version["id"]
+    ).load_workflow()
     assert workflow is not None
     result = workflow(
         {
@@ -348,7 +364,11 @@ def test_workflow_loader_continue_does_not_fail_downstream_task(tmp_path, monkey
     )
     WorkflowLoader._instance = None
 
-    workflow = WorkflowLoader(config).load_workflow()
+    version = seed_pipeline(config)
+    assign_pipeline(config, created["document"]["id"], version)
+    workflow = WorkflowLoader(
+        config, definition=config.get_all(), pipeline_version_id=version["id"]
+    ).load_workflow()
     assert workflow is not None
     result = workflow(
         {

@@ -56,7 +56,10 @@ def _patch_prefect(monkeypatch, *, future=False):
 
 def _loader(tmp_path: Path, values: dict) -> WorkflowLoader:
     WorkflowLoader._instance = None
-    return WorkflowLoader(TempConfig(tmp_path / "workflow.sqlite3", values))
+    return WorkflowLoader(
+        TempConfig(tmp_path / "workflow.sqlite3", values),
+        definition=values, pipeline_version_id="test-version",
+    )
 
 
 def test_import_task_class_rejects_non_task_and_import_errors(tmp_path, monkeypatch):
@@ -294,12 +297,17 @@ def test_workflow_manager_load_trigger_and_child_edge_paths(tmp_path, monkeypatc
     config = TempConfig(tmp_path / "manager.sqlite3", {})
     manager = WorkflowManager(config)
     manager._mark_document_failed = Mock()
-    manager.workflow_loader.load_workflow = Mock(return_value=None)
+    loader = Mock()
+    loader.load_workflow.return_value = None
+    monkeypatch.setattr("modules.workflow_manager.WorkflowLoader", lambda *args, **kwargs: loader)
+    manager._load_document_pipeline = Mock(return_value=SimpleNamespace(
+        definition={"pipeline": [], "tasks": {}}, version_id="v1", template_id="t1"
+    ))
 
     assert manager.trigger_workflow_for_file("file.pdf", "id", "file.pdf", "web") is False
     manager._mark_document_failed.assert_called_once()
 
-    manager.workflow_loader.load_workflow = Mock(side_effect=RuntimeError("load failed"))
+    loader.load_workflow = Mock(side_effect=RuntimeError("load failed"))
     assert manager.trigger_workflow_for_file(
         "file.pdf",
         "id",
@@ -412,7 +420,12 @@ def test_workflow_manager_skips_missing_children_and_missing_failure_roots(
         "_fail_children_when_extract_preflight_fails",
         Mock(return_value=False),
     )
-    manager.workflow_loader.load_workflow = Mock(return_value=None)
+    loader = Mock()
+    loader.load_workflow.return_value = None
+    monkeypatch.setattr("modules.workflow_manager.WorkflowLoader", lambda *args, **kwargs: loader)
+    manager._load_document_pipeline = Mock(return_value=SimpleNamespace(
+        definition={"pipeline": [], "tasks": {}}, version_id="v1", template_id="t1"
+    ))
 
     manager._trigger_child_workflows({"split_children": ["missing", "child"]})
     manager._record_extract_preflight_failure(
@@ -434,4 +447,4 @@ def test_workflow_manager_skips_missing_children_and_missing_failure_roots(
         params={},
     )
 
-    manager.workflow_loader.load_workflow.assert_called_once_with(start_task_index=0)
+    loader.load_workflow.assert_called_once_with(start_task_index=0)

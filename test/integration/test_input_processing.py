@@ -110,6 +110,12 @@ def test_process_web_upload_success_pdf_header_valid(monkeypatch, tmp_dirs, conf
     wf = DummyWorkflowManager()
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
+    # Isolate file validation/moving from the assigned-ingestion boundary.
+    # Real SQLite assignment and worker execution are tested in test_sqlite_ingestion.
+    monkeypatch.setattr(fp, "process_file", lambda **kwargs: wf.trigger_workflow_for_file(
+        file_path=kwargs["filepath"], unique_id=kwargs["unique_id"],
+        original_filename=kwargs["original_filename"], source=kwargs["source"],
+    ))
 
     # Create a valid PDF header
     content = b"%PDF-1.4\n%..."  # starts with %PDF-
@@ -143,6 +149,12 @@ def test_process_web_upload_invalid_header_removes_temp_and_raises(monkeypatch, 
     wf = DummyWorkflowManager()
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
+    # Isolate file validation/moving from the assigned-ingestion boundary.
+    # Real SQLite assignment and worker execution are tested in test_sqlite_ingestion.
+    monkeypatch.setattr(fp, "process_file", lambda **kwargs: wf.trigger_workflow_for_file(
+        file_path=kwargs["filepath"], unique_id=kwargs["unique_id"],
+        original_filename=kwargs["original_filename"], source=kwargs["source"],
+    ))
 
     # Not a valid PDF header
     bad_content = b"NOTPDF"
@@ -169,6 +181,12 @@ def test_process_web_upload_header_validation_disabled(monkeypatch, tmp_dirs, co
     wf = DummyWorkflowManager()
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
+    # Isolate file validation/moving from the assigned-ingestion boundary.
+    # Real SQLite assignment and worker execution are tested in test_sqlite_ingestion.
+    monkeypatch.setattr(fp, "process_file", lambda **kwargs: wf.trigger_workflow_for_file(
+        file_path=kwargs["filepath"], unique_id=kwargs["unique_id"],
+        original_filename=kwargs["original_filename"], source=kwargs["source"],
+    ))
 
     # Invalid header but validation disabled
     content = b"NO_PDF_HEADER"
@@ -198,6 +216,12 @@ def test_process_web_upload_supports_bytes_like_input(monkeypatch, tmp_dirs, con
     wf = DummyWorkflowManager()
 
     fp = FileProcessor(config_manager=cfg, retry_operation_func=lambda f, *a, **k: f(*a, **k), workflow_manager=cast(WorkflowManager, wf))
+    # Isolate file validation/moving from the assigned-ingestion boundary.
+    # Real SQLite assignment and worker execution are tested in test_sqlite_ingestion.
+    monkeypatch.setattr(fp, "process_file", lambda **kwargs: wf.trigger_workflow_for_file(
+        file_path=kwargs["filepath"], unique_id=kwargs["unique_id"],
+        original_filename=kwargs["original_filename"], source=kwargs["source"],
+    ))
 
     # Provide raw bytes that are a valid PDF header
     content = b"%PDF-1.7..."

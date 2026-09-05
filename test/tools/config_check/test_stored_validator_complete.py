@@ -26,6 +26,7 @@ from tools.config_check.stored_validator import (
     validate_portable_file,
     ValidationResult,
 )
+from modules.db.migrations import SCHEMA_VERSION
 from modules.services.versioned_config_contracts import content_hash
 from modules.services.versioned_config_contracts import ReviewSchemaCoordinate
 
@@ -60,7 +61,7 @@ def test_readonly_database_and_schema_findings(tmp_path: Path) -> None:
     db.execute("CREATE TABLE schema_migrations(version INTEGER)")
     db.execute("INSERT INTO schema_migrations VALUES (2)")
     assert validate_database_schema(db).errors[0].code == "database-schema-outdated"
-    db.execute("UPDATE schema_migrations SET version = 3")
+    db.execute("UPDATE schema_migrations SET version = ?", (SCHEMA_VERSION,))
     assert validate_database_schema(db).errors[0].code == "database-schema-incomplete"
     db.close()
 
@@ -242,7 +243,7 @@ def test_stored_validator_remaining_success_paths(tmp_path: Path, monkeypatch) -
     db = tmp_path / "readonly.sqlite"
     raw = sqlite3.connect(db)
     raw.execute("CREATE TABLE schema_migrations(version INTEGER)")
-    raw.execute("INSERT INTO schema_migrations VALUES (3)")
+    raw.execute("INSERT INTO schema_migrations VALUES (?)", (SCHEMA_VERSION,))
     for table in (
         "pipeline_templates", "pipeline_drafts", "pipeline_versions",
         "review_schema_templates", "review_schema_drafts", "review_schema_versions",

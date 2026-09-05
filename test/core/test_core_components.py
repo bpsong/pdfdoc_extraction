@@ -73,6 +73,8 @@ def test_file_processor_initialization_and_process_file(mock_config_manager, moc
         source="watch_folder",
         original_filename="testfile_uuid.pdf",
         create_sqlite_state=False,
+        batch_id="test-batch",
+        document_id=unique_id,
     )
     assert result is True
 

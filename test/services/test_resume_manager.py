@@ -7,7 +7,7 @@ from modules.db.repositories import DocumentRepository, ExtractionRepository, Ta
 from modules.resume_manager import ResumeManager
 from modules.services.batch_service import BatchService
 from modules.workflow_loader import WorkflowLoader
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline, assign_pipeline
 from test.workflow.test_workflow_task_run_tracking import _patch_prefect
 
 
@@ -25,12 +25,15 @@ def test_resume_manager_resumes_next_task_and_guards_duplicate_resume(tmp_path, 
         },
     )
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(pdf_path),
             original_filename="invoice.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
         result = ExtractionRepository(conn).save_result(
             document_id=created["document"]["id"],
             provider="test",
@@ -94,12 +97,15 @@ def test_resume_manager_atomically_rejects_concurrent_resume(tmp_path, monkeypat
         },
     )
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(pdf_path),
             original_filename="invoice.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
         DocumentRepository(conn).update_current_task(created["document"]["id"], 0, "review_gate")
         DocumentRepository(conn).update_status(created["document"]["id"], "review_completed")
 
@@ -137,12 +143,15 @@ def test_resume_manager_finalizes_when_review_gate_is_last(tmp_path, monkeypatch
         },
     )
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(pdf_path),
             original_filename="invoice.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
         DocumentRepository(conn).update_current_task(created["document"]["id"], 0, "review_gate")
         DocumentRepository(conn).update_status(created["document"]["id"], "review_completed")
 
@@ -178,12 +187,15 @@ def test_resume_context_reconstructs_corrected_objects_arrays_and_missing_values
     pdf_path.write_bytes(b"%PDF-1.4")
     config = TempConfig(tmp_path / "app.sqlite3", {})
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(pdf_path),
             original_filename=pdf_path.name,
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
         repository = ExtractionRepository(conn)
         result = repository.save_result(
             document_id=created["document"]["id"],

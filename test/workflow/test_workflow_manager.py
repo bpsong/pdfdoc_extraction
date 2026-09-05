@@ -7,6 +7,7 @@ import csv
 import json
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 from unittest.mock import patch, mock_open, Mock
 
@@ -16,98 +17,6 @@ from modules.workflow_manager import WorkflowManager
 from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.utils import sanitize_filename
 from test.helpers_sqlite import TempConfig
-
-@pytest.fixture
-def test_environment():
-    # Ensure ConfigManager is reset for each test
-    ConfigManager._instance = None
-
-    # Ensure log file exists to pass ConfigManager validation - use path from config
-    config_path = Path('test/data/config.yaml')
-
-    # Create required directories BEFORE ConfigManager validation
-    # This ensures the directories exist before ConfigManager tries to validate them
-    watch_folder_dir = Path('test/test_data/watch_folder')
-    processing_dir = Path('test/test_data/processing')
-    watch_folder_dir.mkdir(parents=True, exist_ok=True)
-    processing_dir.mkdir(parents=True, exist_ok=True)
-
-    temp_config_manager = ConfigManager(config_path)  # Load config to get log file path
-    log_file_path = Path(str(temp_config_manager.get('logging.log_file', 'test/test_app.log')))
-    if not log_file_path.parent.exists():
-        log_file_path.parent.mkdir(parents=True, exist_ok=True)
-    if not log_file_path.exists():
-        log_file_path.touch()
-    # Setup config manager to get paths from config.yaml
-    config_path = Path('test/data/config.yaml')
-    config_manager = ConfigManager(config_path)
-    
-    # Get paths from config, with fallbacks for test environment
-    # Ensure Path() receives a string
-    watch_folder_dir = Path(str(config_manager.get('watch_folder.dir', 'test/test_data/watch_folder')))
-    processing_dir = Path(str(config_manager.get('watch_folder.processing_dir', 'test/test_data/processing')))
-    
-    # Get data_dir from the configured CSV storage task params
-    store_csv_params = config_manager.get('tasks.store_metadata_csv.params', {})
-    if not isinstance(store_csv_params, dict): store_csv_params = {} # Ensure it's a dict
-    data_dir = Path(str(store_csv_params.get('data_dir', 'data')))
-
-    # Get files_dir from the configured file storage task params
-    store_file_params = config_manager.get('tasks.store_file_to_localdrive.params', {})
-    if not isinstance(store_file_params, dict): store_file_params = {} # Ensure it's a dict
-    files_dir = Path(str(store_file_params.get('files_dir', 'files')))
-
-    # Get archive_dir from the configured archive task params
-    archive_file_params = config_manager.get('tasks.archive_pdf.params', {})
-    if not isinstance(archive_file_params, dict): archive_file_params = {} # Ensure it's a dict
-    archive_dir = Path(str(archive_file_params.get('archive_dir', 'archive')))
-
-    # Define all directories to clean and create
-    dirs_to_manage = [
-        watch_folder_dir,
-        processing_dir,
-        data_dir,
-        files_dir,
-        archive_dir
-    ]
-
-    # Create web_upload directory required by config_manager
-    web_upload_dir = Path('web_upload')
-    if web_upload_dir.exists():
-        shutil.rmtree(web_upload_dir)
-    web_upload_dir.mkdir(parents=True, exist_ok=True)
-    # Clean and create directories
-    # Do NOT remove watch_folder_dir, data_dir, files_dir, or archive_dir to
-    # preserve fixture directories expected by config validation and avoid race deletions.
-    for d in dirs_to_manage:
-        if d in (watch_folder_dir, data_dir, files_dir, archive_dir):
-            d.mkdir(parents=True, exist_ok=True)
-            continue
-        if d.exists():
-            shutil.rmtree(d)
-        d.mkdir(parents=True, exist_ok=True)
-
-    # Copy sample PDF to watch folder
-    sample_pdf_source = Path('test/test_data/sample.pdf')
-    sample_pdf_dest = watch_folder_dir / 'sample.pdf'
-    shutil.copy(sample_pdf_source, sample_pdf_dest)
-
-    # Initialize StatusManager
-    status_manager = StatusManager(config_manager)
-
-    # Initialize WorkflowManager
-    workflow_manager = WorkflowManager(config_manager)
-
-    yield config_manager, workflow_manager, status_manager, watch_folder_dir, processing_dir, data_dir, files_dir, archive_dir
-
-    # Teardown: Clean up directories
-    # Preserve watch_folder_dir, data_dir, files_dir, and archive_dir artifacts
-    # after test; only clean transient processing.
-    for d in dirs_to_manage:
-        if d in (watch_folder_dir, data_dir, files_dir, archive_dir):
-            continue
-        if d.exists():
-            shutil.rmtree(d)
 
 @pytest.fixture
 def watch_folder_monitor_instance():
@@ -156,250 +65,77 @@ def test_is_valid_pdf_header_ioerror_retry(watch_folder_monitor_instance):
         result = watch_folder_monitor_instance._is_valid_pdf_header("dummy_path")
         assert result is True
 
-def test_end_to_end_workflow_execution(test_environment):
-    logging.info("Starting end-to-end workflow execution test (synchronous, no watcher thread)")
-    config_manager, workflow_manager, status_manager, watch_folder_dir, processing_dir, data_dir, files_dir, archive_dir = test_environment
+def test_end_to_end_workflow_execution(tmp_path, monkeypatch):
+    """Run a pinned pipeline with synthetic extraction and real exports."""
+    from modules.db.connection import connect
+    from modules.db.migrations import initialize_database
+    from modules.services.batch_service import BatchService
+    from modules.db.repositories import DocumentRepository, TaskRunRepository
+    from test.helpers_sqlite import seed_pipeline, assign_pipeline
+    from test.workflow.test_workflow_task_run_tracking import _patch_prefect
+    from modules.workflow_loader import WorkflowLoader
 
-    # Prepare sample PDF in watch folder
-    sample_pdf = watch_folder_dir / 'sample.pdf'
-    assert sample_pdf.exists(), "Sample PDF was not copied to watch folder"
+    source = tmp_path / "input.pdf"
+    source.write_bytes(b"%PDF-1.4\n")
+    config = TempConfig(tmp_path / "state.sqlite3", {
+        "pipeline": ["extract", "json", "csv", "pdf", "archive"],
+        "tasks": {
+            "extract": {"module": "tests", "class": "SyntheticExtract", "params": {}},
+            "json": {"module": "standard_step.storage.store_metadata_as_json", "class": "StoreMetadataAsJson", "params": {"data_dir": str(tmp_path / "exports"), "filename": "{supplier}"}},
+            "csv": {"module": "standard_step.storage.store_metadata_as_csv", "class": "StoreMetadataAsCsv", "params": {"data_dir": str(tmp_path / "exports"), "filename": "{supplier}"}},
+            "pdf": {"module": "standard_step.storage.store_file_to_localdrive", "class": "StoreFileToLocaldrive", "params": {"files_dir": str(tmp_path / "files"), "filename": "{supplier}"}},
+            "archive": {"module": "standard_step.archiver.archive_pdf", "class": "ArchivePdfTask", "params": {"archive_dir": str(tmp_path / "archive")}},
+        },
+    })
+    initialize_database(config)
+    version = seed_pipeline(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(source="web", file_path=str(source), original_filename="input.pdf")
+    assign_pipeline(config, created["document"]["id"], version)
 
-    # Ensure processing_dir exists prior to status writes
-    processing_dir.mkdir(parents=True, exist_ok=True)
+    class SyntheticExtract:
+        def __init__(self, config_manager, **params):
+            pass
+        def on_start(self, context):
+            pass
+        def run(self, context):
+            context["data"] = {"supplier": "Synthetic", "amount": 12.5}
+            return context
 
-    # Invoke workflow directly. Workflow completion is synchronous; persistent
-    # workflow state is SQLite-backed when a document context is supplied.
-    original_filename = sample_pdf.name
-    unique_id = Path(original_filename).stem
-    source = "watch_folder"
-
-    test_api_key = config_manager.get('tasks.extract_document_data.params.api_key')
-    if test_api_key and not os.getenv('LLAMA_CLOUD_API_KEY'):
-        os.environ['LLAMA_CLOUD_API_KEY'] = str(test_api_key)
-
-    if not os.getenv('LLAMA_CLOUD_API_KEY'):
-        pytest.skip("LlamaCloud API key not available - skipping end-to-end test")
-
-    # Create a stub LlamaCloud runner so the test does not require network access
-    extracted_payload = {
-        "Supplier name": "Liberty Insurance Pte Ltd",
-        "Invoice amount": 70.0,
-        "Policy Number": "SD24B39161 / R 0",
-        "Client name": "Acme Corporation",
-        "Client": "Acme Corporation, 123 Street",
-        "Insurance Start date": "2024-01-01",
-        "Insurance End date": "2024-12-31",
-        "Invoice type": "Invoice",
-        "Serial Numbers": ["SN12345", None],
-    }
-
-    class _DummyExtractionResult:
-        def __init__(self, data):
-            self.data = data
-            self.extraction_metadata = {}
-            self.job_id = "test-job"
-
-    dummy_result = _DummyExtractionResult(extracted_payload)
-
-    with patch('standard_step.extraction.extract_pdf.run_extract_v2_job', return_value=dummy_result):
-        workflow_result = workflow_manager.trigger_workflow_for_file(str(sample_pdf), unique_id, original_filename, source)
-
-    assert workflow_result is True
-
-    # Legacy text status files are no longer the workflow-state source.
-    status_file_path = processing_dir / f"{unique_id}.txt"
-    assert not status_file_path.exists(), "Status text files should not be created by unified workflow processing"
-
-    # Discover produced artifacts
-    produced_json_files = sorted(data_dir.glob('*.json'))
-    assert produced_json_files, "No JSON files produced in data; the PDF may not have been sent to LlamaCloud."
-    latest_json = max(produced_json_files, key=lambda p: p.stat().st_mtime)
-    with open(latest_json, 'r', encoding='utf-8') as jf:
-        produced = json.load(jf)
-    assert isinstance(produced, (dict, list)), "Produced JSON should be object or array."
-
-    # Read templates from test config and compute expected filenames from produced data
-    json_params = config_manager.get('tasks.store_metadata_json.params', {}) or {}
-    csv_params = config_manager.get('tasks.store_metadata_csv.params', {}) or {}
-    file_params = config_manager.get('tasks.store_file_to_localdrive.params', {}) or {}
-
-    def _get_val(dct, *keys):
-        for k in keys:
-            if isinstance(dct, dict) and k in dct:
-                return dct[k]
-        return None
-
-    # Support both object and array result shapes
-    payload = produced[0] if isinstance(produced, list) and produced else produced
-    supplier_name = _get_val(payload, 'supplier_name', 'Supplier name', 'supplier')
-    invoice_amount = _get_val(payload, 'invoice_amount', 'Invoice amount', 'amount')
-    policy_number = _get_val(payload, 'policy_number', 'Policy Number', 'invoice_no')
-
-    # Normalize segments using project utility to match how filenames are generated on Windows
-    # 1) Format amount into a simple string
-    def _normalize_amount(val) -> str:
-        try:
-            v = float(str(val))
-            s = f"{v}"
-            return s.rstrip('0').rstrip('.') if '.' in s else str(int(v))
-        except Exception:
-            return str(val)
-
-    # 2) Sanitize each segment by leveraging sanitize_filename, then strip the placeholder extension it appends
-    def _sanitize_segment(seg: Optional[str]) -> str:
-        s = '' if seg is None else str(seg)
-        tmp = sanitize_filename(f"{s}.tmp")
-        return tmp[:-4] if tmp.endswith(".tmp") else tmp
-
-    supplier_name = _sanitize_segment(supplier_name)
-    policy_number = _sanitize_segment(policy_number)
-    # Align expected filenames with actual outputs: keep the raw numeric formatting used by tasks
-    # The observed filenames show invoice_amount as "70.0", not "70"
-    invoice_amount = str(invoice_amount)
-
-    assert supplier_name is not None, "supplier_name not found in produced JSON"
-    assert invoice_amount is not None, "invoice_amount not found in produced JSON"
-    assert policy_number is not None, "policy_number not found in produced JSON"
-
-    csv_template = csv_params.get('filename', '{supplier_name}_{invoice_amount}_{policy_number}')
-    json_template = json_params.get('filename', '{supplier_name}_{invoice_amount}_{policy_number}')
-    file_template = file_params.get('rename_pattern', '{supplier_name}_{invoice_amount}_{policy_number}')
-
-    format_ctx = {
-        'supplier_name': supplier_name,
-        'invoice_amount': invoice_amount,
-        'policy_number': policy_number,
-    }
-
-    def _resolve_unique(base_dir: Path, base_name: str, suffix: str) -> Path:
-        candidate = base_dir / f"{base_name}{suffix}"
-        if candidate.exists():
-            return candidate
-        for i in range(1, 20):
-            cand = base_dir / f"{base_name}_{i}{suffix}"
-            if cand.exists():
-                return cand
-        return candidate
-
-    expected_csv_basename = csv_template.format(**format_ctx)
-    expected_json_basename = json_template.format(**format_ctx)
-    expected_pdf_basename = file_template.format(**format_ctx)
-
-    expected_csv_file = _resolve_unique(data_dir, expected_csv_basename, '.csv')
-    expected_json_file = _resolve_unique(data_dir, expected_json_basename, '.json')
-    expected_renamed_pdf = _resolve_unique(files_dir, expected_pdf_basename, '.pdf')
-
-
-    # If templated expected files are missing, fall back to detecting latest generated files to avoid false negatives
-    if not expected_csv_file.exists() or not expected_json_file.exists():
-        generated_csvs = sorted(data_dir.glob("*.csv"))
-        generated_jsons = sorted(data_dir.glob("*.json"))
-        assert generated_csvs, "No CSV files found in data directory"
-        assert generated_jsons, "No JSON files found in data directory"
-        expected_csv_file = max(generated_csvs, key=lambda p: p.stat().st_mtime)
-        expected_json_file = max(generated_jsons, key=lambda p: p.stat().st_mtime)
-
-    assert expected_csv_file.exists(), f"Expected CSV file not found: {expected_csv_file}"
-    assert expected_json_file.exists(), f"Expected JSON file not found: {expected_json_file}"
-    assert expected_renamed_pdf.exists(), f"Expected renamed PDF not found: {expected_renamed_pdf}"
-
-    # Basic content checks for CSV/JSON
-    with open(expected_csv_file, 'r', encoding='utf-8') as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        data_row = next(reader)
-        assert ("supplier_name" in header) or ("Supplier name" in header)
-        assert str(supplier_name) in data_row
-
-    with open(expected_json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-        def get_json(d, *keys):
-            for k in keys:
-                if k in d:
-                    return d[k]
-            return None
-        assert get_json(data, 'supplier_name', 'Supplier name') == supplier_name
-        amt = get_json(data, 'invoice_amount', 'Invoice amount')
-        assert amt is not None, "invoice_amount missing in JSON output"
-        assert float(str(amt)) == float(str(invoice_amount))
-        # Allow slash and normalize whitespace to match filename sanitization
-        json_policy = get_json(data, 'policy_number', 'Policy Number')
-        assert json_policy is not None, "policy_number missing in JSON output"
-        import re
-        def _normalize_spaces(s: str) -> str:
-            # collapse multiple spaces to a single space after slash replacement
-            return re.sub(r'\s+', ' ', s).strip()
-        assert _normalize_spaces(json_policy.replace('/', ' ')) == _normalize_spaces(policy_number)
-
-    # Source is carried in workflow context, not mirrored to legacy text status files.
-    status_after = status_manager.get_status(unique_id)
-    assert status_after is None
-    logging.info("End-to-end workflow execution test (synchronous) completed successfully")
+    original_import = WorkflowLoader._import_task_class
+    monkeypatch.setattr(WorkflowLoader, "_import_task_class", lambda self, module, cls: SyntheticExtract if cls == "SyntheticExtract" else original_import(self, module, cls))
+    _patch_prefect(monkeypatch)
+    assert WorkflowManager(config).trigger_workflow_for_file(
+        str(source), created["document"]["id"], "input.pdf", "web",
+        batch_id=created["batch"]["id"], document_id=created["document"]["id"],
+    ) is True
+    assert json.loads((tmp_path / "exports" / "Synthetic.json").read_text())["amount"] == 12.5
+    with (tmp_path / "exports" / "Synthetic.csv").open(newline="") as stream:
+        assert list(csv.DictReader(stream))[0]["supplier"] == "Synthetic"
+    assert list((tmp_path / "files").glob("*.pdf"))
+    assert list((tmp_path / "archive").glob("*.pdf"))
+    with connect(config) as conn:
+        assert DocumentRepository(conn).get(created["document"]["id"])["status"] == "completed"
+        runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+        assert [run["task_key"] for run in runs] == ["extract", "json", "csv", "pdf", "archive", "cleanup_task"]
+        assert all(run["status"] == "completed" for run in runs)
+        assert all(run["pipeline_version_id"] == version["id"] for run in runs)
+    assert not list(tmp_path.rglob("*.txt"))
 
 
 def test_workflow_manager_propagates_source_web(monkeypatch, tmp_path):
-    """
-    Verify that WorkflowManager receives and propagates source='web'
-    when triggered directly (simulating a web upload path).
-    """
-    # Reset singleton and prepare config
-    ConfigManager._instance = None
-    # Create minimal config file for this test
-    cfg_dir = tmp_path / "cfg"
-    cfg_dir.mkdir(parents=True, exist_ok=True)
-    cfg_file = cfg_dir / "config.yaml"
-    cfg_file.write_text(
-        "logging:\n"
-        "  log_file: test/test_data/workflow_manager.log\n"
-        "web:\n"
-        "  upload_dir: web_upload\n"
-        "watch_folder:\n"
-        "  dir: test/test_data/watch_folder\n"
-        "  processing_dir: test/test_data/processing\n",
-        encoding="utf-8"
-    )
-
-    # Ensure referenced log file and required static dirs exist (ConfigManager validation)
-    test_data_dir = Path("test/test_data")
-    test_data_dir.mkdir(parents=True, exist_ok=True)
-    (test_data_dir / "workflow_manager.log").touch(exist_ok=True)
-    (test_data_dir / "watch_folder").mkdir(parents=True, exist_ok=True)
-    (test_data_dir / "processing").mkdir(parents=True, exist_ok=True)
-
-    config_manager = ConfigManager(cfg_file)
-    status_manager = StatusManager(config_manager)
-    workflow_manager = WorkflowManager(config_manager)
-
-    # Prepare a fake processing file path and identifiers
-    processing_dir = Path(str(config_manager.get("watch_folder.processing_dir", "processing")))
-    processing_dir.mkdir(parents=True, exist_ok=True)
-    file_path = processing_dir / "dummy.pdf"
-    file_path.write_bytes(b"%PDF-1.4\n")  # minimal content
-
-    unique_id = "web-123"
-    original_filename = "uploaded.pdf"
-    source = "web"
-
-    captured_context = {}
-
-    def fake_flow(context):
-        captured_context.update(context)
-        return context
-
-    monkeypatch.setattr(workflow_manager.workflow_loader, "load_workflow", lambda: fake_flow)
-
-    # Trigger workflow and inspect the initial context passed to the loaded flow.
-    workflow_result = workflow_manager.trigger_workflow_for_file(str(file_path), unique_id, original_filename, source)
-
-    assert workflow_result is True
-    assert captured_context["id"] == unique_id
-    assert captured_context["file_path"] == str(file_path)
-    assert captured_context["source"] == "web"
-    assert captured_context["original_filename"] == original_filename
-
-    # No legacy text status record should be created for source propagation.
-    status = status_manager.get_status(unique_id)
-    assert status is None
+    from types import SimpleNamespace
+    from modules.workflow_loader import WorkflowLoader
+    config = TempConfig(tmp_path / "state.sqlite3")
+    manager = WorkflowManager(config)
+    captured = {}
+    monkeypatch.setattr(manager, "_load_document_pipeline", lambda document_id: SimpleNamespace(definition={"pipeline": [], "tasks": {}}, version_id="v1", template_id="t1"))
+    monkeypatch.setattr(WorkflowLoader, "load_workflow", lambda self: lambda context: captured.update(context))
+    assert manager.trigger_workflow_for_file("input.pdf", "doc", "uploaded.pdf", "web", batch_id="batch", document_id="doc")
+    assert captured["source"] == "web"
+    assert captured["original_filename"] == "uploaded.pdf"
+    assert captured["pipeline_version_id"] == "v1"
+    assert captured["document_id"] == "doc"
 
 
 def test_split_child_preflight_is_provider_specific_for_llama_and_glm(
@@ -427,7 +163,7 @@ def test_split_child_preflight_is_provider_specific_for_llama_and_glm(
         "modules.workflow_manager.preflight_extract_v2_access", preflight
     )
 
-    assert glm_manager._fail_children_when_extract_preflight_fails({}, [], 0) is False
+    assert glm_manager._fail_children_when_extract_preflight_fails({}, [], 0, executable=SimpleNamespace(definition=glm_config.get_all())) is False
     preflight.assert_not_called()
     assert glm_manager._is_llamacloud_extract_task(
         glm_config.get("tasks.glm_extract")
@@ -452,7 +188,7 @@ def test_split_child_preflight_is_provider_specific_for_llama_and_glm(
         "modules.workflow_manager.preflight_extract_v2_access", llama_preflight
     )
 
-    assert llama_manager._fail_children_when_extract_preflight_fails({}, [], 0) is False
+    assert llama_manager._fail_children_when_extract_preflight_fails({}, [], 0, executable=SimpleNamespace(definition=llama_config.get_all())) is False
     llama_preflight.assert_called_once()
     assert llama_manager._is_llamacloud_extract_task(
         llama_config.get("tasks.extract")

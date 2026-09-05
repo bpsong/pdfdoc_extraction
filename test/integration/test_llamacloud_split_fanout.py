@@ -16,7 +16,7 @@ from modules.workflow_loader import WorkflowLoader
 from modules.workflow_manager import WorkflowManager
 from standard_step.split.llamacloud_split import LlamaCloudSplitTask
 from standard_step.split.llamacloud_split_adapter import SplitResult, SplitSegment
-from test.helpers_sqlite import TempConfig
+from test.helpers_sqlite import TempConfig, seed_pipeline, assign_pipeline
 from test.workflow.test_workflow_task_run_tracking import _patch_prefect
 
 
@@ -71,7 +71,6 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
                     "class": "LlamaCloudSplitTask",
                     "params": {
                         "enabled": True,
-                        "adapter": FakeSplitAdapter(),
                         "categories": [{"name": "invoice"}, {"name": "receipt"}],
                         "split_dir": str(tmp_path / "split"),
                     },
@@ -87,12 +86,15 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
         },
     )
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(source),
             original_filename="bundle.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
 
     update_contexts = []
 
@@ -126,7 +128,9 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
         WorkflowLoader,
         "_import_task_class",
         lambda self, module_name, class_name: {
-            "LlamaCloudSplitTask": LlamaCloudSplitTask,
+            "LlamaCloudSplitTask": lambda config_manager, **params: LlamaCloudSplitTask(
+                config_manager, adapter=FakeSplitAdapter(), **params
+            ),
             "FakeUpdateReferenceTask": FakeUpdateReferenceTask,
         }[class_name],
     )
@@ -176,7 +180,6 @@ def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, mo
                     "class": "LlamaCloudSplitTask",
                     "params": {
                         "enabled": True,
-                        "adapter": FakeSplitAdapter(),
                         "categories": [{"name": "invoice"}, {"name": "receipt"}],
                         "split_dir": str(tmp_path / "split"),
                     },
@@ -196,12 +199,15 @@ def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, mo
         },
     )
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(source),
             original_filename="bundle.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
 
     class CleanupTask:
         def __init__(self, config_manager, **params):
@@ -220,7 +226,7 @@ def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, mo
     monkeypatch.setattr(
         WorkflowLoader,
         "_import_task_class",
-        lambda self, module_name, class_name: {"LlamaCloudSplitTask": LlamaCloudSplitTask}[class_name],
+        lambda self, module_name, class_name: {"LlamaCloudSplitTask": lambda config_manager, **params: LlamaCloudSplitTask(config_manager, adapter=FakeSplitAdapter(), **params)}[class_name],
     )
     monkeypatch.setattr(
         "modules.workflow_manager.preflight_extract_v2_access",
@@ -267,12 +273,15 @@ def test_split_results_api_returns_parent_child_payload(tmp_path, monkeypatch):
     _write_pdf(child_pdf, 1)
     config = TempConfig(tmp_path / "app.sqlite3")
     initialize_database(config)
+    version = seed_pipeline(config)
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(source),
             original_filename="bundle.pdf",
         )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
         documents = DocumentRepository(conn)
         documents.update_status(created["document"]["id"], "split_completed")
         child = documents.create_child(

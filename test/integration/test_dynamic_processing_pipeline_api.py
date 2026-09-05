@@ -141,7 +141,8 @@ def test_processing_state_api_falls_back_for_historical_batch_without_snapshot(t
     assert response.status_code == 200
     payload = response.json()
     assert payload["pipeline_snapshot"]["fallback"] is True
-    assert payload["pipeline_snapshot"]["steps"][0]["key"] == "extract_invoice"
+    assert payload["pipeline_snapshot"]["steps"] == []
+    assert payload["pipeline_snapshot"]["historical"] is True
 
 
 def test_processing_state_list_api_returns_recent_batches(tmp_path, monkeypatch):
