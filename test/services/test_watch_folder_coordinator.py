@@ -167,6 +167,33 @@ def test_inaccessible_and_invalid_bindings_do_not_block_other_folders(tmp_path):
     assert row["enabled"] == 1
 
 
+def test_inaccessible_binding_reports_degraded_ingestion(tmp_path):
+    config = build_context(tmp_path)
+    missing = tmp_path / "missing"
+    missing.mkdir()
+    with connect(config) as conn:
+        _, version = publish_pipeline(conn, key="health-pipeline")
+        IngressBindingService(conn, config).create(
+            folder_path=str(missing),
+            pipeline_version_id=version["id"],
+            enabled=True,
+            user="admin",
+        )
+    missing.rmdir()
+    reporter = Mock()
+    coordinator = WatchFolderCoordinator(
+        config,
+        FakeProcessor(),
+        health_reporter=reporter,
+    )
+
+    assert coordinator.scan_once() == 0
+
+    reporter.set_status.assert_called_once_with(
+        "degraded", {"binding_issue_count": 1}
+    )
+
+
 def test_disabled_binding_is_reconciled_without_claiming_new_files(tmp_path):
     config = build_context(tmp_path)
     folder = tmp_path / "incoming"

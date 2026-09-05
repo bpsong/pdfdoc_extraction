@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import sys
 from typing import Any, cast
+from unittest.mock import Mock
+
+import pytest
 from starlette.requests import Request
 
 from fastapi import FastAPI, HTTPException
@@ -117,10 +120,11 @@ def test_server_redirect_and_logout_routes(monkeypatch) -> None:
     assert client.get("/app/upload", follow_redirects=False).status_code == 307
 
 
-def test_server_startup_failure_is_logged_and_does_not_prevent_app(monkeypatch) -> None:
-    monkeypatch.setattr(web_server, "validate_startup_task_registry", lambda _config: (_ for _ in ()).throw(RuntimeError("startup failure")))
-    client = build_client(monkeypatch)
-    assert client.get("/login").status_code == 200
+def test_server_startup_failure_prevents_app_creation(monkeypatch) -> None:
+    startup_checks = Mock(side_effect=RuntimeError("startup failure"))
+
+    with pytest.raises(RuntimeError, match="startup failure"):
+        build_client(monkeypatch, startup_checks=startup_checks)
 
 
 def test_server_admin_schema_route_and_json_http_exception(monkeypatch) -> None:

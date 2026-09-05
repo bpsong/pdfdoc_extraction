@@ -551,11 +551,12 @@ def visual_app(tmp_path_factory: pytest.TempPathFactory):
     env = os.environ.copy()
     env["CONFIG_PATH"] = str(config_path)
     env["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
+    env["DOCFLOW_STDIO_CAPTURED"] = "1"
     process = subprocess.Popen(
         [sys.executable, "-m", "uvicorn", "web.server:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
         cwd=Path(__file__).resolve().parents[2],
         env=env,
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         text=True,
     )

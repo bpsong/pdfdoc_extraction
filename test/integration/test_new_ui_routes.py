@@ -79,6 +79,7 @@ def build_client(
     cors_allowed_origins: list[str] | None = None,
     allowed_hosts: list[str] | None = None,
     production_docs_enabled: bool = False,
+    startup_checks: Mock | None = None,
 ) -> TestClient:
     config = FakeConfig(
         admin_users=admin_users,
@@ -92,6 +93,11 @@ def build_client(
         return config, auth, None, None, None
 
     monkeypatch.setattr(web_server, "get_dependencies", fake_get_dependencies)
+    monkeypatch.setattr(
+        web_server,
+        "run_startup_checks",
+        startup_checks if startup_checks is not None else Mock(),
+    )
     monkeypatch.setattr(api_router, "get_dependencies", fake_get_dependencies)
     monkeypatch.setattr(api_router, "is_admin_user", lambda candidate, _config: candidate == "admin")
     app = web_server.create_app()
@@ -111,6 +117,65 @@ def test_app_lifespan_runs_shutdown_manager(monkeypatch) -> None:
         pass
 
     shutdown_manager.shutdown.assert_called_once_with()
+
+
+def test_public_health_routes_are_minimal_and_use_runtime_readiness(monkeypatch) -> None:
+    monkeypatch.setenv("DOCFLOW_RUN_ID", "run-health")
+    monkeypatch.setenv(
+        "DOCFLOW_EXPECTED_COMPONENTS", "supervisor,worker,watch_folder,web"
+    )
+    runtime = Mock()
+    runtime.snapshot.return_value = {"ready": True, "status": "ready"}
+    monkeypatch.setattr(web_server, "RuntimeHealthService", lambda *_args: runtime)
+    monkeypatch.setattr(web_server, "RuntimeHealthReporter", Mock())
+    client = build_client(monkeypatch)
+
+    live = client.get("/health/live")
+    ready = client.get("/health/ready")
+
+    assert live.status_code == 200
+    assert live.json() == {"status": "alive"}
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ready"}
+
+
+def test_public_readiness_returns_503_without_run_details(monkeypatch) -> None:
+    monkeypatch.setenv("DOCFLOW_RUN_ID", "run-health")
+    runtime = Mock()
+    runtime.snapshot.return_value = {
+        "ready": False,
+        "status": "not_ready",
+        "missing_components": ["worker"],
+    }
+    monkeypatch.setattr(web_server, "RuntimeHealthService", lambda *_args: runtime)
+    monkeypatch.setattr(web_server, "RuntimeHealthReporter", Mock())
+    client = build_client(monkeypatch)
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {"status": "not_ready"}
+
+
+def test_admin_runtime_health_returns_diagnostics(monkeypatch) -> None:
+    monkeypatch.setenv("DOCFLOW_RUN_ID", "run-health")
+    snapshot = {
+        "run_id": "run-health",
+        "ready": False,
+        "status": "not_ready",
+        "components": {"worker": {"status": "stale"}},
+    }
+    runtime = Mock()
+    runtime.snapshot.return_value = snapshot
+    monkeypatch.setattr(api_router, "RuntimeHealthService", lambda *_args: runtime)
+    monkeypatch.setattr(web_server, "RuntimeHealthReporter", Mock())
+    client = build_client(monkeypatch, username="admin", admin_users=["admin"])
+    authenticate(client)
+
+    response = client.get("/api/admin/runtime-health")
+
+    assert response.status_code == 200
+    assert response.json() == snapshot
 
 
 def test_security_headers_are_added(monkeypatch) -> None:

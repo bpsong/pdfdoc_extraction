@@ -71,8 +71,10 @@ import sys  # Import sys module
 from pathlib import Path
 import time
 import logging.handlers
+import signal
 import warnings
 import threading
+import uuid
 
 import subprocess
 import shlex
@@ -105,10 +107,13 @@ from modules.shutdown_manager import ShutdownManager
 from modules.file_processor import FileProcessor
 from modules.workflow_manager import WorkflowManager
 from modules.services.watch_folder_coordinator import WatchFolderCoordinator
-from modules.db.migrations import initialize_database
-from modules.services.task_registry_service import validate_startup_task_registry
+from modules.services.startup_service import run_startup_checks
+from modules.services.runtime_health_service import (
+    RuntimeHealthReporter,
+    RuntimeHealthService,
+)
 
-from modules.logging_config import setup_logging
+from modules.logging_config import resolve_log_path, setup_bootstrap_logging, setup_logging
 
 # Initialize a basic logger reference; real configuration happens in setup_logging()
 logger = logging.getLogger(__name__)
@@ -159,7 +164,13 @@ def resolve_config_path(args) -> Path:
     return (Path(__file__).parent / "config.yaml").resolve()
 
 
-def start_web_server(config: ConfigProvider, logger: logging.Logger):
+def start_web_server(
+    config: ConfigProvider,
+    logger: logging.Logger,
+    *,
+    run_id: str | None = None,
+    expected_components: tuple[str, ...] = (),
+):
     """Spawn Uvicorn as a subprocess with configured host, port, and reload options.
 
     Args:
@@ -184,13 +195,8 @@ def start_web_server(config: ConfigProvider, logger: logging.Logger):
         base_cmd += " --reload"
 
     logger.info(f"Spawning Uvicorn: {base_cmd}")
-    log_file_path = config.get("logging.log_file", "app.log") or "app.log"
-
-    # Ensure log_file_path is a string path
-    if isinstance(log_file_path, Path):
-        log_file_path = str(log_file_path)
-
-    # Open file in append mode (text) and pass as both stdout and stderr
+    log_file_path = resolve_log_path(config, process_role="web")
+    log_file_path.parent.mkdir(parents=True, exist_ok=True)
     uvicorn_log = open(log_file_path, mode="a", encoding="utf-8", buffering=1)
 
     try:
@@ -207,6 +213,13 @@ def start_web_server(config: ConfigProvider, logger: logging.Logger):
 
         # Ensure the web process reads the same resolved config path
         child_env = os.environ.copy()
+        child_env["DOCFLOW_PROCESS_ROLE"] = "web"
+        child_env["DOCFLOW_STDIO_CAPTURED"] = "1"
+        child_env["DOCFLOW_STARTUP_MODE"] = "verify"
+        if run_id:
+            child_env["DOCFLOW_RUN_ID"] = run_id
+        if expected_components:
+            child_env["DOCFLOW_EXPECTED_COMPONENTS"] = ",".join(expected_components)
         try:
             resolved_cfg = getattr(config, "_config_path", None)
             if resolved_cfg:
@@ -214,13 +227,17 @@ def start_web_server(config: ConfigProvider, logger: logging.Logger):
         except Exception:
             pass
 
+        creation_flags = (
+            subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        )
         process = subprocess.Popen(
             cmd,
             shell=False,
-            # Do not redirect stdout/stderr so subprocess log records are handled
-            # by the application's logging configuration (console + file handlers).
+            stdout=uvicorn_log,
+            stderr=subprocess.STDOUT,
             cwd=str(Path(__file__).parent),  # ensure project root
             env=child_env,
+            creationflags=creation_flags,
         )
         logger.info(f"Uvicorn subprocess started with PID {process.pid}, listening on http://{host}:{port}")
         return process, uvicorn_log
@@ -233,12 +250,24 @@ def start_web_server(config: ConfigProvider, logger: logging.Logger):
         raise
 
 
-def start_processing_worker(config: ConfigProvider, logger: logging.Logger):
+def start_processing_worker(
+    config: ConfigProvider,
+    logger: logging.Logger,
+    *,
+    run_id: str | None = None,
+    expected_components: tuple[str, ...] = (),
+):
     """Spawn the durable worker with the same resolved deployment config."""
     child_env = os.environ.copy()
     resolved_cfg = getattr(config, "_config_path", None)
     if resolved_cfg:
         child_env["CONFIG_PATH"] = str(resolved_cfg)
+    child_env["DOCFLOW_PROCESS_ROLE"] = "worker"
+    child_env["DOCFLOW_STARTUP_MODE"] = "verify"
+    if run_id:
+        child_env["DOCFLOW_RUN_ID"] = run_id
+    if expected_components:
+        child_env["DOCFLOW_EXPECTED_COMPONENTS"] = ",".join(expected_components)
     cmd = [
         sys.executable,
         "-m",
@@ -247,12 +276,106 @@ def start_processing_worker(config: ConfigProvider, logger: logging.Logger):
         str(resolved_cfg) if resolved_cfg else "config.yaml",
     ]
     logger.info("Spawning durable processing worker")
+    creation_flags = (
+        subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+    )
     return subprocess.Popen(
         cmd,
         shell=False,
         cwd=str(Path(__file__).parent),
         env=child_env,
+        creationflags=creation_flags,
     )
+
+
+def wait_for_runtime_readiness(
+    config: ConfigProvider,
+    run_id: str,
+    expected_components: tuple[str, ...],
+    *,
+    processes: dict[str, subprocess.Popen],
+    watch_thread: threading.Thread,
+) -> dict[str, object]:
+    """Wait a bounded time for fresh health from every required component."""
+    timeout = max(
+        1.0,
+        float(config.get("runtime_health.startup_timeout_seconds", 30) or 30),
+    )
+    deadline = time.monotonic() + timeout
+    service = RuntimeHealthService(config, run_id)
+    last_snapshot: dict[str, object] = {}
+    while time.monotonic() < deadline:
+        for component, process in processes.items():
+            return_code = process.poll()
+            if return_code is not None:
+                record_runtime_failure(
+                    service,
+                    component,
+                    details={"exit_code": return_code, "phase": "startup"},
+                )
+                raise RuntimeError(
+                    f"{component} exited during startup with code {return_code}"
+                )
+        if not watch_thread.is_alive():
+            raise RuntimeError("watch-folder coordinator exited during startup")
+        last_snapshot = service.snapshot(expected_components)
+        if bool(last_snapshot.get("ready")):
+            return last_snapshot
+        time.sleep(0.1)
+    missing = last_snapshot.get("missing_components", [])
+    unhealthy = last_snapshot.get("unhealthy_components", [])
+    raise RuntimeError(
+        "Runtime readiness timed out. "
+        f"missing={missing} unhealthy={unhealthy}"
+    )
+
+
+def record_runtime_failure(
+    service: RuntimeHealthService,
+    component: str,
+    *,
+    details: dict[str, object],
+) -> None:
+    """Persist a component failure without masking supervision behavior."""
+    try:
+        service.record(component, "failed", details=details)
+    except Exception:
+        logger.exception(
+            "Failed to persist component failure: component=%s", component
+        )
+
+
+def terminate_process_tree(
+    process: subprocess.Popen,
+    *,
+    name: str,
+    logger: logging.Logger,
+    timeout: float = 10,
+) -> None:
+    """Stop a child and its descendants, with a bounded forced fallback."""
+    if process.poll() is not None:
+        return
+    logger.info("Stopping %s process tree (PID %s)", name, process.pid)
+    try:
+        if os.name == "nt":
+            os.kill(process.pid, signal.CTRL_BREAK_EVENT)
+        else:
+            process.terminate()
+        process.wait(timeout=timeout)
+        return
+    except (OSError, subprocess.SubprocessError, TimeoutError):
+        logger.warning("Graceful %s shutdown timed out; forcing termination", name)
+
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            check=False,
+            capture_output=True,
+            timeout=timeout,
+        )
+    else:
+        process.kill()
+    process.wait(timeout=timeout)
 
 
 def main():
@@ -267,104 +390,175 @@ def main():
     # Determine the config path
     resolved_config_path = resolve_config_path(args)
 
+    setup_bootstrap_logging(process_role="supervisor")
+
     # Initialize ConfigManager singleton with the resolved path
     config_manager = ConfigManager(config_path=resolved_config_path)
-    if bool(config_manager.get("database.run_migrations_on_startup", True)):
-        try:
-            initialize_database(config_manager)
-        except Exception:
-            logger.critical(
-                "Database migration failed; startup is blocked before accepting work."
-            )
-            sys.exit(1)
-    # Use centralized logging setup from modules.logging_config
-    setup_logging(wrap_stdout_utf8=True)
-    validate_startup_task_registry(config_manager)
-
-    # Initialize ShutdownManager singleton
-    shutdown_manager = ShutdownManager()
-
-    # Instantiate WorkflowManager
-    workflow_manager = WorkflowManager(config_manager)
-
-    # FileProcessor retains a legacy retry dependency but no longer uses it.
-    file_processor = FileProcessor(config_manager, None, workflow_manager)
-
-    # Start the durable worker before accepting web or watch-folder work.
-    worker_proc = None
+    setup_logging(
+        config_manager,
+        process_role="supervisor",
+        wrap_stdout_utf8=True,
+    )
     try:
-        worker_proc = start_processing_worker(config_manager, logger)
-    except Exception as e:
-        logger.exception(f"Failed to start durable processing worker: {e}")
+        run_startup_checks(config_manager, migration_mode="migrate")
+    except Exception as exc:
+        logger.critical(
+            "Application startup checks failed; startup is blocked. "
+            "failure_type=%s",
+            type(exc).__name__,
+        )
         sys.exit(1)
 
-    # Start web server unless disabled
+    shutdown_manager = ShutdownManager()
+    run_id = uuid.uuid4().hex
+    expected_components = ("supervisor", "worker", "watch_folder")
+    if not args.no_web:
+        expected_components += ("web",)
+    supervisor_reporter = RuntimeHealthReporter(
+        config_manager, run_id, "supervisor"
+    )
+    watch_reporter = RuntimeHealthReporter(
+        config_manager, run_id, "watch_folder"
+    )
+    worker_proc = None
     uvicorn_proc = None
     uvicorn_log_handle = None
-    if not args.no_web:
-        try:
-            uvicorn_proc, uvicorn_log_handle = start_web_server(config_manager, logger)
-        except Exception as e:
-            logger.exception(f"Failed to start web server: {e}")
-            sys.exit(1)
-    else:
-        logger.info("Web server disabled via --no-web")
+    watch_folder_monitor = None
+    watch_thread = None
+    exit_code = 0
+    monitor_failure: list[BaseException] = []
 
-    # One coordinator reconciles all enabled SQLite watch-folder bindings.
-    watch_folder_monitor = WatchFolderCoordinator(config_manager, file_processor)
-
-    def run_watch_folder_monitor() -> None:
-        """Keep coordinator failures from escaping the supervision thread."""
-        try:
-            watch_folder_monitor.start()
-        except Exception:
-            logger.exception("Watch folder monitoring stopped unexpectedly")
-
-    watch_thread = threading.Thread(
-        target=run_watch_folder_monitor,
-        name="watch-folder-coordinator",
-        daemon=True,
-    )
-    watch_thread.start()
     try:
-        logger.info("Watch folder monitoring has started. Press Ctrl+C to stop.")
-        if args.no_web:
-            while watch_thread.is_alive():
-                if worker_proc.poll() is not None:
-                    logger.error("Durable processing worker exited unexpectedly")
-                    break
-                time.sleep(1)
+        supervisor_reporter.start(status="starting")
+        workflow_manager = WorkflowManager(config_manager)
+        file_processor = FileProcessor(config_manager, None, workflow_manager)
+
+        worker_proc = start_processing_worker(
+            config_manager,
+            logger,
+            run_id=run_id,
+            expected_components=expected_components,
+        )
+
+        if not args.no_web:
+            uvicorn_proc, uvicorn_log_handle = start_web_server(
+                config_manager,
+                logger,
+                run_id=run_id,
+                expected_components=expected_components,
+            )
         else:
-            while True:
-                if uvicorn_proc is not None and uvicorn_proc.poll() is not None:
-                    logger.error("Uvicorn subprocess exited unexpectedly")
-                    break
-                if worker_proc.poll() is not None:
-                    logger.error("Durable processing worker exited unexpectedly")
-                    break
-                time.sleep(1)
+            logger.info("Web server disabled via --no-web")
+
+        watch_folder_monitor = WatchFolderCoordinator(
+            config_manager,
+            file_processor,
+            health_reporter=watch_reporter,
+        )
+
+        def run_watch_folder_monitor() -> None:
+            """Capture coordinator failures for the supervisor."""
+            try:
+                watch_reporter.start(status="ready")
+                watch_folder_monitor.start()
+            except BaseException as exc:
+                monitor_failure.append(exc)
+                logger.exception("Watch folder monitoring stopped unexpectedly")
+                watch_reporter.stop(status="failed")
+
+        watch_thread = threading.Thread(
+            target=run_watch_folder_monitor,
+            name="watch-folder-coordinator",
+            daemon=True,
+        )
+        watch_thread.start()
+        supervisor_reporter.set_status("ready")
+
+        processes = {"worker": worker_proc}
+        if uvicorn_proc is not None:
+            processes["web"] = uvicorn_proc
+        wait_for_runtime_readiness(
+            config_manager,
+            run_id,
+            expected_components,
+            processes=processes,
+            watch_thread=watch_thread,
+        )
+        logger.info("Application runtime is ready: run_id=%s", run_id)
+        runtime_health = RuntimeHealthService(config_manager, run_id)
+
+        while True:
+            if monitor_failure or not watch_thread.is_alive():
+                if not monitor_failure:
+                    watch_reporter.set_status(
+                        "failed", {"reason": "coordinator_exited"}
+                    )
+                logger.error("Watch-folder coordinator exited unexpectedly")
+                exit_code = 1
+                break
+            if uvicorn_proc is not None and uvicorn_proc.poll() is not None:
+                record_runtime_failure(
+                    runtime_health,
+                    "web",
+                    details={
+                        "exit_code": uvicorn_proc.returncode,
+                        "phase": "runtime",
+                    },
+                )
+                logger.error(
+                    "Uvicorn subprocess exited unexpectedly with code %s",
+                    uvicorn_proc.returncode,
+                )
+                exit_code = 1
+                break
+            if worker_proc.poll() is not None:
+                record_runtime_failure(
+                    runtime_health,
+                    "worker",
+                    details={
+                        "exit_code": worker_proc.returncode,
+                        "phase": "runtime",
+                    },
+                )
+                logger.error(
+                    "Durable processing worker exited unexpectedly with code %s",
+                    worker_proc.returncode,
+                )
+                exit_code = 1
+                break
+            time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received. Shutting down...")
-    except Exception as e:
-        logger.exception(f"Application supervision failed: {e}")
+    except Exception as exc:
+        exit_code = 1
+        logger.exception(
+            "Application startup or supervision failed: failure_type=%s",
+            type(exc).__name__,
+        )
     finally:
-        # Stop watch folder monitor
         try:
-            watch_folder_monitor.stop()
-        except Exception as e:
-            logger.warning(f"Error while stopping monitor after interrupt: {e}")
-        # Terminate uvicorn subprocess
+            supervisor_reporter.set_status("stopping")
+        except Exception:
+            logger.exception("Failed to record supervisor stopping state")
+        if watch_folder_monitor is not None:
+            try:
+                watch_folder_monitor.stop()
+            except Exception as exc:
+                logger.warning("Error while stopping watch-folder coordinator: %s", exc)
+        if watch_thread is not None and watch_thread.is_alive():
+            watch_thread.join(timeout=10)
+        try:
+            watch_reporter.stop()
+        except Exception:
+            logger.exception("Failed to stop watch-folder health reporter")
         if uvicorn_proc is not None:
             try:
-                logger.info("Terminating Uvicorn subprocess...")
-                uvicorn_proc.terminate()
-                try:
-                    uvicorn_proc.wait(timeout=10)
-                except Exception:
-                    logger.info("Uvicorn did not exit in time; killing...")
-                    uvicorn_proc.kill()
-            except Exception as e:
-                logger.warning(f"Error while terminating Uvicorn: {e}")
+                terminate_process_tree(
+                    uvicorn_proc, name="web", logger=logger
+                )
+            except Exception as exc:
+                exit_code = 1
+                logger.warning("Error while terminating web process tree: %s", exc)
             finally:
                 if uvicorn_log_handle is not None:
                     try:
@@ -374,17 +568,17 @@ def main():
                         pass
         if worker_proc is not None:
             try:
-                logger.info("Terminating durable processing worker...")
-                worker_proc.terminate()
-                try:
-                    worker_proc.wait(timeout=10)
-                except Exception:
-                    worker_proc.kill()
-            except Exception as e:
-                logger.warning(f"Error while terminating durable worker: {e}")
-        # Perform shutdown and exit cleanly
-        shutdown_manager.shutdown()
-        sys.exit(0)
+                terminate_process_tree(
+                    worker_proc, name="worker", logger=logger
+                )
+            except Exception as exc:
+                exit_code = 1
+                logger.warning("Error while terminating worker process tree: %s", exc)
+        try:
+            supervisor_reporter.stop(status="failed" if exit_code else "stopped")
+        finally:
+            shutdown_manager.shutdown()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":

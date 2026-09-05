@@ -811,7 +811,18 @@ The unified application uses SQLite as the primary source of workflow state.
 
 #### 4.5.1. Database Initialization
 
-The database location is configured by `database.path`, with a default of `data/app_state.sqlite3`. When `database.run_migrations_on_startup` is true, migrations run during application process startup rather than during individual HTTP requests. Legacy or direct ingestion helpers may also perform defensive idempotent initialization before creating workflow state.
+The database location is configured by `database.path`, with a default of
+`data/app_state.sqlite3`. During normal `main.py` startup, the parent process is
+the only migration owner. The web and worker children open the database in
+verification mode and refuse to start when the schema is missing, incomplete,
+older, or newer than the supported version. HTTP requests do not run schema
+migrations.
+
+A directly launched worker verifies an already prepared database by default.
+Pass `--startup-mode migrate` only when that standalone worker must own
+migration. A directly launched Uvicorn process uses verification mode; set
+`DOCFLOW_STARTUP_MODE=migrate` explicitly when it must initialize a fresh
+database.
 
 Administrators should back up the SQLite database together with durable business artifacts. The database contains operational state and review decisions; exported CSV/JSON/PDF files remain filesystem artifacts.
 
@@ -1068,20 +1079,23 @@ definition.
 
 ### 4.6. Log Files and Troubleshooting
 
-- The main log file is `app.log` in the project root.
+- `logging.log_file` supplies the base log path. The default `app.log` produces
+  `app.supervisor.log`, `app.web.log`, and `app.worker.log` beside the active
+  configuration file.
 - To see more detailed logs, set `logging.log_level` to `DEBUG` in `config.yaml`.
 - Common startup errors include:
   - Invalid YAML syntax (check your config file with a YAML validator).
+  - A missing, incomplete, older, or newer SQLite schema.
   - Missing folders (create required folders like `watch_folder`, `web_upload` before starting).
   - Missing or invalid provider credentials, such as a LlamaCloud `api_key`.
   - Permission errors (ensure the system user has read/write access to all configured directories).
 - Performance considerations for large files:
   - Larger PDFs require more disk, memory, network, split, and provider processing time.
   - Process unusually large documents individually and during quieter periods.
-  - Monitor **Processing Overview**, `app.log`, Windows Task Manager, free disk space, and provider quotas.
+  - Monitor **Processing Overview**, the role-specific logs, Windows Task Manager, free disk space, and provider quotas.
 - During runtime troubleshooting:
-  - Failed tasks log detailed errors to `app.log` with timestamps and context information.
-  - Files with processing errors may remain in the processing directory; check **Processing Overview**, **Failures**, and `app.log`.
+  - Failed tasks log detailed errors to `app.worker.log` with timestamps and context information when the default base path is used.
+  - Files with processing errors may remain in the processing directory; check **Processing Overview**, **Failures**, and the worker log.
   - Use the application pages for current status and the log for technical details.
   - Use `Ctrl+C` to request an orderly shutdown, then verify any document that was processing at the time.
 - Common runtime issues and solutions:
@@ -1098,19 +1112,31 @@ definition.
 ### 4.7. Graceful Shutdown and Error Recovery
 
 To stop the system, press `Ctrl+C` in the terminal where `main.py` is running.
-This asks the watch-folder coordinator and web server to stop and runs
-registered cleanup handlers. It does not guarantee that every in-progress
-document finishes before the processes exit.
+This asks the watch-folder coordinator, web server, and durable worker to stop,
+then runs registered cleanup handlers. It does not guarantee that every
+in-progress document finishes before the processes exit. An unexpected web,
+worker, or coordinator exit stops the remaining components and returns a
+nonzero process exit code. On Windows, the supervisor gives child processes a
+bounded graceful-stop period before force-terminating their process trees.
+
+For service monitoring, `GET /health/live` confirms that the web process can
+respond and `GET /health/ready` returns `503` until the current supervised run
+is ready. Administrators can use `GET /api/admin/runtime-health` for component,
+heartbeat, watch-folder degradation, and database details.
 
 After stopping or restarting:
 
-1. Check the final shutdown messages in `app.log`.
+1. Check the final shutdown messages in `app.supervisor.log` when using the
+   default log base path.
 2. Sign in and open **Processing Overview** and **Failures**.
 3. Inspect any document that was processing when shutdown began.
 4. Confirm whether its outputs were created before deciding to re-upload it.
 5. Do not delete processing files or database records unless the document state and recovery need are understood.
 
-If the system fails to start, check `app.log`, validate `config.yaml`, confirm that the required watch and upload folders exist, and verify folder permissions and provider connectivity. The Config Check tool described in section 4.12 should be the first configuration diagnostic.
+If the system fails to start, check the supervisor and component logs, validate
+`config.yaml`, confirm that the required watch and upload folders exist, and
+verify folder permissions and provider connectivity. The Config Check tool
+described in section 4.12 should be the first configuration diagnostic.
 
 ### 4.8. Task System: Standard Steps and Parameters
 

@@ -23,7 +23,7 @@ from urllib.parse import parse_qs
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -36,8 +36,13 @@ from modules.api_router import (
 from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
 from modules.auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
-from modules.db.migrations import initialize_database
-from modules.services.task_registry_service import validate_startup_task_registry
+from modules.logging_config import setup_bootstrap_logging, setup_logging
+from modules.services.startup_service import run_startup_checks
+from modules.services.runtime_health_service import (
+    RuntimeHealthReporter,
+    RuntimeHealthService,
+    expected_components_from_env,
+)
 
 
 def _cors_allowed_origins(config: ConfigManager) -> list[str]:
@@ -109,18 +114,39 @@ def create_app() -> FastAPI:
         - API routes are composed via modules.api_router.build_router().
         - ShutdownManager is registered to handle application shutdown events.
     """
-    logger = logging.getLogger("web.server")
+    process_role = os.getenv("DOCFLOW_PROCESS_ROLE", "web")
+    setup_bootstrap_logging(process_role=process_role)
     config, _, _, _, _ = get_dependencies()
+    setup_logging(
+        config,
+        process_role=process_role,
+        wrap_stdout_utf8=True,
+        file_logging=os.getenv("DOCFLOW_STDIO_CAPTURED") != "1",
+    )
+    logger = logging.getLogger("web.server")
+    run_startup_checks(
+        config,
+        migration_mode=os.getenv("DOCFLOW_STARTUP_MODE", "verify"),
+    )
     production = _is_production()
     docs_enabled = not production or bool(config.get("web.production_docs_enabled", False))
     shutdown_manager = ShutdownManager()
+    run_id = os.getenv("DOCFLOW_RUN_ID", "").strip()
+    health_reporter = (
+        RuntimeHealthReporter(config, run_id, "web") if run_id else None
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         """Run registered cleanup tasks when the ASGI application stops."""
-
-        yield
-        shutdown_manager.shutdown()
+        try:
+            if health_reporter is not None:
+                health_reporter.start(status="ready")
+            yield
+        finally:
+            if health_reporter is not None:
+                health_reporter.stop()
+            shutdown_manager.shutdown()
 
     app = FastAPI(
         title="PDF Processing Web Interface",
@@ -134,6 +160,32 @@ def create_app() -> FastAPI:
         TrustedHostMiddleware,
         allowed_hosts=_allowed_hosts(config, production),
     )
+
+    @app.get("/health/live", include_in_schema=False)
+    def health_live() -> dict[str, str]:
+        """Report only that the web process can serve requests."""
+        return {"status": "alive"}
+
+    @app.get("/health/ready", include_in_schema=False)
+    def health_ready() -> Any:
+        """Report whether the supervised runtime can accept work."""
+        if not run_id:
+            return JSONResponse(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                content={"status": "not_ready"},
+            )
+        snapshot = RuntimeHealthService(config, run_id).snapshot(
+            expected_components_from_env()
+        )
+        status_code = (
+            status.HTTP_200_OK
+            if snapshot["ready"]
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+        return JSONResponse(
+            status_code=status_code,
+            content={"status": snapshot["status"]},
+        )
 
     @app.middleware("http")
     async def add_security_headers(request: Request, call_next: Any) -> Any:
@@ -178,21 +230,15 @@ def create_app() -> FastAPI:
             path="/",
         )
 
-    try:
-        validate_startup_task_registry(config)
-        allowed_origins = _cors_allowed_origins(config)
-        if allowed_origins:
-            app.add_middleware(
-                CORSMiddleware,
-                allow_origins=allowed_origins,
-                allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                allow_headers=["Authorization", "Content-Type"],
-                allow_credentials=True,
-            )
-        if bool(config.get("database.run_migrations_on_startup", True)):
-            initialize_database(config)
-    except Exception as exc:
-        logger.warning("Database initialization during web startup failed: %s", exc)
+    allowed_origins = _cors_allowed_origins(config)
+    if allowed_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allowed_origins,
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type"],
+            allow_credentials=True,
+        )
 
     # Helper: read/validate JWT from cookie; return username or None
     async def get_current_user(request: Request) -> Optional[str]:

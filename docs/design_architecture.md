@@ -95,14 +95,38 @@ flowchart LR
 
 The default deployment contains a parent process plus two child processes:
 
-1. `main.py` resolves configuration, runs migrations, validates the task
-   registry, configures logging, and constructs ingestion/workflow components.
+1. `main.py` resolves configuration, configures supervisor logging, runs
+   migrations, validates the task registry, and constructs ingestion/workflow
+   components.
 2. Unless `--no-web` is supplied, it starts Uvicorn as a subprocess.
 3. It starts a dedicated durable processing-worker subprocess.
 4. The parent process runs the polling watch-folder coordinator in a thread and
    supervises both child processes.
 5. The parent, web, and worker processes access the configured SQLite database and
    filesystem; only the worker executes queued root workflows.
+
+The parent is the sole migration owner in this topology. Before either child
+accepts work, the web and worker processes use read-only startup verification
+to require the exact supported schema version and essential runtime tables.
+Startup validation failures propagate out of application construction; the web
+process does not continue serving a partially initialized application.
+
+Each launch has a fresh run ID. The supervisor, web process, worker, and
+watch-folder coordinator write run-scoped heartbeats to SQLite and must all
+report ready within a bounded startup window. Worker heartbeats continue on a
+dedicated thread while OCR is running; inaccessible watch-folder bindings mark
+ingestion degraded without marking the worker unavailable. Unexpected
+component exits make the supervisor stop the remaining process trees and exit
+nonzero. On Windows, children run in separate process groups so shutdown first
+requests an orderly stop after current worker activity, then force-terminates
+the full process tree only if the bounded grace period expires.
+
+`logging.log_file` is a deployment-configured base path. Normal startup derives
+separate `.supervisor`, `.web`, and `.worker` files from it, resolves a
+relative path beside the active configuration file, and applies
+`logging.log_level` to each process. Log records include the process role and
+PID. The parent redirects Uvicorn stdout and stderr to the web-role log so
+output emitted before web logging initializes is retained.
 
 Watch-folder files and web batch uploads are persisted as SQLite processing jobs
 before the producer acknowledges them. A worker claims one job with a lease and
@@ -393,6 +417,7 @@ review; mixed terminal outcomes produce `completed_with_errors`.
 | Versioned pipelines | `pipeline_templates`, `pipeline_drafts`, `pipeline_versions`, `pipeline_version_schema_dependencies` |
 | Versioned review forms | `review_schema_templates`, `review_schema_drafts`, `review_schema_versions` |
 | Ingress configuration | `watch_folder_bindings` |
+| Runtime health | `runtime_component_health` |
 | Schema management | `schema_migrations` |
 
 [`modules/db/connection.py`](../modules/db/connection.py) resolves the database
@@ -402,10 +427,10 @@ services coordinate cross-table behavior.
 
 Migrations currently apply an idempotent schema and record a coarse version.
 This is not a complete ordered migration chain with per-change upgrade and
-downgrade scripts. When enabled, migrations run during application process
-startup; HTTP request dependency resolution does not run schema migrations.
-Legacy or direct ingestion helpers may still perform defensive idempotent
-initialization before creating workflow state.
+downgrade scripts. During normal startup, only the parent runs migrations; its
+web and worker children verify the exact schema without modifying it. Request
+handling does not run schema migrations. Standalone web or worker processes
+must explicitly select migration mode when they own database initialization.
 
 SQLite stores artifact identity, role, path, and metadata. The filesystem
 stores contents. Canonical roles are:

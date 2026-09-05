@@ -13,6 +13,7 @@ from modules.config_protocol import ConfigProvider
 from modules.db.connection import connect
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.ingress_binding_service import IngressBindingService
+from modules.services.runtime_health_service import RuntimeHealthReporter
 from modules.utils import is_pdf_header, windows_long_path
 
 
@@ -22,11 +23,18 @@ logger = logging.getLogger(__name__)
 class WatchFolderCoordinator:
     """Reconcile bindings and claim files sequentially under one process lock."""
 
-    def __init__(self, config: ConfigProvider, file_processor: Any | None = None) -> None:
+    def __init__(
+        self,
+        config: ConfigProvider,
+        file_processor: Any | None = None,
+        *,
+        health_reporter: RuntimeHealthReporter | None = None,
+    ) -> None:
         self.config = config
         # Kept as an optional constructor argument for callers that used the
         # pre-queue coordinator. Workflow execution belongs to the worker now.
         self.file_processor = file_processor
+        self.health_reporter = health_reporter
         self.polling_interval = float(
             config.get("watch_folder.polling_interval", 5) or 5
         )
@@ -43,10 +51,12 @@ class WatchFolderCoordinator:
         self.stop_event = Event()
         self._lock = RLock()
         self._ignored_invalid: set[tuple[str, str]] = set()
+        self._scan_issue_count = 0
 
     def scan_once(self) -> int:
         """Reconcile current bindings and process each folder sequentially."""
         processed = 0
+        self._scan_issue_count = 0
         with self._lock:
             with connect(self.config) as conn:
                 bindings = IngressBindingService(conn, self.config).list()
@@ -56,15 +66,25 @@ class WatchFolderCoordinator:
                 try:
                     processed += self._scan_binding(binding)
                 except Exception:
+                    self._scan_issue_count += 1
                     logger.exception(
                         "Watch binding scan failed for binding_id=%s",
                         binding["id"],
                     )
+        if self.health_reporter is not None:
+            if self._scan_issue_count:
+                self.health_reporter.set_status(
+                    "degraded",
+                    {"binding_issue_count": self._scan_issue_count},
+                )
+            else:
+                self.health_reporter.set_status("ready")
         return processed
 
     def _scan_binding(self, binding: dict[str, Any]) -> int:
         folder = Path(str(binding["folder_path"]))
         if not folder.is_dir():
+            self._scan_issue_count += 1
             logger.warning(
                 "Watch binding is inaccessible: binding_id=%s", binding["id"]
             )
@@ -75,6 +95,7 @@ class WatchFolderCoordinator:
                 path for path in folder.iterdir() if path.suffix.lower() == ".pdf"
             )
         except OSError:
+            self._scan_issue_count += 1
             logger.warning(
                 "Watch binding cannot be listed: binding_id=%s", binding["id"]
             )

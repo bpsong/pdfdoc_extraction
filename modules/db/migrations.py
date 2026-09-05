@@ -13,7 +13,8 @@ from modules.services.legacy_versioned_config_migration import (
 
 
 LEGACY_SCHEMA_VERSION = 2
-SCHEMA_VERSION = 4
+PROCESSING_QUEUE_SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 TARGET_VERSIONED_CONFIG_SCHEMA_VERSION = 3
 
 
@@ -112,12 +113,27 @@ def initialize_database(config_manager: ConfigProvider) -> None:
         ).fetchone()
         if existing is not None:
             return
+        processing_queue_schema_exists = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?",
+            (PROCESSING_QUEUE_SCHEMA_VERSION,),
+        ).fetchone() is not None
+        if processing_queue_schema_exists:
+            with immediate_transaction(conn):
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                    (SCHEMA_VERSION, utc_now()),
+                )
+            return
         versioned_schema_exists = conn.execute(
             "SELECT 1 FROM schema_migrations WHERE version = ?",
             (TARGET_VERSIONED_CONFIG_SCHEMA_VERSION,),
         ).fetchone() is not None
         if versioned_schema_exists:
             with immediate_transaction(conn):
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                    (PROCESSING_QUEUE_SCHEMA_VERSION, utc_now()),
+                )
                 conn.execute(
                     "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                     (SCHEMA_VERSION, utc_now()),
@@ -151,6 +167,10 @@ def initialize_database(config_manager: ConfigProvider) -> None:
                         "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                         (TARGET_VERSIONED_CONFIG_SCHEMA_VERSION, utc_now()),
                     )
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                    (PROCESSING_QUEUE_SCHEMA_VERSION, utc_now()),
+                )
                 conn.execute(
                     "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                     (SCHEMA_VERSION, utc_now()),

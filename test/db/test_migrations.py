@@ -36,4 +36,5 @@ def test_initialize_database_creates_schema_and_is_idempotent(tmp_path):
     assert "batches" in tables
     assert "documents" in tables
     assert "task_runs" in tables
-    assert migration_versions == {2, 3, 4}
+    assert "runtime_component_health" in tables
+    assert migration_versions == {2, 3, 4, 5}

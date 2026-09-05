@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock, call
 
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
@@ -101,3 +102,20 @@ def test_expired_lease_is_requeued_before_claim(tmp_path):
     assert job["status"] == "completed"
     assert job["attempt_count"] == 2
     assert processor.calls[0]["document_id"] == created["documents"][0]["id"]
+
+
+def test_worker_reports_busy_and_ready_around_work(tmp_path):
+    config, _, processor = build_job(tmp_path)
+    reporter = Mock()
+    worker = ProcessingWorker(
+        config,
+        file_processor=processor,
+        worker_id="health-worker",
+        health_reporter=reporter,
+    )
+
+    assert worker.run_once() is True
+
+    assert reporter.set_status.call_args_list[0].args[0] == "busy"
+    assert reporter.set_status.call_args_list[0].args[1]["job_id"]
+    assert reporter.set_status.call_args_list[-1] == call("ready")

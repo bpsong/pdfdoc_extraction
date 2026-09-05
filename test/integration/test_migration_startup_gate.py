@@ -22,9 +22,20 @@ def _patch_common(monkeypatch, config):
         main, "resolve_config_path", lambda args: Path("synthetic-config.yaml")
     )
     monkeypatch.setattr(main, "ConfigManager", lambda config_path: config)
+    monkeypatch.setattr(main, "setup_bootstrap_logging", Mock())
     monkeypatch.setattr(main, "setup_logging", Mock())
-    monkeypatch.setattr(main, "validate_startup_task_registry", Mock())
     monkeypatch.setattr(main, "ShutdownManager", lambda: Mock())
+    worker = Mock()
+    worker.poll.return_value = None
+    monkeypatch.setattr(
+        main, "start_processing_worker", lambda *args, **kwargs: worker
+    )
+    reporter = Mock()
+    monkeypatch.setattr(main, "RuntimeHealthReporter", lambda *args, **kwargs: reporter)
+    monkeypatch.setattr(
+        main, "wait_for_runtime_readiness", Mock(return_value={"ready": True})
+    )
+    monkeypatch.setattr(main, "terminate_process_tree", Mock())
 
 
 def test_startup_refuses_web_watch_and_ingestion_after_migration_failure(
@@ -35,7 +46,7 @@ def test_startup_refuses_web_watch_and_ingestion_after_migration_failure(
     sensitive = "synthetic-secret-at-C:/customer/config.yaml"
     monkeypatch.setattr(
         main,
-        "initialize_database",
+        "run_startup_checks",
         Mock(side_effect=RuntimeError(sensitive)),
     )
     workflow = Mock()
@@ -64,7 +75,23 @@ def test_successful_migration_precedes_runtime_construction(monkeypatch):
     _patch_common(monkeypatch, config)
     events = []
     monkeypatch.setattr(
-        main, "initialize_database", lambda cfg: events.append("migration")
+        main,
+        "setup_bootstrap_logging",
+        lambda **kwargs: events.append("bootstrap-logging"),
+    )
+    monkeypatch.setattr(
+        main,
+        "setup_logging",
+        lambda *args, **kwargs: events.append("configured-logging"),
+    )
+    startup_modes = []
+    monkeypatch.setattr(
+        main,
+        "run_startup_checks",
+        lambda cfg, **kwargs: (
+            startup_modes.append(kwargs["migration_mode"]),
+            events.append("startup-checks"),
+        ),
     )
     monkeypatch.setattr(
         main, "WorkflowManager", lambda cfg: events.append("workflow") or Mock()
@@ -76,7 +103,7 @@ def test_successful_migration_precedes_runtime_construction(monkeypatch):
     )
 
     class Coordinator:
-        def __init__(self, config_manager, processor):
+        def __init__(self, config_manager, processor, **_kwargs):
             events.append("coordinator")
 
         def start(self):
@@ -90,11 +117,14 @@ def test_successful_migration_precedes_runtime_construction(monkeypatch):
     with pytest.raises(SystemExit) as error:
         main.main()
 
-    assert error.value.code == 0
-    assert events[:5] == [
-        "migration",
+    assert error.value.code == 1
+    assert events[:7] == [
+        "bootstrap-logging",
+        "configured-logging",
+        "startup-checks",
         "workflow",
         "processor",
         "coordinator",
         "watch-start",
     ]
+    assert startup_modes == ["migrate"]

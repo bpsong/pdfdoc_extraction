@@ -60,7 +60,6 @@ from .db.repositories import (
     TaskRunRepository,
     UserRepository,
 )
-from .db.migrations import initialize_database
 from .services.admin_settings_service import (
     AdminAuditService,
     AdminSettingsError,
@@ -89,6 +88,10 @@ from .services.processing_state_service import ProcessingStateService
 from .services.reports_service import ReportsService
 from .services.review_service import ReviewService, ReviewServiceError
 from .services.runtime_settings_service import RuntimeSettingsService
+from .services.runtime_health_service import (
+    RuntimeHealthService,
+    expected_components_from_env,
+)
 from .services.schema_service import SchemaService
 from .services.review_schema_version_service import (
     ReviewSchemaConflictError,
@@ -877,7 +880,6 @@ def build_router() -> APIRouter:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Append an admin audit event without changing endpoint response shape."""
-        initialize_database(config)
         with connect(config) as conn:
             AuditService(conn).append_event(
                 event_type=event_type,
@@ -1341,6 +1343,26 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         with connect(config) as conn:
             return AdminSummaryService(config, conn).summary()
+
+    @router.get("/api/admin/runtime-health")
+    def get_admin_runtime_health(user: str = Depends(get_current_user)):
+        """Return run-scoped component diagnostics to administrators."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        run_id = os.getenv("DOCFLOW_RUN_ID", "").strip()
+        if not run_id:
+            return {
+                "run_id": None,
+                "status": "not_supervised",
+                "ready": False,
+                "expected_components": [],
+                "missing_components": [],
+                "unhealthy_components": [],
+                "components": {},
+            }
+        return RuntimeHealthService(config, run_id).snapshot(
+            expected_components_from_env()
+        )
 
     @router.get("/api/admin/settings")
     def get_admin_settings(user: str = Depends(get_current_user)):

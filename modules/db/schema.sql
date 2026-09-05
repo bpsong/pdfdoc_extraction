@@ -317,6 +317,19 @@ CREATE TABLE IF NOT EXISTS watch_folder_bindings (
         REFERENCES pipeline_versions(id, template_id)
 );
 
+CREATE TABLE IF NOT EXISTS runtime_component_health (
+    run_id TEXT NOT NULL,
+    component TEXT NOT NULL,
+    process_id INTEGER,
+    status TEXT NOT NULL CHECK(status IN (
+        'starting', 'ready', 'busy', 'degraded', 'stopping', 'stopped', 'failed'
+    )),
+    started_at TEXT NOT NULL,
+    last_heartbeat_at TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY(run_id, component)
+);
+
 CREATE INDEX IF NOT EXISTS idx_documents_batch_id ON documents(batch_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_task_runs_document_id ON task_runs(document_id);
@@ -337,6 +350,8 @@ CREATE INDEX IF NOT EXISTS idx_pipeline_dependencies_schema
     ON pipeline_version_schema_dependencies(schema_version_id);
 CREATE INDEX IF NOT EXISTS idx_watch_folder_bindings_enabled
     ON watch_folder_bindings(enabled, normalized_path);
+CREATE INDEX IF NOT EXISTS idx_runtime_component_health_heartbeat
+    ON runtime_component_health(last_heartbeat_at);
 CREATE INDEX IF NOT EXISTS idx_batches_pipeline_version ON batches(pipeline_version_id);
 CREATE INDEX IF NOT EXISTS idx_documents_pipeline_version ON documents(pipeline_version_id);
 CREATE INDEX IF NOT EXISTS idx_task_runs_pipeline_version ON task_runs(pipeline_version_id);

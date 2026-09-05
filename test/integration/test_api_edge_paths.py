@@ -120,11 +120,8 @@ def test_dependency_resolution_does_not_run_database_migrations(
     auth = object()
     workflow_manager = object()
     file_processor = object()
-    migration = Mock()
-
     monkeypatch.setenv("CONFIG_PATH", str(tmp_path / "config.yaml"))
     monkeypatch.setattr(api, "ConfigManager", Mock(return_value=config))
-    monkeypatch.setattr(api, "initialize_database", migration)
     monkeypatch.setattr(api, "AuthUtils", Mock(return_value=auth))
     monkeypatch.setattr(api, "WorkflowManager", Mock(return_value=workflow_manager))
     monkeypatch.setattr(api, "FileProcessor", Mock(return_value=file_processor))
@@ -138,7 +135,6 @@ def test_dependency_resolution_does_not_run_database_migrations(
         workflow_manager,
         file_processor,
     )
-    migration.assert_not_called()
 
 
 def test_login_body_parsing_success_and_failure_paths(monkeypatch):

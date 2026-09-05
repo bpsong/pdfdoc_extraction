@@ -410,7 +410,6 @@ def test_router_remaining_nested_helpers(monkeypatch: pytest.MonkeyPatch, tmp_pa
     assert helpers["_schema_active_review_warning"]("missing.yaml", ConfigStub({})) is None
 
     audit_service = Mock()
-    monkeypatch.setattr(router, "initialize_database", Mock())
     monkeypatch.setattr(router, "AuditService", lambda conn: audit_service)
     helpers["_append_admin_audit"](
         ConfigStub({}), event_type="admin_test", user="admin", after={"ok": True}

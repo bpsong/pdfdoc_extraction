@@ -241,7 +241,7 @@ def test_active_yaml_and_schemas_import_idempotently_with_collisions(
     assert stat.S_IMODE(config._config_path.stat().st_mode) == original_mode
     assert (first / "invoice.yaml").exists()
     assert (second / "invoice.json").exists()
-    assert migration_versions == {2, 3, 4}
+    assert migration_versions == {2, 3, 4, 5}
     assert SECRET_VALUE not in caplog.text
 
 

@@ -13,6 +13,7 @@ from modules.db.connection import connect
 from modules.db.repositories import BatchRepository, DocumentRepository, ProcessingJobRepository
 from modules.file_processor import FileProcessor
 from modules.services.processing_job_service import ProcessingJobService
+from modules.services.runtime_health_service import RuntimeHealthReporter
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.workflow_manager import WorkflowManager
 
@@ -29,6 +30,7 @@ class ProcessingWorker:
         *,
         file_processor: Any | None = None,
         worker_id: str | None = None,
+        health_reporter: RuntimeHealthReporter | None = None,
     ) -> None:
         self.config = config
         self.worker_id = worker_id or f"worker-{uuid.uuid4()}"
@@ -42,6 +44,7 @@ class ProcessingWorker:
             0.1, float(config.get("processing_queue.retry_delay", 5) or 5)
         )
         self.stop_event = Event()
+        self.health_reporter = health_reporter
         self.file_processor = file_processor or FileProcessor(
             config, None, WorkflowManager(config)
         )
@@ -63,6 +66,9 @@ class ProcessingWorker:
 
         job_id = str(job["id"])
         document_id = str(job["document_id"])
+        document: dict[str, Any] | None = None
+        if self.health_reporter is not None:
+            self.health_reporter.set_status("busy", {"job_id": job_id})
         try:
             with connect(self.config) as conn:
                 document = DocumentRepository(conn).get(document_id)
@@ -120,6 +126,9 @@ class ProcessingWorker:
                         reason="processing_job_exception",
                     )
             return True
+        finally:
+            if self.health_reporter is not None and not self.stop_event.is_set():
+                self.health_reporter.set_status("ready")
 
     def run(self) -> None:
         """Poll until shutdown is requested."""
@@ -133,6 +142,10 @@ class ProcessingWorker:
         self.stop_event.set()
 
 
-def build_worker(config: ConfigProvider) -> ProcessingWorker:
+def build_worker(
+    config: ConfigProvider,
+    *,
+    health_reporter: RuntimeHealthReporter | None = None,
+) -> ProcessingWorker:
     """Build the production worker with the real workflow executor."""
-    return ProcessingWorker(config)
+    return ProcessingWorker(config, health_reporter=health_reporter)

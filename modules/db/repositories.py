@@ -85,6 +85,67 @@ class UserRepository:
                 raise ValueError("User accounts are not initialized")
 
 
+class RuntimeComponentHealthRepository:
+    """Persistence for run-scoped process health and heartbeat records."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def upsert(
+        self,
+        *,
+        run_id: str,
+        component: str,
+        status: str,
+        process_id: int | None,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with transaction(self.conn):
+            self.conn.execute(
+                """
+                INSERT INTO runtime_component_health(
+                    run_id, component, process_id, status, started_at,
+                    last_heartbeat_at, details_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id, component) DO UPDATE SET
+                    process_id = COALESCE(
+                        excluded.process_id,
+                        runtime_component_health.process_id
+                    ),
+                    status = excluded.status,
+                    last_heartbeat_at = excluded.last_heartbeat_at,
+                    details_json = excluded.details_json
+                """,
+                (
+                    run_id,
+                    component,
+                    process_id,
+                    status,
+                    now,
+                    now,
+                    json_dumps(details),
+                ),
+            )
+        return self.get(run_id, component) or {}
+
+    def get(self, run_id: str, component: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM runtime_component_health "
+                "WHERE run_id = ? AND component = ?",
+                (run_id, component),
+            ).fetchone()
+        )
+
+    def list_for_run(self, run_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM runtime_component_health "
+            "WHERE run_id = ? ORDER BY component",
+            (run_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
 class BatchRepository:
     """CRUD helpers for ingestion batches."""
 

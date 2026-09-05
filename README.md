@@ -105,7 +105,9 @@ A sophisticated PDF document processing system that leverages AI-powered extract
    .\.venv\Scripts\python.exe main.py
    ```
 
-   Database migrations run automatically on startup when `database.run_migrations_on_startup` is enabled.
+   `main.py` owns database migration when
+   `database.run_migrations_on_startup` is enabled. Its web and worker children
+   verify the resulting schema before starting.
 
 5. **Access the web interface**
    Open your browser and navigate to `http://localhost:8000/app/upload`
@@ -306,6 +308,12 @@ After a successful import, remove the legacy `authentication` block. Passwords m
 Repeated failed login attempts are temporarily throttled and may return HTTP `429 Too Many Requests`.
 The `admin` account has full access. The `operator` account cannot access administrative pages or APIs. Admins manage both passwords at `/app/admin/users`; changing a password revokes existing sessions for that account.
 
+### Runtime Health
+
+- `GET /health/live`: Public web-process liveness with no operational details.
+- `GET /health/ready`: Public supervised-runtime readiness (`503` until ready).
+- `GET /api/admin/runtime-health`: Run-scoped component and database diagnostics (admin only).
+
 ### File Operations
 - `POST /upload`: Legacy single-PDF upload endpoint; redirects to `/app/processing` after scheduling
 - `GET /api/pipelines/available`: List exact pipeline versions eligible for the current user
@@ -466,6 +474,7 @@ The end-to-end workflow fixture config also passes config-check:
 - Verify Python 3.13+ is installed
 - Check configuration file syntax
 - Ensure all required directories exist
+- Check `app.supervisor.log` for a missing or incompatible database schema
 
 **PDF processing fails**
 - Verify Llama Cloud API credentials
@@ -479,7 +488,10 @@ The end-to-end workflow fixture config also passes config-check:
 
 ### Logging
 
-Application logs are written to the file specified in `config.yaml` under `logging.log_file`. Default location is `app.log`.
+`logging.log_file` is the base path for role-specific logs. With the default
+`app.log`, normal startup writes `app.supervisor.log`, `app.web.log`, and
+`app.worker.log`; relative paths are resolved beside the active configuration
+file. `logging.log_level` applies to all three processes.
 
 ### Getting Help
 
