@@ -2,7 +2,7 @@
 
 {% block content %}
 <div id="extraction-results-workspace" class="extraction-results-workspace" data-document-id="{{ document_id|default('') }}">
-    <section class="extraction-preview-panel bg-base-100 border border-base-300 rounded-lg">
+    <section class="extraction-preview-panel bg-base-100 border border-base-300 rounded-lg shadow-sm">
         <div class="panel-header">
             <div class="min-w-0">
                 <h2 id="extraction-document-title" class="font-semibold text-sm truncate">Document</h2>
@@ -16,7 +16,7 @@
         <div id="extraction-file-list" class="extraction-file-list"></div>
     </section>
 
-    <section class="extraction-fields-panel bg-base-100 border border-base-300 rounded-lg">
+    <section class="extraction-fields-panel bg-base-100 border border-base-300 rounded-lg shadow-sm">
         <div class="panel-header">
             <div class="min-w-0">
                 <h2 class="font-semibold text-sm">Extracted Fields</h2>
@@ -29,10 +29,14 @@
         </div>
 
         <div class="confidence-legend">
-            <span class="badge badge-success badge-sm">High >= 90%</span>
-            <span class="badge badge-warning badge-sm">Medium 70-89%</span>
-            <span class="badge badge-error badge-sm">Low &lt; 70%</span>
-            <span class="badge badge-ghost badge-sm">N/A</span>
+            <span class="badge badge-success badge-sm">High confidence · 90%+</span>
+            <span class="badge badge-warning badge-sm">Medium confidence · 70-89%</span>
+            <span class="badge badge-error badge-sm">Low confidence · &lt; 70%</span>
+            <span class="badge badge-ghost badge-sm">No confidence</span>
+            <details class="context-help confidence-help">
+                <summary class="cursor-pointer text-xs font-medium">How to use confidence</summary>
+                <p class="mt-2 basis-full text-xs text-base-content/60">High confidence is usually ready to verify quickly. Review medium and low confidence values against the source document before completing the review.</p>
+            </details>
         </div>
 
         <div class="overflow-x-auto">
@@ -55,7 +59,7 @@
         </div>
     </section>
 
-    <section class="extraction-payload-panel bg-base-100 border border-base-300 rounded-lg">
+    <section class="extraction-payload-panel bg-base-100 border border-base-300 rounded-lg shadow-sm">
         <div class="panel-header">
             <h2 class="font-semibold text-sm">Raw Payload</h2>
             <span id="extraction-provider-label" class="badge badge-ghost badge-sm">No provider</span>
@@ -66,5 +70,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/extraction_results.js?v=task18" defer></script>
+<script src="/static/js/pdf_viewer.js?v=pdfjs-4-10-38" defer></script>
+<script src="/static/js/extraction_results.js?v=ui-status-vocabulary-help" defer></script>
 {% endblock %}

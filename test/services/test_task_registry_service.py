@@ -13,6 +13,7 @@ from modules.services.task_registry_service import (
     TaskApprovalError,
     validate_startup_task_registry,
 )
+import modules.services.task_registry_service as registry_module
 from test.helpers_sqlite import TempConfig
 
 
@@ -154,6 +155,60 @@ def test_startup_validation_logs_prints_waits_and_exits_for_unapproved_task(tmp_
     assert "untrusted.module.BadTask" in output.getvalue()
     assert "CRITICAL" in log_file.read_text(encoding="utf-8")
     assert "untrusted.module.BadTask" in log_file.read_text(encoding="utf-8")
+
+
+def test_registry_malformed_custom_config_and_relative_log_fallbacks(tmp_path: Path, monkeypatch) -> None:
+    registry = ApprovedTaskRegistry(_config(tmp_path, {"custom_steps": {"enabled": True, "registry": []}}))
+    assert registry.approved_pairs()
+    assert registry.validate_custom_registry()[0]["code"] == "custom-task-registry-not-mapping"
+    registry = ApprovedTaskRegistry(_config(tmp_path, {"custom_steps": {"enabled": True, "registry": {"bad": None, "wrong": {"module": 1, "class": 2}}}}))
+    assert registry.approved_pairs()
+
+    config = _config(tmp_path, {"logging": {"log_file": "relative.log"}})
+    config._config_path = tmp_path / "config.yaml"
+    registry_module._append_startup_failure_log(config, "message")
+    assert (tmp_path / "relative.log").exists()
+
+    class BrokenPath:
+        def __init__(self, *_args):
+            pass
+        def is_absolute(self):
+            return True
+        @property
+        def parent(self):
+            return self
+        def mkdir(self, **_kwargs):
+            pass
+        def open(self, **_kwargs):
+            raise OSError("cannot log")
+
+    monkeypatch.setattr(registry_module, "Path", BrokenPath)
+    registry_module._append_startup_failure_log(config, "message")
+
+    registry = ApprovedTaskRegistry(
+        _config(tmp_path, {"custom_steps": {"enabled": True, "registry": None}})
+    )
+    assert registry.validate_custom_registry() == []
+    registry = ApprovedTaskRegistry(
+        _config(
+            tmp_path,
+            {
+                "pipeline": [None, "missing", "bad-types"],
+                "tasks": {"missing": None, "bad-types": {"module": 1, "class": 2}},
+            },
+        )
+    )
+    assert registry.validate_pipeline_config() == []
+    assert validate_startup_task_registry(
+        _config(
+            tmp_path,
+            {"pipeline": ["bad"], "tasks": {"bad": {"module": "os", "class": "Path"}}},
+        ),
+        wait_seconds=0,
+        sleeper=Mock(),
+        exit_func=Mock(),
+        stream=io.StringIO(),
+    ) is False
 
 
 def _base_name(base: ast.expr) -> str | None:

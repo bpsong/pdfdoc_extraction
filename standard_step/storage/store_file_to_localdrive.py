@@ -25,7 +25,7 @@ from modules.utils import (
     sanitize_filename,
 )
 from modules.base_task import BaseTask
-from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from datetime import datetime
@@ -90,13 +90,11 @@ class StoreFileToLocaldrive(BaseTask):
         self.files_dir = Path(windows_long_path(files_dir_str))
         self.filename = filename
 
-        # Optional: access extraction fields configuration from global config
-        tasks_config = get_all_config(self.config_manager).get("tasks", {})
-        extract_task_definition = tasks_config.get("extract_document_data", {})
-        extraction_step_params = extract_task_definition.get("params", {})
-        
-        if "fields" in extraction_step_params:
-            self.extraction_fields_config = extraction_step_params["fields"]
+        # Optional extraction metadata is pipeline-owned and must be supplied
+        # directly in this task's published params.
+        extraction_config = self.params.get("extraction", {})
+        if isinstance(extraction_config, dict) and isinstance(extraction_config.get("fields"), dict):
+            self.extraction_fields_config = extraction_config["fields"]
 
         if not self.extraction_fields_config:
             self.logger.warning("Could not find 'extraction.fields' configuration. Filename formatting might not use extracted data.")

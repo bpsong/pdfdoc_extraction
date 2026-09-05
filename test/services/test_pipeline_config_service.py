@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 import yaml
 
+import modules.services.pipeline_config_service as pipeline_module
 from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.db.repositories import AuditRepository, ConfigVersionRepository
@@ -237,3 +240,71 @@ def test_pipeline_config_service_hides_and_strips_runtime_housekeeping(tmp_path:
         assert "cleanup" not in written["tasks"]
     finally:
         service.conn.close()
+
+
+def test_pipeline_config_service_remaining_model_and_storage_branches(monkeypatch) -> None:
+    service = object.__new__(PipelineConfigService)
+    service.config_manager = SimpleNamespace(_config_path=None)
+    service.conn = Mock()
+    service.versions = Mock()
+    service.audit = Mock()
+
+    service._active_config = Mock(return_value={"tasks": {}, "pipeline": []})
+    service._model_from_config = Mock(return_value={"steps": []})
+    service.save_draft = Mock(return_value={"id": "draft"})
+    assert service.create_draft(user="alice") == {"id": "draft"}
+    service.save_draft.assert_called_once_with({"steps": []}, user="alice")
+
+    service._normalize_model = Mock(return_value={"steps": []})
+    service._secret_source_config = Mock(return_value={})
+    service._config_from_model = Mock(return_value={"tasks": {}})
+    service._dump_yaml = Mock(return_value="preview")
+    assert service.yaml_preview({"steps": []}) == "preview"
+
+    service._config_from_yaml = Mock(return_value={"tasks": {}, "pipeline": []})
+    service._model_from_config = Mock(return_value={"steps": []})
+    service._normalize_model = Mock(side_effect=lambda model: model)
+    assert service._draft_payload({"id": "d1", "content_text": "{}", "metadata_json": "null"})["id"] == "d1"
+
+    service.versions.get_draft.return_value = None
+    service._model_from_config.return_value = {"steps": []}
+    assert service._stored_or_active_model() == {"steps": []}
+    service.versions.get_draft.return_value = {"content_text": "{}", "metadata_json": "{}", "id": "d1"}
+    service._draft_payload = Mock(return_value={"model": {"steps": [{"key": "x"}]}})
+    assert service._stored_or_active_model() == {"steps": [{"key": "x"}]}
+
+    row = {"content_text": "same", "id": "d1"}
+    service.versions.get_draft.return_value = row
+    assert service._matching_or_new_draft(yaml_preview="same", model={}, user=None) is row
+    service.versions.get_draft.return_value = None
+    service.versions.create_draft.return_value = {"id": "new"}
+    assert service._matching_or_new_draft(yaml_preview="new", model={}, user="a")["id"] == "new"
+
+    monkeypatch.setattr(pipeline_module, "get_all_config", lambda _manager: [])
+    service._active_config = PipelineConfigService._active_config.__get__(service)
+    assert service._active_config() == {}
+
+    service._active_config = Mock(return_value={"tasks": {"cleanup": {"module": "standard_step.housekeeping.cleanup_task", "class": "CleanupTask"}, "keep": {"class": "Keep"}}})
+    service._config_from_model = PipelineConfigService._config_from_model.__get__(service)
+    model = {"steps": [None, {"key": "keep", "module": "m", "class": "C", "params": None, "enabled": True}]}
+    assert service._config_from_model(model)["pipeline"] == ["keep"]
+    assert service._config_from_model({"steps": []})["pipeline"] == []
+
+    config = {"tasks": {"known": {"class": "Known", "module": "m"}, "clean": {"module": "standard_step.housekeeping.cleanup_task", "class": "CleanupTask"}}, "pipeline": ["known", "missing", 4, "clean"]}
+    service._model_from_config = PipelineConfigService._model_from_config.__get__(service)
+    service._step_from_task = Mock()
+    service._step_from_task.return_value = {"key": "known"}
+    model = service._model_from_config(config)
+    assert [step["key"] for step in model["steps"]] == ["known", "missing"]
+
+    service._normalize_model = PipelineConfigService._normalize_model.__get__(service)
+    normalized = service._normalize_model({"steps": [{"module": "standard_step.housekeeping.cleanup_task", "class": "CleanupTask"}, {"module": "m", "class": "C", "params": None}]})
+    assert len(normalized["steps"]) == 1 and normalized["steps"][0]["params"] == {}
+
+    service.config_manager = SimpleNamespace(config={}, _values={})
+    service._replace_in_memory_config({"pipeline": []})
+    assert service.config_manager.config == {"pipeline": []}
+
+    service.versions.get_draft.return_value = None
+    service._active_config = Mock(return_value={"pipeline": []})
+    assert service._draft_config(None) == {"pipeline": []}

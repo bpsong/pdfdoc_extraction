@@ -29,15 +29,7 @@
     }
 
     function statusBadge(status) {
-        const normalized = String(status || "pending").toLowerCase();
-        const badgeClass = normalized === "failed"
-            ? "badge-error"
-            : normalized === "success" || normalized === "completed" || normalized === "split_completed"
-                ? "badge-success"
-                : normalized === "review_required" || normalized === "in_review"
-                    ? "badge-warning"
-                    : "badge-ghost";
-        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(titleCase(normalized))}</span>`;
+        return `<span class="badge ${window.DocFlow.statusBadgeClass(status, "pending")} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "pending"))}</span>`;
     }
 
     function pageLabel(child) {

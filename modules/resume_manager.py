@@ -17,7 +17,6 @@ class ResumeManager:
 
     def __init__(self, config_manager: ConfigManager) -> None:
         self.config_manager = config_manager
-        self.pipeline = config_manager.get("pipeline", []) or []
 
     def resume_document(self, document_id: str, user: str | None = None) -> bool:
         """Resume a document after review without duplicating downstream work."""
@@ -30,15 +29,15 @@ class ResumeManager:
                 return False
             if document.get("status") != "review_completed":
                 return False
-            executable = None
-            if document.get("pipeline_version_id"):
-                try:
-                    executable = PipelineDefinitionService(
-                        conn, self.config_manager
-                    ).load_for_document(document_id)
-                except Exception:
-                    return False
-            pipeline = executable.pipeline if executable is not None else self.pipeline
+            if not document.get("pipeline_version_id"):
+                return False
+            try:
+                executable = PipelineDefinitionService(
+                    conn, self.config_manager
+                ).load_for_document(document_id)
+            except Exception:
+                return False
+            pipeline = executable.pipeline
             workflow_state = WorkflowStateService(
                 conn,
                 pipeline=pipeline,
@@ -61,15 +60,11 @@ class ResumeManager:
                 context["pipeline_version_id"] = executable.version_id
                 context["pipeline_template_id"] = executable.template_id
 
-        loader = (
-            WorkflowLoader(
-                self.config_manager,
-                definition=executable.definition,
-                pipeline_version_id=executable.version_id,
-                pipeline_template_id=executable.template_id,
-            )
-            if executable is not None
-            else WorkflowLoader(self.config_manager)
+        loader = WorkflowLoader(
+            self.config_manager,
+            definition=executable.definition,
+            pipeline_version_id=executable.version_id,
+            pipeline_template_id=executable.template_id,
         )
         flow_func = loader.load_workflow(start_task_index=next_index)
         if flow_func is None:

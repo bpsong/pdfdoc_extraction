@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from unittest.mock import Mock
+
 import pytest
 
 from modules.db.connection import connect
@@ -11,6 +14,8 @@ from modules.services.ingestion_assignment_service import (
     IngestionAssignmentError,
     IngestionAssignmentService,
 )
+from modules.services.pipeline_definition_service import PipelineDefinitionError
+import modules.services.ingestion_assignment_service as assignment_module
 from modules.services.pipeline_template_service import PipelineTemplateService
 from test.helpers_sqlite import TempConfig
 
@@ -189,3 +194,65 @@ def test_selection_rejects_inactive_and_operator_hidden_versions(context):
     )
     with pytest.raises(IngestionAssignmentError, match="not active"):
         service.resolve_selection(version["id"], role="admin")
+
+
+def test_assignment_defensive_selection_and_mismatched_root_paths(context, monkeypatch):
+    _, conn, service = context
+    with pytest.raises(IngestionAssignmentError, match="must be selected"):
+        service.resolve_selection("", role="operator")
+    with pytest.raises(IngestionAssignmentError, match="must be selected"):
+        service.resolve_selection(None, role="operator")
+
+    connection = Mock()
+    connection.execute.return_value.fetchone.return_value = {
+        "id": "v1",
+        "template_id": "t1",
+        "template_key": "key",
+        "name": "Name",
+        "template_status": "active",
+        "operator_selectable": 1,
+        "document_type": None,
+        "operator_instructions": "",
+    }
+    isolated = IngestionAssignmentService(connection, context[0])
+    with pytest.raises(IngestionAssignmentError, match="Unknown ingestion role"):
+        isolated.resolve_selection("v1", role="guest")
+
+    monkeypatch.setattr(
+        assignment_module,
+        "PipelineDefinitionService",
+        lambda *args: Mock(load_version=Mock(side_effect=PipelineDefinitionError("wrong"))),
+    )
+    connection.execute.return_value.fetchall.return_value = [{"id": "bad"}]
+    assert isolated.available_versions(role="admin") == []
+
+    summary = {
+        "pipeline_version_id": "v1",
+        "pipeline_template_id": "t1",
+        "template_key": "key",
+        "name": "Name",
+        "version_number": 1,
+    }
+    service.resolve_selection = Mock(return_value=summary)
+    monkeypatch.setattr(assignment_module, "immediate_transaction", lambda _conn: nullcontext())
+    monkeypatch.setattr(
+        assignment_module,
+        "BatchService",
+        lambda _conn: Mock(
+            create_ingestion_batch_with_documents=Mock(
+                return_value={
+                    "batch": {"id": "b", "pipeline_template_id": "t1", "pipeline_version_id": "v1"},
+                    "documents": [{"id": "d", "pipeline_template_id": "wrong", "pipeline_version_id": "v1"}],
+                }
+            )
+        ),
+    )
+    with pytest.raises(IngestionAssignmentError, match="does not match"):
+        service.create_batch(
+            pipeline_version_id="v1",
+            role="system",
+            source="web",
+            assignment_source="upload",
+            files=[],
+            user="admin",
+        )

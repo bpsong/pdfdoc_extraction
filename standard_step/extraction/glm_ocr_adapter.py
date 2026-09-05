@@ -125,7 +125,7 @@ class GlmOcrAdapter:
         resolution_mode: str = "page_merge",
         resolver_model: str = "",
         resolver_max_dimension: int = 1280,
-        resolver_num_ctx: int = 8192,
+        resolver_num_ctx: int = 18000,
         resolver_num_predict: int = 10000,
         resolver_max_attempts: int = 2,
         timeout_seconds: float = 300,

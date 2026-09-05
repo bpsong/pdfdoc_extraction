@@ -10,7 +10,7 @@ Architecture Reference:
     patterns, refer to docs/design_architecture.md.
 """
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Mapping
 
 from modules.workflow_loader import WorkflowLoader
 from modules.config_protocol import ConfigProvider as ConfigManager
@@ -23,6 +23,7 @@ from modules.services.pipeline_definition_service import (
     PipelineDefinitionError,
     PipelineDefinitionService,
 )
+from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.extraction.llama_cloud_v2 import preflight_extract_v2_access
 
 class WorkflowManager:
@@ -49,7 +50,6 @@ class WorkflowManager:
                 WorkflowLoader and to supply settings.
         """
         self.config_manager = config_manager
-        self.workflow_loader = WorkflowLoader(config_manager)
         self.logger = logging.getLogger(__name__)
         
     def trigger_workflow_for_file(
@@ -87,15 +87,11 @@ class WorkflowManager:
         """
         try:
             executable = self._load_document_pipeline(document_id)
-            loader = (
-                WorkflowLoader(
-                    self.config_manager,
-                    definition=executable.definition,
-                    pipeline_version_id=executable.version_id,
-                    pipeline_template_id=executable.template_id,
-                )
-                if executable is not None
-                else self.workflow_loader
+            loader = WorkflowLoader(
+                self.config_manager,
+                definition=executable.definition,
+                pipeline_version_id=executable.version_id,
+                pipeline_template_id=executable.template_id,
             )
             flow_func = loader.load_workflow()
             if not flow_func:
@@ -137,16 +133,20 @@ class WorkflowManager:
 
     def _load_document_pipeline(
         self, document_id: str | None
-    ) -> ExecutablePipeline | None:
-        """Load a pinned definition, retaining legacy mode only for unassigned rows."""
+    ) -> ExecutablePipeline:
+        """Load the exact published definition assigned to a document."""
         if not document_id:
-            return None
+            raise PipelineDefinitionError(
+                "A document ID is required for versioned workflow execution."
+            )
         with connect(self.config_manager) as conn:
             document = DocumentRepository(conn).get(document_id)
             if document is None:
                 raise PipelineDefinitionError("Document does not exist.")
             if not document.get("pipeline_version_id"):
-                return None
+                raise PipelineDefinitionError(
+                    "Document has no exact published pipeline assignment."
+                )
             return PipelineDefinitionService(conn, self.config_manager).load_for_document(
                 document_id
             )
@@ -157,9 +157,10 @@ class WorkflowManager:
             return
         try:
             with connect(self.config_manager) as conn:
-                documents = DocumentRepository(conn)
-                if documents.get(str(document_id)):
-                    documents.update_status(str(document_id), "failed")
+                if DocumentRepository(conn).get(str(document_id)):
+                    WorkflowStateService(conn).transition_document(
+                        str(document_id), "failed", reason=reason
+                    )
         except Exception:
             self.logger.debug("Failed to persist workflow launch failure: %s", reason, exc_info=True)
 
@@ -175,11 +176,10 @@ class WorkflowManager:
             child_documents = [documents.get(child_id) for child_id in child_ids]
 
         first_child = next((child for child in child_documents if child is not None), None)
-        executable = (
-            self._load_document_pipeline(str(first_child["id"]))
-            if first_child is not None and first_child.get("pipeline_version_id")
-            else None
-        )
+        executable = self._load_document_pipeline(str(first_child["id"])) if first_child else None
+        if executable is None:
+            self.logger.error("Cannot start child workflows without a pinned pipeline.")
+            return
         if self._fail_children_when_extract_preflight_fails(
             parent_context,
             child_documents,
@@ -194,23 +194,14 @@ class WorkflowManager:
             child_context = self._build_child_context(child, parent_context, start_task_index)
             child_executable = (
                 executable
-                if executable is not None
-                and executable.version_id == child.get("pipeline_version_id")
-                else (
-                    self._load_document_pipeline(str(child["id"]))
-                    if child.get("pipeline_version_id")
-                    else None
-                )
+                if executable.version_id == child.get("pipeline_version_id")
+                else self._load_document_pipeline(str(child["id"]))
             )
-            loader = (
-                WorkflowLoader(
-                    self.config_manager,
-                    definition=child_executable.definition,
-                    pipeline_version_id=child_executable.version_id,
-                    pipeline_template_id=child_executable.template_id,
-                )
-                if child_executable is not None
-                else self.workflow_loader
+            loader = WorkflowLoader(
+                self.config_manager,
+                definition=child_executable.definition,
+                pipeline_version_id=child_executable.version_id,
+                pipeline_template_id=child_executable.template_id,
             )
             flow_func = loader.load_workflow(start_task_index=start_task_index)
             if not flow_func:
@@ -326,12 +317,16 @@ class WorkflowManager:
             )
             task_runs.mark_failed(run["id"], safe_message, output)
             self._merge_document_metadata(documents, root_document_id, fatal_failure, safe_message, task_key)
-            documents.update_status(root_document_id, "failed")
+            WorkflowStateService(conn).transition_document(
+                root_document_id, "failed", reason="extract_preflight_failed"
+            )
             for child in child_documents:
                 child_id = str(child.get("id"))
                 documents.update_current_task(child_id, start_task_index, task_key)
                 self._merge_document_metadata(documents, child_id, fatal_failure, safe_message, task_key)
-                documents.update_status(child_id, "failed")
+                WorkflowStateService(conn).transition_document(
+                    child_id, "failed", reason="extract_preflight_failed"
+                )
             BatchRepository(conn).recompute_counts(batch_id)
 
     @staticmethod
@@ -374,19 +369,15 @@ class WorkflowManager:
         *,
         definition: Any | None = None,
     ) -> tuple[str | None, dict[str, Any]]:
-        pipeline = (
-            definition.get("pipeline", [])
-            if definition is not None
-            else self.config_manager.get("pipeline", [])
-        )
+        """Return a task from the explicitly loaded pipeline definition."""
+        if not isinstance(definition, Mapping):
+            return None, {}
+        pipeline = definition.get("pipeline", [])
         if not isinstance(pipeline, list) or task_index < 0 or task_index >= len(pipeline):
             return None, {}
         task_key = str(pipeline[task_index])
-        if definition is not None:
-            tasks = definition.get("tasks", {})
-            task_config = tasks.get(task_key, {}) if isinstance(tasks, dict) else {}
-        else:
-            task_config = self.config_manager.get(f"tasks.{task_key}", {})
+        tasks = definition.get("tasks", {})
+        task_config = tasks.get(task_key, {}) if isinstance(tasks, dict) else {}
         return task_key, task_config if isinstance(task_config, dict) else {}
 
     @staticmethod

@@ -12,6 +12,7 @@ from modules.db.connection import (
     json_dumps,
     json_loads,
     json_value_dumps,
+    immediate_transaction,
     transaction,
     utc_now,
 )
@@ -185,6 +186,171 @@ class BatchRepository:
                 (total, completed, failed, status, utc_now(), batch_id),
             )
         return self.get(batch_id)
+
+
+class ProcessingJobRepository:
+    """Durable queue operations for document workflow dispatch."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def enqueue(
+        self,
+        *,
+        batch_id: str,
+        document_id: str,
+        max_attempts: int = 3,
+        available_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Insert one queued document job, preserving idempotency by document."""
+        if max_attempts < 1:
+            raise ValueError("max_attempts must be positive")
+        existing = self.get_for_document(document_id)
+        if existing is not None:
+            return existing
+        job_id = _new_id()
+        now = utc_now()
+        with transaction(self.conn):
+            self.conn.execute(
+                """
+                INSERT INTO processing_jobs(
+                    id, batch_id, document_id, status, available_at,
+                    max_attempts, created_at, updated_at
+                ) VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)
+                """,
+                (
+                    job_id,
+                    batch_id,
+                    document_id,
+                    available_at or now,
+                    max_attempts,
+                    now,
+                    now,
+                ),
+            )
+        return self.get(job_id) or {}
+
+    def get(self, job_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM processing_jobs WHERE id = ?", (job_id,)
+            ).fetchone()
+        )
+
+    def get_for_document(self, document_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(
+            self.conn.execute(
+                "SELECT * FROM processing_jobs WHERE document_id = ?",
+                (document_id,),
+            ).fetchone()
+        )
+
+    def list_for_batch(self, batch_id: str) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            "SELECT * FROM processing_jobs WHERE batch_id = ? ORDER BY created_at",
+            (batch_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def claim_next(
+        self,
+        *,
+        worker_id: str,
+        lease_expires_at: str,
+    ) -> dict[str, Any] | None:
+        """Atomically claim the oldest job ready for execution."""
+        now = utc_now()
+        with immediate_transaction(self.conn):
+            row = self.conn.execute(
+                """
+                SELECT * FROM processing_jobs
+                WHERE status = 'queued' AND available_at <= ?
+                ORDER BY available_at, created_at
+                LIMIT 1
+                """,
+                (now,),
+            ).fetchone()
+            if row is None:
+                return None
+            cursor = self.conn.execute(
+                """
+                UPDATE processing_jobs
+                SET status = 'running', attempt_count = attempt_count + 1,
+                    worker_id = ?, lease_expires_at = ?, started_at = COALESCE(started_at, ?),
+                    updated_at = ?
+                WHERE id = ? AND status = 'queued'
+                """,
+                (worker_id, lease_expires_at, now, now, row["id"]),
+            )
+            if cursor.rowcount != 1:
+                return None
+        return self.get(str(row["id"]))
+
+    def requeue_expired(self) -> int:
+        """Return expired leases to the queue for crash recovery."""
+        now = utc_now()
+        with transaction(self.conn):
+            cursor = self.conn.execute(
+                """
+                UPDATE processing_jobs
+                SET status = 'queued', worker_id = NULL, lease_expires_at = NULL,
+                    available_at = ?, updated_at = ?
+                WHERE status = 'running' AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at <= ?
+                """,
+                (now, now, now),
+            )
+        return int(cursor.rowcount)
+
+    def mark_completed(self, job_id: str, *, worker_id: str) -> bool:
+        """Complete a job only when the claiming worker still owns its lease."""
+        with transaction(self.conn):
+            cursor = self.conn.execute(
+                """
+                UPDATE processing_jobs
+                SET status = 'completed', completed_at = ?, updated_at = ?,
+                    worker_id = NULL, lease_expires_at = NULL
+                WHERE id = ? AND status = 'running' AND worker_id = ?
+                """,
+                (utc_now(), utc_now(), job_id, worker_id),
+            )
+        return cursor.rowcount == 1
+
+    def mark_failed(
+        self,
+        job_id: str,
+        *,
+        worker_id: str,
+        error: str,
+        retry_at: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Retry or terminally fail a job owned by the worker."""
+        now = utc_now()
+        with transaction(self.conn):
+            row = self.conn.execute(
+                "SELECT * FROM processing_jobs WHERE id = ? AND status = 'running' AND worker_id = ?",
+                (job_id, worker_id),
+            ).fetchone()
+            if row is None:
+                return None
+            retry = retry_at is not None and int(row["attempt_count"]) < int(row["max_attempts"])
+            self.conn.execute(
+                """
+                UPDATE processing_jobs
+                SET status = ?, available_at = ?, worker_id = NULL,
+                    lease_expires_at = NULL, last_error = ?, updated_at = ?
+                WHERE id = ? AND status = 'running' AND worker_id = ?
+                """,
+                (
+                    "queued" if retry else "failed",
+                    retry_at or now,
+                    error,
+                    now,
+                    job_id,
+                    worker_id,
+                ),
+            )
+        return self.get(job_id)
 
 
 class DocumentRepository:

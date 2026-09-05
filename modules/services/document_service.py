@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any
 
 from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
+from modules.services.workflow_state_service import WorkflowStateService
 
 
 class DocumentService:
@@ -18,6 +19,7 @@ class DocumentService:
         self.task_runs = TaskRunRepository(conn)
         self.extractions = ExtractionRepository(conn)
         self.reviews = ReviewRepository(conn)
+        self.state = WorkflowStateService(conn)
 
     def create_child_document(
         self,
@@ -53,7 +55,7 @@ class DocumentService:
 
     def update_status(self, document_id: str, status: str) -> None:
         """Update a document status."""
-        self.documents.update_status(document_id, status)
+        self.state.transition_document(document_id, status)
 
     def get_details(self, document_id: str) -> dict[str, Any] | None:
         """Return a UI-ready document detail payload."""
@@ -64,6 +66,7 @@ class DocumentService:
             "document": document,
             "files": self.documents.list_files(document_id),
             "task_runs": self.task_runs.list_by_document(document_id),
+            "status_history": self.state.status_history(document_id),
             "latest_extraction": self.extractions.get_latest_result(document_id),
             "fields": self.extractions.get_fields(document_id),
             "review_items": self.reviews.list_queue(),

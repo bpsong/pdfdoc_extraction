@@ -6,13 +6,11 @@ import logging
 from pathlib import Path
 import shutil
 from threading import Event, RLock
-import time
 import uuid
 from typing import Any
 
 from modules.config_protocol import ConfigProvider
 from modules.db.connection import connect
-from modules.db.repositories import DocumentRepository
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.ingress_binding_service import IngressBindingService
 from modules.utils import is_pdf_header, windows_long_path
@@ -24,8 +22,10 @@ logger = logging.getLogger(__name__)
 class WatchFolderCoordinator:
     """Reconcile bindings and claim files sequentially under one process lock."""
 
-    def __init__(self, config: ConfigProvider, file_processor: Any) -> None:
+    def __init__(self, config: ConfigProvider, file_processor: Any | None = None) -> None:
         self.config = config
+        # Kept as an optional constructor argument for callers that used the
+        # pre-queue coordinator. Workflow execution belongs to the worker now.
         self.file_processor = file_processor
         self.polling_interval = float(
             config.get("watch_folder.polling_interval", 5) or 5
@@ -102,7 +102,7 @@ class WatchFolderCoordinator:
     def _claim_and_process(
         self, source_path: Path, binding: dict[str, Any]
     ) -> bool:
-        """Move first to claim, then persist and execute with captured binding IDs."""
+        """Move first to claim, then persist one durable processing job."""
         document_id = str(uuid.uuid4())
         destination = self.processing_dir / f"{document_id}.pdf"
         try:
@@ -128,14 +128,14 @@ class WatchFolderCoordinator:
                             "document_id": document_id,
                             "file_path": str(destination),
                             "original_filename": source_path.name,
-                            "status": "processing",
+                            "status": "queued",
                             "metadata": {"ingress_binding_id": binding["id"]},
                         }
                     ],
                     user=None,
                     metadata={"ingress_binding_id": binding["id"]},
                     ingress_binding_id=str(binding["id"]),
-                    status="processing",
+                    status="queued",
                 )
             batch = created["batch"]
             document = created["documents"][0]
@@ -146,30 +146,13 @@ class WatchFolderCoordinator:
             )
             return False
 
-        for attempt in range(1, self.retry_attempts + 1):
-            try:
-                result = self.file_processor.process_file(
-                    filepath=str(destination),
-                    unique_id=str(document["id"]),
-                    source="watch_folder",
-                    original_filename=source_path.name,
-                    batch_id=str(batch["id"]),
-                    document_id=str(document["id"]),
-                    create_sqlite_state=False,
-                )
-                if result is not False:
-                    return True
-            except Exception:
-                logger.warning(
-                    "Watch processing attempt failed for binding_id=%s attempt=%s",
-                    binding["id"],
-                    attempt,
-                )
-            if attempt < self.retry_attempts:
-                time.sleep(self.retry_delay)
-        with connect(self.config) as conn:
-            DocumentRepository(conn).update_status(str(document["id"]), "failed")
-        return False
+        logger.info(
+            "Watch file queued for durable processing: binding_id=%s batch_id=%s document_id=%s",
+            binding["id"],
+            batch["id"],
+            document["id"],
+        )
+        return True
 
     @staticmethod
     def _restore_claim(destination: Path, source_path: Path) -> None:

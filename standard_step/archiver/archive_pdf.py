@@ -73,15 +73,9 @@ class ArchivePdfTask(BaseTask):
             Converts paths to Windows long path format for robustness.
         """
         super().__init__(config_manager, **params)
-        # Extract archive_dir from params or config manager
-        archive_dir_param = params.get("archive_dir")
-        if archive_dir_param:
-            archive_dir = archive_dir_param
-        else:
-            # Fallback to config manager path for archive_dir
-            archive_dir = config_manager.get("tasks.archive_original_file.params.archive_dir")
-        if not archive_dir:
-            archive_dir = ""
+        # Pipeline-owned settings must come from the immutable published
+        # definition supplied as task params, never from deployment YAML.
+        archive_dir = params.get("archive_dir") or ""
         # Convert to Windows long path format
         self.archive_dir = windows_long_path(archive_dir)
         self.logger = logging.getLogger(self.__class__.__name__)

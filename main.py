@@ -72,6 +72,7 @@ from pathlib import Path
 import time
 import logging.handlers
 import warnings
+import threading
 
 import subprocess
 import shlex
@@ -232,6 +233,28 @@ def start_web_server(config: ConfigProvider, logger: logging.Logger):
         raise
 
 
+def start_processing_worker(config: ConfigProvider, logger: logging.Logger):
+    """Spawn the durable worker with the same resolved deployment config."""
+    child_env = os.environ.copy()
+    resolved_cfg = getattr(config, "_config_path", None)
+    if resolved_cfg:
+        child_env["CONFIG_PATH"] = str(resolved_cfg)
+    cmd = [
+        sys.executable,
+        "-m",
+        "tools.processing_worker",
+        "--config-path",
+        str(resolved_cfg) if resolved_cfg else "config.yaml",
+    ]
+    logger.info("Spawning durable processing worker")
+    return subprocess.Popen(
+        cmd,
+        shell=False,
+        cwd=str(Path(__file__).parent),
+        env=child_env,
+    )
+
+
 def main():
     """Main entry point for the application.
 
@@ -267,7 +290,15 @@ def main():
     # FileProcessor retains a legacy retry dependency but no longer uses it.
     file_processor = FileProcessor(config_manager, None, workflow_manager)
 
-    # Start web server FIRST unless disabled
+    # Start the durable worker before accepting web or watch-folder work.
+    worker_proc = None
+    try:
+        worker_proc = start_processing_worker(config_manager, logger)
+    except Exception as e:
+        logger.exception(f"Failed to start durable processing worker: {e}")
+        sys.exit(1)
+
+    # Start web server unless disabled
     uvicorn_proc = None
     uvicorn_log_handle = None
     if not args.no_web:
@@ -281,34 +312,41 @@ def main():
 
     # One coordinator reconciles all enabled SQLite watch-folder bindings.
     watch_folder_monitor = WatchFolderCoordinator(config_manager, file_processor)
-    # Do not return early on KeyboardInterrupt here; handle shutdown in unified block below
+
+    def run_watch_folder_monitor() -> None:
+        """Keep coordinator failures from escaping the supervision thread."""
+        try:
+            watch_folder_monitor.start()
+        except Exception:
+            logger.exception("Watch folder monitoring stopped unexpectedly")
+
+    watch_thread = threading.Thread(
+        target=run_watch_folder_monitor,
+        name="watch-folder-coordinator",
+        daemon=True,
+    )
+    watch_thread.start()
     try:
         logger.info("Watch folder monitoring has started. Press Ctrl+C to stop.")
-        watch_folder_monitor.start()
         if args.no_web:
-            # Exit after watch folder monitor returns when --no-web is set to avoid needing second Ctrl+C
-            # Perform shutdown and exit cleanly
-            shutdown_manager.shutdown()
-            sys.exit(0)
-    except Exception as e:
-        logger.exception(f"Failed to start watch folder monitor: {e}")
-        # If monitor fails to start, still keep web server running; fall through to main loop
-
-    # Keep the main thread alive to allow background monitoring and supervise uvicorn
-    try:
-        while True:
-            if uvicorn_proc is not None:
-                ret = uvicorn_proc.poll()
-                if ret is not None:
-                    log_path = config_manager.get('logging.log_file', 'app.log')
-                    if ret == 0:
-                        logger.info(f"Uvicorn subprocess exited cleanly with code {ret}. Check logs at {log_path}")
-                    else:
-                        logger.error(f"Uvicorn subprocess exited with code {ret}. Check logs at {log_path}")
+            while watch_thread.is_alive():
+                if worker_proc.poll() is not None:
+                    logger.error("Durable processing worker exited unexpectedly")
                     break
-            time.sleep(1)
+                time.sleep(1)
+        else:
+            while True:
+                if uvicorn_proc is not None and uvicorn_proc.poll() is not None:
+                    logger.error("Uvicorn subprocess exited unexpectedly")
+                    break
+                if worker_proc.poll() is not None:
+                    logger.error("Durable processing worker exited unexpectedly")
+                    break
+                time.sleep(1)
     except KeyboardInterrupt:
         logger.info("Keyboard interrupt received. Shutting down...")
+    except Exception as e:
+        logger.exception(f"Application supervision failed: {e}")
     finally:
         # Stop watch folder monitor
         try:
@@ -334,6 +372,16 @@ def main():
                         uvicorn_log_handle.close()
                     except Exception:
                         pass
+        if worker_proc is not None:
+            try:
+                logger.info("Terminating durable processing worker...")
+                worker_proc.terminate()
+                try:
+                    worker_proc.wait(timeout=10)
+                except Exception:
+                    worker_proc.kill()
+            except Exception as e:
+                logger.warning(f"Error while terminating durable worker: {e}")
         # Perform shutdown and exit cleanly
         shutdown_manager.shutdown()
         sys.exit(0)

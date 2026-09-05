@@ -18,11 +18,6 @@ import logging
 
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.utils import is_pdf_header
-from modules.db.connection import connect
-from modules.db.migrations import initialize_database
-from modules.db.repositories import DocumentRepository
-from modules.services.batch_service import BatchService
-from modules.services.processing_state_service import build_pipeline_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -117,31 +112,12 @@ class FileProcessor:
         source: str,
         original_filename: str,
     ) -> tuple[str | None, str | None]:
-        """Create SQLite batch/document records when the configured app DB is available."""
-        if not hasattr(self.config_manager, "get_all"):
-            return None, None
-        try:
-            initialize_database(self.config_manager)
-            with connect(self.config_manager) as conn:
-                existing = DocumentRepository(conn).get(unique_id)
-                if existing is not None:
-                    return str(existing["batch_id"]), str(existing["id"])
-                service = BatchService(conn)
-                created = service.create_ingestion_batch(
-                    source=source,
-                    file_path=filepath,
-                    original_filename=original_filename,
-                    document_id=unique_id,
-                    metadata={
-                        "legacy_id": unique_id,
-                        "ingestion_source": source,
-                        "pipeline_snapshot": build_pipeline_snapshot(self.config_manager),
-                    },
-                )
-                return created["batch"]["id"], created["document"]["id"]
-        except Exception as exc:
-            logger.warning("SQLite ingestion state creation failed: %s", exc)
-            return None, None
+        """Reject unassigned ingestion instead of creating legacy state."""
+        raise ValueError(
+            "An exact published pipeline assignment is required before processing "
+            f"'{original_filename}'. Create the batch through the assigned upload "
+            "or watch-folder ingestion flow."
+        )
 
     def _validate_pdf_header(self, file_path: str) -> bool:
         """Delegate to the centralized is_pdf_header utility.
@@ -281,6 +257,12 @@ class FileProcessor:
                 unique_id=unique_id,
                 source=source,
                 original_filename=filename,
+            )
+
+        if not batch_id or not document_id:
+            raise ValueError(
+                "Processing requires SQLite batch and document records with an "
+                "exact published pipeline assignment."
             )
         
         # Trigger workflow for this file. Some tests and third-party callers still

@@ -104,6 +104,58 @@ def test_context_summary_and_existing_fatal_failure_are_normalized():
     assert summary["metadata_keys"] == []
     assert context["fatal_failure"]["task_key"] == "extract"
     assert context["fatal_failure"]["task_index"] == 2
+    continued = {"continued_failures": "legacy", "error": "old", "error_step": "step"}
+    WorkflowLoader._continue_after_failure(continued)
+    assert isinstance(continued["continued_failures"], list)
+
+
+def test_workflow_records_continuing_and_system_exit_failures_with_state(
+    tmp_path, monkeypatch
+):
+    _patch_prefect(monkeypatch)
+
+    class RaisingTask(SuccessfulTask):
+        def __init__(self, config_manager, error, **params):
+            self.error = error
+
+        def run(self, context):
+            raise self.error
+
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", SuccessfulCleanup)
+    for error in (TaskError("continue"), RuntimeError("unexpected")):
+        loader = _loader(
+            tmp_path,
+            {
+                "pipeline": ["broken"],
+                "tasks": {"broken": {"module": "test.module", "class": "RaisingTask", "params": {"error": error}, "on_error": "continue"}},
+            },
+        )
+        state = Mock()
+        state.start_task.return_value = {"id": "run"}
+        state.conn = Mock()
+        loader._state_service = Mock(return_value=state)
+        loader._finalize_leaf = Mock()
+        monkeypatch.setattr(loader, "_import_task_class", lambda *args: RaisingTask)
+        result = loader.load_workflow()({"id": "doc", "batch_id": "batch", "document_id": "doc"})
+        assert result["continued_failures"]
+        state.fail_task.assert_called_once()
+        assert state.conn.close.call_count >= 1
+
+    loader = _loader(
+        tmp_path,
+        {
+            "pipeline": ["broken"],
+            "tasks": {"broken": {"module": "test.module", "class": "RaisingTask", "params": {"error": SystemExit("stop")}}},
+        },
+    )
+    state = Mock()
+    state.start_task.return_value = {"id": "run"}
+    state.conn = Mock()
+    loader._state_service = Mock(return_value=state)
+    monkeypatch.setattr(loader, "_import_task_class", lambda *args: RaisingTask)
+    with pytest.raises(SystemExit):
+        loader.load_workflow()({"id": "doc", "batch_id": "batch", "document_id": "doc"})
+    state.fail_task.assert_called_once()
 
 
 def test_load_workflow_rejects_invalid_unknown_and_incomplete_steps(tmp_path, monkeypatch):

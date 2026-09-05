@@ -11,7 +11,7 @@ It exposes the following endpoints:
 Dependencies:
 - ConfigManager: Loads and provides access to application configuration (e.g., folders, auth settings).
 - AuthUtils: Handles authentication (login, token generation/validation).
-- StatusManager: Legacy compatibility dependency retained for older callers.
+- SQLite-backed workflow services: Provide authoritative document and task state.
 - WorkflowManager: Coordinates processing workflows used by file operations.
 - FileProcessor: Handles web upload processing and integration with workflows.
 - utils.retry_with_cleanup (optional): Retry wrapper used by FileProcessor if available.
@@ -47,13 +47,19 @@ from pydantic import BaseModel
 
 from .auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from .config_manager import ConfigManager
-from .status_manager import StatusManager
 from .workflow_manager import WorkflowManager
 from .file_processor import FileProcessor
 from . import utils as utils_mod
 from .db.connection import connect
 from .db.connection import json_loads
-from .db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository, UserRepository
+from .db.repositories import (
+    DocumentRepository,
+    ExtractionRepository,
+    PipelineVersionRepository,
+    ReviewRepository,
+    TaskRunRepository,
+    UserRepository,
+)
 from .db.migrations import initialize_database
 from .services.admin_settings_service import (
     AdminAuditService,
@@ -90,6 +96,7 @@ from .services.review_schema_version_service import (
     ReviewSchemaVersionService,
 )
 from .services.task_catalog_service import TaskCatalogService
+from .services.workflow_state_service import WorkflowStateService
 from .services.user_service import UserService, UserServiceError
 from .services.versioned_admin_service import VersionedAdminService
 from .services.versioned_config_contracts import redact_sensitive
@@ -238,9 +245,11 @@ def get_dependencies() -> tuple:
     startup and are intentionally not run during request dependency resolution.
 
     Returns:
-        Tuple[ConfigManager, AuthUtils, StatusManager, WorkflowManager, FileProcessor]:
+        Tuple[ConfigManager, AuthUtils, None, WorkflowManager, FileProcessor]:
         A tuple containing initialized instances for configuration, authentication,
-        status access, workflow coordination, and file processing.
+        workflow coordination, and file processing. The third position remains
+        ``None`` for compatibility with injected callers; document state is
+        exclusively SQLite-backed through the workflow state services.
 
     Raises:
         None
@@ -249,7 +258,6 @@ def get_dependencies() -> tuple:
     cfg_path = Path(cfg_env) if cfg_env else Path("config.yaml")
     config = ConfigManager(config_path=cfg_path.resolve())
     auth = AuthUtils(config)
-    status_mgr = StatusManager(config)
     # WorkflowManager signature expects config_manager
     workflow_mgr = WorkflowManager(config_manager=config)
     # Provide a basic retry function from utils if available, else a no-op passthrough
@@ -257,7 +265,7 @@ def get_dependencies() -> tuple:
     if retry_func is None:
         retry_func = lambda func, *a, **kw: func(*a, **kw)
     file_processor = FileProcessor(config_manager=config, retry_operation_func=retry_func, workflow_manager=workflow_mgr)
-    return config, auth, status_mgr, workflow_mgr, file_processor
+    return config, auth, None, workflow_mgr, file_processor
 
 
 def get_current_user(token: Optional[str] = Depends(cookie_or_header_token), auth: AuthUtils = Depends(lambda: get_dependencies()[1])) -> str:
@@ -395,7 +403,7 @@ def _iter_config_directory_values(value: Any) -> list[str]:
     return paths
 
 
-def _configured_pdf_roots(config: Any) -> list[Path]:
+def _configured_pdf_roots(config: Any, *additional_config: Any) -> list[Path]:
     """Return resolved directories that may contain application PDF artifacts."""
     raw_roots = [
         config.get("web.upload_dir"),
@@ -404,6 +412,8 @@ def _configured_pdf_roots(config: Any) -> list[Path]:
     ]
     if hasattr(config, "get_all"):
         raw_roots.extend(_iter_config_directory_values(config.get_all()))
+    for config_value in additional_config:
+        raw_roots.extend(_iter_config_directory_values(config_value))
 
     roots: list[Path] = []
     seen: set[str] = set()
@@ -1115,7 +1125,7 @@ def build_router() -> APIRouter:
         user: str = Depends(get_current_user),
     ):
         """Upload one or more PDFs as a single SQLite-backed processing batch."""
-        config, _, _, _, file_processor = get_dependencies()
+        config, _, _, _, _ = get_dependencies()
         selection_values = await _multipart_scalar_values(
             request, "pipeline_version_id"
         )
@@ -1205,18 +1215,6 @@ def build_router() -> APIRouter:
 
             batch = created["batch"]
             documents = created["documents"]
-            for descriptor, document in zip(file_descriptors, documents):
-                background_tasks.add_task(
-                    file_processor.process_file,
-                    filepath=descriptor["file_path"],
-                    unique_id=document["id"],
-                    source="web",
-                    original_filename=descriptor["original_filename"],
-                    batch_id=batch["id"],
-                    document_id=document["id"],
-                    create_sqlite_state=False,
-                )
-
             return {
                 "batch_id": batch["id"],
                 "document_ids": [document["id"] for document in documents],
@@ -1294,14 +1292,16 @@ def build_router() -> APIRouter:
     def get_runtime_settings(user: str = Depends(get_current_user)):
         """Return read-only non-secret runtime settings."""
         config, _, _, _, _ = get_dependencies()
-        return RuntimeSettingsService(config).settings()
+        with connect(config) as conn:
+            return RuntimeSettingsService(config, conn).settings()
 
     @router.get("/api/admin/task-catalog")
     def get_admin_task_catalog(user: str = Depends(get_current_user)):
         """Return available workflow task classes for admin pipeline editing."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        return TaskCatalogService(config).catalog()
+        with connect(config) as conn:
+            return TaskCatalogService(config, conn=conn).catalog()
 
     @router.get("/api/admin/users")
     def get_admin_users(user: str = Depends(get_current_user)):
@@ -1475,9 +1475,11 @@ def build_router() -> APIRouter:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unable to read CSV header") from exc
         return {"path": display, "columns": [str(column) for column in columns]}
 
-    def _pipeline_editor_catalog(config: ConfigManager) -> dict[str, Any]:
+    def _pipeline_editor_catalog(
+        config: ConfigManager, conn: sqlite3.Connection
+    ) -> dict[str, Any]:
         """Return only user-configurable tasks for the pipeline editor."""
-        catalog = TaskCatalogService(config).catalog()
+        catalog = TaskCatalogService(config, conn=conn).catalog()
         tasks = [
             task
             for task in catalog.get("tasks", [])
@@ -2096,7 +2098,7 @@ def build_router() -> APIRouter:
         with connect(config) as conn:
             service = PipelineConfigService(config, conn)
             payload = service.get_pipeline()
-        payload["catalog"] = _pipeline_editor_catalog(config)
+            payload["catalog"] = _pipeline_editor_catalog(config, conn)
         return payload
 
     @router.get("/api/admin/pipeline/directories")
@@ -2399,6 +2401,7 @@ def build_router() -> APIRouter:
         with connect(config) as conn:
             documents = DocumentRepository(conn)
             task_runs = TaskRunRepository(conn)
+            state = WorkflowStateService(conn)
             document = documents.get(file_id)
             if document is None:
                 document = documents.get(str(file_id))
@@ -2415,6 +2418,7 @@ def build_router() -> APIRouter:
             "document": document,
             "task_runs": runs,
             "files": files,
+            "status_history": state.status_history(str(document["id"])),
             "error": latest_error,
         }
         return _file_status_from_document(document, details=details)
@@ -2643,6 +2647,12 @@ def build_router() -> APIRouter:
             if document is None:
                 raise HTTPException(status_code=404, detail="Document not found")
             files = documents.list_files(document_id)
+            pipeline_definition = {}
+            pipeline_version_id = document.get("pipeline_version_id")
+            if pipeline_version_id:
+                pipeline_version = PipelineVersionRepository(conn).get(str(pipeline_version_id))
+                if pipeline_version:
+                    pipeline_definition = json_loads(pipeline_version.get("definition_json"), {})
 
         candidate_paths = [
             file_record.get("file_path")
@@ -2650,7 +2660,7 @@ def build_router() -> APIRouter:
             if file_record.get("file_type") in {"split_pdf", "source_original", "original_pdf"}
         ]
         candidate_paths.append(document.get("file_path"))
-        allowed_roots = _configured_pdf_roots(config)
+        allowed_roots = _configured_pdf_roots(config, pipeline_definition)
         if not allowed_roots:
             logger.error("No configured artifact roots available for PDF preview")
             raise HTTPException(status_code=404, detail="PDF file not found")

@@ -11,6 +11,7 @@ from typing import Any
 import pytest
 import yaml
 import bcrypt
+from pypdf import PdfWriter
 
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
@@ -355,7 +356,11 @@ fields:
             user="admin",
         )
     pdf_path = tmp_path / "web_upload" / "invoice.pdf"
-    pdf_path.write_bytes(b"%PDF-1.4\n% visual test")
+    writer = PdfWriter()
+    writer.add_blank_page(width=612, height=792)
+    writer.add_blank_page(width=612, height=792)
+    with pdf_path.open("wb") as handle:
+        writer.write(handle)
 
     with connect(config) as conn:
         created = BatchService(conn).create_ingestion_batch(
@@ -370,10 +375,42 @@ fields:
             document_id=document_id,
             extraction_result_id=extraction["id"],
             fields=[
-                {"field_key": "supplier", "field_alias": "Supplier", "extracted_value": "Acme", "confidence": 0.61, "requires_review": True},
-                {"field_key": "invoice_amount", "field_alias": "Invoice amount", "extracted_value": 70, "confidence": 0.82, "requires_review": True},
+                {
+                    "field_key": "supplier",
+                    "field_alias": "Supplier",
+                    "extracted_value": "Acme",
+                    "confidence": 0.61,
+                    "requires_review": True,
+                    "source": {
+                        "provider_source": [{
+                            "page": 1,
+                            "bounding_boxes": [{"x": 72, "y": 90, "w": 110, "h": 18}],
+                            "page_dimensions": {"width": 612, "height": 792},
+                        }],
+                    },
+                },
+                {
+                    "field_key": "invoice_amount",
+                    "field_alias": "Invoice amount",
+                    "extracted_value": 70,
+                    "confidence": 0.82,
+                    "requires_review": True,
+                    "source": {
+                        "provider_source": [{
+                            "page": 2,
+                            "bounding_boxes": [{"x": 250, "y": 220, "w": 95, "h": 18}],
+                            "page_dimensions": {"width": 612, "height": 792},
+                        }],
+                    },
+                },
                 {"field_key": "approved", "field_alias": "Approved", "extracted_value": None, "confidence": 0.8},
-                {"field_key": "reviewed_at", "field_alias": "Reviewed at", "extracted_value": "2026-06-12T09:30:00Z", "confidence": 0.95},
+                {
+                    "field_key": "reviewed_at",
+                    "field_alias": "Reviewed at",
+                    "extracted_value": "2026-06-12T09:30:00Z",
+                    "confidence": 0.95,
+                    "source": {"pages": [2]},
+                },
                 {"field_key": "address", "field_alias": "Address", "extracted_value": {"city": "Singapore"}, "confidence": 0.95},
                 {"field_key": "tags", "field_alias": "Tags", "extracted_value": ["urgent"], "confidence": 0.9},
                 {
@@ -412,7 +449,10 @@ fields:
     child_review_pdf = tmp_path / "web_upload" / "phase14-child-review.pdf"
     child_failed_pdf = tmp_path / "web_upload" / "phase14-child-failed.pdf"
     for path in (source_pdf, child_review_pdf, child_failed_pdf):
-        path.write_bytes(b"%PDF-1.4\n% synthetic phase 14 evidence")
+        writer = PdfWriter()
+        writer.add_blank_page(width=612, height=792)
+        with path.open("wb") as handle:
+            writer.write(handle)
 
     with connect(config) as conn:
         pipeline_template_id = active["template"]["id"]
@@ -490,6 +530,8 @@ fields:
 
     return {
         "review_id": str(review["id"]),
+        "extraction_document_id": str(document_id),
+        "failed_document_id": str(failed_child["id"]),
         "batch_id": str(batch["batch"]["id"]),
         "active_template_id": str(active["template"]["id"]),
         "pipeline_version_id": str(published_pipeline["version"]["id"]),
@@ -606,9 +648,12 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     page.locator("body.sidebar-collapsed").wait_for()
     assert page.locator('.nav-link[aria-label="Review Queue"]').get_attribute("title") == "Review Queue"
     assert page.locator('.nav-link[aria-label="Review Queue"]').get_attribute("data-nav-label") == "Review Queue"
-    assert page.locator("#review-pdf-fit-width-button").count() == 0
-    assert page.locator("#review-pdf-fit-page-button").count() == 0
-    assert "zoom=" not in (page.locator(".review-pdf-frame").get_attribute("src") or "")
+    page.locator(".docflow-pdf-viewer").wait_for()
+    page.locator(".docflow-pdf-page canvas").nth(1).wait_for()
+    assert page.locator(".docflow-pdf-page").count() == 2
+    assert page.locator(".docflow-pdf-page canvas").count() == 2
+    assert page.locator("iframe").count() == 0
+    assert page.locator(".docflow-pdf-bbox").count() == 1
     page.locator("#review-claim-button").click()
     page.locator("#review-lock-summary").wait_for()
     assert page.locator("#review-claim-button").is_hidden()
@@ -618,6 +663,18 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     page.locator('input[data-field-path="invoice_amount"]').wait_for()
     amount = page.locator('input[data-field-path="invoice_amount"]')
     assert amount.input_value() == "70.00"
+    amount.focus()
+    page.wait_for_function("() => document.querySelectorAll('.docflow-pdf-bbox').length === 1")
+    assert page.locator('.docflow-pdf-page[data-page="2"] .docflow-pdf-bbox').count() == 1
+    page.wait_for_function("() => document.querySelector('.docflow-pdf-page-readout')?.textContent.includes('Page 2 of 2')")
+    page.get_by_role("button", name="Center location").click()
+    page.wait_for_function(
+        "() => document.querySelector('.docflow-pdf-status')?.textContent.includes('Centered on Invoice amount')"
+    )
+    reviewed_at = page.locator('input[data-field-path="reviewed_at"]')
+    reviewed_at.focus()
+    page.wait_for_function("() => document.querySelector('.docflow-pdf-status')?.textContent.includes('page-only evidence')")
+    assert page.locator(".docflow-pdf-bbox").count() == 0
     assert amount.get_attribute("step") == "0.01"
     assert page.locator("#review-source-mode-select").input_value() == "review"
     amount_row = page.locator('.review-field-row[data-field-path="invoice_amount"]')
@@ -641,6 +698,31 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
 
     page.set_viewport_size({"width": 390, "height": 900})
     page.locator("#review-fields-container").wait_for()
+    _assert_nonblank_screenshot(page)
+
+
+def test_extraction_results_visual_uses_shared_pdfjs_viewer(page: Page, visual_app: dict[str, str]) -> None:
+    """Extraction results renders PDF.js and selects a cited field."""
+    page.goto(
+        f"{visual_app['base_url']}/app/documents/"
+        f"{visual_app['extraction_document_id']}/extraction"
+    )
+    page.locator("#extraction-preview-body .docflow-pdf-page canvas").first.wait_for()
+    page.locator("#extraction-fields-table-body [data-field-key='supplier']").click()
+    assert page.locator("#extraction-preview-body iframe").count() == 0
+    assert page.locator("#extraction-preview-body .docflow-pdf-bbox").count() == 1
+    assert page.locator("#extraction-preview-body .docflow-pdf-page").count() == 2
+    _assert_nonblank_screenshot(page)
+
+
+def test_failure_detail_visual_uses_shared_pdfjs_viewer(page: Page, visual_app: dict[str, str]) -> None:
+    """Failure detail renders the source PDF through the shared viewer."""
+    page.goto(
+        f"{visual_app['base_url']}/app/failures?document_id={visual_app['failed_document_id']}"
+    )
+    page.locator("#failure-pdf-viewer .docflow-pdf-page canvas").first.wait_for()
+    assert page.locator("#failure-pdf-viewer iframe").count() == 0
+    assert page.locator("#failure-pdf-viewer .docflow-pdf-page").count() == 1
     _assert_nonblank_screenshot(page)
 
 

@@ -217,7 +217,7 @@ def test_glm_defaults_and_summary_are_local_and_non_secret() -> None:
         'GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", '
         'model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", '
         'resolution_mode: "document", resolver_model: "qwen3.5:9b-q4_K_M", '
-        'resolver_max_dimension: 1280, resolver_num_ctx: 8192, resolver_num_predict: 10000, resolver_max_attempts: 2, dpi: 216, '
+        'resolver_max_dimension: 1280, resolver_num_ctx: 18000, resolver_num_predict: 10000, resolver_max_attempts: 2, dpi: 216, '
         "num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} }"
     ) in source
     for label in ("Model", "Ollama host", "Fields", "Table status", "Resolution", "Resolver"):

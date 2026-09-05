@@ -92,6 +92,25 @@ CREATE TABLE IF NOT EXISTS task_runs (
     FOREIGN KEY(pipeline_version_id) REFERENCES pipeline_versions(id)
 );
 
+CREATE TABLE IF NOT EXISTS processing_jobs (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL,
+    document_id TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed')),
+    available_at TEXT NOT NULL,
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+    max_attempts INTEGER NOT NULL DEFAULT 3 CHECK(max_attempts > 0),
+    worker_id TEXT,
+    lease_expires_at TEXT,
+    last_error TEXT,
+    created_at TEXT NOT NULL,
+    started_at TEXT,
+    completed_at TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(batch_id) REFERENCES batches(id),
+    FOREIGN KEY(document_id) REFERENCES documents(id)
+);
+
 CREATE TABLE IF NOT EXISTS extraction_results (
     id TEXT PRIMARY KEY,
     document_id TEXT NOT NULL,
@@ -301,6 +320,10 @@ CREATE TABLE IF NOT EXISTS watch_folder_bindings (
 CREATE INDEX IF NOT EXISTS idx_documents_batch_id ON documents(batch_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_task_runs_document_id ON task_runs(document_id);
+CREATE INDEX IF NOT EXISTS idx_processing_jobs_claimable
+    ON processing_jobs(status, available_at, created_at);
+CREATE INDEX IF NOT EXISTS idx_processing_jobs_lease
+    ON processing_jobs(status, lease_expires_at);
 CREATE INDEX IF NOT EXISTS idx_review_items_status ON review_items(status);
 CREATE INDEX IF NOT EXISTS idx_extracted_fields_document_id ON extracted_fields(document_id);
 CREATE INDEX IF NOT EXISTS idx_config_versions_type_status ON config_versions(config_type, status);

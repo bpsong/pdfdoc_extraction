@@ -19,6 +19,8 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Multiple Input Methods
 - **Watch Folder Monitoring**: Automated processing of dropped PDF files
 - **Web Upload Interface**: User-friendly web portal for manual uploads
+- **Upload Progress Feedback**: Batch uploads show aggregate browser-to-server transfer progress before processing begins
+- **Operator UI Guidance**: Keyboard-friendly upload controls, cancellable transfers, retry actions, consistent queue tables, and lightweight contextual help
 - **Polled Processing Status**: Browser pages refresh workflow progress at
   short intervals
 - **Batch Uploads**: `/app/upload` supports multi-file upload and creates batch/document records for tracking
@@ -49,6 +51,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
   `/app/schemas`, `/app/admin/tasks`, `/app/settings/validation`, and
   `/app/admin/audit`
 - **Review Workflows**: Human review queues for low-confidence or policy-triggered extracted fields
+- **Citation-Aware PDF Review**: Local PDF.js source viewing with provider-specific page and bounding-box navigation
 - **Responsive Design**: Mobile-friendly interface
 
 ## Table of Contents
@@ -67,6 +70,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 
 ### Prerequisites
 - Python 3.13+
+- Node.js/npm for frontend asset rebuilds (not required when using committed assets)
 - At least one extraction provider: Llama Cloud API access, or a separately
   installed Ollama server with the models configured by a GLM-OCR pipeline
 
@@ -83,7 +87,12 @@ A sophisticated PDF document processing system that leverages AI-powered extract
    py -3.13 -m venv .venv
    .\.venv\Scripts\python.exe -m pip install --upgrade pip
    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   npm ci
    ```
+
+   `npm ci` installs the frontend build dependencies used when rebuilding
+   committed CSS or browser assets. Node.js/npm is not required to run the
+   application when those committed assets are already present.
 
 3. **Configure the system**
    Open the ignored local `config.yaml` and set deployment paths, web/auth
@@ -122,6 +131,7 @@ Key dependencies:
 - **Ollama Python client (`ollama`)**: Native local API access for GLM-OCR and
   its optional document resolver
 - **PyMuPDF**: In-memory PDF page rendering for local vision extraction
+- **PDF.js (`pdfjs-dist`)**: Vendored browser module and worker for source-PDF review
 - **Prefect**: Workflow orchestration engine
 - **Pandas**: Data manipulation and CSV processing
 - **Uvicorn**: ASGI server for production deployment
@@ -183,14 +193,17 @@ The current runtime uses the `llama-cloud` SDK and `LlamaCloud` client. New code
 ### Manual LlamaCloud Smoke Check
 
 After validating a saved Extract v2 configuration in the LlamaCloud UI, you can
-run a one-file SDK and workflow fit check against `sample_invoice.pdf`. The
-manual tool reads a YAML task definition; it does not read SQLite or resolve
-`pipeline_secrets`. Export/copy the selected pipeline definition to an ignored
-local smoke file and provide the API key through the current process:
+run a one-file SDK and workflow fit check against a local PDF. Sample PDF
+documents are not included in the GitHub repository; provide your own test
+document or use a PDF from your existing document set. The manual tool reads a
+YAML task definition; it does not read SQLite or resolve `pipeline_secrets`.
+Export/copy the selected pipeline definition to an ignored local smoke file and
+provide the API key through the current process:
 
 ```powershell
 $env:LLAMA_CLOUD_API_KEY = "set-locally"
-.\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config smoke-pipeline.yaml --file sample_invoice.pdf --configuration-id "cfg-..."
+$pdfPath = "C:\path\to\your\test-document.pdf"
+.\.venv\Scripts\python.exe tools\llamacloud_extract_smoke.py --config smoke-pipeline.yaml --file $pdfPath --configuration-id "cfg-..."
 ```
 
 If `configuration_id` is already set in the smoke definition, omit the override
@@ -221,13 +234,13 @@ To re-check a saved raw result without another LlamaCloud call:
 SQLite is the primary workflow-state store. The application records:
 
 - ingestion batches and documents
-- task-run lifecycle and errors
+- task-run lifecycle and errors, plus document status transition history
 - extraction results and field-level confidence/review state
 - review queue items and decisions
 - registered document artifacts
 - admin settings versions and audit events
 
-Text status files are not required for configured workflow state. `/api/files` and `/api/status/{file_id}` remain as legacy compatibility APIs, but they read from SQLite. Use `/app/*` pages for browser workflows.
+Workflow state is persisted in SQLite. `/api/files` and `/api/status/{file_id}` remain as legacy response shapes backed by SQLite; filesystem status files are not used. Use `/app/*` pages for browser workflows.
 
 ## Usage
 
@@ -250,7 +263,7 @@ After a successful import, remove the legacy `authentication` block. Passwords m
 1. **Login**: Access the app at `http://localhost:8000/app/upload` and select `admin` or `operator`
 2. **Upload PDFs**: Use `/app/upload`, select one exact eligible published
    pipeline version for the whole batch, and submit one or more PDFs
-3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track splitting, extraction, review, and completion state
+3. **Monitor Progress**: Use `/app/processing` or `/app/batches/{batch_id}` to track queued work, splitting, extraction, review, and completion state
 4. **Review Exceptions**: Use `/app/review` and `/app/review/{review_item_id}` for human review queues
 5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
 6. **Inspect Batch History**: Use `/app/reports` and click a recent batch row to view document task timelines and task-run details
@@ -297,7 +310,8 @@ The `admin` account has full access. The `operator` account cannot access admini
 - `POST /upload`: Legacy single-PDF upload endpoint; redirects to `/app/processing` after scheduling
 - `GET /api/pipelines/available`: List exact pipeline versions eligible for the current user
 - `POST /api/batches/upload`: Upload a batch of PDFs with a required
-  `pipeline_version_id` and create SQLite batch/document records
+  `pipeline_version_id`, create SQLite batch/document records, and enqueue
+  durable processing jobs
 - `GET /api/batches`: List ingestion batches
 - `GET /api/batches/{batch_id}`: Get batch details
 - `GET /api/batches/{batch_id}/documents`: List batch documents
@@ -344,7 +358,6 @@ pdfdoc_extraction/
 │   ├── file_processor.py       # File processing logic
 │   ├── db/                     # SQLite connection, migrations, repositories
 │   ├── services/               # Batch, review, reports, audit, settings, artifact services
-│   ├── status_manager.py       # Legacy text-status compatibility support
 │   ├── services/watch_folder_coordinator.py # Multi-binding watch-folder routing
 │   ├── watch_folder_monitor.py # Legacy single-folder compatibility component
 │   └── workflow_manager.py     # Workflow orchestration

@@ -8,32 +8,35 @@
 
 {% block content %}
 <div class="app-workspace" id="review-queue-workspace">
-    <div class="flex items-center gap-2 flex-wrap">
-        <button class="btn btn-primary btn-sm review-filter" data-filter="all" type="button">
-            All <span class="badge badge-sm ml-1" id="review-count-all">0</span>
-        </button>
-        <button class="btn btn-outline btn-sm review-filter" data-filter="low_confidence" type="button">
-            Low Confidence <span class="badge badge-sm ml-1" id="review-count-low">0</span>
-        </button>
-        <button class="btn btn-outline btn-sm review-filter" data-filter="in_review" type="button">
-            In Review <span class="badge badge-sm ml-1" id="review-count-in-review">0</span>
-        </button>
-        <button class="btn btn-outline btn-sm review-filter" data-filter="completed" type="button">
-            Completed <span class="badge badge-sm ml-1" id="review-count-completed">0</span>
-        </button>
+    <div class="app-filter-bar">
+        <div class="flex items-center gap-2 flex-wrap">
+            <button class="btn btn-primary btn-sm review-filter" data-filter="all" type="button">
+                All <span class="badge badge-sm ml-1" id="review-count-all">0</span>
+            </button>
+            <button class="btn btn-outline btn-sm review-filter" data-filter="low_confidence" type="button">
+                Low Confidence <span class="badge badge-sm ml-1" id="review-count-low">0</span>
+            </button>
+            <button class="btn btn-outline btn-sm review-filter" data-filter="in_review" type="button">
+                In Review <span class="badge badge-sm ml-1" id="review-count-in-review">0</span>
+            </button>
+            <button class="btn btn-outline btn-sm review-filter" data-filter="completed" type="button">
+                Completed <span class="badge badge-sm ml-1" id="review-count-completed">0</span>
+            </button>
+        </div>
+
+        <label class="input input-bordered input-sm flex items-center gap-2">
+            <svg class="w-4 h-4 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input type="search" class="grow" id="review-search-input" placeholder="Search documents..." />
+        </label>
     </div>
 
-    <label class="input input-bordered input-sm flex items-center gap-2">
-        <svg class="w-4 h-4 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input type="search" class="grow" id="review-search-input" placeholder="Search documents..." />
-    </label>
-
-    <section class="app-table-region">
-        <table class="table table-sm">
+    <section id="review-queue-region" class="app-table-region app-queue-table-region" role="region" aria-labelledby="review-queue-table-heading" aria-busy="true">
+        <h2 id="review-queue-table-heading" class="sr-only">Review queue items</h2>
+        <table class="table table-sm table-zebra app-queue-table">
             <thead>
                 <tr>
                     <th>Document</th>
@@ -45,10 +48,10 @@
                     <th class="text-right">Actions</th>
                 </tr>
             </thead>
-            <tbody id="review-queue-body">
-                <tr>
-                    <td colspan="7" class="text-center text-base-content/50 py-10">Loading review items...</td>
-                </tr>
+            <tbody id="review-queue-body" aria-busy="true">
+                <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
+                <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
+                <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-2/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span></div></td></tr>
             </tbody>
         </table>
     </section>
@@ -56,5 +59,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/review_queue.js?v=task19" defer></script>
+<script src="/static/js/review_queue.js?v=ui-retry-table-polish" defer></script>
 {% endblock %}

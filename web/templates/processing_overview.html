@@ -4,12 +4,12 @@
 <div id="processing-workspace" class="app-workspace" data-batch-id="{{ batch_id|default('') }}">
     <section class="card bg-base-100 shadow-sm">
         <div class="card-body">
-            <div class="flex items-center justify-between gap-3 mb-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h2 class="font-semibold">Pipeline Status</h2>
-                <div class="flex items-center gap-2">
+                <div class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
                     <button id="clear-failure-notifications-button" class="btn btn-error btn-sm hidden" type="button">Clear Error Notification</button>
                     {% if batch_id is defined and batch_id %}
-                    <span class="badge badge-outline badge-sm">{{ batch_id }}</span>
+                    <span class="badge badge-outline badge-sm max-w-full truncate" title="{{ batch_id }}">{{ batch_id }}</span>
                     {% else %}
                     <span class="badge badge-ghost badge-sm">Active batches</span>
                     {% endif %}
@@ -22,25 +22,26 @@
                 <div class="empty-panel">Loading pipeline</div>
             </div>
 
-            <div class="mt-6">
+            <div id="processing-progress-region" class="mt-6" role="group" aria-labelledby="processing-progress-heading" aria-busy="true">
                 <div class="flex items-center justify-between mb-1">
-                    <span class="text-sm font-semibold">Overall Progress</span>
+                    <span id="processing-progress-heading" class="text-sm font-semibold">Overall Progress</span>
                     <span id="overall-progress-label" class="text-sm font-bold text-primary">0%</span>
                 </div>
-                <progress id="overall-progress-bar" class="progress progress-primary w-full" value="0" max="100"></progress>
+                <progress id="overall-progress-bar" class="progress progress-primary w-full" value="0" max="100" aria-label="Overall processing progress"></progress>
                 <p id="processing-refresh-note" class="text-xs text-base-content/50 mt-1">Waiting for processing data</p>
             </div>
         </div>
     </section>
 
     <section class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-            <div class="flex items-center justify-between gap-3 mb-3">
+        <div class="card-body p-0">
+            <div class="flex items-center justify-between gap-3 px-4 pt-6 pb-4 sm:px-6">
                 <h2 class="font-semibold">Processing Queue</h2>
                 <a id="split-results-link" href="#" class="btn btn-primary btn-sm hidden">View Split Results</a>
             </div>
-            <div class="overflow-x-auto">
-                <table class="table table-sm">
+            <div id="processing-table-region" class="app-table-region app-queue-table-region rounded-none border-x-0 border-b-0" role="region" aria-labelledby="processing-queue-heading" aria-busy="true">
+                <h2 id="processing-queue-heading" class="sr-only">Processing queue</h2>
+                <table class="table table-sm table-zebra app-queue-table">
                     <thead>
                         <tr class="text-xs text-base-content/50">
                             <th>File Name</th>
@@ -51,10 +52,10 @@
                             <th>Action</th>
                         </tr>
                     </thead>
-                    <tbody id="processing-table-body">
-                        <tr>
-                            <td colspan="6" class="text-center text-base-content/50 py-10">No active documents</td>
-                        </tr>
+                    <tbody id="processing-table-body" aria-busy="true">
+                        <tr aria-hidden="true"><td colspan="6"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
+                        <tr aria-hidden="true"><td colspan="6"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
+                        <tr aria-hidden="true"><td colspan="6"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-2/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span></div></td></tr>
                     </tbody>
                 </table>
             </div>
@@ -64,5 +65,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/processing_overview.js?v=pinned-pipeline-identity" defer></script>
+<script src="/static/js/processing_overview.js?v=ui-retry-table-polish" defer></script>
 {% endblock %}

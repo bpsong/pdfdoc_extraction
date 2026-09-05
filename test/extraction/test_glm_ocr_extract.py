@@ -333,7 +333,7 @@ def test_task_keeps_legacy_page_merge_when_resolution_params_are_absent(
     assert adapter.resolver_model == ""
 
 
-def test_task_uses_higher_default_resolver_output_budget(tmp_path) -> None:
+def test_task_uses_higher_default_resolver_budgets(tmp_path) -> None:
     config, context, _document_id = _persisted_context(tmp_path)
     task = GlmOcrExtractTask(
         config,
@@ -345,7 +345,9 @@ def test_task_uses_higher_default_resolver_output_budget(tmp_path) -> None:
 
     task.on_start(context)
 
-    assert task._build_adapter().resolver_num_predict == 10000
+    adapter = task._build_adapter()
+    assert adapter.resolver_num_ctx == 18000
+    assert adapter.resolver_num_predict == 10000
 
 
 def test_task_rejects_unknown_prompt_style(tmp_path) -> None:

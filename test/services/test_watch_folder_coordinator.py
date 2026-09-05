@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from pathlib import Path
+import time
+from unittest.mock import Mock
 
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.services.ingress_binding_service import IngressBindingService
 from modules.services.watch_folder_coordinator import WatchFolderCoordinator
+import modules.services.watch_folder_coordinator as coordinator_module
 from test.helpers_sqlite import TempConfig
 from test.services.test_ingestion_assignment_service import publish_pipeline
 
@@ -80,7 +84,11 @@ def test_two_folders_ingest_to_different_exact_versions(tmp_path):
     }
     assert assignments[first_binding["id"]] == first_version["id"]
     assert assignments[second_binding["id"]] == second_version["id"]
-    assert len(processor.calls) == 2
+    assert processor.calls == []
+    with connect(config) as conn:
+        jobs = conn.execute("SELECT * FROM processing_jobs").fetchall()
+    assert len(jobs) == 2
+    assert {job["status"] for job in jobs} == {"queued"}
 
 
 def test_binding_change_affects_only_files_claimed_after_reconciliation(tmp_path):
@@ -150,7 +158,7 @@ def test_inaccessible_and_invalid_bindings_do_not_block_other_folders(tmp_path):
 
     assert coordinator.scan_once() == 1
     assert coordinator.scan_once() == 0
-    assert len(processor.calls) == 1
+    assert processor.calls == []
     with connect(config) as conn:
         row = conn.execute(
             "SELECT enabled FROM watch_folder_bindings WHERE id = ?",
@@ -184,7 +192,7 @@ def test_disabled_binding_is_reconciled_without_claiming_new_files(tmp_path):
     assert pending.exists()
 
 
-def test_processing_retries_and_stop_are_coordinator_owned(tmp_path):
+def test_processing_is_deferred_to_the_worker_and_stop_is_coordinator_owned(tmp_path):
     config = build_context(tmp_path)
     folder = tmp_path / "incoming"
     folder.mkdir()
@@ -201,10 +209,140 @@ def test_processing_retries_and_stop_are_coordinator_owned(tmp_path):
     coordinator = WatchFolderCoordinator(config, processor)
 
     assert coordinator.scan_once() == 1
-    assert len(processor.calls) == 3
-    assert all(
-        Path(call["filepath"]).parent == Path(config.get("watch_folder.processing_dir"))
-        for call in processor.calls
-    )
+    assert processor.calls == []
+    with connect(config) as conn:
+        job = conn.execute("SELECT * FROM processing_jobs").fetchone()
+    assert job["status"] == "queued"
     coordinator.stop()
     assert coordinator.stop_event.is_set()
+
+
+def test_scan_binding_handles_listing_errors_and_repeated_claim_failures(tmp_path, monkeypatch):
+    config = build_context(tmp_path)
+    folder = tmp_path / "incoming"
+    folder.mkdir()
+    coordinator = WatchFolderCoordinator(config, FakeProcessor())
+    binding = {"id": "binding-1", "folder_path": str(folder), "enabled": True}
+
+    def fail_iterdir():
+        raise OSError("unreadable")
+
+    monkeypatch.setattr(type(folder), "iterdir", lambda _path: fail_iterdir())
+    assert coordinator._scan_binding(binding) == 0
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    monkeypatch.setattr(coordinator_module.shutil, "move", lambda *_args: (_ for _ in ()).throw(OSError("locked")))
+    assert coordinator._claim_and_process(source, {"id": "binding-1"}) is False
+
+
+def test_claim_restores_file_when_assignment_fails(tmp_path, monkeypatch):
+    config = build_context(tmp_path)
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    coordinator = WatchFolderCoordinator(config, FakeProcessor())
+
+    monkeypatch.setattr(
+        coordinator_module.IngestionAssignmentService,
+        "create_batch",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("db down")),
+    )
+    assert coordinator._claim_and_process(source, {"id": "binding-1", "pipeline_version_id": "v1"}) is False
+    assert source.exists()
+
+
+def test_claim_marks_document_failed_after_processor_exhaustion(tmp_path, monkeypatch):
+    config = build_context(tmp_path)
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4")
+
+    class FailedProcessor:
+        def process_file(self, **_kwargs):
+            return False
+
+    coordinator = WatchFolderCoordinator(config, FailedProcessor())
+    coordinator.retry_attempts = 1
+    with connect(config) as conn:
+        _, version = publish_pipeline(conn, key="pipeline")
+        binding = IngressBindingService(conn, config).create(
+            folder_path=str(tmp_path),
+            pipeline_version_id=version["id"],
+            enabled=True,
+            user="admin",
+        )
+    assert coordinator._claim_and_process(
+        source,
+        {"id": binding["id"], "pipeline_version_id": version["id"]},
+    ) is True
+    with connect(config) as conn:
+        row = conn.execute("SELECT status FROM documents ORDER BY created_at DESC LIMIT 1").fetchone()
+        job = conn.execute("SELECT status FROM processing_jobs ORDER BY created_at DESC LIMIT 1").fetchone()
+    assert row["status"] == "queued"
+    assert job["status"] == "queued"
+
+
+def test_restore_claim_handles_existing_source_and_move_errors(tmp_path, monkeypatch):
+    destination = tmp_path / "processing.pdf"
+    source = tmp_path / "source.pdf"
+    destination.write_bytes(b"data")
+    source.write_bytes(b"already there")
+    WatchFolderCoordinator._restore_claim(destination, source)
+    assert destination.exists()
+
+    source.unlink()
+    monkeypatch.setattr(coordinator_module.shutil, "move", lambda *_args: (_ for _ in ()).throw(OSError("restore failed")))
+    WatchFolderCoordinator._restore_claim(destination, source)
+
+
+def test_start_runs_until_stop_event_is_set(tmp_path, monkeypatch):
+    coordinator = WatchFolderCoordinator(build_context(tmp_path), FakeProcessor())
+    calls = []
+    coordinator.scan_once = lambda: calls.append(time.monotonic()) or 0
+
+    def stop_after_wait(_timeout):
+        coordinator.stop_event.set()
+
+    coordinator.stop_event.wait = stop_after_wait
+    coordinator.start()
+    assert len(calls) == 1
+
+
+def test_scan_once_and_processor_exception_paths_are_isolated(tmp_path, monkeypatch):
+    config = build_context(tmp_path)
+    coordinator = WatchFolderCoordinator(config, FakeProcessor())
+    coordinator._scan_binding = lambda _binding: (_ for _ in ()).throw(RuntimeError("scan failed"))
+    assert coordinator.scan_once() == 0
+
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.4")
+    with connect(config) as conn:
+        _, version = publish_pipeline(conn, key="pipeline")
+        binding = IngressBindingService(conn, config).create(
+            folder_path=str(tmp_path),
+            pipeline_version_id=version["id"],
+            enabled=True,
+            user="admin",
+        )
+
+    class RaisingProcessor:
+        def process_file(self, **_kwargs):
+            raise RuntimeError("processor failed")
+
+    coordinator = WatchFolderCoordinator(config, RaisingProcessor())
+    coordinator.retry_attempts = 1
+    assert coordinator._claim_and_process(
+        source,
+        {"id": binding["id"], "pipeline_version_id": version["id"]},
+    ) is True
+
+
+def test_scan_once_contains_unexpected_binding_failures(tmp_path, monkeypatch):
+    config = build_context(tmp_path)
+    coordinator = WatchFolderCoordinator(config, FakeProcessor())
+    binding = {"id": "binding-1", "enabled": True}
+    binding_service = Mock()
+    binding_service.list.return_value = [binding]
+    monkeypatch.setattr(coordinator_module, "connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(coordinator_module, "IngressBindingService", lambda *_args: binding_service)
+    coordinator._scan_binding = Mock(side_effect=RuntimeError("unexpected scan"))
+    assert coordinator.scan_once() == 0

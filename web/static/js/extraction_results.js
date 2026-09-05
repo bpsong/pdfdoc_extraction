@@ -18,6 +18,7 @@
     const reviewLink = document.getElementById("extraction-review-link");
     const previousButton = document.getElementById("previous-document-button");
     const nextButton = document.getElementById("next-document-button");
+    let pdfViewer = null;
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -45,20 +46,12 @@
     }
 
     function statusBadge(status) {
-        const normalized = String(status || "unknown").toLowerCase();
-        const badgeClass = normalized === "review_required" || normalized === "in_review" || normalized === "required"
-            ? "badge-warning"
-            : normalized === "corrected" || normalized === "review_completed" || normalized === "not_required"
-                ? "badge-success"
-                : normalized === "failed"
-                    ? "badge-error"
-                    : "badge-ghost";
-        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(titleCase(normalized))}</span>`;
+        return `<span class="badge ${window.DocFlow.statusBadgeClass(status, "unknown")} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "unknown"))}</span>`;
     }
 
     function confidenceBadge(field) {
         if (field.confidence === null || field.confidence === undefined) {
-            return '<span class="badge badge-ghost badge-sm">N/A</span>';
+            return '<span class="badge badge-ghost badge-sm">N/A confidence</span>';
         }
         const value = Number(field.confidence);
         const percent = Number.isFinite(value) ? `${Math.round(value * 100)}%` : "N/A";
@@ -68,7 +61,8 @@
             low: "badge-error",
             missing: "badge-ghost",
         };
-        return `<span class="badge ${classes[field.confidence_band] || "badge-ghost"} badge-sm">${escapeHtml(percent)}</span>`;
+        const band = titleCase(field.confidence_band || "unknown");
+        return `<span class="badge ${classes[field.confidence_band] || "badge-ghost"} badge-sm">${escapeHtml(band)} confidence · ${escapeHtml(percent)}</span>`;
     }
 
     function nestedConfidenceSummary(field) {
@@ -87,11 +81,18 @@
 
     function renderPreview(payload) {
         const previewUrl = payload.document && payload.document.preview_url;
+        if (pdfViewer) {
+            pdfViewer.destroy();
+            pdfViewer = null;
+        }
         if (!previewUrl) {
             previewBody.innerHTML = '<div class="empty-panel">No preview available</div>';
             return;
         }
-        previewBody.innerHTML = `<iframe class="extraction-pdf-frame" src="${escapeHtml(previewUrl)}" title="Source PDF preview"></iframe>`;
+        pdfViewer = window.DocFlowPdfViewer.mount(
+            previewBody,
+            { url: previewUrl, title: `${payload.document.filename || "Document"} source PDF` },
+        );
     }
 
     function renderFiles(files) {
@@ -115,7 +116,7 @@
             return;
         }
         tableBody.innerHTML = fields.map((field) => `
-            <tr class="${field.requires_review ? "bg-warning/10" : ""}">
+            <tr class="${field.requires_review ? "bg-warning/10" : ""} cursor-pointer" data-field-key="${escapeHtml(field.field_key)}" tabindex="0">
                 <td>
                     <div class="font-medium">${escapeHtml(field.field_alias || field.field_key)}</div>
                     <div class="text-xs text-base-content/50">${escapeHtml(field.field_key)}</div>
@@ -126,6 +127,22 @@
                 <td>${statusBadge(field.review_status)}</td>
             </tr>
         `).join("");
+        tableBody.querySelectorAll("[data-field-key]").forEach((row) => {
+            const field = fields.find((item) => String(item.field_key) === row.dataset.fieldKey);
+            const selectField = () => {
+                if (pdfViewer && field) {
+                    pdfViewer.selectField(field.field_key, field, [field.field_key], field.field_alias || field.field_key);
+                }
+            };
+            row.addEventListener("click", selectField);
+            row.addEventListener("focus", selectField);
+            row.addEventListener("keydown", (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    selectField();
+                }
+            });
+        });
     }
 
     function wireSiblingButtons(payload) {

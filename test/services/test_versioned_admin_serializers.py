@@ -1,10 +1,15 @@
 """Unit tests for versioned administration read models."""
 
+from unittest.mock import Mock
+
+import pytest
+
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from modules.services.versioned_admin_service import VersionedAdminService
+import modules.services.versioned_admin_service as admin_module
 from test.helpers_sqlite import TempConfig
 
 
@@ -102,3 +107,50 @@ def test_pipeline_group_identity_uses_exact_version_not_only_hash():
     )
 
     assert {group["pipeline_version_id"] for group in groups} == {"v1", "v2"}
+
+
+def test_versioned_admin_service_ownership_portable_and_coordinate_guards(monkeypatch):
+    service = VersionedAdminService.__new__(VersionedAdminService)
+    service.conn = Mock()
+    service.schemas = Mock()
+    service.pipelines = Mock()
+
+    service.schemas.load_version.return_value = {"schema_template_id": "other"}
+    try:
+        service.get_schema_version("expected", "version")
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("schema ownership should be enforced")
+
+    service.pipelines.load_version.return_value = {"template_id": "other", "definition": {}}
+    try:
+        service.get_pipeline_version("expected", "version")
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("pipeline ownership should be enforced")
+
+    monkeypatch.setattr(admin_module, "import_pipeline_bundle", lambda document, resolve_coordinate: ({"tasks": {}}, {}))
+    assert service.import_pipeline_document({"kind": "pipeline-bundle"}) == {"tasks": {}}
+    monkeypatch.setattr(admin_module, "export_pipeline_bundle", lambda *args, **kwargs: {"kind": "bundle"})
+    with pytest.raises(ValueError, match="yaml or json"):
+        service._dump_pipeline_bundle({"template_key": "x", "name": "X"}, {}, format="toml")
+
+    service.conn.execute.return_value.fetchone.return_value = None
+    assert service._resolve_schema_coordinate(Mock(key="x", version_number=1, content_hash="h")) is None
+    assert service._coordinate_for_version("missing") is None
+    service.conn.execute.return_value.fetchone.return_value = {
+        "id": "v1", "content_hash": "h", "schema_key": "x", "version_number": 1
+    }
+    assert service._resolve_schema_coordinate(Mock(key="x", version_number=1, content_hash="h")) == "v1"
+    coordinate = service._coordinate_for_version("v1")
+    assert coordinate is not None and coordinate.key == "x"
+
+    service.pipelines._require_template.return_value = {"id": "expected"}
+    service.pipelines.load_version.return_value = {
+        "template_id": "other",
+        "definition": {},
+    }
+    with pytest.raises(KeyError, match="Unknown pipeline version"):
+        service.export_pipeline_version("expected", "version")

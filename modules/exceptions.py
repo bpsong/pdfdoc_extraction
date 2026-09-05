@@ -12,7 +12,7 @@ class TaskError(Exception):
     TaskError provides a consistent way to signal failures that occur within
     individual tasks or across the workflow execution. It is intended to be
     raised by task implementations and propagated up the pipeline, where it can
-    be logged, surfaced to status managers, or used to control flow.
+    be logged, persisted in SQLite task runs, or used to control flow.
 
     Typical usage:
       - Raise when a task encounters a recoverable/expected failure condition.
@@ -24,7 +24,7 @@ class TaskError(Exception):
     representation.
 
     Troubleshooting:
-        - Common Issue: TaskError propagation fails to update status. Resolution: Ensure exception handlers properly catch TaskError and call status_manager.update_task_status() with appropriate error information.
+        - Common Issue: TaskError propagation fails to update status. Resolution: Ensure exception handlers properly catch TaskError and persist document and task-run state through the SQLite workflow state service.
         - Common Issue: Generic error messages lack context. Resolution: Always provide descriptive messages when raising TaskError, including task name, file being processed, and specific failure reason.
         - Common Issue: TaskError not being logged properly. Resolution: Verify logging configuration includes ERROR level logging and that exception handlers include proper logging statements.
         - Common Issue: TaskError causes workflow to hang. Resolution: Implement proper exception handling in workflow manager to ensure tasks are marked as failed and workflow continues with remaining tasks.

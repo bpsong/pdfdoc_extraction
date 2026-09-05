@@ -2,10 +2,11 @@ import asyncio
 import json
 from contextlib import nullcontext
 from pathlib import Path
+import sys
 from unittest.mock import Mock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from fastapi.routing import APIRoute
 from starlette.requests import Request
 
@@ -117,7 +118,6 @@ def test_dependency_resolution_does_not_run_database_migrations(
 ):
     config = Config({"database.run_migrations_on_startup": True})
     auth = object()
-    status_manager = object()
     workflow_manager = object()
     file_processor = object()
     migration = Mock()
@@ -126,7 +126,6 @@ def test_dependency_resolution_does_not_run_database_migrations(
     monkeypatch.setattr(api, "ConfigManager", Mock(return_value=config))
     monkeypatch.setattr(api, "initialize_database", migration)
     monkeypatch.setattr(api, "AuthUtils", Mock(return_value=auth))
-    monkeypatch.setattr(api, "StatusManager", Mock(return_value=status_manager))
     monkeypatch.setattr(api, "WorkflowManager", Mock(return_value=workflow_manager))
     monkeypatch.setattr(api, "FileProcessor", Mock(return_value=file_processor))
 
@@ -135,7 +134,7 @@ def test_dependency_resolution_does_not_run_database_migrations(
     assert dependencies == (
         config,
         auth,
-        status_manager,
+        None,
         workflow_manager,
         file_processor,
     )
@@ -415,3 +414,205 @@ def test_admin_pipeline_model_and_service_errors(monkeypatch):
                 user="admin",
             )
         )
+
+
+def _multipart_part(name: str, payload: bytes, filename: str | None = None):
+    return type(
+        "Part",
+        (),
+        {
+            "get_content_disposition": lambda self: "form-data",
+            "get_param": lambda self, key, header=None: name,
+            "get_filename": lambda self: filename,
+            "get_payload": lambda self, decode=True: payload,
+            "get_content_type": lambda self: "application/pdf" if filename else "text/plain",
+        },
+    )()
+
+
+def _install_multipart_parser(monkeypatch, parts):
+    message = Mock(iter_parts=lambda: iter(parts))
+    monkeypatch.setattr(api, "BytesParser", lambda policy: Mock(parsebytes=lambda body: message))
+
+
+def test_upload_and_batch_routes_cover_validation_and_cleanup_branches(tmp_path: Path, monkeypatch) -> None:
+    config = Config({"web.upload_dir": str(tmp_path / "uploads"), "watch_folder.processing_dir": str(tmp_path / "processing")})
+    Path(config.values["web.upload_dir"]).mkdir()
+    processor = Mock()
+    monkeypatch.setattr(api, "get_dependencies", lambda: (config, None, None, None, processor))
+    upload_route = _route("upload_pdf")
+    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"%PDF-1.4", "file.pdf")])
+    response = _run(_route("upload_pdf")(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
+    assert response.status_code == 303
+
+    config.values["web.upload_dir"] = ""
+    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"%PDF-1.4", "file.pdf")])
+    with pytest.raises(HTTPException, match="not configured"):
+        _run(upload_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
+
+    config.values["web.upload_dir"] = str(tmp_path / "uploads")
+    monkeypatch.setattr(api.utils_mod, "is_pdf_header", lambda *args, **kwargs: False)
+    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"bad", "bad.pdf")])
+    monkeypatch.setattr(api.os, "remove", Mock(side_effect=OSError("locked")))
+    with pytest.raises(HTTPException, match="Invalid PDF header"):
+        _run(upload_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
+    monkeypatch.setattr(api.utils_mod, "is_pdf_header", Mock(side_effect=OSError("header")))
+    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"%PDF-1.4", "file.pdf")])
+    with pytest.raises(HTTPException, match="Invalid PDF header"):
+        _run(upload_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
+
+    batch_route = _route("upload_pdf_batch")
+    user_repo = Mock()
+    user_repo.get.return_value = {"role": "operator"}
+    assignment = Mock()
+    assignment.resolve_selection.return_value = {"id": "v1"}
+    monkeypatch.setattr(api, "UserRepository", lambda _conn: user_repo)
+    monkeypatch.setattr(api, "IngestionAssignmentService", lambda *_args: assignment)
+    monkeypatch.setattr(api, "connect", lambda _config: nullcontext(object()))
+    config.values["watch_folder.processing_dir"] = ""
+    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), _multipart_part("files", b"%PDF-1.4", "file.pdf")])
+    with pytest.raises(HTTPException, match="Processing directory"):
+        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
+
+    config.values["watch_folder.processing_dir"] = str(tmp_path / "processing")
+    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), _multipart_part("files", b"bad", "bad.pdf")])
+    with pytest.raises(HTTPException, match="invalid PDF header"):
+        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
+
+    valid_file = _multipart_part("files", b"%PDF-1.4", "valid.pdf")
+    assignment.create_batch.side_effect = api.IngestionAssignmentError("create failed")
+    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), valid_file])
+    monkeypatch.setattr(api.os, "remove", Mock(side_effect=OSError("locked")))
+    with pytest.raises(HTTPException, match="create failed"):
+        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
+    assignment.create_batch.side_effect = RuntimeError("unexpected")
+    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), valid_file])
+    with pytest.raises(HTTPException, match="unexpected"):
+        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
+
+
+def test_remaining_admin_and_document_route_error_branches(monkeypatch) -> None:
+    config = Config({})
+    connection = Mock()
+    monkeypatch.setattr(api, "get_dependencies", lambda: (config, None, None, None, None))
+    monkeypatch.setattr(api, "connect", lambda _config: nullcontext(connection))
+    monkeypatch.setattr(api, "require_admin_user", Mock())
+
+    with pytest.raises(HTTPException, match="Unsupported pipeline"):
+        _route("available_pipelines")(source="other", user="admin")
+
+    binding_service = Mock()
+    monkeypatch.setattr(api, "IngressBindingService", lambda *_args: binding_service)
+    for method_name, route_name, expected in [
+        ("update", "update_watch_folder_binding", 404),
+        ("update", "update_watch_folder_binding", 409),
+        ("delete", "delete_watch_folder_binding", 404),
+        ("delete", "delete_watch_folder_binding", 409),
+    ]:
+        error = KeyError("missing") if expected == 404 else api.IngressBindingConflictError("conflict")
+        getattr(binding_service, method_name).side_effect = error
+        endpoint = _route(route_name)
+        args = ("b1", _request(b"{}"), "admin") if method_name == "update" else ("b1", "admin")
+        with pytest.raises(HTTPException) as exc_info:
+            if method_name == "update":
+                _run(endpoint(*args))
+            else:
+                endpoint(*args)
+        assert exc_info.value.status_code == expected
+
+    monkeypatch.setattr(api, "UserService", lambda _conn: Mock(change_password=Mock(return_value="admin")))
+    changed = _run(_route("change_admin_user_password")("admin", _request(b'{}'), user="admin"))
+    assert changed["session_revoked"] is True
+
+    class Exploding:
+        def __init__(self, *args, **kwargs):
+            raise ValueError("service failure")
+
+    monkeypatch.setattr(api, "ReviewSchemaVersionService", Exploding)
+    with pytest.raises(HTTPException):
+        _run(_route("create_versioned_review_schema")(_request(b'{"schema_key":"x","name":"X"}'), user="admin"))
+    monkeypatch.setattr(api, "PipelineTemplateService", Exploding)
+    with pytest.raises(HTTPException):
+        _run(_route("create_versioned_pipeline_template")(_request(b'{"template_key":"x","name":"X"}'), user="admin"))
+
+    with pytest.raises(HTTPException, match="schema must be an object"):
+        _run(_route("save_versioned_review_schema_draft")("t1", _request(b'{"schema":[]}'), user="admin"))
+    with pytest.raises(HTTPException, match="definition must be an object"):
+        _run(_route("save_versioned_pipeline_draft")("t1", _request(b'{"definition":[]}'), user="admin"))
+    with pytest.raises(HTTPException):
+        _run(_route("import_versioned_pipeline_draft")("t1", _request(b"[]", "application/yaml"), expected_revision=1, user="admin"))
+
+    admin = Mock()
+    admin.import_pipeline_document.return_value = {"schema_version": 1}
+    admin.pipelines.import_draft.return_value = {"id": "draft"}
+    monkeypatch.setattr(api, "VersionedAdminService", lambda *_args, **_kwargs: admin)
+    imported = _run(_route("import_versioned_pipeline_draft")("t1", _request(b"kind: pipeline", "application/yaml"), expected_revision=1, user="admin"))
+    assert imported["published"] is False
+
+    batch_service = Mock()
+    batch_service.get_batch.return_value = None
+    monkeypatch.setattr(api, "BatchService", lambda _conn: batch_service)
+    with pytest.raises(HTTPException, match="Batch not found"):
+        _route("get_split_results")("b1", user="admin")
+    batch_service.get_batch.return_value = {"id": "b1"}
+    docs = Mock()
+    docs.list_by_batch.return_value = [
+        {"id": "root", "parent_document_id": None},
+        {"id": "child", "parent_document_id": "root", "status": "failed", "metadata_json": "{}"},
+    ]
+    monkeypatch.setattr(api, "DocumentRepository", lambda _conn: docs)
+    split = _route("get_split_results")("b1", user="admin")
+    assert split["summary"]["failed"] == 1
+
+    docs.get.return_value = None
+    with pytest.raises(HTTPException, match="Document not found"):
+        _route("get_document_pdf_file")("missing", user="admin")
+    docs.get.return_value = {"id": "d1", "file_path": None, "pipeline_version_id": None}
+    docs.list_files.return_value = []
+    with pytest.raises(HTTPException, match="PDF file not found"):
+        _route("get_document_pdf_file")("d1", user="admin")
+
+    docs.get.return_value = {"id": "d1", "file_path": None, "pipeline_version_id": "v1"}
+    pipeline_versions = Mock()
+    pipeline_versions.get.return_value = {"definition_json": "{}"}
+    monkeypatch.setattr(api, "PipelineVersionRepository", lambda _conn: pipeline_versions)
+    with pytest.raises(HTTPException, match="PDF file not found"):
+        _route("get_document_pdf_file")("d1", user="admin")
+
+
+def test_schema_audit_payload_helper_is_exercised(monkeypatch):
+    captured = {}
+
+    def trace(frame, event, arg):
+        if frame.f_code.co_name == "build_router" and event == "line":
+            helper = frame.f_locals.get("_schema_audit_payload")
+            if helper is not None:
+                captured["helper"] = helper
+        return trace
+
+    previous = sys.gettrace()
+    sys.settrace(trace)
+    try:
+        api.build_router()
+    finally:
+        sys.settrace(previous)
+
+    service = Mock()
+    service.normalize_schema.return_value = {"title": "Invoice", "fields": ["id"]}
+    service.schema_hash.return_value = "hash"
+    assert captured["helper"]("invoice", service) == {
+        "schema_name": "invoice",
+        "title": "Invoice",
+        "hash": "hash",
+        "field_count": 1,
+    }
+
+
+def test_process_background_missing_directory_and_cleanup_failure(monkeypatch, tmp_path):
+    config = Config({"watch_folder.processing_dir": ""})
+    temp = tmp_path / "temp.pdf"
+    temp.write_bytes(b"data")
+    monkeypatch.setattr(api, "get_dependencies", lambda: (config, None, None, None, None))
+    monkeypatch.setattr(api.os, "remove", Mock(side_effect=OSError("locked")))
+    api.process_file_in_background(Mock(), str(temp), "file", "file.pdf")
+    assert temp.exists()

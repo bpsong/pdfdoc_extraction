@@ -50,5 +50,5 @@ def test_processing_page_contains_exact_assignment_presentation(monkeypatch):
 
     assert response.status_code == 200
     assert 'id="pipeline-assignment-summary"' in response.text
-    assert "pinned-pipeline-identity" in response.text
+    assert "ui-retry-table-polish" in response.text
     assert "schema content" not in response.text.lower()

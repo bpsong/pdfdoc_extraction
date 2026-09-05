@@ -13,6 +13,7 @@
     const detailBody = document.getElementById("failure-detail-body");
     const sourceLink = document.getElementById("failure-source-link");
     let failures = [];
+    let pdfViewer = null;
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -88,6 +89,10 @@
         detailSubtitle.textContent = `${failedTask.task_key || "failed task"} | ${titleCase(failure.failure_type || "task_failed")}`;
         sourceLink.href = payload.source_preview_url || payload.preview_url || "#";
         sourceLink.classList.toggle("hidden", !(payload.source_preview_url || payload.preview_url));
+        if (pdfViewer) {
+            pdfViewer.destroy();
+            pdfViewer = null;
+        }
         detailBody.innerHTML = `
             <div>
                 <div class="alert alert-error mb-4">
@@ -139,7 +144,7 @@
             </div>
             <div>
                 ${payload.source_preview_url || payload.preview_url
-                    ? `<iframe class="extraction-pdf-frame" src="${escapeHtml(payload.source_preview_url || payload.preview_url)}" title="Source PDF preview"></iframe>`
+                    ? '<div id="failure-pdf-viewer" class="failure-pdf-viewer"></div>'
                     : '<div class="empty-panel">Source PDF preview unavailable</div>'}
                 <div class="mt-4">
                     <div class="text-xs font-medium mb-1">Failed Task Output</div>
@@ -147,6 +152,14 @@
                 </div>
             </div>
         `;
+        const previewUrl = payload.source_preview_url || payload.preview_url;
+        const viewerContainer = document.getElementById("failure-pdf-viewer");
+        if (previewUrl && viewerContainer) {
+            pdfViewer = window.DocFlowPdfViewer.mount(
+                viewerContainer,
+                { url: previewUrl, title: `${sourceDocument.filename || "Document"} source PDF` },
+            );
+        }
     }
 
     async function openFailure(documentId) {

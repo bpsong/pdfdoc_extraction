@@ -39,8 +39,9 @@ The essential model is:
 - The production frontend is a server-rendered FastAPI/Jinja multi-page
   application enhanced by page-specific vanilla JavaScript.
 - Dynamic task imports are allow-listed.
-- `StatusManager`, text status files, `/api/files`, and
-  `/api/status/{file_id}` are compatibility-only surfaces.
+- `/api/files` and `/api/status/{file_id}` are compatibility-only response
+  shapes backed by SQLite. Filesystem status files and `StatusManager` are not
+  part of runtime workflow state.
 
 ## Key architectural decisions
 
@@ -92,19 +93,23 @@ flowchart LR
     Browser --> APIs
 ```
 
-The default deployment contains two local processes:
+The default deployment contains a parent process plus two child processes:
 
 1. `main.py` resolves configuration, runs migrations, validates the task
    registry, configures logging, and constructs ingestion/workflow components.
 2. Unless `--no-web` is supplied, it starts Uvicorn as a subprocess.
-3. The parent process runs the polling watch-folder coordinator and supervises the
-   web subprocess.
-4. Both processes access the configured SQLite database and filesystem.
+3. It starts a dedicated durable processing-worker subprocess.
+4. The parent process runs the polling watch-folder coordinator in a thread and
+   supervises both child processes.
+5. The parent, web, and worker processes access the configured SQLite database and
+   filesystem; only the worker executes queued root workflows.
 
-Watch-folder files are processed sequentially. Web batch uploads use FastAPI
-background tasks and can overlap with watch-folder or other web work. Split
-children are launched sequentially. There is no distributed queue, worker
-pool, or multi-host coordination layer.
+Watch-folder files and web batch uploads are persisted as SQLite processing jobs
+before the producer acknowledges them. A worker claims one job with a lease and
+executes it; expired leases are requeued after a worker interruption. Split
+children are still launched sequentially inside the claimed workflow. There is
+one local worker, not a distributed queue, worker pool, or multi-host
+coordination layer.
 
 Extraction providers are independent implementations behind the same workflow
 boundary. LlamaCloud owns its cloud API, saved-configuration, citation, and
@@ -136,8 +141,9 @@ arbitrarily nested structures.
 | Component | Responsibility | Boundary |
 | --- | --- | --- |
 | [`main.py`](../main.py) | Startup, supervision, shutdown | No workflow business logic |
-| [`WatchFolderCoordinator`](../modules/services/watch_folder_coordinator.py) | Reconcile enabled bindings, validate and claim PDFs, and start their pinned versions | No durable workflow-state ownership |
-| [`FileProcessor`](../modules/file_processor.py) | Place files, create ingestion state, trigger processing | No task policy |
+| [`WatchFolderCoordinator`](../modules/services/watch_folder_coordinator.py) | Reconcile enabled bindings, validate and claim PDFs, and enqueue assigned jobs | Does not execute workflows |
+| [`ProcessingWorker`](../modules/services/processing_worker.py) | Lease queued jobs and trigger the assigned workflow | No ingestion or task policy |
+| [`FileProcessor`](../modules/file_processor.py) | Validate the assigned SQLite context and trigger processing for a worker job | No task policy |
 | [`WorkflowManager`](../modules/workflow_manager.py) | Start root, child, and resumed flows | No table-specific persistence |
 | [`WorkflowLoader`](../modules/workflow_loader.py) | Approve, instantiate, and execute configured tasks | No domain task behavior |
 | [`BaseTask`](../modules/base_task.py), `standard_step/` | One configured operation | Preserve context and failure contracts |
@@ -166,7 +172,8 @@ sequenceDiagram
     Source->>Ingest: PDF
     Ingest->>Ingest: Validate header and move file
     Ingest->>DB: Create batch, document, source artifact
-    Ingest->>Runner: Trigger with persisted identifiers
+    Ingest->>DB: Enqueue processing job with persisted identifiers
+    DB->>Runner: Worker claims a leased job
     loop Pipeline
         Runner->>DB: Start task run
         Runner->>Task: on_start(context), run(context)
@@ -183,13 +190,14 @@ sequenceDiagram
 - **Watch folder:** the serialized coordinator reconciles enabled bindings,
   claims a file only after resolving the binding's exact eligible version,
   validates the `%PDF-` signature, assigns a UUID, moves the file, and creates
-  assignment-bearing batch/document rows atomically. Binding changes affect
-  later claims only. An explicit `False` workflow result is retried against the
-  same UUID-backed state and assignment.
+  assignment-bearing batch/document rows plus a durable processing job
+  atomically. Binding changes affect later claims only. Workflow execution is
+  performed by the worker, not by the coordinator.
 - **Primary web upload:** `POST /api/batches/upload` creates one batch with a
   document per accepted PDF only after the operator supplies one eligible
   published `pipeline_version_id`. The whole batch shares that exact version;
-  invalid or stale selections create no rows or orphan files.
+  invalid or stale selections create no rows or orphan files. Each accepted
+  document receives its durable processing job in the same transaction.
 - **Legacy web upload:** older single-file routes and response shapes remain
   for compatibility. New browser flows should use the batch API.
 
@@ -243,7 +251,7 @@ child flows run cleanup when their configured work finishes.
 Standard tasks inherit from `BaseTask` and implement `on_start`, `run`, and
 `validate_required_fields`. Expected failures use `TaskError` and
 `register_error`. New tasks must not write workflow status through
-`StatusManager` or text files. Tasks use their injected parameters and must not
+filesystem status files. Tasks use their injected parameters and must not
 reload their own parameters from a fixed `tasks.<name>` configuration path,
 because one implementation may be configured under different pipeline keys.
 
@@ -517,6 +525,7 @@ three seconds.
 | Feature templates | [`web/templates/`](../web/templates/) | Semantic structure and server identifiers |
 | Shared browser utilities | [`app.js`](../web/static/js/app.js) | API wrappers, CSRF, auth redirect, toasts, navigation |
 | Feature controllers | [`web/static/js/`](../web/static/js/) | Fetch, DOM rendering, interactions |
+| Vendored PDF.js | [`web/static/vendor/pdfjs/`](../web/static/vendor/pdfjs/) | Same-origin PDF rendering for source inspection |
 | Styling | Tailwind, DaisyUI, [`app.css`](../web/static/css/app.css) | Design utilities and application styles |
 
 Templates and controllers form implicit DOM/API contracts and must change
@@ -529,6 +538,13 @@ Operator pages cover upload, processing, split and extraction inspection,
 review, failures, reports, and settings. Admin pages cover the overview, fixed
 user accounts, versioned pipelines and review forms, the task catalog, legacy
 schema validation, and the filtered administrative audit log.
+
+Extraction and human-review pages mount the local PDF.js module and worker to
+render source PDFs in a canvas-based viewer. Selecting an extracted field can
+navigate to its provider-supplied source location: LlamaCloud citation boxes
+are highlighted when available, while GLM-OCR page-only evidence navigates to
+the cited page without inventing a bounding box. The source PDF remains served
+through the authenticated, same-origin preview endpoint.
 
 Tailwind scans production templates and JavaScript. Rebuild committed CSS
 after utility-class or frontend dependency changes:
@@ -548,8 +564,8 @@ npm run build:css
   origins.
 - Trusted-host, CSP, content-type, referrer, permissions, and frame headers
   are applied globally.
-- Normal pages deny framing; same-origin PDF responses may be framed by the
-  review workspace.
+- Normal pages deny framing; the review workspace fetches same-origin PDF
+  responses for its local PDF.js viewer.
 
 ### Frontend constraints
 
@@ -558,6 +574,14 @@ npm run build:css
 - Shared forms, tables, modals, loading, and errors are only partly
   centralized.
 - Polling replaces server-pushed updates.
+- Shared operator pages expose concise live-region announcements for meaningful
+  processing/review changes, and upload progress reports client-side transfer
+  progress before the existing batch-upload response and redirect.
+- Upload cancellation is limited to aborting the in-flight browser transfer;
+  it does not cancel server-side processing after the upload response.
+- Operator queue presentation is scoped to shared table classes and native
+  HTML disclosures for contextual help; these are presentation concerns and do
+  not introduce workflow-state or API contracts.
 - Production JavaScript has no bundling or static type-checking stage.
 - Demoted review-gate and split-settings templates/scripts remain although
   their routes redirect to the pipeline page.
@@ -608,7 +632,7 @@ Current operational evidence consists of logs, task-run timelines, batch and
 document state, failure records, review/audit events, and artifact records.
 Supported metrics and distributed tracing are not currently emitted.
 
-Recovery paths are limited:
+Recovery paths include the following:
 
 - Completed review resumes from the next task using final persisted values.
 - Resume reloads the document's pinned pipeline version and the review item's
@@ -616,8 +640,10 @@ Recovery paths are limited:
   for already-assigned work.
 - Corrected provider/task failures are normally re-ingested.
 - Fan-in is recomputed as child leaves finish.
-- Arbitrary interrupted flows are not automatically reconstructed; SQLite
-  supports diagnosis but there is no durable worker recovery system.
+- A claimed job whose lease expires is returned to the queue by the next worker
+  poll. A workflow that fails after task execution begins still requires task
+  idempotency or operator re-ingestion; the queue does not make external
+  provider calls transactional.
 
 ## Testing and verification
 
@@ -638,12 +664,12 @@ pytest-cov are not supported project checks unless added to the toolchain.
 | Workflow contract | Weakly typed mutable context dictionary |
 | API composition | Large `api_router.py` integration surface |
 | Configuration | YAML, SQLite settings, and versions have different semantics |
-| Execution | No durable queue, distributed worker, or multi-host coordination |
+| Execution | One SQLite-backed worker and lease recovery; no distributed worker pool or multi-host coordination |
 | Throughput | Sequential watch-folder and split-child processing |
 | Persistence | SQLite write-concurrency ceiling and coarse migrations |
 | I/O | Blocking file and provider operations in local processes |
 | Review | New-flow resume rather than durable engine suspension |
-| Compatibility | Legacy status manager, files, and APIs remain |
+| Compatibility | Legacy SQLite response shapes remain; filesystem status is removed |
 | Frontend | Large controllers and implicit DOM/API contracts |
 | Secrets | Provider credentials may reside in local runtime YAML |
 | Storage | Artifact availability assumes shared local filesystem access |

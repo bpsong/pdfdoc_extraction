@@ -18,7 +18,6 @@ from prefect.cache_policies import NO_CACHE
 from modules.config_protocol import (
     ConfigProvider as ConfigManager,
     VersionedTaskConfig,
-    get_all_config,
 )
 from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
@@ -63,7 +62,10 @@ class WorkflowLoader:
     ) -> None:
         """Initialize an isolated loader for one explicit definition."""
         self.config_manager = config_manager
-        self.cfg = definition if definition is not None else get_all_config(config_manager)
+        # Workflow definitions are loaded from an exact published SQLite
+        # version by WorkflowManager. Do not silently fall back to deployment
+        # YAML when a definition is absent.
+        self.cfg = dict(definition) if isinstance(definition, Mapping) else {}
         self.task_defs = self.cfg.get("tasks", {})
         self.pipeline_version_id = pipeline_version_id
         self.pipeline_template_id = pipeline_template_id
@@ -237,6 +239,11 @@ class WorkflowLoader:
               pipeline stops after logging and status update; otherwise it continues.
             - Housekeeping: executes a mandatory cleanup task before leaf fan-in.
         """
+        if self.pipeline_version_id is None or not self.cfg:
+            self.logger.critical(
+                "Cannot build a workflow without an exact published pipeline definition."
+            )
+            return None
         pipeline_config = self.cfg.get("pipeline", [])
         if not isinstance(pipeline_config, list):
             self.logger.critical("Pipeline configuration must be a list of task names.")

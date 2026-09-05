@@ -62,7 +62,7 @@ class GlmOcrExtractTask(BaseTask):
         self.resolution_mode = "page_merge"
         self.resolver_model = ""
         self.resolver_max_dimension = 1280
-        self.resolver_num_ctx = 8192
+        self.resolver_num_ctx = 18000
         self.resolver_num_predict = 10000
         self.resolver_max_attempts = 2
         self.timeout_seconds = 300.0
@@ -234,7 +234,7 @@ class GlmOcrExtractTask(BaseTask):
         self.resolver_model = (
             resolver_model.strip() if isinstance(resolver_model, str) else ""
         )
-        self.resolver_num_ctx = self.params.get("resolver_num_ctx", 8192)
+        self.resolver_num_ctx = self.params.get("resolver_num_ctx", 18000)
         self.resolver_max_dimension = self.params.get(
             "resolver_max_dimension",
             1280,

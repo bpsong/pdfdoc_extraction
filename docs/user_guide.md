@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.3
-Release Date: 2026-08-15
+Version: 3.5
+Release Date: 2026-09-03
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 3.3
-Release Date: 2026-08-15
+Version: 3.5
+Release Date: 2026-09-03
 Author: [Your Organization/Name]
 
 ---
@@ -94,6 +94,9 @@ Author: [Your Organization/Name]
 | 3.1     | 2026-08-09 | [Your Organization] | Documented GLM-OCR sensitivity to JSON Schema property order and prompt construction, with controlled-testing and review guidance |
 | 3.2     | 2026-08-12 | [Your Organization] | Documented generic multi-page GLM-OCR document resolution, resolver configuration, schema boundaries, and document-specific pipeline guidance |
 | 3.3     | 2026-08-15 | [Your Organization] | Added visual-editor guidance for multiline extraction values, labelled-block boundaries, adjacent-field exclusions, and focused regression testing |
+| 3.4     | 2026-09-03 | [Your Organization] | Documented the local PDF.js source viewer, provider-specific source-location behavior, and the GLM-OCR resolver context default of 18000 |
+| 3.5     | 2026-09-03 | [Your Organization] | Added upload transfer progress, text confidence bands, and concise screen-reader announcements for dynamic operator updates |
+| 3.6     | 2026-09-04 | [Your Organization] | Added keyboard-friendly upload activation, cancellable uploads, queue retry actions, consistent DaisyUI table styling, and lightweight contextual help |
 
 ---
 
@@ -156,7 +159,7 @@ Key features:
   *(Standard steps are predefined operations that the system performs on each file.)*  
 - Centralized configuration and logging  
 - Watch-folder based ingestion and web interface for PDF upload
-- SQLite-backed workflow state for batches, documents, task runs, extraction results, review items, artifacts, settings, and audit history
+- SQLite-backed workflow state for batches, documents, task runs, extraction results, review items, artifacts, settings, document status transitions, and audit history
 - Role-based web interface for operators and administrators
 - Isolated per-pipeline CSV/JSON output with optional task-specific aliases
   *(Alias means a friendly name used for data fields in outputs, such as column headers.)*
@@ -320,6 +323,13 @@ Ask your administrator for the system's web address and your account password.
 5. Select **Start Processing** to submit the documents.
 6. The application opens the batch details so you can follow progress.
 
+While the batch is being submitted, **Upload & Process** shows aggregate transfer
+progress for the selected files. This measures browser-to-server upload only;
+pipeline processing progress appears on the batch details page after submission.
+While an upload is in progress, select **Cancel upload** to stop the browser
+transfer and return to the file-selection screen. Keyboard users can focus the
+drop zone and press **Enter** or **Space** to open the file picker.
+
 Only active, eligible pipeline versions appear. One choice applies to the
 entire batch. If different documents need different pipelines, submit separate
 batches. If the required version is missing, select **Refresh** once and then
@@ -340,9 +350,18 @@ The application displays the original filename, current status, timestamps, and 
 **What happens after upload:**
 
 - The system checks that each upload has a valid PDF header. An invalid file is rejected and is not queued for processing.
-- Accepted files are moved into the processing area and handled in the background.
+- Accepted files are moved into the processing area and placed in a durable
+  SQLite queue before background processing begins. If the worker restarts,
+  queued work remains available for processing.
 - Depending on the configured workflow, a file may be split, extracted, sent for review, exported, and archived.
 - Processing and batch pages update from the application's saved workflow state.
+- Dynamic processing and review changes are also announced concisely to assistive
+  technology. Confidence indicators include both a text band (High, Medium, or
+  Low) and the percentage; color is supplementary.
+- Processing and review queues use consistent table styling, sticky headers, and
+  inline **Retry** actions when their data cannot be loaded.
+- The **What happens next?** and **How to use confidence** disclosures provide
+  lightweight contextual help without changing workflow state.
 
 ### 3.3. Operator Workflows in the Unified App
 
@@ -392,6 +411,14 @@ Documents enter the review queue when the system cannot confidently accept the e
 7. Select **Preview Diff** to review your changes.
 8. Select **Save Draft** if the review is incomplete, or **Complete Review** when all information has been checked.
 9. After completion, confirm that the document leaves the active queue and continues processing.
+
+The PDF preview is rendered with the local PDF.js viewer. Selecting a field
+value or its **Show source value** action navigates to the cited page and
+centers the viewer on the extracted source location when the provider returned
+bounding-box coordinates. LlamaCloud Extract citations support this box
+highlight. GLM-OCR evidence is page-only, so the viewer navigates to the cited
+page without drawing a fabricated box; fields without source evidence leave the
+viewer unhighlighted.
 
 Review actions have the following meanings:
 
@@ -1207,7 +1234,7 @@ pipeline:
     object fields use all ordered pages. Each table evidence chunk uses only its
     referenced source pages so the resolver can inspect visible table and
     section boundaries without loading unrelated pages.
-  - `resolver_num_ctx`: positive resolver context size; default `8192`.
+  - `resolver_num_ctx`: positive resolver context size; default `18000`.
   - `resolver_num_predict`: positive resolver output-token limit; default
     `10000`. The resolver context must still be large enough for the prompt and
     requested output; increase `resolver_num_ctx` separately when required.
@@ -1427,7 +1454,7 @@ tasks:
       resolution_mode: document
       resolver_model: qwen3.5:9b-q4_K_M
       resolver_max_dimension: 1280
-      resolver_num_ctx: 8192
+      resolver_num_ctx: 18000
       resolver_num_predict: 10000
       resolver_max_attempts: 2
       dpi: 216

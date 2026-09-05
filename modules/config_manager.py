@@ -81,6 +81,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "enabled": False,
         "registry": {},
     },
+    "processing_queue": {
+        "poll_interval": 1,
+        "lease_seconds": 3600,
+        "max_attempts": 3,
+        "retry_delay": 5,
+    },
 }
 
 
@@ -285,7 +291,7 @@ class ConfigManager:
         if not upload_dir:
             self.logger.critical("Missing required static path in config: 'web.upload_dir'")
             sys.exit(1)
-        upload_dir_path = Path(upload_dir)
+        upload_dir_path = self._resolve_path(upload_dir)
         if not upload_dir_path.exists() or not upload_dir_path.is_dir():
             self.logger.critical(f"Static path invalid: 'web.upload_dir' -> {upload_dir_path}")
             sys.exit(1)
@@ -301,7 +307,7 @@ class ConfigManager:
         if not watch_dir:
             self.logger.critical("Missing required static path in config: 'watch_folder.dir'")
             sys.exit(1)
-        watch_dir_path = Path(watch_dir)
+        watch_dir_path = self._resolve_path(watch_dir)
         if not watch_dir_path.exists() or not watch_dir_path.is_dir():
             self.logger.critical(f"Static path invalid: 'watch_folder.dir' -> {watch_dir_path}")
             sys.exit(1)
@@ -331,7 +337,7 @@ class ConfigManager:
                     if key.endswith('_dir') and isinstance(val, str):
                         # Exclude the specific key 'watch_folder.dir' from auto-creation
                         if dotted != "watch_folder.dir":
-                            dirs_to_create.add(Path(val))
+                            dirs_to_create.add(self._resolve_path(val))
                     else:
                         collect_dirs(val, current_stack)
             elif isinstance(obj, list):
@@ -363,14 +369,14 @@ class ConfigManager:
                 for key, val in obj.items():
                     current_trace = f"{path_trace}.{key}"
                     if key.endswith('_dir') and isinstance(val, str):
-                        p = Path(val)
+                        p = self._resolve_path(val)
                         if not p.exists() or not p.is_dir():
                             self.logger.critical(
                                 f"Configured directory '{current_trace}' ({val}) does not exist or isn’t a directory"
                             )
                             sys.exit(1)
                     elif key.endswith('_file') and isinstance(val, str):
-                        p = Path(val)
+                        p = self._resolve_path(val)
                         if not p.exists() or not p.is_file():
                             self.logger.critical(
                                 f"Configured file '{current_trace}' ({val}) does not exist or isn’t a file"
@@ -383,3 +389,10 @@ class ConfigManager:
                     recursive_validate(item, f"{path_trace}[{idx}]")
 
         recursive_validate(self.config)
+
+    def _resolve_path(self, raw_path: str | Path) -> Path:
+        """Resolve relative deployment paths from the YAML file directory."""
+        path = Path(raw_path).expanduser()
+        if path.is_absolute():
+            return path
+        return Path(self._config_path).parent / path

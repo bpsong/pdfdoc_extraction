@@ -34,6 +34,7 @@
                 <div class="flex items-center gap-2 flex-wrap">
                     <h2 class="font-semibold">Review Fields</h2>
                     <span class="badge badge-outline" id="review-item-badge">{{ review_item_id|default('') }}</span>
+                    <span class="badge badge-ghost hidden" id="review-provider-badge"></span>
                     <span class="badge hidden" id="review-status-badge"></span>
                     <span class="review-lock-summary hidden" id="review-lock-summary"></span>
                 </div>
@@ -72,6 +73,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/pdf_viewer.js?v=task27-review-refinement" defer></script>
-<script src="/static/js/human_review.js?v=scalar-input-guard" defer></script>
+<script src="/static/js/pdf_viewer.js?v=pdf-pager-input-2" defer></script>
+<script src="/static/js/human_review.js?v=ui-status-vocabulary-help" defer></script>
 {% endblock %}

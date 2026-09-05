@@ -205,3 +205,67 @@ def test_is_pdf_header_handles_exceptions(monkeypatch, caplog):
     caplog.set_level(logging.WARNING)
     assert utils.is_pdf_header("dummy.pdf", read_size=5, attempts=2, delay=0.0) is False
     assert any("Error reading file" in r.message for r in caplog.records)
+
+
+def test_filename_and_path_helpers_cover_fallback_and_collision_branches(tmp_path, monkeypatch):
+    assert utils.preprocess_filename_value(None) == "none"
+    assert utils.preprocess_filename_value("   ") == "none"
+    assert utils.preprocess_filename_value(12) == "12"
+    assert utils.sanitize_filename("bad<>:\\name?.pdf") == "badname.pdf"
+    monkeypatch.setattr(utils.uuid, "uuid4", lambda: type("UUID", (), {"hex": "abcdef123456"})())
+    assert utils.sanitize_filename("<>.txt") == "file_abcdef12.txt"
+    assert len(utils.sanitize_filename("x" * 300 + ".csv")) == 255
+    assert utils.generate_uuid_filename("invoice.pdf").endswith(".pdf")
+
+    (tmp_path / "out.csv").write_text("", encoding="utf-8")
+    (tmp_path / "out_1.csv").write_text("", encoding="utf-8")
+    assert utils.generate_unique_filepath(tmp_path, "out", ".csv").name == "out_2.csv"
+    reserved = utils.reserve_unique_filepath(tmp_path, "out", ".csv")
+    assert reserved.name == "out_2.csv"
+    assert utils.release_reserved_filepath(reserved) is True
+
+    class BrokenPath:
+        def unlink(self, *, missing_ok):
+            raise OSError("locked")
+
+    assert utils.release_reserved_filepath(BrokenPath()) is False
+
+
+def test_windows_long_path_variants_and_resolve_scalar_branch(monkeypatch):
+    monkeypatch.setattr(utils.sys, "platform", "win32")
+    monkeypatch.setattr(utils.os.path, "abspath", lambda _path: "\\\\?\\C:\\" + "x" * 260)
+    prefixed = utils.windows_long_path("input")
+    assert prefixed.startswith("\\\\?\\")
+
+    monkeypatch.setattr(utils.os.path, "abspath", lambda _path: "\\\\server\\share\\" + "x" * 260)
+    assert utils.windows_long_path("input").startswith("\\\\?\\UNC\\")
+    monkeypatch.setattr(utils.os.path, "abspath", lambda _path: "C:\\" + "x" * 260)
+    assert utils.windows_long_path("input").startswith("\\\\?\\C:")
+    monkeypatch.setattr(utils.os.path, "abspath", lambda _path: "C:\\short")
+    assert utils.windows_long_path("input") == "C:\\short"
+    monkeypatch.setattr(utils.sys, "platform", "linux")
+    assert utils.windows_long_path("input") == "input"
+    assert utils.resolve_field({"data": "scalar"}, "data.child") == (None, False)
+
+
+def test_retry_exhaustion_pdf_delay_and_resolution_exception(monkeypatch):
+    attempts = {"count": 0}
+
+    @utils.retry_io(max_attempts=2, delay=0, exceptions=(RuntimeError,))
+    def always_fails():
+        attempts["count"] += 1
+        raise RuntimeError("still failing")
+
+    with pytest.raises(RuntimeError, match="still failing"):
+        always_fails()
+    assert attempts["count"] == 2
+
+    monkeypatch.setattr(utils.time, "sleep", lambda _delay: None)
+    monkeypatch.setattr(builtins, "open", _make_open_mock(b"bad"))
+    assert utils.is_pdf_header("dummy.pdf", attempts=2, delay=0.01) is False
+
+    class BrokenMapping(dict):
+        def __getitem__(self, _key):
+            raise TypeError("broken mapping")
+
+    assert utils.resolve_field(BrokenMapping(data=1), "data") == (None, False)

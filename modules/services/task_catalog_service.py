@@ -6,10 +6,12 @@ import ast
 import importlib
 import inspect
 from pathlib import Path
+import sqlite3
 from typing import Any, cast
 
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
+from modules.db.connection import json_loads
 from modules.services.task_registry_service import ApprovedTaskRegistry
 
 
@@ -19,7 +21,13 @@ SECRET_KEY_PARTS = ("api_key", "password", "secret", "token", "credential")
 class TaskCatalogService:
     """Discover configured and available workflow task classes."""
 
-    def __init__(self, config_manager: ConfigManager, *, project_root: Path | None = None) -> None:
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        *,
+        conn: sqlite3.Connection | None = None,
+        project_root: Path | None = None,
+    ) -> None:
         """Initialize the catalog service.
 
         Args:
@@ -27,6 +35,7 @@ class TaskCatalogService:
             project_root: Optional root override for tests.
         """
         self.config_manager = config_manager
+        self.conn = conn
         config_path = getattr(config_manager, "_config_path", None)
         candidate_root = Path(config_path).parent if config_path else Path.cwd()
         if not (candidate_root / "standard_step").exists():
@@ -111,7 +120,16 @@ class TaskCatalogService:
         return entries
 
     def _configured_entries(self) -> list[dict[str, Any]]:
-        """Return normalized configured task definitions."""
+        """Return normalized tasks from active SQLite pipeline versions.
+
+        The optional YAML fallback is retained only for callers that do not
+        have a database connection, such as isolated discovery helpers. All
+        production API callers provide ``conn`` and therefore use the
+        versioned pipeline source of truth.
+        """
+        if self.conn is not None:
+            return self._versioned_configured_entries()
+
         config = get_all_config(self.config_manager)
         tasks = config.get("tasks") if isinstance(config, dict) else {}
         pipeline = config.get("pipeline") if isinstance(config, dict) else []
@@ -141,6 +159,61 @@ class TaskCatalogService:
                     "pipeline_index": pipeline_positions.get(str(task_key)),
                 }
             )
+        return configured
+
+    def _versioned_configured_entries(self) -> list[dict[str, Any]]:
+        """Return tasks used by the newest version of each active template."""
+        rows = self.conn.execute(
+            """
+            SELECT v.id, v.version_number, v.definition_json,
+                   t.template_key, t.name
+            FROM pipeline_versions v
+            JOIN pipeline_templates t ON t.id = v.template_id
+            WHERE t.status = 'active'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pipeline_versions newer
+                  WHERE newer.template_id = v.template_id
+                    AND newer.version_number > v.version_number
+              )
+            ORDER BY t.name, t.template_key
+            """
+        ).fetchall()
+        configured: list[dict[str, Any]] = []
+        for row in rows:
+            definition = json_loads(row["definition_json"], {})
+            if not isinstance(definition, dict):
+                continue
+            raw_tasks = definition.get("tasks")
+            tasks = raw_tasks if isinstance(raw_tasks, dict) else {}
+            raw_pipeline = definition.get("pipeline")
+            pipeline = raw_pipeline if isinstance(raw_pipeline, list) else []
+            positions = {
+                str(task_key): index
+                for index, task_key in enumerate(pipeline)
+                if isinstance(task_key, str)
+            }
+            for task_key, task_config in tasks.items():
+                if not isinstance(task_config, dict):
+                    continue
+                module_name = str(task_config.get("module") or "")
+                class_name = str(task_config.get("class") or "")
+                if not module_name or not class_name:
+                    continue
+                params = task_config.get("params", {})
+                configured.append(
+                    {
+                        "task_key": str(task_key),
+                        "module": module_name,
+                        "class_name": class_name,
+                        "params": self._redact(params if isinstance(params, dict) else {}),
+                        "on_error": task_config.get("on_error"),
+                        "pipeline_index": positions.get(str(task_key)),
+                        "pipeline_version_id": str(row["id"]),
+                        "pipeline_version_number": int(row["version_number"]),
+                        "pipeline_template_key": str(row["template_key"]),
+                    }
+                )
         return configured
 
     def _class_entry(self, module_name: str, task_class: type[BaseTask]) -> dict[str, Any]:

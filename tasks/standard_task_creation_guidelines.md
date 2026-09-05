@@ -181,6 +181,17 @@ conditions and preserve document-wide editing when `review_scope` is
 
 SQLite is the primary workflow-state source. New tasks must integrate with the shared workflow context and services instead of writing status text files.
 
+Configured execution requires a document assigned to an exact published SQLite
+pipeline version; the runner does not fall back to deployment YAML. Supply
+storage paths and extraction field metadata through the published task params.
+Use `WorkflowStateService.transition_document()` for document status changes so
+the state update and its audit event are persisted together.
+
+Root ingestion jobs run through the durable SQLite processing queue. Expired
+leases can cause interrupted work to run again, so task side effects must remain
+idempotent where possible. Queue recovery does not make external provider calls
+transactional or replace task-level retry handling.
+
 ### 5.1. Task-Run State
 
 The workflow runner records standardized task lifecycle events:

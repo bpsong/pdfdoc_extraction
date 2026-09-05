@@ -25,6 +25,11 @@ from modules.services.versioned_config_contracts import (
     redact_sensitive,
     resolve_secret_references,
     validate_secret_references,
+    RuntimeResolvedDefinition,
+    normalize_lifecycle,
+    is_secret_key,
+    is_secret_reference,
+    replace_secret_references_for_validation,
 )
 
 
@@ -184,3 +189,29 @@ def test_portable_pipeline_requires_online_or_embedded_dependency():
     )
     with pytest.raises(PortableConfigError, match="Duplicate"):
         import_pipeline_bundle(embedded)
+
+
+def test_contract_edge_helpers_and_secret_list_paths():
+    runtime = RuntimeResolvedDefinition({"a": 1})
+    assert runtime["a"] == 1
+    assert list(runtime) == ["a"]
+    assert len(runtime) == 1
+    assert ValidationSource("runtime").prefix == "runtime"
+    assert ValidationSource("pipeline_file", key="invoice").prefix == "pipeline-file:invoice"
+    assert normalize_lifecycle(" ACTIVE ") == "active"
+    with pytest.raises(ValueError):
+        normalize_lifecycle("unknown")
+    assert is_secret_key("api_token")
+    assert not is_secret_key("ordinary")
+    assert is_secret_reference({"$secret": "valid"})
+    assert not is_secret_reference({"$secret": 1})
+    assert validate_secret_references({"$secret": "BAD"}) == ["$"]
+    assert validate_secret_references({"$secret": "valid", "extra": True}) == ["$"]
+    with pytest.raises(SecretReferenceError, match="Malformed"):
+        resolve_secret_references({"x": {"$secret": "a", "extra": 1}}, {"a": "value"})
+    assert replace_secret_references_for_validation({"x": [{"$secret": "a"}]}) == {"x": ["configured-secret-reference"]}
+    assert redact_sensitive({"api_key": "literal", "nested": [{"password": "secret"}]})["api_key"] == "[REDACTED]"
+    assert preserve_secret_references(["[REDACTED]"], [{"$secret": "alias"}]) == [{"$secret": "alias"}]
+    assert preserve_secret_references("ordinary", None) == "ordinary"
+    snapshot = build_display_snapshot({"pipeline": ["bad", 1], "tasks": {"bad": "not-a-task"}})
+    assert snapshot["steps"][0]["class"] == ""

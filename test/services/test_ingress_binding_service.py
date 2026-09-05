@@ -2,8 +2,16 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from pathlib import Path
+from unittest.mock import Mock
+
 import pytest
 
+import modules.services.ingress_binding_service as ingress_module
+from modules.services.ingestion_assignment_service import (
+    IngestionAssignmentError,
+)
 from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
@@ -146,3 +154,84 @@ def test_referenced_binding_cannot_be_deleted(context, tmp_path):
 
     with pytest.raises(IngressBindingConflictError, match="cannot be deleted"):
         service.delete(binding["id"], user="admin")
+
+
+def test_ingress_binding_defensive_paths_and_payload_findings(monkeypatch, tmp_path):
+    service = IngressBindingService.__new__(IngressBindingService)
+    service.config = TempConfig(tmp_path / "config.sqlite3")
+    service.conn = Mock()
+    service.bindings = Mock()
+    service.audit = Mock()
+
+    with pytest.raises(IngressBindingConflictError, match="required"):
+        service.normalize_path("")
+    folder = tmp_path / "folder"
+    folder.mkdir()
+    monkeypatch.setattr(Path, "iterdir", Mock(side_effect=OSError("inaccessible")))
+    with pytest.raises(IngressBindingConflictError, match="inaccessible"):
+        service.normalize_path(str(folder))
+    monkeypatch.undo()
+
+    service.bindings.get.return_value = None
+    with pytest.raises(KeyError, match="Unknown watch-folder binding"):
+        service.update("missing", user="admin")
+    with pytest.raises(KeyError, match="Unknown watch-folder binding"):
+        service.delete("missing", user="admin")
+
+    service.bindings.list.return_value = [
+        {"id": "same", "normalized_path": "C:\\one"},
+        {"id": "other", "normalized_path": "D:\\one"},
+    ]
+    service._reject_path_conflict("C:\\one", exclude_id="same")
+
+    service.conn.execute.return_value.fetchone.return_value = None
+    payload = service._payload(
+        {"id": "binding", "folder_path": str(tmp_path / "missing"), "pipeline_version_id": "v", "enabled": True}
+    )
+    assert payload["validation_findings"][0]["code"] == "watch-folder-inaccessible"
+    assert any(item["code"] == "pipeline-version-missing" for item in payload["validation_findings"])
+
+    service.conn.execute.return_value.fetchone.return_value = {
+        "version_number": 1,
+        "content_hash": "hash",
+        "template_key": "invoice",
+        "name": "Invoice",
+        "template_status": "inactive",
+    }
+    payload = service._payload(
+        {"id": "binding", "folder_path": str(tmp_path / "missing"), "pipeline_version_id": "v", "enabled": True}
+    )
+    assert any(item["code"] == "pipeline-template-inactive" for item in payload["validation_findings"])
+
+    monkeypatch.setattr(
+        ingress_module,
+        "IngestionAssignmentService",
+        lambda *args: Mock(resolve_selection=Mock(side_effect=IngestionAssignmentError("bad selection"))),
+    )
+    with pytest.raises(IngressBindingConflictError, match="not eligible"):
+        service._validate_version("v", enabled=True)
+
+    monkeypatch.setattr(
+        ingress_module,
+        "PipelineDefinitionService",
+        lambda *args: Mock(load_version=Mock(side_effect=RuntimeError("bad version"))),
+    )
+    with pytest.raises(IngressBindingConflictError, match="not eligible"):
+        service._validate_version("v", enabled=False)
+
+    service.bindings.get.return_value = {
+        "id": "binding",
+        "folder_path": str(folder),
+        "normalized_path": str(folder).lower(),
+        "pipeline_template_id": "template",
+        "pipeline_version_id": "version",
+        "enabled": 1,
+    }
+    monkeypatch.setattr(ingress_module, "immediate_transaction", lambda _conn: nullcontext())
+    service.bindings.is_referenced.side_effect = [False, True]
+    with pytest.raises(IngressBindingConflictError, match="cannot be deleted"):
+        service.delete("binding", user="admin")
+    service.bindings.is_referenced.side_effect = [False, False]
+    service.bindings.delete.return_value = False
+    with pytest.raises(KeyError, match="Unknown watch-folder binding"):
+        service.delete("binding", user="admin")

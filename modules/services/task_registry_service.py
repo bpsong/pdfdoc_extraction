@@ -268,9 +268,13 @@ def validate_startup_task_registry(
 ) -> bool:
     """Validate active startup tasks and exit after a readable delay on failure."""
     registry = ApprovedTaskRegistry(config_manager)
+    # The active pipeline lives in SQLite and is validated when it is
+    # published and again when its exact version is loaded. YAML startup
+    # validation is therefore limited to deployment-controlled custom task
+    # registry entries.
     findings = [
         finding
-        for finding in registry.validate_pipeline_config()
+        for finding in registry.validate_custom_registry()
         if finding.get("severity") == "error"
     ]
     if not findings:

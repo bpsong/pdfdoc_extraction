@@ -201,6 +201,17 @@ def test_document_extraction_api_404s_for_unknown_document(tmp_path, monkeypatch
     assert response.status_code == 404
 
 
+def test_configured_pdf_roots_include_pinned_pipeline_directories(tmp_path) -> None:
+    config = TempConfig(tmp_path / "app.sqlite3", {"web": {}, "watch_folder": {}})
+    split_dir = tmp_path / "versioned-split"
+    roots = api_router._configured_pdf_roots(
+        config,
+        {"tasks": {"split_documents": {"params": {"split_dir": str(split_dir)}}}},
+    )
+
+    assert split_dir.resolve() in roots
+
+
 def test_document_pdf_preview_serves_registered_file(tmp_path, monkeypatch) -> None:
     client, _, state = _client(tmp_path, monkeypatch)
     document_id = state["created"]["document"]["id"]

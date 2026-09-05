@@ -25,15 +25,8 @@
     }
 
     function statusBadge(status) {
-        const normalized = String(status || "pending").toLowerCase();
-        const badgeClass = normalized === "completed"
-            ? "badge-success"
-            : normalized === "in_review"
-                ? "badge-info"
-                : normalized === "pending"
-                    ? "badge-warning"
-                    : "badge-ghost";
-        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(titleCase(normalized))}</span>`;
+        const badgeClass = window.DocFlow.statusBadgeClass(status, "pending");
+        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "pending"))}</span>`;
     }
 
     function confidenceText(value) {
@@ -47,9 +40,20 @@
         return `${Math.round(numeric * 100)}%`;
     }
 
+    function confidenceBand(value) {
+        if (value === null || value === undefined || value === "") {
+            return "Missing";
+        }
+        const numeric = Number(value);
+        if (Number.isNaN(numeric)) {
+            return "Unknown";
+        }
+        return numeric < 0.7 ? "Low" : numeric < 0.9 ? "Medium" : "High";
+    }
+
     function confidenceBadge(value) {
         if (value === null || value === undefined || value === "") {
-            return '<span class="badge badge-ghost badge-sm">Missing</span>';
+            return '<span class="badge badge-ghost badge-sm">Missing confidence</span>';
         }
         const numeric = Number(value);
         const badgeClass = Number.isNaN(numeric)
@@ -59,7 +63,7 @@
                 : numeric < 0.9
                     ? "badge-warning"
                     : "badge-success";
-        return `<span class="badge ${badgeClass} badge-sm">${confidenceText(value)}</span>`;
+        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(confidenceBand(value))} confidence · ${confidenceText(value)}</span>`;
     }
 
     function itemHasLowConfidence(item) {
@@ -181,6 +185,28 @@
         renderRows();
     }
 
+    function announceReviewChanges(previousItems, nextItems) {
+        if (!previousItems.length || !window.DocFlow || !window.DocFlow.announce) {
+            return;
+        }
+        const previousById = new Map(previousItems.map((item) => [String(item.id), item]));
+        const additions = nextItems.filter((item) => !previousById.has(String(item.id)));
+        const completed = nextItems.filter((item) => {
+            const previous = previousById.get(String(item.id));
+            return previous && previous.status !== "completed" && item.status === "completed";
+        });
+        const messages = [];
+        if (additions.length) {
+            messages.push(`${additions.length} new review item${additions.length === 1 ? "" : "s"}`);
+        }
+        if (completed.length) {
+            messages.push(`${completed.length} review item${completed.length === 1 ? "" : "s"} completed`);
+        }
+        if (messages.length) {
+            window.DocFlow.announce(messages.join("; "));
+        }
+    }
+
     async function claimReviewItem(reviewItemId, button) {
         if (!reviewItemId) {
             return;
@@ -196,16 +222,44 @@
         }
     }
 
+    let loadInFlight = false;
+
     async function loadReviewItems() {
+        if (loadInFlight) {
+            return;
+        }
+        loadInFlight = true;
         const body = document.getElementById("review-queue-body");
-        body.innerHTML = '<tr><td colspan="7" class="text-center text-base-content/50 py-10">Loading review items...</td></tr>';
+        const region = document.getElementById("review-queue-region");
+        [body, region].forEach((element) => {
+            if (element) {
+                element.setAttribute("aria-busy", "true");
+            }
+        });
+        body.innerHTML = window.DocFlow.tableSkeletonRows(7, 4);
         try {
             const payload = await window.DocFlow.apiGet("/api/review/items");
-            state.items = Array.isArray(payload) ? payload : [];
+            const nextItems = Array.isArray(payload) ? payload : [];
+            announceReviewChanges(state.items, nextItems);
+            state.items = nextItems;
             render();
         } catch (error) {
-            body.innerHTML = '<tr><td colspan="7" class="text-center text-error py-10">Review queue failed to load</td></tr>';
+            body.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center py-10">
+                        <p class="text-error">Review queue failed to load</p>
+                        <button class="btn btn-outline btn-sm mt-3" type="button" data-review-retry>Retry</button>
+                    </td>
+                </tr>
+            `;
             window.DocFlow.showToast(error.message || "Review queue failed to load", "error");
+        } finally {
+            loadInFlight = false;
+            [body, region].forEach((element) => {
+                if (element) {
+                    element.setAttribute("aria-busy", "false");
+                }
+            });
         }
     }
 
@@ -221,6 +275,11 @@
             renderRows();
         });
         document.getElementById("review-refresh-button").addEventListener("click", loadReviewItems);
+        document.getElementById("review-queue-body").addEventListener("click", (event) => {
+            if (event.target.closest("[data-review-retry]")) {
+                loadReviewItems();
+            }
+        });
     }
 
     document.addEventListener("DOMContentLoaded", () => {

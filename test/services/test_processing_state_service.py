@@ -84,9 +84,9 @@ def test_snapshot_from_batch_falls_back_for_historical_batches(tmp_path):
         snapshot = snapshot_from_batch(created["batch"], config)
 
     assert snapshot["fallback"] is True
-    assert snapshot["source"] == "historical_legacy_config_fallback"
+    assert snapshot["source"] == "historical_unassigned_pipeline"
     assert snapshot["historical"] is True
-    assert snapshot["steps"][0]["key"] == "assign_nanoid"
+    assert snapshot["steps"] == []
 
 
 def test_processing_state_exposes_internal_cleanup_without_adding_pipeline_step(tmp_path):

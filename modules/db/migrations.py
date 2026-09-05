@@ -13,7 +13,7 @@ from modules.services.legacy_versioned_config_migration import (
 
 
 LEGACY_SCHEMA_VERSION = 2
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 TARGET_VERSIONED_CONFIG_SCHEMA_VERSION = 3
 
 
@@ -112,6 +112,17 @@ def initialize_database(config_manager: ConfigProvider) -> None:
         ).fetchone()
         if existing is not None:
             return
+        versioned_schema_exists = conn.execute(
+            "SELECT 1 FROM schema_migrations WHERE version = ?",
+            (TARGET_VERSIONED_CONFIG_SCHEMA_VERSION,),
+        ).fetchone() is not None
+        if versioned_schema_exists:
+            with immediate_transaction(conn):
+                conn.execute(
+                    "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                    (SCHEMA_VERSION, utc_now()),
+                )
+            return
         legacy_v2_exists = conn.execute(
             "SELECT 1 FROM schema_migrations WHERE version = ?",
             (LEGACY_SCHEMA_VERSION,),
@@ -132,6 +143,14 @@ def initialize_database(config_manager: ConfigProvider) -> None:
                 if legacy_v2_exists or legacy_state_exists:
                     migration = LegacyVersionedConfigMigration(conn, config_manager)
                     migration.run()
+                if conn.execute(
+                    "SELECT 1 FROM schema_migrations WHERE version = ?",
+                    (TARGET_VERSIONED_CONFIG_SCHEMA_VERSION,),
+                ).fetchone() is None:
+                    conn.execute(
+                        "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
+                        (TARGET_VERSIONED_CONFIG_SCHEMA_VERSION, utc_now()),
+                    )
                 conn.execute(
                     "INSERT INTO schema_migrations(version, applied_at) VALUES (?, ?)",
                     (SCHEMA_VERSION, utc_now()),

@@ -74,4 +74,5 @@ def test_services_coordinate_core_business_operations(tmp_path):
     assert next_task == (1, "review_gate")
     assert details and details["task_runs"][0]["status"] == "completed"
     assert refreshed_batch and refreshed_batch["total_documents"] == 2
-    assert document_audit[0]["id"] == audit["id"]
+    assert any(event["id"] == audit["id"] for event in document_audit)
+    assert any(event["event_type"] == "document.status_changed" for event in document_audit)

@@ -7,7 +7,7 @@ import sqlite3
 from typing import Any, TypeGuard
 
 from modules.db.connection import json_loads
-from modules.db.repositories import BatchRepository, DocumentRepository, TaskRunRepository
+from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository, TaskRunRepository
 
 
 SNAPSHOT_METADATA_KEY = "pipeline_snapshot"
@@ -94,19 +94,22 @@ def classify_pipeline_step(module_name: str, class_name: str, task_key: str = ""
     return "custom"
 
 
-def snapshot_from_batch(batch: dict[str, Any], config_manager: Any) -> dict[str, Any]:
-    """Return a legacy metadata snapshot for migration diagnostics only."""
+def snapshot_from_batch(batch: dict[str, Any], config_manager: Any | None = None) -> dict[str, Any]:
+    """Return a historical snapshot without consulting active configuration."""
     metadata = json_loads(batch.get("metadata_json"), {})
     if isinstance(metadata, dict):
         snapshot = metadata.get(SNAPSHOT_METADATA_KEY)
         if _valid_snapshot(snapshot):
             return snapshot
-    fallback = build_pipeline_snapshot(
-        config_manager, source="historical_legacy_config_fallback"
-    )
-    fallback["fallback"] = True
-    fallback["historical"] = True
-    return fallback
+    return {
+        "version": SNAPSHOT_VERSION,
+        "source": "historical_unassigned_pipeline",
+        "content_hash": None,
+        "step_count": 0,
+        "steps": [],
+        "fallback": True,
+        "historical": True,
+    }
 
 
 class ProcessingStateService:
@@ -119,6 +122,7 @@ class ProcessingStateService:
         self.batches = BatchRepository(conn)
         self.documents = DocumentRepository(conn)
         self.task_runs = TaskRunRepository(conn)
+        self.audit = AuditRepository(conn)
 
     def get_batch_state(self, batch_id: str) -> dict[str, Any] | None:
         """Return processing state for one batch."""
@@ -203,7 +207,7 @@ class ProcessingStateService:
                         "historical": False,
                     }
                     return snapshot, identity
-        snapshot = snapshot_from_batch(batch, self.config_manager)
+        snapshot = snapshot_from_batch(batch)
         identity = {
             "pipeline_version_id": version_id,
             "pipeline_template_id": batch.get("pipeline_template_id"),
@@ -238,6 +242,11 @@ class ProcessingStateService:
             "metadata": json_loads(document.get("metadata_json"), {}),
             "task_states": step_states,
             "task_runs": task_runs,
+            "status_history": [
+                event
+                for event in self.audit.list_for_document(str(document["id"]))
+                if event.get("event_type") == "document.status_changed"
+            ],
             "current_step": current_step,
             "last_completed_step": last_completed,
             "progress_percent": progress,

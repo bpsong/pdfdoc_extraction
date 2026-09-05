@@ -9,6 +9,7 @@ from modules.config_protocol import ConfigProvider
 from modules.db.connection import immediate_transaction
 from modules.db.repositories import AuditRepository
 from modules.services.batch_service import BatchService
+from modules.services.processing_job_service import ProcessingJobService
 from modules.services.pipeline_definition_service import (
     PipelineDefinitionError,
     PipelineDefinitionService,
@@ -171,5 +172,14 @@ class IngestionAssignmentService:
                 },
                 batch_id=created["batch"]["id"],
                 user=user,
+            )
+            ProcessingJobService(
+                self.conn,
+                max_attempts=int(
+                    self.config.get("processing_queue.max_attempts", 3) or 3
+                ),
+            ).enqueue_documents(
+                batch_id=str(created["batch"]["id"]),
+                document_ids=[str(document["id"]) for document in created["documents"]],
             )
         return {**created, "pipeline": summary}

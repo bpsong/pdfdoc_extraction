@@ -2,6 +2,7 @@ import argparse
 import io
 import logging
 import logging.handlers
+import runpy
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, mock_open
@@ -136,6 +137,9 @@ def _patch_main_components(monkeypatch, *, no_web, monitor_start=None, process=N
     monkeypatch.setattr(main, "WorkflowManager", lambda cfg: workflow)
     monkeypatch.setattr(main, "FileProcessor", lambda *args: file_processor)
     monkeypatch.setattr(main, "WatchFolderCoordinator", FakeMonitor)
+    worker = Mock()
+    worker.poll.return_value = None
+    monkeypatch.setattr(main, "start_processing_worker", lambda *args: worker)
     if process is not None:
         monkeypatch.setattr(main, "start_web_server", lambda *args: (process, Mock()))
     return config, shutdown, file_processor, monitors
@@ -196,6 +200,27 @@ def test_main_supervises_web_process_and_stops_cleanly(
     log_handle.close.assert_called_once_with()
 
 
+def test_main_waits_once_when_web_process_is_still_running(monkeypatch):
+    process = Mock()
+    process.poll.side_effect = [None, 0]
+    process.wait.return_value = 0
+    _, _, _, monitors = _patch_main_components(
+        monkeypatch,
+        no_web=False,
+        process=process,
+    )
+    monkeypatch.setattr(main, "start_web_server", lambda *args: (process, Mock()))
+    sleep = Mock()
+    monkeypatch.setattr(main.time, "sleep", sleep)
+
+    with pytest.raises(SystemExit) as exc_info:
+        main.main()
+
+    assert exc_info.value.code == 0
+    sleep.assert_called_once_with(1)
+    monitors[-1].stop.assert_called_once_with()
+
+
 def test_main_handles_monitor_and_process_shutdown_failures(monkeypatch):
     process = Mock()
     process.poll.side_effect = KeyboardInterrupt
@@ -247,6 +272,38 @@ def test_main_exits_when_web_server_cannot_start(monkeypatch):
     assert exc_info.value.code == 1
 
 
+def test_main_module_entrypoint_executes_main_guard(monkeypatch):
+    config = DictConfig({"database.run_migrations_on_startup": False})
+    shutdown = Mock()
+
+    class Monitor:
+        def __init__(self, *args):
+            pass
+
+        def start(self):
+            return None
+
+    monkeypatch.setattr(
+        argparse.ArgumentParser,
+        "parse_args",
+        lambda self: argparse.Namespace(config_path=None, no_web=True),
+    )
+    monkeypatch.setattr("modules.config_manager.ConfigManager", lambda **kwargs: config)
+    monkeypatch.setattr("modules.db.migrations.initialize_database", Mock())
+    monkeypatch.setattr("modules.logging_config.setup_logging", Mock())
+    monkeypatch.setattr("modules.services.task_registry_service.validate_startup_task_registry", Mock())
+    monkeypatch.setattr("modules.shutdown_manager.ShutdownManager", lambda: shutdown)
+    monkeypatch.setattr("modules.workflow_manager.WorkflowManager", lambda _config: Mock())
+    monkeypatch.setattr("modules.file_processor.FileProcessor", lambda *args: Mock())
+    monkeypatch.setattr("modules.services.watch_folder_coordinator.WatchFolderCoordinator", Monitor)
+
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_path(str(Path(main.__file__)), run_name="__main__")
+
+    assert exc_info.value.code == 0
+    shutdown.shutdown.assert_called_once_with()
+
+
 def test_logging_helpers_cover_stream_and_setup_paths(monkeypatch, tmp_path):
     plain_stream = io.StringIO()
     file_handler = Mock()
@@ -295,6 +352,14 @@ def test_logging_stream_wrapper_and_handler_tolerate_errors(monkeypatch):
     handler.emit(logging.LogRecord("x", logging.INFO, __file__, 1, "x", (), None))
 
 
+def test_utf8_wrapper_initializes_and_keeps_buffer_open():
+    raw = io.BytesIO()
+    wrapper = logging_config._NonClosingUTF8Wrapper(raw)
+    wrapper.write("hello")
+    wrapper.close()
+    assert raw.getvalue() == b"hello"
+
+
 def test_shutdown_manager_continues_after_cleanup_error():
     ShutdownManager._instance = None
     manager = ShutdownManager()
@@ -340,7 +405,7 @@ def test_file_processor_error_and_compatibility_paths(monkeypatch, tmp_path):
     assert "batch_id" not in workflow.trigger_workflow_for_file.call_args.kwargs
 
     workflow.trigger_workflow_for_file.side_effect = TypeError("internal failure")
-    with pytest.raises(TypeError, match="internal failure"):
+    with pytest.raises(ValueError, match="SQLite batch and document records"):
         processor.process_file(
             "input.pdf",
             "id",
@@ -354,6 +419,8 @@ def test_file_processor_error_and_compatibility_paths(monkeypatch, tmp_path):
         "input.pdf",
         "id",
         "web",
+        batch_id="batch",
+        document_id="document",
         create_sqlite_state=False,
     ) is False
 

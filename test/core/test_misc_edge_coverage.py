@@ -7,12 +7,14 @@ import pytest
 
 from modules.file_processor import FileProcessor
 from modules.services.config_validation_service import ConfigValidationService
+import modules.services.config_validation_service as config_validation_module
 from modules.services.reports_service import (
     ReportsService,
     _duration_display,
     _parse_iso_datetime,
 )
 from modules.services.runtime_settings_service import RuntimeSettingsService
+from modules.services.processing_state_service import _config_value
 from modules.services.user_service import UserService, UserServiceError
 from modules.watch_folder_monitor import WatchFolderMonitor
 from modules import utils
@@ -92,6 +94,17 @@ def test_config_validation_payload_shapes(tmp_path):
         "message": "x",
     }
     assert service._dedupe_findings([finding, finding]) == [finding]
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(
+            config_validation_module,
+            "YAMLParser",
+            lambda: SimpleNamespace(loads=lambda *_args, **_kwargs: (["not", "mapping"], None)),
+        )
+        with pytest.raises(ValueError, match="must be a mapping"):
+            service._extract_config_data({"yaml": "items"})
+    finally:
+        monkeypatch.undo()
 
 
 def test_reports_helpers_and_invalid_table():
@@ -130,6 +143,7 @@ def test_runtime_settings_invalid_pipeline_and_redaction():
     steps = service._pipeline_steps()
     assert steps[0]["configured"] is False
     assert steps[1]["params"]["api_key"] == "[REDACTED]"
+    assert _config_value(object(), "missing", "fallback") == "fallback"
 
 
 def test_user_service_rejection_paths(monkeypatch):

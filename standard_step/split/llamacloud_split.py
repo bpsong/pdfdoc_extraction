@@ -15,6 +15,7 @@ from modules.db.connection import transaction
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact_text
+from modules.services.workflow_state_service import WorkflowStateService
 from modules.utils import release_reserved_filepath, reserve_unique_filepath, sanitize_filename
 from standard_step.split.llamacloud_split_adapter import (
     LlamaCloudSplitAdapter,
@@ -194,7 +195,9 @@ class LlamaCloudSplitTask(BaseTask):
                     split_result=split_result,
                     source_artifact=source_artifact,
                 )
-                documents.update_status(document["id"], "split_completed")
+                WorkflowStateService(conn).transition_document(
+                    str(document["id"]), "split_completed", reason="split_completed"
+                )
                 BatchRepository(conn).recompute_counts(str(document["batch_id"]))
                 AuditRepository(conn).append(
                     event_type="split_completed",
@@ -464,6 +467,10 @@ class LlamaCloudSplitTask(BaseTask):
 
         for child in remaining_children:
             if child.get("status") not in {"completed", "failed"}:
-                documents.update_status(str(child["id"]), "failed")
-        documents.update_status(str(document["id"]), "failed")
+                    WorkflowStateService(conn).transition_document(
+                        str(child["id"]), "failed", reason="split_failed"
+                    )
+        WorkflowStateService(conn).transition_document(
+            str(document["id"]), "failed", reason="split_failed"
+        )
         BatchRepository(documents.conn).recompute_counts(str(document["batch_id"]))

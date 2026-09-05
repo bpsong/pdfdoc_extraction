@@ -163,6 +163,7 @@ def test_review_detail_api_returns_schema_pdf_and_parsed_fields(tmp_path, monkey
     assert response.status_code == 200
     payload = response.json()
     assert payload["document"]["preview_url"].endswith("/file/pdf")
+    assert payload["extraction"]["provider"] == "test"
     assert payload["schema"]["name"] == "invoice.yaml"
     assert [field["key"] for field in payload["schema"]["fields"]] == [
         "supplier",

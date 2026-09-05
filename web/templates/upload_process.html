@@ -17,7 +17,7 @@
             </div>
         </div>
     </section>
-    <section id="upload-drop-zone" class="card bg-base-100 shadow-sm upload-dropzone" tabindex="0">
+    <section id="upload-drop-zone" class="card bg-base-100 shadow-sm upload-dropzone" tabindex="0" role="button" aria-controls="pdf-file-input" aria-describedby="upload-drop-help" aria-label="Choose PDF files to upload">
         <div class="card-body items-center text-center py-12">
             <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
                 <svg class="w-7 h-7 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -36,7 +36,7 @@
                 Choose Files
                 <input id="pdf-file-input" type="file" class="hidden" accept="application/pdf,.pdf" multiple />
             </label>
-            <p class="text-xs text-base-content/40 mt-3">PDF only, up to {{ max_upload_mb|default(50) }} MB per file</p>
+            <p id="upload-drop-help" class="text-xs text-base-content/40 mt-3">PDF only, up to {{ max_upload_mb|default(50) }} MB per file. Press Enter or Space to choose files.</p>
         </div>
     </section>
 
@@ -53,9 +53,21 @@
             <div class="divider my-1"></div>
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm text-base-content/60">
                 <span id="selected-file-summary">Total files: 0 | Total size: 0 B</span>
-                <span id="upload-status" class="text-xs text-base-content/50"></span>
+                <span id="upload-status" class="text-xs text-base-content/50" role="status" aria-live="polite"></span>
             </div>
-            <div class="flex justify-end">
+            <div id="upload-progress-region" class="hidden rounded-lg border border-primary/20 bg-primary/5 p-3" role="group" aria-labelledby="upload-progress-heading" aria-busy="false">
+                <div class="flex items-center justify-between gap-3 text-sm">
+                    <span id="upload-progress-heading" class="font-medium">Upload progress</span>
+                    <span id="upload-progress-label" class="font-semibold text-primary">0%</span>
+                </div>
+                <progress id="upload-progress-bar" class="progress progress-primary mt-2 w-full" value="0" max="100" aria-label="Upload progress"></progress>
+            </div>
+            <details class="context-help rounded-lg border border-base-300 bg-base-200/40 px-3 py-2">
+                <summary class="cursor-pointer text-sm font-medium">What happens next?</summary>
+                <p class="mt-2 text-sm text-base-content/60">The selected PDFs are uploaded as one batch, then the chosen pipeline processes each document. You can follow progress on the processing page.</p>
+            </details>
+            <div class="flex justify-end gap-2">
+                <button id="cancel-upload-button" class="btn btn-outline btn-sm hidden" type="button">Cancel upload</button>
                 <button id="start-processing-button" class="btn btn-primary btn-sm" disabled>
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                         aria-hidden="true">
@@ -72,5 +84,5 @@
 
 {% block scripts %}
 <script src="/static/js/operator_pipeline_view_models.js?v=1" defer></script>
-<script src="/static/js/upload_process.js?v=version-selection" defer></script>
+<script src="/static/js/upload_process.js?v=ui-upload-cancel-keyboard" defer></script>
 {% endblock %}

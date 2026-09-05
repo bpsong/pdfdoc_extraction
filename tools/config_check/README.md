@@ -166,7 +166,7 @@ glm_extract:
     resolution_mode: document
     resolver_model: qwen3.5:9b-q4_K_M
     resolver_max_dimension: 1280
-    resolver_num_ctx: 8192
+    resolver_num_ctx: 18000
     resolver_num_predict: 10000
     resolver_max_attempts: 2
     dpi: 216

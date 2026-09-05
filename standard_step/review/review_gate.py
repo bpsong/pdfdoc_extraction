@@ -11,6 +11,7 @@ from modules.db.repositories import DocumentRepository, ExtractionRepository
 from modules.exceptions import TaskError
 from modules.services.review_service import ReviewService
 from modules.services.schema_service import SchemaService
+from modules.services.workflow_state_service import WorkflowStateService
 
 
 class ReviewGateTask(BaseTask):
@@ -51,6 +52,10 @@ class ReviewGateTask(BaseTask):
             extraction_repository = ExtractionRepository(conn)
             document_repository = DocumentRepository(conn)
             review_service = ReviewService(conn, self.config_manager)
+            state_service = WorkflowStateService(
+                conn,
+                pipeline_version_id=context.get("pipeline_version_id"),
+            )
 
             fields = extraction_repository.get_fields(str(document_id))
             document = document_repository.get(str(document_id)) or {}
@@ -75,7 +80,9 @@ class ReviewGateTask(BaseTask):
                     str(self.schema_version_id) if self.schema_version_id else None
                 ),
             )
-            document_repository.update_status(str(document_id), "review_required")
+            state_service.transition_document(
+                str(document_id), "review_required", reason="review_gate"
+            )
 
         context["review_required"] = True
         context["review_gate_status"] = "paused"

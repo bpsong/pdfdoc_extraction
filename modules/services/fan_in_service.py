@@ -9,6 +9,7 @@ import uuid
 
 from modules.db.connection import json_dumps, json_loads, transaction, utc_now
 from modules.db.repositories import DocumentRepository
+from modules.services.workflow_state_service import WorkflowStateService
 
 
 SUCCESS_STATUS = "completed"
@@ -40,6 +41,7 @@ class FanInService:
         """Initialize the service with an existing SQLite connection."""
         self.conn = conn
         self.documents = DocumentRepository(conn)
+        self.state = WorkflowStateService(conn)
 
     def finalize_leaf(self, context: dict[str, Any]) -> FanInResult | None:
         """Finalize a leaf document and recompute root and batch state.
@@ -217,11 +219,8 @@ class FanInService:
         }
 
     def _update_document_status(self, document_id: str, status: str) -> None:
-        """Persist a document status without opening another transaction."""
-        self.conn.execute(
-            "UPDATE documents SET status = ?, updated_at = ? WHERE id = ?",
-            (status, utc_now(), document_id),
-        )
+        """Persist a document status through the central state service."""
+        self.state.transition_document(document_id, status, reason="fan_in")
 
     def _update_failure_metadata(self, document_id: str, context: dict[str, Any]) -> None:
         """Persist structured fatal failure context on failed documents."""

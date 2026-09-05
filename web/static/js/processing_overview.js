@@ -8,15 +8,19 @@
 
     const batchId = workspace.dataset.batchId || "";
     const tableBody = document.getElementById("processing-table-body");
+    const tableRegion = document.getElementById("processing-table-region");
     const pipelineStepList = document.getElementById("pipeline-step-list");
     const progressBar = document.getElementById("overall-progress-bar");
     const progressLabel = document.getElementById("overall-progress-label");
+    const progressRegion = document.getElementById("processing-progress-region");
     const refreshNote = document.getElementById("processing-refresh-note");
     const splitResultsLink = document.getElementById("split-results-link");
     const clearFailureNotificationsButton = document.getElementById("clear-failure-notifications-button");
     const assignmentSummary = document.getElementById("pipeline-assignment-summary");
     const terminalStatuses = new Set(["completed", "completed_with_errors", "failed", "cancelled", "review_completed"]);
     let pollTimer = null;
+    let refreshInFlight = false;
+    let previousProcessingSnapshot = null;
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -28,9 +32,7 @@
     }
 
     function titleCase(value) {
-        return String(value || "unknown")
-            .replace(/_/g, " ")
-            .replace(/\b\w/g, (letter) => letter.toUpperCase());
+        return window.DocFlow.statusLabel(value, "unknown");
     }
 
     function isTerminal(status) {
@@ -38,24 +40,7 @@
     }
 
     function statusBadge(status) {
-        const normalized = String(status || "queued").toLowerCase();
-        const classByStatus = {
-            received: "badge-ghost",
-            queued: "badge-ghost",
-            processing: "badge-primary",
-            split_pending: "badge-warning",
-            split_completed: "badge-success",
-            extraction_pending: "badge-warning",
-            extraction_completed: "badge-success",
-            review_required: "badge-warning",
-            in_review: "badge-warning",
-            review_completed: "badge-success",
-            completed: "badge-success",
-            completed_with_errors: "badge-warning",
-            failed: "badge-error",
-            cancelled: "badge-ghost",
-        };
-        return `<span class="badge ${classByStatus[normalized] || "badge-ghost"} badge-sm">${escapeHtml(titleCase(normalized))}</span>`;
+        return `<span class="badge ${window.DocFlow.statusBadgeClass(status, "queued")} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "queued"))}</span>`;
     }
 
     function categoryBadge(category) {
@@ -329,9 +314,11 @@
 
         if (!rows.length) {
             tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-base-content/50 py-10">No active documents</td></tr>';
+            tableBody.dataset.loadError = "false";
             return;
         }
         tableBody.innerHTML = rows.join("");
+        tableBody.dataset.loadError = "false";
     }
 
     function aggregateProgress(states) {
@@ -372,7 +359,70 @@
         });
     }
 
+    function processingSnapshot(states) {
+        const snapshot = new Map();
+        states.forEach((state) => {
+            const batch = state.batch || {};
+            const batchIdValue = String(batch.id || "");
+            if (batchIdValue) {
+                snapshot.set(`batch:${batchIdValue}`, {
+                    label: batch.original_filename || batchIdValue,
+                    status: String(batch.status || "queued").toLowerCase(),
+                });
+            }
+            (state.documents || []).forEach((document) => {
+                const documentId = String(document.id || "");
+                if (documentId) {
+                    snapshot.set(`document:${documentId}`, {
+                        label: document.filename || document.original_filename || documentId,
+                        status: String(document.status || "queued").toLowerCase(),
+                    });
+                }
+            });
+        });
+        return snapshot;
+    }
+
+    function announceProcessingChanges(states) {
+        const snapshot = processingSnapshot(states);
+        if (!previousProcessingSnapshot) {
+            previousProcessingSnapshot = snapshot;
+            return;
+        }
+
+        const changes = [];
+        snapshot.forEach((current, key) => {
+            const previous = previousProcessingSnapshot.get(key);
+            if (!previous || previous.status === current.status || !isTerminal(current.status)) {
+                return;
+            }
+            changes.push(`${current.label}: ${titleCase(current.status)}`);
+        });
+        previousProcessingSnapshot = snapshot;
+
+        if (changes.length && window.DocFlow && window.DocFlow.announce) {
+            const visibleChanges = changes.slice(0, 3);
+            const suffix = changes.length > visibleChanges.length
+                ? `, plus ${changes.length - visibleChanges.length} more`
+                : "";
+            window.DocFlow.announce(`${visibleChanges.join("; ")}${suffix}`);
+        }
+    }
+
     async function refreshProcessing() {
+        if (refreshInFlight) {
+            return;
+        }
+        refreshInFlight = true;
+        if (tableBody && tableBody.dataset.loadError === "true") {
+            tableBody.innerHTML = window.DocFlow.tableSkeletonRows(6, 4);
+            tableBody.dataset.loadError = "false";
+        }
+        [tableRegion, tableBody, progressRegion].forEach((element) => {
+            if (element) {
+                element.setAttribute("aria-busy", "true");
+            }
+        });
         try {
             const states = await loadVisibleStates();
             renderPipeline(states);
@@ -383,6 +433,7 @@
             const progress = aggregateProgress(states);
             progressBar.value = progress;
             progressLabel.textContent = `${progress}%`;
+            announceProcessingChanges(states);
             refreshNote.textContent = states.length ? `Last updated ${new Date().toLocaleTimeString()}` : "No batches found";
 
             if (hasActiveWork(states)) {
@@ -394,10 +445,30 @@
                 pollTimer = null;
             }
         } catch (error) {
-            refreshNote.textContent = error.message || "Unable to load processing state";
+            const message = error.message || "Unable to load processing state";
+            refreshNote.innerHTML = `
+                <span class="text-error">${escapeHtml(message)}</span>
+                <button id="processing-retry-button" class="btn btn-outline btn-xs ml-2" type="button">Retry</button>
+            `;
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-10">
+                        <p class="text-error">Processing data failed to load</p>
+                        <button class="btn btn-outline btn-sm mt-3" type="button" data-processing-retry>Retry</button>
+                    </td>
+                </tr>
+            `;
+            tableBody.dataset.loadError = "true";
             if (window.DocFlow) {
-                window.DocFlow.showToast(error.message || "Unable to load processing state", "error");
+                window.DocFlow.showToast(message, "error");
             }
+        } finally {
+            refreshInFlight = false;
+            [tableRegion, tableBody, progressRegion].forEach((element) => {
+                if (element) {
+                    element.setAttribute("aria-busy", "false");
+                }
+            });
         }
     }
 
@@ -421,6 +492,17 @@
             }
         });
     }
+
+    refreshNote.addEventListener("click", (event) => {
+        if (event.target.closest("#processing-retry-button")) {
+            refreshProcessing();
+        }
+    });
+    tableBody.addEventListener("click", (event) => {
+        if (event.target.closest("[data-processing-retry]")) {
+            refreshProcessing();
+        }
+    });
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {

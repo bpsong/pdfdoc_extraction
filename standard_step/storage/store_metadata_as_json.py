@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from modules.base_task import BaseTask
-from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import (
@@ -78,10 +78,8 @@ class StoreMetadataAsJson(BaseTask):
         self.data_dir: Path = Path(windows_long_path(str(data_dir_str)))
         self.filename_template: str = str(filename_template)
 
-        # Prefer an exact task-specific mapping. Legacy YAML execution may
-        # still obtain aliases from its extraction task through ConfigManager;
-        # versioned execution receives a deployment-only provider that hides
-        # those mutable workflow sections.
+        # Extraction field metadata is part of this task's published
+        # definition. Deployment YAML is intentionally not consulted.
         extraction_config = self.params.get("extraction")
         explicit_fields = (
             extraction_config.get("fields")
@@ -92,18 +90,7 @@ class StoreMetadataAsJson(BaseTask):
         if isinstance(explicit_fields, dict):
             self.extraction_fields_config = explicit_fields
         else:
-            tasks_config = get_all_config(self.config_manager).get("tasks", {})
-            extract_task_def = (
-                tasks_config.get("extract_document_data")
-                or tasks_config.get("extract_document")
-                or {}
-            )
-            extraction_params = (
-                extract_task_def.get("params", {})
-                if isinstance(extract_task_def, dict)
-                else {}
-            )
-            self.extraction_fields_config = extraction_params.get("fields", {})
+            self.extraction_fields_config = {}
 
         if not self.extraction_fields_config:
             # Not fatal; we can still write JSON without aliasing/is_table metadata

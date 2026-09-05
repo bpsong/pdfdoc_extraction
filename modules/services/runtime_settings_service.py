@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import sqlite3
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
+from modules.db.connection import json_loads
 from modules.services.task_catalog_service import TaskCatalogService
 
 
@@ -26,13 +28,18 @@ SECRET_KEYS = {
 class RuntimeSettingsService:
     """Expose safe read-only runtime settings to authenticated users."""
 
-    def __init__(self, config_manager: ConfigManager) -> None:
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
         """Initialize the service.
 
         Args:
             config_manager: Active configuration provider.
         """
         self.config_manager = config_manager
+        self.conn = conn
         self.config = self._active_config()
 
     def settings(self) -> dict[str, Any]:
@@ -104,7 +111,19 @@ class RuntimeSettingsService:
         return value
 
     def _pipeline_steps(self) -> list[dict[str, Any]]:
-        """Return configured pipeline steps without secret params."""
+        """Return the latest active versioned pipeline steps."""
+        if self.conn is not None:
+            return [
+                {
+                    **step,
+                    "params": _redact_secrets(step.get("params", {})),
+                }
+                for step in self._versioned_tasks()
+                if step.get("enabled", True)
+            ]
+
+        # Retain the old shape for isolated callers that do not provide a DB
+        # connection. Production API callers always pass ``conn``.
         tasks = self._get("tasks", {})
         pipeline = self._get("pipeline", [])
         if not isinstance(tasks, dict) or not isinstance(pipeline, list):
@@ -144,6 +163,16 @@ class RuntimeSettingsService:
 
     def _first_task_by_class(self, class_name: str) -> dict[str, Any]:
         """Return the first configured task matching a class name."""
+        if self.conn is not None:
+            return next(
+                (
+                    task
+                    for task in self._versioned_tasks()
+                    if task.get("class") == class_name
+                ),
+                {},
+            )
+
         tasks = self._get("tasks", {})
         if not isinstance(tasks, dict):
             return {}
@@ -157,6 +186,62 @@ class RuntimeSettingsService:
                 "params": _redact_secrets(task_config.get("params") if isinstance(task_config.get("params"), dict) else {}),
             }
         return {}
+
+    def _versioned_tasks(self) -> list[dict[str, Any]]:
+        """Return steps from the newest published version of each active template."""
+        rows = self.conn.execute(
+            """
+            SELECT v.id AS pipeline_version_id, v.version_number,
+                   v.definition_json, t.template_key, t.name
+            FROM pipeline_versions v
+            JOIN pipeline_templates t ON t.id = v.template_id
+            WHERE t.status = 'active'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pipeline_versions newer
+                  WHERE newer.template_id = v.template_id
+                    AND newer.version_number > v.version_number
+              )
+            ORDER BY t.name, t.template_key
+            """
+        ).fetchall()
+        steps: list[dict[str, Any]] = []
+        for row in rows:
+            definition = json_loads(row["definition_json"], {})
+            if not isinstance(definition, dict):
+                continue
+            raw_tasks = definition.get("tasks")
+            tasks = raw_tasks if isinstance(raw_tasks, dict) else {}
+            raw_pipeline = definition.get("pipeline")
+            pipeline = raw_pipeline if isinstance(raw_pipeline, list) else []
+            for index, task_key in enumerate(pipeline):
+                if not isinstance(task_key, str):
+                    continue
+                task_config = tasks.get(task_key)
+                if not isinstance(task_config, dict):
+                    continue
+                class_name = str(task_config.get("class") or "")
+                if not class_name:
+                    continue
+                steps.append(
+                    {
+                        "index": index,
+                        "key": task_key,
+                        "label": TaskCatalogService._label_for(class_name),
+                        "module": str(task_config.get("module") or ""),
+                        "class": class_name,
+                        "configured": True,
+                        "on_error": task_config.get("on_error"),
+                        "params": task_config.get("params", {})
+                        if isinstance(task_config.get("params"), dict)
+                        else {},
+                        "pipeline_version_id": str(row["pipeline_version_id"]),
+                        "pipeline_version_number": int(row["version_number"]),
+                        "pipeline_template_key": str(row["template_key"]),
+                        "pipeline_name": str(row["name"]),
+                    }
+                )
+        return steps
 
 
 def _secret_key(key: str) -> bool:

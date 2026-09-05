@@ -1,5 +1,6 @@
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -13,12 +14,22 @@ from modules.services.pipeline_config_service import (
 )
 from modules.services.pipeline_validation_service import (
     PipelineValidationService,
+    _dedupe_findings,
     _duplicate_warning_type,
     _iter_tasks,
 )
+import modules.services.pipeline_validation_service as validation_module
 from modules.services.task_catalog_service import TaskCatalogService, _is_json_safe
 from modules.services.task_registry_service import ApprovedTaskRegistry
 from test.helpers_sqlite import TempConfig
+
+
+def test_pipeline_validation_deduplicates_identical_findings():
+    finding = {"severity": "error", "code": "duplicate", "path": "tasks.x", "message": "bad"}
+    assert _dedupe_findings([finding, dict(finding), {**finding, "message": "other"}]) == [
+        finding,
+        {**finding, "message": "other"},
+    ]
 
 
 def test_task_catalog_static_edge_cases(tmp_path, monkeypatch):
@@ -366,3 +377,44 @@ def test_pipeline_config_normalization_and_helper_edges():
     used = {"task", "task_2"}
     assert _unique_key("task", used) == "task_3"
     assert _label_for_key("") == ""
+
+
+def test_pipeline_validation_remaining_defensive_and_schema_paths(monkeypatch, tmp_path):
+    config = TempConfig(tmp_path / "app.sqlite3", {})
+    service = PipelineValidationService(config)
+    findings = service._validate_review_gate(
+        {"tasks": {"review": {"class": "ReviewGateTask", "params": []}}}
+    )
+    assert findings[0]["code"] == "review-gate-params-not-mapping"
+    assert service._validate_pipeline_task_cardinality(
+        {"pipeline": [1, "bad"], "tasks": {"bad": "not a mapping"}}
+    ) == []
+    final_split = service._validate_split(
+        {
+            "pipeline": ["split"],
+            "tasks": {
+                "split": {
+                    "class": "LlamaCloudSplitTask",
+                    "module": "standard_step.split.llamacloud_split",
+                    "params": {"enabled": True, "split_dir": "split", "categories": []},
+                }
+            },
+        }
+    )
+    assert any(item["code"] == "split-final-pipeline-step" for item in final_split)
+
+    schema = Mock()
+    schema.load_schema.return_value = {"fields": {}}
+    schema.validate_schema.return_value = [{"path": "fields.x", "message": "bad"}]
+    monkeypatch.setattr(validation_module, "SchemaService", lambda config: schema)
+    schema_findings = service._validate_schema_references(
+        {"tasks": {"review": {"class": "ReviewGateTask", "params": {"schema_file": "x.yaml"}}}}
+    )
+    assert schema_findings[0]["code"] == "schema-invalid"
+
+    schema.list_schemas.return_value = [{"name": "missing.yaml"}, {"name": "bad.yaml"}]
+    schema.load_schema.side_effect = [None, {"fields": {}}]
+    schema.validate_schema.return_value = [{"path": "x", "message": "bad"}]
+    result = validation_module.validate_all_schemas(config)
+    assert result["valid"] is False
+    assert {item["code"] for item in result["findings"]} == {"schema-load-failed", "schema-invalid"}

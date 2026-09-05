@@ -28,15 +28,7 @@
     }
 
     function statusBadge(status) {
-        const normalized = String(status || "unknown").toLowerCase();
-        const badgeClass = normalized.includes("fail")
-            ? "badge-error"
-            : normalized.includes("complete") || normalized === "review_completed"
-                ? "badge-success"
-                : normalized.includes("review")
-                    ? "badge-warning"
-            : "badge-ghost";
-        return `<span class="badge badge-sm ${badgeClass}">${escapeHtml(titleCase(status))}</span>`;
+        return `<span class="badge badge-sm ${window.DocFlow.statusBadgeClass(status, "unknown")}">${escapeHtml(window.DocFlow.statusLabel(status, "unknown"))}</span>`;
     }
 
     function workflowState(batch) {

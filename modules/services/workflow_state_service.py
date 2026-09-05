@@ -5,7 +5,24 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from modules.db.repositories import DocumentRepository, TaskRunRepository
+from modules.db.connection import transaction, utc_now
+from modules.db.repositories import AuditRepository, DocumentRepository, TaskRunRepository
+
+
+DOCUMENT_STATUS_VALUES = {
+    "pending",
+    "received",
+    "queued",
+    "processing",
+    "in_review",
+    "review_required",
+    "review_completed",
+    "split_completed",
+    "completed",
+    "completed_with_errors",
+    "failed",
+    "cancelled",
+}
 
 
 class WorkflowStateService:
@@ -22,6 +39,54 @@ class WorkflowStateService:
         self.pipeline_version_id = pipeline_version_id
         self.documents = DocumentRepository(conn)
         self.task_runs = TaskRunRepository(conn)
+        self.audit = AuditRepository(conn)
+
+    def transition_document(
+        self,
+        document_id: str,
+        status: str,
+        *,
+        reason: str | None = None,
+        user: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist one document transition and its audit event atomically."""
+        normalized = str(status or "").strip().lower()
+        if normalized not in DOCUMENT_STATUS_VALUES:
+            raise ValueError(f"Unsupported document status: {status}")
+        document = self.documents.get(document_id)
+        if document is None:
+            raise ValueError("Document does not exist.")
+        previous = str(document.get("status") or "").lower()
+        if previous == normalized:
+            return document
+        with transaction(self.conn):
+            cursor = self.conn.execute(
+                "UPDATE documents SET status = ?, updated_at = ? WHERE id = ?",
+                (normalized, utc_now(), document_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Document status update failed.")
+            self.audit.append_uncommitted(
+                event_type="document.status_changed",
+                event={
+                    "from": previous or None,
+                    "to": normalized,
+                    "reason": reason,
+                },
+                batch_id=str(document.get("batch_id")) if document.get("batch_id") else None,
+                document_id=document_id,
+                user=user,
+            )
+        updated = self.documents.get(document_id)
+        return updated or {**document, "status": normalized}
+
+    def status_history(self, document_id: str) -> list[dict[str, Any]]:
+        """Return the persisted document status transition history."""
+        return [
+            event
+            for event in self.audit.list_for_document(document_id)
+            if event.get("event_type") == "document.status_changed"
+        ]
 
     def start_task(
         self,
@@ -96,7 +161,7 @@ class WorkflowStateService:
 
     def pause_document(self, document_id: str, *, status: str = "review_required") -> None:
         """Pause a document for app-level human review."""
-        self.documents.update_status(document_id, status)
+        self.transition_document(document_id, status, reason="human_review")
 
     def is_paused(self, document_id: str) -> bool:
         """Return True when document is in a paused review state."""

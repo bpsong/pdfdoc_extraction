@@ -152,9 +152,15 @@ def test_batch_upload_api_creates_one_batch_for_multiple_pdfs(tmp_path, monkeypa
     assert {document["id"] for document in documents} == set(payload["document_ids"])
     assert len(source_files) == 2
     assert all(Path(document["file_path"]).exists() for document in documents)
-    assert len(workflow.calls) == 2
-    assert {call["batch_id"] for call in workflow.calls} == {payload["batch_id"]}
-    assert {call["document_id"] for call in workflow.calls} == set(payload["document_ids"])
+    assert workflow.calls == []
+    with connect(config) as conn:
+        jobs = conn.execute(
+            "SELECT * FROM processing_jobs WHERE batch_id = ? ORDER BY created_at",
+            (payload["batch_id"],),
+        ).fetchall()
+    assert len(jobs) == 2
+    assert {job["document_id"] for job in jobs} == set(payload["document_ids"])
+    assert {job["status"] for job in jobs} == {"queued"}
 
 
 def test_batch_upload_api_rejects_cookie_auth_without_csrf_token(tmp_path, monkeypatch):

@@ -60,6 +60,13 @@ params:
   ollama_host: http://127.0.0.1:11434
   model: glm-ocr:latest
   document_instructions: ""
+  prompt_style: detailed
+  resolution_mode: document
+  resolver_model: qwen3.5:9b-q4_K_M
+  resolver_max_dimension: 1280
+  resolver_num_ctx: 18000
+  resolver_num_predict: 10000
+  resolver_max_attempts: 2
   dpi: 216
   num_ctx: 8192
   num_predict: 2048
@@ -70,6 +77,12 @@ params:
 Rules:
 
 - `fields` uses the existing extraction field contract.
+- `resolution_mode: document` enables complete-document scalar/object
+  resolution and table reconciliation. Published definitions that omit this
+  parameter retain the legacy `page_merge` behavior.
+- `resolver_model` is required in document mode. Resolver context and output
+  limits are independently configurable; `resolver_num_ctx` defaults to
+  `18000` and `resolver_num_predict` defaults to `10000`.
 - Scalar, scalar-array, flat object, and one array-of-objects table are supported.
 - Field keys become JSON and context keys.
 - Aliases and descriptions guide the prompt but do not replace field keys.

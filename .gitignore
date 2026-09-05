@@ -59,6 +59,7 @@ test/files/
 output/playwright/
 tmp/
 experimenta/results/
+experimentb/llama-extract-sample_invoice.json
 node_modules/
 
 # Standard Python ignores

@@ -7,6 +7,7 @@
         reviewItem: null,
         metadata: {},
         document: null,
+        extraction: null,
         fields: [],
         fieldsByKey: new Map(),
         schemaFields: [],
@@ -15,6 +16,7 @@
         lock: null,
         sourceValueMode: "review",
         sourceValueReveals: new Set(),
+        pdfViewer: null,
     };
 
     const elements = {};
@@ -26,6 +28,7 @@
         elements.pdfBody = document.getElementById("review-pdf-body");
         elements.pdfOpenLink = document.getElementById("review-pdf-open-link");
         elements.itemBadge = document.getElementById("review-item-badge");
+        elements.providerBadge = document.getElementById("review-provider-badge");
         elements.statusBadge = document.getElementById("review-status-badge");
         elements.reasonSummary = document.getElementById("review-reason-summary");
         elements.fieldsContainer = document.getElementById("review-fields-container");
@@ -126,18 +129,33 @@
     function renderPdfPreview() {
         const documentPayload = state.document || {};
         const filename = documentPayload.filename || documentPayload.original_filename || "Document";
+        if (state.pdfViewer) {
+            state.pdfViewer.destroy();
+            state.pdfViewer = null;
+        }
         if (documentPayload.preview_url) {
             elements.pdfOpenLink.href = documentPayload.preview_url;
             elements.pdfOpenLink.classList.remove("hidden");
-            window.DocFlowPdfViewer.renderIframeFallback(
+            state.pdfViewer = window.DocFlowPdfViewer.mount(
                 elements.pdfBody,
-                documentPayload.preview_url,
-                filename,
+                { url: documentPayload.preview_url, title: `${filename} source PDF` },
             );
         } else {
             elements.pdfOpenLink.classList.add("hidden");
-            window.DocFlowPdfViewer.renderIframeFallback(elements.pdfBody, null, filename);
+            elements.pdfBody.innerHTML = '<div class="empty-panel">Source PDF unavailable</div>';
         }
+    }
+
+    function selectPdfField(pathParts, field) {
+        if (!state.pdfViewer) {
+            return;
+        }
+        state.pdfViewer.selectField(
+            pathString(pathParts),
+            fieldForPath(pathParts) || field,
+            pathParts,
+            fieldLabel(field),
+        );
     }
 
     function valueFromField(field, preferredKey) {
@@ -434,21 +452,13 @@
     }
 
     function statusBadge(status) {
-        const normalized = String(status || "pending").toLowerCase();
-        const badgeClass = normalized === "completed"
-            ? "badge-success"
-            : normalized === "in_review"
-                ? "badge-info"
-                : normalized === "pending"
-                    ? "badge-warning"
-                    : "badge-ghost";
-        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(titleCase(normalized))}</span>`;
+        return `<span class="badge ${window.DocFlow.statusBadgeClass(status, "pending")} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "pending"))}</span>`;
     }
 
     function confidenceBadge(field) {
         const confidence = field && field.confidence;
         if (confidence === null || confidence === undefined || confidence === "") {
-            return '<span class="badge badge-ghost badge-sm">Missing</span>';
+            return '<span class="badge badge-ghost badge-sm">Missing confidence</span>';
         }
         const numeric = Number(confidence);
         const badgeClass = Number.isNaN(numeric)
@@ -459,7 +469,8 @@
                     ? "badge-warning"
                     : "badge-success";
         const text = Number.isNaN(numeric) ? String(confidence) : `${Math.round(numeric * 100)}%`;
-        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(text)}</span>`;
+        const band = Number.isNaN(numeric) ? "Unknown" : numeric < 0.7 ? "Low" : numeric < 0.9 ? "Medium" : "High";
+        return `<span class="badge ${badgeClass} badge-sm">${band} confidence · ${escapeHtml(text)}</span>`;
     }
 
     function hasOwnLock() {
@@ -661,6 +672,15 @@
             documentPayload.status ? titleCase(documentPayload.status) : "",
         ].filter(Boolean).join(" - ");
         elements.itemBadge.textContent = state.reviewItemId;
+        if (elements.providerBadge) {
+            const provider = state.extraction && state.extraction.provider;
+            elements.providerBadge.textContent = provider === "glm_ocr_ollama"
+                ? "GLM-OCR"
+                : provider === "llamacloud_extract_v2"
+                    ? "LlamaCloud Extract"
+                    : provider || "Provider unavailable";
+            elements.providerBadge.classList.remove("hidden");
+        }
         elements.statusBadge.innerHTML = statusBadge(state.reviewItem && state.reviewItem.status);
         elements.statusBadge.classList.remove("hidden");
 
@@ -784,6 +804,7 @@
         row.dataset.fieldPath = pathString(pathParts);
         row.classList.toggle("highlight", isHighlighted(pathParts));
         row.classList.toggle("locked", !editable);
+        row.addEventListener("click", () => selectPdfField(pathParts, field));
 
         const labelCell = createElement("div", "review-field-label");
         const labelLine = createElement("div", "review-label-line");
@@ -813,6 +834,7 @@
         row.appendChild(renderScalarInput(field, pathParts, value, editable));
         row.addEventListener("input", () => updateSourceVisibility(row, pathParts, fieldInfo, extracted));
         row.addEventListener("change", () => updateSourceVisibility(row, pathParts, fieldInfo, extracted));
+        row.querySelector("input, textarea, select")?.addEventListener("focus", () => selectPdfField(pathParts, field));
         updateSourceVisibility(row, pathParts, fieldInfo, extracted);
         container.appendChild(row);
     }
@@ -827,6 +849,7 @@
         const title = createElement("div", "review-label-line");
         appendFieldLabelContent(title, field);
         appendConfidenceBadge(title, confidenceInfoForPath(pathParts));
+        header.addEventListener("click", () => selectPdfField(pathParts, field));
         header.appendChild(title);
         group.appendChild(header);
 
@@ -838,6 +861,7 @@
             textarea.value = JSON.stringify(getByPath(state.values, pathParts) || {}, null, 2);
             textarea.disabled = !canEditPath(pathParts);
             textarea.classList.add("review-json-editor");
+            textarea.addEventListener("focus", () => selectPdfField(pathParts, field));
             textarea.addEventListener("input", () => {
                 try {
                     setByPath(state.values, pathParts, JSON.parse(textarea.value || "{}"));
@@ -1012,6 +1036,10 @@
             }
             renderField(field, [field.key], elements.fieldsContainer);
         });
+        const preferredField = state.schemaFields.find((field) => isHighlighted([field.key])) || state.schemaFields[0];
+        if (preferredField) {
+            selectPdfField([preferredField.key], preferredField);
+        }
     }
 
     function collectCorrections() {
@@ -1048,6 +1076,7 @@
         state.reviewItem = payload.review_item || {};
         state.metadata = payload.metadata || state.reviewItem.metadata || {};
         state.document = payload.document || null;
+        state.extraction = payload.extraction || null;
         state.lock = payload.lock || null;
         initializeValues(payload);
         renderHeader();

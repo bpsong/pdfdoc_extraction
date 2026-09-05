@@ -19,6 +19,7 @@ from modules.db.repositories import (
 )
 from modules.services.schema_service import SchemaService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
+from modules.services.workflow_state_service import WorkflowStateService
 
 
 class ReviewServiceError(ValueError):
@@ -41,6 +42,7 @@ class ReviewService:
         self.extractions = ExtractionRepository(conn)
         self.task_runs = TaskRunRepository(conn)
         self.audit = AuditRepository(conn)
+        self.state = WorkflowStateService(conn)
 
     def list_items(self, *, status: str | None = None, queue_name: str | None = None) -> list[dict[str, Any]]:
         """List review queue items."""
@@ -57,10 +59,18 @@ class ReviewService:
         document_id = str(item["document_id"])
         metadata = json_loads(item.get("metadata_json"), {})
         document = self.documents.get(document_id)
+        latest_result = self.extractions.get_latest_result(document_id)
         return {
             "review_item": self._review_item_payload(item),
             "metadata": metadata,
             "document": self._document_payload(document),
+            "extraction": {
+                "provider": latest_result.get("provider"),
+                "provider_job_id": latest_result.get("provider_job_id"),
+                "created_at": latest_result.get("created_at"),
+            }
+            if latest_result
+            else None,
             "fields": [self._field_payload(field) for field in self.extractions.get_fields(document_id)],
             "lock": self.reviews.get_lock(review_item_id),
             "schema": self._schema_payload(
@@ -166,7 +176,9 @@ class ReviewService:
             )
         except ReviewLockConflictError as exc:
             raise ReviewServiceError(str(exc)) from exc
-        self.documents.update_status(str(item["document_id"]), "in_review")
+        self.state.transition_document(
+            str(item["document_id"]), "in_review", reason="review_claimed", user=user
+        )
         self.audit.append(
             event_type="review_claimed",
             event={"locked_by": user},
@@ -185,7 +197,9 @@ class ReviewService:
         if lock and lock.get("locked_by") != user:
             raise ReviewServiceError("Review item is locked by another operator.")
         self.reviews.release(review_item_id)
-        self.documents.update_status(str(item["document_id"]), "review_required")
+        self.state.transition_document(
+            str(item["document_id"]), "review_required", reason="review_released", user=user
+        )
         self.audit.append(
             event_type="review_released",
             event={"released_by": user},
@@ -268,7 +282,9 @@ class ReviewService:
         self.reviews.update_metadata(review_item_id, metadata)
         self.reviews.complete(review_item_id, user)
         self._complete_review_task_run(item, metadata)
-        self.documents.update_status(document_id, "review_completed")
+        self.state.transition_document(
+            document_id, "review_completed", reason="review_completed", user=user
+        )
         self.audit.append(
             event_type="review_completed",
             event={"field_keys": sorted(corrections.keys()), "diff": diff},

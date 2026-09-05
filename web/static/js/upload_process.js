@@ -16,6 +16,10 @@
     const startButton = document.getElementById("start-processing-button");
     const uploadAlert = document.getElementById("upload-alert");
     const uploadStatus = document.getElementById("upload-status");
+    const uploadProgressRegion = document.getElementById("upload-progress-region");
+    const uploadProgressBar = document.getElementById("upload-progress-bar");
+    const uploadProgressLabel = document.getElementById("upload-progress-label");
+    const cancelUploadButton = document.getElementById("cancel-upload-button");
     const pipelineList = document.getElementById("pipeline-version-list");
     const pipelineAlert = document.getElementById("pipeline-selection-alert");
     const pipelineRefresh = document.getElementById("pipeline-selection-refresh");
@@ -23,6 +27,8 @@
     let availablePipelines = [];
     let selectedPipelineVersionId = "";
     let uploading = false;
+    let activeUploadXhr = null;
+    let lastAnnouncedUploadMilestone = -1;
 
     function escapeHtml(value) {
         return String(value)
@@ -67,6 +73,79 @@
         }
         uploadAlert.textContent = message || "";
         uploadAlert.classList.toggle("hidden", !message);
+    }
+
+    function updateUploadProgress(loaded, total) {
+        const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+        uploadProgressBar.value = percent;
+        uploadProgressLabel.textContent = `${percent}%`;
+        const milestone = Math.floor(percent / 25) * 25;
+        if (milestone > lastAnnouncedUploadMilestone && uploadStatus) {
+            uploadStatus.textContent = `Uploading batch... ${percent}%`;
+            lastAnnouncedUploadMilestone = milestone;
+        }
+    }
+
+    function uploadBatchRequest(formData) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            activeUploadXhr = xhr;
+            const clearActiveRequest = () => {
+                if (activeUploadXhr === xhr) {
+                    activeUploadXhr = null;
+                }
+            };
+            xhr.open("POST", "/api/batches/upload");
+            xhr.withCredentials = true;
+            xhr.setRequestHeader("Accept", "application/json");
+            const csrfHeaders = window.DocFlow ? window.DocFlow.csrfHeaders("POST") : {};
+            Object.entries(csrfHeaders).forEach(([name, value]) => xhr.setRequestHeader(name, value));
+            xhr.upload.addEventListener("progress", (event) => {
+                if (event.lengthComputable) {
+                    updateUploadProgress(event.loaded, event.total);
+                }
+            });
+            xhr.addEventListener("load", () => {
+                clearActiveRequest();
+                let payload = null;
+                try {
+                    payload = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+                } catch (error) {
+                    payload = null;
+                }
+                if (xhr.status === 401) {
+                    window.location.href = "/login";
+                    resolve(null);
+                    return;
+                }
+                if (xhr.status < 200 || xhr.status >= 300) {
+                    const detail = payload && payload.detail ? payload.detail : xhr.statusText;
+                    const message = typeof detail === "string" ? detail : detail && detail.message || "Upload failed";
+                    const requestError = new Error(message);
+                    requestError.status = xhr.status;
+                    reject(requestError);
+                    return;
+                }
+                resolve(payload);
+            });
+            xhr.addEventListener("error", () => {
+                clearActiveRequest();
+                reject(new Error("Upload failed: network error"));
+            });
+            xhr.addEventListener("abort", () => {
+                clearActiveRequest();
+                const error = new Error("Upload was cancelled");
+                error.name = "AbortError";
+                reject(error);
+            });
+            xhr.send(formData);
+        });
+    }
+
+    function cancelUpload() {
+        if (activeUploadXhr) {
+            activeUploadXhr.abort();
+        }
     }
 
     function setPipelineAlert(message) {
@@ -195,46 +274,38 @@
         uploading = true;
         startButton.disabled = true;
         startButton.classList.add("loading");
-        uploadStatus.textContent = "Uploading batch...";
+        cancelUploadButton.classList.remove("hidden");
+        cancelUploadButton.disabled = false;
+        lastAnnouncedUploadMilestone = -1;
+        uploadProgressRegion.classList.remove("hidden");
+        uploadProgressRegion.setAttribute("aria-busy", "true");
+        updateUploadProgress(0, 1);
         setAlert("");
 
         try {
-            const response = await fetch("/api/batches/upload", {
-                method: "POST",
-                credentials: "same-origin",
-                headers: window.DocFlow ? window.DocFlow.csrfHeaders("POST") : {},
-                body: formData,
-            });
-            if (response.status === 401) {
-                window.location.href = "/login";
+            const payload = await uploadBatchRequest(formData);
+            if (!payload) {
                 return;
             }
-            if (!response.ok) {
-                let detail = response.statusText;
-                try {
-                    const payload = await response.json();
-                    detail = payload.detail || detail;
-                } catch (error) {
-                    detail = response.statusText;
-                }
-                const requestError = new Error(typeof detail === "string" ? detail : detail.message || "Upload failed");
-                requestError.status = response.status;
-                throw requestError;
-            }
-            const payload = await response.json();
+            updateUploadProgress(1, 1);
+            uploadStatus.textContent = "Upload complete. Starting processing...";
             window.location.href = `/app/batches/${encodeURIComponent(payload.batch_id)}`;
         } catch (error) {
             uploading = false;
             startButton.classList.remove("loading");
             startButton.disabled = false;
-            uploadStatus.textContent = "";
-            setAlert(error.message || "Upload failed");
+            cancelUploadButton.classList.add("hidden");
+            cancelUploadButton.disabled = true;
+            uploadProgressRegion.setAttribute("aria-busy", "false");
+            const cancelled = error.name === "AbortError";
+            uploadStatus.textContent = cancelled ? "Upload cancelled." : "Upload failed.";
+            setAlert(cancelled ? "" : error.message || "Upload failed");
             if ([400, 403, 409].includes(error.status)) {
                 selectedPipelineVersionId = "";
                 await loadPipelines();
                 setPipelineAlert("The selected version is no longer eligible. Choose again from the refreshed list.");
             }
-            if (window.DocFlow) {
+            if (window.DocFlow && !cancelled) {
                 window.DocFlow.showToast(error.message || "Upload failed", "error");
             }
         }
@@ -281,12 +352,22 @@
         handleFileSelection(event.dataTransfer.files);
     });
 
+    dropZone.addEventListener("keydown", (event) => {
+        if (uploading || !["Enter", " "].includes(event.key)) {
+            return;
+        }
+        event.preventDefault();
+        fileInput.click();
+    });
+
     startButton.addEventListener("click", uploadBatch);
+    cancelUploadButton.addEventListener("click", cancelUpload);
 
     window.UploadProcess = {
         handleFileSelection,
         renderSelectedFiles,
         uploadBatch,
+        cancelUpload,
         loadPipelines,
     };
     loadPipelines().catch((error) => {

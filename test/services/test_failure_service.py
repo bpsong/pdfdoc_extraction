@@ -1,4 +1,5 @@
 from modules.db.connection import connect
+from unittest.mock import Mock
 from modules.db.migrations import initialize_database
 from modules.db.repositories import DocumentRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
@@ -173,3 +174,63 @@ def test_failure_service_groups_repeated_split_child_extract_failures(tmp_path):
     assert detail["source_preview_url"].endswith(f"/api/documents/{created['document']['id']}/file/pdf")
     assert detail["split_segment"]["pages"] == [1]
     assert len(detail["related_failures"]) == 2
+
+
+def test_failure_service_defensive_payload_and_grouping_branches():
+    service = FailureService.__new__(FailureService)
+    service.documents = Mock()
+    service.task_runs = Mock()
+
+    service.documents.get.return_value = None
+    assert service.get_failure("missing") is None
+    service.documents.get.return_value = {"id": "doc"}
+    service.task_runs.list_by_document.return_value = [{"status": "completed"}]
+    assert service.get_failure("doc") is None
+    assert service._source_document(None) is None
+    service.documents.get.return_value = {
+        "id": "doc",
+        "batch_id": "batch",
+        "file_path": "doc.pdf",
+        "metadata_json": "[]",
+    }
+    service.task_runs.list_by_document.return_value = [
+        {"status": "failed", "error": "failed", "ended_at": "2026-01-01"}
+    ]
+    service.documents.list_files.return_value = []
+    assert service.get_failure("doc")["metadata"] == {}
+
+    row = {
+        "id": "child-1",
+        "parent_document_id": "root",
+        "failed_task_key": "extract_document_data",
+        "failed_task_run_id": "run-1",
+        "failed_error": "same failure",
+        "failure_at": "2026-01-01",
+        "metadata_json": "[]",
+    }
+    newer = dict(row, id="child-2", failure_at="2026-01-02", extra="new")
+    grouped = service._group_failure_rows([row, newer])
+    assert grouped[0]["extra"] == "new"
+    assert service._split_segment_payload(dict(row, metadata_json="[]"))["pages"] == []
+
+    service.documents.list_children.return_value = [
+        {"id": "skip-status", "parent_document_id": "root"},
+        {"id": "skip-task", "parent_document_id": "root"},
+        {"id": "skip-message", "parent_document_id": "root"},
+    ]
+    service.task_runs.list_by_document.side_effect = [
+        [{"status": "completed"}],
+        [{"status": "failed", "task_key": "other", "error": "same failure"}],
+        [{"status": "failed", "task_key": "extract_document_data", "error": "different"}],
+    ]
+    failed_run = {"task_key": "extract_document_data", "error": "same failure"}
+    assert service._related_group_failures(row, failed_run) == []
+
+    document = dict(row, metadata_json="[]")
+    fallback = service._failure_detail(document, {"error": "failed"})
+    assert fallback["failure_type"] == "task_failed"
+    metadata_fatal = service._failure_detail(
+        dict(row, metadata_json='{"fatal_failure":{"message":"from metadata"}}'),
+        {"error": "failed", "output_json": "{}"},
+    )
+    assert metadata_fatal["message"] == "from metadata"

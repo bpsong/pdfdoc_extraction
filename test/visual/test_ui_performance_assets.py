@@ -20,7 +20,7 @@ def test_failure_notifications_are_cached_between_page_navigations() -> None:
     assert "Date.now() - cached.cachedAt < FAILURE_NOTIFICATION_CACHE_TTL_MS" in app_source
     assert "writeFailureNotificationCache(count)" in app_source
     assert "refreshFailureNotifications({ force: true })" in processing_source
-    assert "app.js?v=ui-performance-notification-cache" in base_template
+    assert "app.js?v=ui-operator-feedback-layout" in base_template
 
 
 def test_admin_dashboard_renders_independent_requests_as_they_complete() -> None:
@@ -55,3 +55,83 @@ def test_named_schema_route_resolves_to_versioned_template_identity() -> None:
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
     assert "/api/admin/review-schemas/${encodeURIComponent(templateId)}" in source
     assert "schema_editor.js?v=ui-clarity-1" in template
+
+
+def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:
+    """Keep the operator feedback regions and upload progress contract visible."""
+
+    base_template = (ROOT / "web/templates/app_base.html").read_text(encoding="utf-8")
+    processing_template = (
+        ROOT / "web/templates/processing_overview.html"
+    ).read_text(encoding="utf-8")
+    review_template = (ROOT / "web/templates/review_queue.html").read_text(
+        encoding="utf-8"
+    )
+    upload_template = (ROOT / "web/templates/upload_process.html").read_text(
+        encoding="utf-8"
+    )
+    processing_source = (
+        ROOT / "web/static/js/processing_overview.js"
+    ).read_text(encoding="utf-8")
+    review_source = (ROOT / "web/static/js/review_queue.js").read_text(encoding="utf-8")
+    upload_source = (ROOT / "web/static/js/upload_process.js").read_text(encoding="utf-8")
+    extraction_source = (
+        ROOT / "web/static/js/extraction_results.js"
+    ).read_text(encoding="utf-8")
+    human_review_source = (
+        ROOT / "web/static/js/human_review.js"
+    ).read_text(encoding="utf-8")
+
+    assert 'id="app-announcement-region"' in base_template
+    assert 'role="status"' in base_template
+    assert 'id="processing-progress-region"' in processing_template
+    assert 'id="processing-table-body"' in processing_template
+    assert 'aria-busy="true"' in processing_template
+    assert "announceProcessingChanges(states)" in processing_source
+    assert 'id="review-queue-region"' in review_template
+    assert "announceReviewChanges(state.items, nextItems)" in review_source
+    assert "confidence ·" in review_source
+    assert "confidence ·" in extraction_source
+    assert "confidence ·" in human_review_source
+    assert 'id="upload-progress-bar"' in upload_template
+    assert 'role="status"' in upload_template
+    assert 'xhr.open("POST", "/api/batches/upload")' in upload_source
+    assert "xhr.upload.addEventListener(\"progress\"" in upload_source
+
+
+def test_operator_help_retry_keyboard_and_table_polish_are_present() -> None:
+    """Protect the low-risk operator affordances and scoped layout treatment."""
+
+    app_source = (ROOT / "web/static/js/app.js").read_text(encoding="utf-8")
+    upload_source = (ROOT / "web/static/js/upload_process.js").read_text(encoding="utf-8")
+    review_source = (ROOT / "web/static/js/review_queue.js").read_text(encoding="utf-8")
+    processing_source = (
+        ROOT / "web/static/js/processing_overview.js"
+    ).read_text(encoding="utf-8")
+    upload_template = (ROOT / "web/templates/upload_process.html").read_text(encoding="utf-8")
+    review_template = (ROOT / "web/templates/review_queue.html").read_text(encoding="utf-8")
+    processing_template = (
+        ROOT / "web/templates/processing_overview.html"
+    ).read_text(encoding="utf-8")
+    extraction_template = (
+        ROOT / "web/templates/extraction_results.html"
+    ).read_text(encoding="utf-8")
+    css_source = (ROOT / "web/static/css/app.css").read_text(encoding="utf-8")
+
+    assert "statusBadgeClass" in app_source
+    assert "tableSkeletonRows" in app_source
+    assert 'role="button"' in upload_template
+    assert 'id="cancel-upload-button"' in upload_template
+    assert 'dropZone.addEventListener("keydown"' in upload_source
+    assert 'error.name = "AbortError"' in upload_source
+    assert "data-review-retry" in review_source
+    assert "data-processing-retry" in processing_source
+    assert "app-filter-bar" in review_template
+    assert "app-queue-table-region" in review_template
+    assert "app-queue-table-region" in processing_template
+    assert "table-zebra app-queue-table" in review_template
+    assert "table-zebra app-queue-table" in processing_template
+    assert "context-help" in upload_template
+    assert "context-help" in extraction_template
+    assert ".app-queue-table thead th" in css_source
+    assert ".placeholder-row" in css_source

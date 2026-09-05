@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PDF.js citation viewer experiment</title>
+    <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+    <header class="topbar">
+        <div>
+            <p class="eyebrow">PDF extraction experiment B</p>
+            <h1>Review with source citations</h1>
+            <p class="subtitle">Focus an extracted value to reveal its location in the original PDF.</p>
+        </div>
+        <div class="topbar-meta">
+            <span class="status-dot"></span>
+            <span>Standalone viewer</span>
+        </div>
+    </header>
+
+    <main class="workspace">
+        <section class="viewer-panel panel" aria-label="PDF viewer">
+            <div class="panel-heading viewer-heading">
+                <div>
+                    <p class="section-kicker">Source document</p>
+                    <h2 id="document-name">Loading PDF…</h2>
+                </div>
+                <div class="viewer-tools">
+                    <span class="page-readout" id="page-readout">Page —</span>
+                    <button class="icon-button" id="zoom-out" type="button" aria-label="Zoom out">−</button>
+                    <span class="zoom-readout" id="zoom-readout">—%</span>
+                    <button class="icon-button" id="zoom-in" type="button" aria-label="Zoom in">+</button>
+                    <button class="reset-button" id="zoom-reset" type="button">Fit width</button>
+                    <button class="reset-button" id="center-citation" type="button">Center citation</button>
+                </div>
+            </div>
+            <div class="viewer-status" id="viewer-status" role="status">Loading PDF.js and source document…</div>
+            <div class="pdf-scroll" id="pdf-scroll">
+                <div class="pdf-page" id="pdf-page" aria-label="Rendered PDF page">
+                    <canvas id="pdf-canvas"></canvas>
+                    <div class="highlight-layer" id="highlight-layer" aria-hidden="true"></div>
+                </div>
+            </div>
+        </section>
+
+        <aside class="fields-panel panel" aria-label="Extracted fields">
+            <div class="panel-heading fields-heading">
+                <div>
+                    <p class="section-kicker">Review editor</p>
+                    <h2>Extracted fields</h2>
+                </div>
+                <span class="field-count" id="field-count">—</span>
+            </div>
+            <div class="selection-note" id="selection-note">
+                <span class="selection-marker"></span>
+                <span>Click a field to locate it in the document.</span>
+            </div>
+            <div class="fields-list" id="fields-list">
+                <div class="loading-card">Loading extraction result…</div>
+            </div>
+            <div class="legend">
+                <span class="legend-box"></span>
+                <span>Selected source location</span>
+            </div>
+        </aside>
+    </main>
+
+    <template id="field-template">
+        <article class="field-card">
+            <div class="field-card-topline">
+                <label class="field-label"></label>
+                <span class="confidence-badge"></span>
+            </div>
+            <textarea class="field-input" rows="1"></textarea>
+            <div class="field-card-footer">
+                <span class="location-badge"></span>
+                <span class="field-key"></span>
+            </div>
+        </article>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>

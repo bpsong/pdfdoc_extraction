@@ -1,8 +1,10 @@
 from pathlib import Path
 import random
+import runpy
 import time
 from typing import Any
 from unittest.mock import Mock
+import builtins
 
 import pytest
 
@@ -154,6 +156,35 @@ def test_table_processing_skips_invalid_and_empty_items(tmp_path):
         "Items",
         field_config,
     ) == [{"quantity": 2}]
+
+
+def test_extract_run_and_object_field_defensive_branches(tmp_path):
+    task = _task(tmp_path)
+    with pytest.raises(TaskError, match="File path not provided"):
+        task.run({"file_path": None})
+    task.validate_required_fields = Mock()
+    with pytest.raises(TaskError, match="File path is None"):
+        task.run({"file_path": None})
+    assert task._process_scalar_field("not-an-object", {"type": "Dict[str, Any]", "object_fields": {}}) == "not-an-object"
+    assert task._process_configured_object(
+        {"value": "x"}, {"bad": "not-a-config", "missing": {"alias": "Missing"}}
+    ) == {}
+
+
+def test_extract_pdf_logging_fallback_import(tmp_path, monkeypatch):
+    original_import = builtins.__import__
+
+    def missing_logging_config(name, *args, **kwargs):
+        if name == "modules.logging_config":
+            raise ImportError("logging config unavailable")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", missing_logging_config)
+    namespace = runpy.run_path(
+        str(Path(__file__).parents[2] / "standard_step" / "extraction" / "extract_pdf.py"),
+        run_name="extract_pdf_fallback_test",
+    )
+    assert namespace["get_logger"]("fallback").name == "fallback"
 
 
 def test_structured_object_processing_normalizes_child_keys_and_types(tmp_path):

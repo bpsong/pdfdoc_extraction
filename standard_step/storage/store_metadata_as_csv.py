@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from modules.base_task import BaseTask
-from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
+from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
 from modules.services.artifact_service import register_document_artifact
 from modules.utils import (
@@ -63,12 +63,6 @@ class StoreMetadataAsCsv(BaseTask):
         self.data_dir_template = storage_cfg.get("data_dir") or self.params.get("data_dir")
         self.filename_template = storage_cfg.get("filename") or self.params.get("filename")
 
-        # If not found in params, try to get from config_manager (try both direct keys and nested paths)
-        if not self.data_dir_template:
-            self.data_dir_template = self.config_manager.get("data_dir")
-        if not self.filename_template:
-            self.filename_template = self.config_manager.get("filename")
-
         # Extraction fields config, if present: mapping of workflow field key -> config.
         extraction_params = self.params.get("extraction")
         self._extraction_fields_from_params = (
@@ -81,22 +75,10 @@ class StoreMetadataAsCsv(BaseTask):
             else {}
         )
 
-        # If not found in params, try to get from config_manager
+        # Extraction fields are pipeline-owned and must be supplied in this
+        # task's published params.
         if not self.extraction_fields:
-            # Try direct extraction config first
-            extraction_config = self.config_manager.get("extraction")
-            if extraction_config and isinstance(extraction_config, dict):
-                self.extraction_fields = extraction_config.get("fields", {})
-            else:
-                # Fallback: locate extraction.fields config from known extraction task keys.
-                tasks_config = get_all_config(self.config_manager).get("tasks", {})
-                extract_task_def = (
-                    tasks_config.get("extract_document_data")
-                    or tasks_config.get("extract_document")
-                    or {}
-                )
-                extraction_params = extract_task_def.get("params", {}) if isinstance(extract_task_def, dict) else {}
-                self.extraction_fields = extraction_params.get("fields", {})
+            self.extraction_fields = {}
 
         # Initialize logger
         self.logger = logging.getLogger(__name__)

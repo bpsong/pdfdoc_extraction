@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
@@ -264,3 +265,43 @@ def test_fan_in_audit_event_is_idempotent(tmp_path):
     event_payload = json_loads(audit_events[0]["event_json"], {})
     assert event_payload["total_leaves"] == 1
     assert event_payload["completed_leaves"] == 1
+
+
+def test_fan_in_defensive_context_and_metadata_paths():
+    service = FanInService.__new__(FanInService)
+    service.conn = Mock()
+    service.documents = Mock()
+    assert service.finalize_leaf({"pipeline_state": "fan_out"}) is None
+    assert service.finalize_leaf({}) is None
+
+    service._get_document = Mock(return_value=None)
+    assert service.finalize_leaf({"document_id": "missing"}) is None
+    service._get_document.return_value = {"id": "parent", "batch_id": "batch"}
+    service._has_children = Mock(return_value=True)
+    assert service.finalize_leaf({"document_id": "parent"}) is None
+
+    service._has_children.return_value = False
+    service._root_document = Mock(return_value=None)
+    service._leaf_descendants = Mock(return_value=[])
+    service._batch_leaves = Mock(return_value=[])
+    service._update_document_status = Mock()
+    service._update_batch_counts = Mock()
+    service._append_fan_in_completed_once = Mock()
+    result = service.finalize_leaf({"document_id": "parent"})
+    assert result is not None and result.root_status == "completed"
+    assert result.batch_status == "pending"
+
+    service._root_document = FanInService._root_document.__get__(service, FanInService)
+    cycle = {"id": "a", "parent_document_id": "x"}
+    service._get_document = Mock(side_effect=[{"id": "x", "parent_document_id": "x"}])
+    assert service._root_document(cycle)["id"] == "x"
+    service._get_document = Mock(return_value=None)
+    assert service._root_document(cycle)["id"] == "a"
+    assert service._summarize_leaves([])["status"] == "pending"
+
+    service._update_failure_metadata("doc", {})
+    service._get_document.return_value = {"metadata_json": "[]"}
+    service._update_failure_metadata("doc", {"error": "boom"})
+
+    service._get_document.return_value = None
+    service._update_failure_metadata("missing", {"error": "boom"})
