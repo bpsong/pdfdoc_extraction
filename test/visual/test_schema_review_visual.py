@@ -901,6 +901,82 @@ def test_phase14_upload_selection_validation_and_success(
     page.locator("#pipeline-assignment-summary strong").wait_for()
 
 
+def test_upload_cancellation_visual_feedback(
+    page: Page, visual_app: dict[str, str]
+) -> None:
+    """Verify an in-flight browser upload can be cancelled visibly."""
+    page.add_init_script(
+        """
+        class PendingUploadRequest extends EventTarget {
+            constructor() {
+                super();
+                this.upload = new EventTarget();
+                this.status = 0;
+                this.responseText = "";
+            }
+            open() {}
+            setRequestHeader() {}
+            getResponseHeader() { return null; }
+            send() {}
+            abort() { this.dispatchEvent(new Event("abort")); }
+        }
+        window.XMLHttpRequest = PendingUploadRequest;
+        """
+    )
+    page.goto(f"{visual_app['base_url']}/app/upload")
+    page.locator('input[name="pipeline-version"]').first.check()
+    page.locator("#pdf-file-input").set_input_files(
+        {
+            "name": "cancel-visual.pdf",
+            "mimeType": "application/pdf",
+            "buffer": b"%PDF-1.4\n% cancellation visual",
+        }
+    )
+
+    page.locator("#start-processing-button").click()
+    page.locator("#cancel-upload-button").wait_for(state="visible")
+    page.locator("#cancel-upload-button").click()
+
+    page.get_by_text("Transfer stopped. Acceptance is unconfirmed; retry the same files and pipeline safely.", exact=True).wait_for()
+    assert page.locator("#cancel-upload-button").is_hidden()
+    assert page.locator("#start-processing-button").is_enabled()
+    _capture_phase14(page, "09-upload-cancelled")
+    _assert_nonblank_screenshot(page)
+    receipt_before = page.evaluate("sessionStorage.getItem('docflow-upload-receipt')")
+    page.locator("#start-processing-button").click()
+    page.locator("#cancel-upload-button").click()
+    page.get_by_text("Transfer stopped. Acceptance is unconfirmed; retry the same files and pipeline safely.", exact=True).wait_for()
+    assert page.evaluate("sessionStorage.getItem('docflow-upload-receipt')") == receipt_before
+
+
+def test_upload_recovers_receipt_when_response_is_lost(page: Page, visual_app: dict[str, str]) -> None:
+    """Submit to the real API but simulate loss of its response in the browser."""
+    page.add_init_script("""
+        class LostResponseRequest extends EventTarget {
+            constructor() { super(); this.upload = new EventTarget(); this.headers = {}; }
+            open(method, url) { this.url = url; }
+            setRequestHeader(name, value) { this.headers[name] = value; }
+            send(body) {
+                fetch(this.url, {method: 'POST', headers: this.headers, body})
+                    .then(response => {
+                        if (!response.ok) throw new Error('Acceptance failed');
+                        this.dispatchEvent(new Event('error'));
+                    });
+            }
+        }
+        window.XMLHttpRequest = LostResponseRequest;
+    """)
+    page.goto(f"{visual_app['base_url']}/app/upload")
+    page.locator('input[name="pipeline-version"]').first.check()
+    page.locator("#pdf-file-input").set_input_files({
+        "name": "lost-response.pdf", "mimeType": "application/pdf", "buffer": b"%PDF-1.4\nsynthetic"})
+    page.locator("#start-processing-button").click()
+    page.wait_for_url("**/app/batches/*")
+    page.locator("#pipeline-assignment-summary strong").wait_for()
+    assert page.evaluate("sessionStorage.getItem('docflow-upload-receipt')") is None
+    _capture_phase14(page, "09-upload-recovered-acceptance")
+
+
 def test_phase14_processing_identity_split_failure_review_and_reflow(
     page: Page, visual_app: dict[str, str]
 ) -> None:

@@ -97,6 +97,8 @@ def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:
     assert 'role="status"' in upload_template
     assert 'xhr.open("POST", "/api/batches/upload")' in upload_source
     assert "xhr.upload.addEventListener(\"progress\"" in upload_source
+    assert "function validateBatch(entries)" in upload_source
+    assert "error.status === 429" in upload_source
 
 
 def test_operator_help_retry_keyboard_and_table_polish_are_present() -> None:

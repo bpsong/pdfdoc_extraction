@@ -7,6 +7,7 @@ import builtins
 import importlib
 import runpy
 import sys
+import warnings
 from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
@@ -519,7 +520,13 @@ def test_cli_remaining_usage_and_stored_branches(
     monkeypatch.setattr(logging, "getLogger", lambda *_args: QuietLogger())
     monkeypatch.setattr(sys, "exit", lambda _code: None)
     monkeypatch.setattr(sys, "argv", ["config-check", "unknown"])
-    runpy.run_module("tools.config_check.__main__", run_name="__main__")
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r".*tools\.config_check\.__main__.*found in sys\.modules.*",
+            category=RuntimeWarning,
+        )
+        runpy.run_module("tools.config_check.__main__", run_name="__main__")
 
 
 def test_cli_reporter_info_only_summary_branch() -> None:

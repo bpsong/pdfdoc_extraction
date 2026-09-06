@@ -82,7 +82,7 @@ def test_task_helpers_cover_safe_metadata_flags_and_invalid_result(tmp_path) -> 
 
 def test_glm_ocr_run_and_parameter_loading_defensive_branches(tmp_path) -> None:
     task, context = _task(tmp_path)
-    with pytest.raises(TaskError, match="context\['file_path'\]"):
+    with pytest.raises(TaskError, match=r"context\['file_path'\]"):
         task.validate_required_fields({"file_path": None})
     task._parameters_loaded = False
     context["file_path"] = str(tmp_path / "missing.pdf")

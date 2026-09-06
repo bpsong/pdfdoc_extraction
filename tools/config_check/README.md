@@ -242,6 +242,12 @@ The validator now checks these web server configuration fields:
 - `web.port`: Web server port number (default: 8000)
   - Must be an integer between 1 and 65535
   - Example: `port: 8080`
+- `web.max_upload_mb`: Maximum size of one uploaded PDF in MiB (default: 50)
+- `web.max_upload_files`: Maximum PDFs in one request (default: 20)
+- `web.max_upload_request_mb`: Maximum complete multipart request in MiB (default: 200)
+- `web.max_concurrent_uploads`: Concurrent upload receivers per web process (default: 2)
+- `web.upload_idle_timeout_seconds`: Maximum wait for the next body chunk (default: 30; positive integer)
+- `web.upload_timeout_seconds`: Overall receiving/staging deadline (default: 600; positive integer)
 
 ### Watch Folder Configuration
 Enhanced validation for watch folder settings:
@@ -261,6 +267,10 @@ web:
   port: 8000
   upload_dir: "web_upload"
   secret_key: "your-secret-key"
+  max_upload_mb: 50
+  max_upload_files: 20
+  max_upload_request_mb: 200
+  max_concurrent_uploads: 2
 
 watch_folder:
   dir: "watch_folder"

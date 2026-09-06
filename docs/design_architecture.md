@@ -221,9 +221,34 @@ sequenceDiagram
   document per accepted PDF only after the operator supplies one eligible
   published `pipeline_version_id`. The whole batch shares that exact version;
   invalid or stale selections create no rows or orphan files. Each accepted
-  document receives its durable processing job in the same transaction.
-- **Legacy web upload:** older single-file routes and response shapes remain
-  for compatibility. New browser flows should use the batch API.
+  document receives its durable processing job in the same transaction. The
+  multipart receiver spools file parts to disk, enforces request and concurrency
+  limits while reading, and never buffers the complete request body. Each part
+  permits at most 16 headers with 16 KiB of combined header-name/value data,
+  checked before buffering. A closing multipart boundary is required before
+  accepting any files; malformed or incomplete requests create no batch or jobs. Startup
+  reconciliation removes upload-owned staging and finalized files that have no
+  SQLite reference after an interrupted submission. Upload requests hold a
+  shared OS file lock through staging, finalization, database commit, and error
+  cleanup. Reconciliation holds the exclusive lock from its reference query
+  through deletion, preventing stale-snapshot races with active submissions.
+  A separate lifetime lock permits only one web process per processing directory;
+  a second process fails startup before reconciliation. Locks release on process
+  exit, including crashes. The `.upload-storage.lock` and `.web-process.lock`
+  files remain on disk and must not be manually deleted while the app is running.
+  Request cancellation uses shielded staging cleanup before propagating the
+  cancellation, so an interrupted disk copy does not leave an upload fragment.
+  Receiving and staging have a 600-second overall deadline and a 30-second
+  receive-idle deadline, configured with `web.upload_timeout_seconds` and
+  `web.upload_idle_timeout_seconds`. Expiry returns HTTP 408 and releases capacity.
+  Browser submissions carry a UUID `Idempotency-Key`; SQLite `upload_submissions`
+  receipts commit atomically with the batch and jobs. Repeating the same key,
+  user, pipeline, and file contents returns the original batch; changed content
+  is rejected. API clients omitting the key retain non-idempotent behavior.
+  `GET /api/upload-submissions/{id}` returns an owner-scoped accepted receipt or
+  `unknown`, which must never be interpreted as confirmed cancellation.
+- **Legacy web upload:** `POST /upload` is retired and returns `410 Gone`.
+  Legacy read-only response shapes remain for compatibility.
 
 ### Pipeline construction
 
@@ -603,7 +628,10 @@ npm run build:css
   processing/review changes, and upload progress reports client-side transfer
   progress before the existing batch-upload response and redirect.
 - Upload cancellation is limited to aborting the in-flight browser transfer;
-  it does not cancel server-side processing after the upload response.
+  it does not guarantee cancellation of server acceptance or processing.
+  The browser checks the receipt after abort/network failure and on page reload.
+  Unconfirmed retries retain the submission ID in tab session storage; clearing
+  that storage or retrying in another tab does not preserve this protection.
 - Operator queue presentation is scoped to shared table classes and native
   HTML disclosures for contextual help; these are presentation concerns and do
   not introduce workflow-state or API contracts.

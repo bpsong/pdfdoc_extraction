@@ -21,8 +21,15 @@ TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiJ9.signature"
 
 
 @pytest.fixture
-def client(mock_auth):
+def client(mock_auth, monkeypatch, tmp_path: Path):
     """Full web app TestClient (HTML routes, cookie-based auth)."""
+    config = TempConfig(tmp_path / "app.sqlite3", {
+        "watch_folder": {"processing_dir": str(tmp_path / "processing")},
+    })
+    initialize_database(config)
+    dependencies = lambda: (config, mock_auth(), None, None, None)
+    monkeypatch.setattr(api_router, "get_dependencies", dependencies)
+    monkeypatch.setattr("web.server.get_dependencies", dependencies)
     app = create_app()
     with TestClient(app) as c:
         yield c
@@ -182,6 +189,7 @@ def test_browser_login_rate_limit_renders_429(monkeypatch, tmp_path: Path):
     config = TempConfig(
         tmp_path / "app.sqlite3",
         {
+            "watch_folder": {"processing_dir": str(tmp_path / "processing")},
             "database": {"run_migrations_on_startup": False},
             "authentication": {
                 "username": "admin",
@@ -249,15 +257,15 @@ def test_upload_requires_auth(api_client):
 
 @patch("modules.api_router.FileProcessor")
 def test_upload_pdf_success_redirects_to_processing(mock_fp_cls, api_client, mock_auth):
-    # The legacy API upload endpoint schedules processing and returns a redirect to the app workflow page.
+    # The legacy non-durable upload endpoint is retired.
     mock_fp = MagicMock()
     mock_fp.process_file.return_value = None
     mock_fp_cls.return_value = mock_fp
 
     files = {"file": ("test.pdf", b"%PDF- dummy", "application/pdf")}
     resp = api_client.post("/upload", files=files, headers={"Authorization": f"Bearer {TOKEN}"}, follow_redirects=False)
-    assert resp.status_code == 303
-    assert resp.headers["location"] == "/app/processing"
+    assert resp.status_code == 410
+    assert resp.json()["detail"].endswith("Use /api/batches/upload.")
 
 
 def test_list_files_requires_auth(api_client):

@@ -51,6 +51,26 @@ class WebConfig(BaseModel):
         default=False,
         description="Expose OpenAPI documentation in production",
     )
+    max_upload_mb: int = Field(
+        default=50,
+        ge=1,
+        description="Maximum size in MiB for one uploaded PDF",
+    )
+    max_upload_files: int = Field(
+        default=20,
+        ge=1,
+        description="Maximum number of PDFs in one upload request",
+    )
+    max_upload_request_mb: int = Field(
+        default=200,
+        ge=1,
+        description="Maximum total multipart request size in MiB",
+    )
+    max_concurrent_uploads: int = Field(
+        default=2,
+        ge=1,
+        description="Maximum concurrent upload receivers per web process",
+    )
 
     @field_validator("host")
     @classmethod
@@ -194,6 +214,8 @@ class CustomStepsConfig(BaseModel):
     """Configuration for deployment-approved custom workflow tasks."""
 
     model_config = ConfigDict(extra="allow")
+    upload_idle_timeout_seconds: int = Field(default=30, ge=1)
+    upload_timeout_seconds: int = Field(default=600, ge=1)
 
     enabled: bool = Field(default=False, description="Enable deployment-approved custom tasks")
     registry: Dict[str, CustomTaskRegistryEntry] = Field(

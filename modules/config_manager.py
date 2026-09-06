@@ -77,6 +77,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "admin_enabled": True,
         "operator_sidebar": ["upload", "review", "reports", "settings"],
     },
+    "web": {
+        "max_upload_mb": 50,
+        "max_upload_files": 20,
+        "max_upload_request_mb": 200,
+        "max_concurrent_uploads": 2,
+        "upload_idle_timeout_seconds": 30,
+        "upload_timeout_seconds": 600,
+    },
     "custom_steps": {
         "enabled": False,
         "registry": {},

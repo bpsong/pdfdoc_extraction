@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import Any
+import pytest
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
@@ -9,6 +10,10 @@ from modules.db.connection import connect, json_loads
 from modules.db.migrations import initialize_database
 from modules.file_processor import FileProcessor
 from modules.services.pipeline_template_service import PipelineTemplateService
+from modules.services.ingestion_assignment_service import IngestionAssignmentService
+from modules.services.upload_receiver import MAX_PART_HEADER_BYTES
+from modules.services.upload_receiver import reconcile_upload_files
+from modules.services.upload_storage_lock import UploadStorageBusy, upload_storage_access
 
 
 class TempConfig:
@@ -46,6 +51,65 @@ class TempConfig:
 
     def get_all(self) -> dict[str, Any]:
         return dict(self._values)
+
+
+def test_upload_receipt_retry_and_conflicting_content(tmp_path, monkeypatch):
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    key = "8648d58e-0e8c-4677-b4af-a13f63067117"
+    def submit(content):
+        return client.post("/api/batches/upload", headers={"Idempotency-Key": key},
+            data={"pipeline_version_id": config.pipeline_version_id},
+            files=[("files", ("a.pdf", content, "application/pdf"))])
+    assert client.get(f"/api/upload-submissions/{key}").json() == {"status": "unknown"}
+    first = submit(b"%PDF-first")
+    assert first.status_code == 200
+    retry = submit(b"%PDF-first")
+    assert retry.json() == first.json()
+    assert submit(b"%PDF-changed").status_code == 400
+    assert client.get(f"/api/upload-submissions/{key}").json() == {
+        "status": "accepted", "batch_id": first.json()["batch_id"]}
+    with connect(config) as conn:
+        for table in ("batches", "documents", "processing_jobs", "upload_submissions"):
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 1
+        from modules.services.upload_submission_service import submission_status
+        assert submission_status(conn, "different-user", key) == {"status": "unknown"}
+    root = Path(config.get("watch_folder.processing_dir"))
+    assert len(list(root.glob("web-upload-*.pdf"))) == 1
+    assert not list(root.rglob("*.upload"))
+
+
+def test_simultaneous_submission_retries_create_one_batch(tmp_path, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    def submit(_):
+        return client.post("/api/batches/upload",
+            headers={"Idempotency-Key": "66f1af23-aed6-4cb5-9ed5-89d2b5708284"},
+            data={"pipeline_version_id": config.pipeline_version_id},
+            files=[("files", ("same.pdf", b"%PDF-concurrent", "application/pdf"))])
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(submit, range(2)))
+    assert all(response.status_code == 200 for response in responses)
+    assert responses[0].json() == responses[1].json()
+    with connect(config) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM processing_jobs").fetchone()[0] == 1
+
+
+def test_receipt_failure_rolls_back_jobs_and_files(tmp_path, monkeypatch):
+    from modules.db.repositories import UploadSubmissionRepository
+    import sqlite3
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    def fail(*args, **kwargs):
+        raise sqlite3.OperationalError("synthetic receipt failure")
+    monkeypatch.setattr(UploadSubmissionRepository, "record", fail)
+    response = client.post("/api/batches/upload",
+        headers={"Idempotency-Key": "66f1af23-aed6-4cb5-9ed5-89d2b5708284"},
+        data={"pipeline_version_id": config.pipeline_version_id},
+        files=[("files", ("same.pdf", b"%PDF-rollback", "application/pdf"))])
+    assert response.status_code == 500
+    with connect(config) as conn:
+        for table in ("batches", "documents", "processing_jobs", "upload_submissions"):
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    assert not list(Path(config.get("watch_folder.processing_dir")).rglob("*.pdf"))
 
 
 class FakeWorkflowManager:
@@ -152,6 +216,8 @@ def test_batch_upload_api_creates_one_batch_for_multiple_pdfs(tmp_path, monkeypa
     assert {document["id"] for document in documents} == set(payload["document_ids"])
     assert len(source_files) == 2
     assert all(Path(document["file_path"]).exists() for document in documents)
+    assert all(Path(document["file_path"]).name.startswith("web-upload-") for document in documents)
+    assert not list((Path(config.get("watch_folder.processing_dir")) / ".upload_staging").glob("*.upload"))
     assert workflow.calls == []
     with connect(config) as conn:
         jobs = conn.execute(
@@ -287,3 +353,113 @@ def test_batch_upload_api_rejects_too_many_files_without_persisting_state(tmp_pa
     assert batch_count == 0
     assert document_count == 0
     assert workflow.calls == []
+
+
+def test_batch_upload_api_removes_finalized_files_when_database_commit_fails(
+    tmp_path, monkeypatch
+):
+    client, config, workflow = build_client(tmp_path, monkeypatch)
+
+    def fail_create_batch(*args, **kwargs):
+        raise RuntimeError("simulated database failure")
+
+    monkeypatch.setattr(IngestionAssignmentService, "create_batch", fail_create_batch)
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("invoice.pdf", b"%PDF-1.4\ninvoice", "application/pdf")),
+        ],
+        data={"pipeline_version_id": config.pipeline_version_id},
+    )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Unable to accept upload batch"
+    processing = Path(config.get("watch_folder.processing_dir"))
+    assert not list(processing.glob("web-upload-*.pdf"))
+    assert not list((processing / ".upload_staging").glob("*.upload"))
+    with connect(config) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM batches").fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM processing_jobs").fetchone()[0] == 0
+    assert workflow.calls == []
+
+
+def test_batch_upload_api_never_buffers_the_complete_request(
+    tmp_path, monkeypatch
+):
+    client, config, _ = build_client(tmp_path, monkeypatch)
+
+    async def fail_if_body_is_buffered(self):
+        raise AssertionError("upload route must stream instead of calling request.body()")
+
+    monkeypatch.setattr(Request, "body", fail_if_body_is_buffered)
+    response = client.post(
+        "/api/batches/upload",
+        files=[
+            ("files", ("invoice.pdf", b"%PDF-1.4\ninvoice", "application/pdf")),
+        ],
+        data={"pipeline_version_id": config.pipeline_version_id},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+
+
+@pytest.mark.parametrize("oversized_header", [False, True])
+def test_malformed_batch_upload_creates_no_partial_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, oversized_header: bool
+) -> None:
+    client, config, workflow = build_client(tmp_path, monkeypatch)
+    body = (
+        f'--a\r\nContent-Disposition: form-data; name="pipeline_version_id"\r\n\r\n{config.pipeline_version_id}'
+        '\r\n--a\r\nContent-Disposition: form-data; name="files"; filename="one.pdf"'
+        '\r\n\r\n%PDF-one\r\n--a\r\nContent-Disposition: form-data; name="files"; filename="two.pdf"'
+    ).encode()
+    if oversized_header:
+        body += b'\r\nX-Large: ' + b'x' * MAX_PART_HEADER_BYTES
+        body += b'\r\n\r\n%PDF-two\r\n--a--\r\n'
+    else:
+        body += b'\r\n\r\n%PDF-truncated'
+    response = client.post(
+        "/api/batches/upload", content=body,
+        headers={"Content-Type": "multipart/form-data; boundary=a"},
+    )
+    assert response.status_code == (413 if oversized_header else 400)
+    with connect(config) as conn:
+        for table in ("batches", "documents", "processing_jobs", "document_files"):
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    processing = Path(config.get("watch_folder.processing_dir"))
+    assert not list(processing.rglob("*.upload"))
+    assert not list(processing.glob("web-upload-*.pdf"))
+    assert workflow.calls == []
+
+
+def test_upload_holds_storage_access_until_database_commit(tmp_path, monkeypatch):
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    original = IngestionAssignmentService.create_batch
+
+    def checked_create(service, **kwargs):
+        with pytest.raises(UploadStorageBusy):
+            reconcile_upload_files(config)
+        assert all(Path(item["file_path"]).exists() for item in kwargs["files"])
+        return original(service, **kwargs)
+
+    monkeypatch.setattr(IngestionAssignmentService, "create_batch", checked_create)
+    response = client.post(
+        "/api/batches/upload", data={"pipeline_version_id": config.pipeline_version_id},
+        files=[("files", ("lock-test.pdf", b"%PDF-test", "application/pdf"))],
+    )
+    assert response.status_code == 200
+    assert reconcile_upload_files(config).orphaned_final_removed == 0
+
+
+def test_upload_returns_retryable_response_during_cleanup(tmp_path, monkeypatch):
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    with upload_storage_access(config, exclusive=True):
+        response = client.post(
+            "/api/batches/upload", data={"pipeline_version_id": config.pipeline_version_id},
+            files=[("files", ("lock-test.pdf", b"%PDF-test", "application/pdf"))],
+        )
+    assert response.status_code == 503
+    assert response.headers["retry-after"] == "1"
+    with connect(config) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM batches").fetchone()[0] == 0

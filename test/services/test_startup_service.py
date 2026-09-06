@@ -101,7 +101,7 @@ def test_schema_verification_rejects_newer_database(tmp_path):
 
     with pytest.raises(
         startup_service.StartupReadinessError,
-        match="expected version 5, found 999",
+        match="expected version 6, found 999",
     ):
         startup_service.verify_database_schema(config)
 
@@ -125,11 +125,11 @@ def test_schema_verification_rejects_older_database_marker(tmp_path):
     config = TempConfig(database_path)
     initialize_database(config)
     with sqlite3.connect(database_path) as conn:
-        conn.execute("DELETE FROM schema_migrations WHERE version = 5")
+        conn.execute("DELETE FROM schema_migrations WHERE version = 6")
 
     with pytest.raises(
         startup_service.StartupReadinessError,
-        match="expected version 5, found 4",
+        match="expected version 6, found 4",
     ):
         startup_service.verify_database_schema(config)
 

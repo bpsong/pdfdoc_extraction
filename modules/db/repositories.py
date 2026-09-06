@@ -19,6 +19,27 @@ from modules.db.connection import (
 
 
 TERMINAL_STATUSES = {"completed", "Pipeline Completed Successfully", "review_completed"}
+
+
+class UploadSubmissionRepository:
+    """Retain accepted submission receipts for safe retries and status lookup."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def get(self, username: str, submission_id: str) -> dict | None:
+        row = self.conn.execute(
+            "SELECT * FROM upload_submissions WHERE username = ? AND submission_id = ?",
+            (username, submission_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def record(self, username: str, submission_id: str, fingerprint: str, response: dict) -> None:
+        """Write in the same transaction as the accepted batch and jobs."""
+        self.conn.execute(
+            "INSERT INTO upload_submissions VALUES (?, ?, ?, ?, ?)",
+            (username, submission_id, fingerprint, json_dumps(response), utc_now()),
+        )
 FAILED_STATUSES = {"failed", "Workflow Trigger Failed", "Pipeline Completed with Errors"}
 FIXED_USERS = {"admin": "admin", "operator": "operator"}
 

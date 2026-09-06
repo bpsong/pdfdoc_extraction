@@ -25,6 +25,7 @@ REQUIRED_RUNTIME_TABLES = frozenset(
         "schema_migrations",
         "task_runs",
         "users",
+        "upload_submissions",
         "watch_folder_bindings",
     }
 )

@@ -38,6 +38,10 @@ def test_schema_models_normalize_and_reject_values() -> None:
         WebConfig(upload_dir="u", secret_key="s", cors_allowed_origins="*")
     with pytest.raises(ValueError):
         WebConfig(upload_dir="u", secret_key="s", allowed_hosts="*")
+    upload_web = WebConfig(upload_dir="u", secret_key="s")
+    assert upload_web.max_upload_request_mb == 200
+    with pytest.raises(ValueError):
+        WebConfig(upload_dir="u", secret_key="s", max_concurrent_uploads=0)
     assert TaskDefinition(module="m", **{"class": "C"}, params=None, on_error=" CONTINUE ").on_error == "continue"
 
 

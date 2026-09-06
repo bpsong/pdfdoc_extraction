@@ -8,6 +8,9 @@
 
     const maxUploadMb = Number(workspace.dataset.maxUploadMb || "50");
     const maxUploadBytes = maxUploadMb * 1024 * 1024;
+    const maxUploadFiles = Number(workspace.dataset.maxUploadFiles || "20");
+    const maxUploadRequestMb = Number(workspace.dataset.maxUploadRequestMb || "200");
+    const maxUploadRequestBytes = maxUploadRequestMb * 1024 * 1024;
     const dropZone = document.getElementById("upload-drop-zone");
     const fileInput = document.getElementById("pdf-file-input");
     const fileList = document.getElementById("selected-file-list");
@@ -29,6 +32,33 @@
     let uploading = false;
     let activeUploadXhr = null;
     let lastAnnouncedUploadMilestone = -1;
+    let submissionId = null;
+    let submissionSignature = null;
+    const receiptStorageKey = "docflow-upload-receipt";
+    const identitiesStorageKey = "docflow-upload-identities";
+    let submissionIdentities = {};
+    try { submissionIdentities = JSON.parse(sessionStorage.getItem(identitiesStorageKey) || "{}"); } catch (_) {}
+    const savedReceipt = sessionStorage.getItem(receiptStorageKey);
+    if (savedReceipt) {
+        try {
+            const saved = JSON.parse(savedReceipt);
+            submissionId = saved.id;
+            submissionSignature = saved.signature;
+        } catch (_) { sessionStorage.removeItem(receiptStorageKey); }
+    }
+
+    async function resolveAcceptance() {
+        if (!submissionId) return false;
+        const receipt = await window.DocFlow.apiGet(`/api/upload-submissions/${encodeURIComponent(submissionId)}`);
+        if (receipt.status === "accepted") {
+            delete submissionIdentities[submissionSignature];
+            sessionStorage.setItem(identitiesStorageKey, JSON.stringify(submissionIdentities));
+            sessionStorage.removeItem(receiptStorageKey);
+            window.location.href = `/app/batches/${encodeURIComponent(receipt.batch_id)}`;
+            return true;
+        }
+        return false;
+    }
 
     function escapeHtml(value) {
         return String(value)
@@ -67,6 +97,18 @@
         return `${file.name}:${file.size}:${file.lastModified}`;
     }
 
+    function validateBatch(entries) {
+        if (entries.length > maxUploadFiles) {
+            return `A batch can contain at most ${maxUploadFiles} files`;
+        }
+        const fileBytes = entries.reduce((total, entry) => total + entry.file.size, 0);
+        const estimatedMultipartOverhead = 8192 + (entries.length * 1024);
+        if (fileBytes + estimatedMultipartOverhead > maxUploadRequestBytes) {
+            return `Batch exceeds the ${maxUploadRequestMb} MB request limit`;
+        }
+        return "";
+    }
+
     function setAlert(message) {
         if (!uploadAlert) {
             return;
@@ -98,6 +140,7 @@
             xhr.open("POST", "/api/batches/upload");
             xhr.withCredentials = true;
             xhr.setRequestHeader("Accept", "application/json");
+            xhr.setRequestHeader("Idempotency-Key", submissionId);
             const csrfHeaders = window.DocFlow ? window.DocFlow.csrfHeaders("POST") : {};
             Object.entries(csrfHeaders).forEach(([name, value]) => xhr.setRequestHeader(name, value));
             xhr.upload.addEventListener("progress", (event) => {
@@ -123,6 +166,7 @@
                     const message = typeof detail === "string" ? detail : detail && detail.message || "Upload failed";
                     const requestError = new Error(message);
                     requestError.status = xhr.status;
+                    requestError.retryAfter = xhr.getResponseHeader("Retry-After");
                     reject(requestError);
                     return;
                 }
@@ -216,9 +260,10 @@
     function renderSelectedFiles() {
         const validFiles = selectedFiles.filter((entry) => !entry.error);
         const totalSize = selectedFiles.reduce((total, entry) => total + entry.file.size, 0);
+        const batchError = validateBatch(selectedFiles);
         fileCount.textContent = `${selectedFiles.length} ${selectedFiles.length === 1 ? "file" : "files"}`;
         fileSummary.textContent = `Total files: ${selectedFiles.length} | Total size: ${formatBytes(totalSize)}`;
-        startButton.disabled = !window.DocFlowOperatorPipeline.canStart(
+        startButton.disabled = Boolean(batchError) || !window.DocFlowOperatorPipeline.canStart(
             selectedFiles,
             selectedPipelineVersionId,
             uploading
@@ -254,12 +299,12 @@
             .join("");
 
         const invalid = selectedFiles.find((entry) => entry.error);
-        setAlert(invalid ? `${invalid.file.name}: ${invalid.error}` : "");
+        setAlert(invalid ? `${invalid.file.name}: ${invalid.error}` : batchError);
     }
 
     async function uploadBatch() {
         const validFiles = selectedFiles.filter((entry) => !entry.error);
-        if (!window.DocFlowOperatorPipeline.canStart(
+        if (validateBatch(selectedFiles) || !window.DocFlowOperatorPipeline.canStart(
             selectedFiles,
             selectedPipelineVersionId,
             uploading
@@ -268,6 +313,14 @@
         }
 
         const formData = new FormData();
+        const signature = JSON.stringify([selectedPipelineVersionId, validFiles.map(entry => entry.key)]);
+        if (submissionSignature !== signature || !submissionId) {
+            submissionId = submissionIdentities[signature] || crypto.randomUUID();
+            submissionSignature = signature;
+        }
+        submissionIdentities[signature] = submissionId;
+        sessionStorage.setItem(identitiesStorageKey, JSON.stringify(submissionIdentities));
+        sessionStorage.setItem(receiptStorageKey, JSON.stringify({id: submissionId, signature}));
         formData.append("pipeline_version_id", selectedPipelineVersionId);
         validFiles.forEach((entry) => formData.append("files", entry.file, entry.file.name));
 
@@ -288,9 +341,15 @@
                 return;
             }
             updateUploadProgress(1, 1);
+            delete submissionIdentities[submissionSignature];
+            sessionStorage.setItem(identitiesStorageKey, JSON.stringify(submissionIdentities));
+            sessionStorage.removeItem(receiptStorageKey);
             uploadStatus.textContent = "Upload complete. Starting processing...";
             window.location.href = `/app/batches/${encodeURIComponent(payload.batch_id)}`;
         } catch (error) {
+            let accepted = false;
+            try { accepted = await resolveAcceptance(); } catch (_) { /* Keep identity for retry. */ }
+            if (accepted) return;
             uploading = false;
             startButton.classList.remove("loading");
             startButton.disabled = false;
@@ -298,9 +357,14 @@
             cancelUploadButton.disabled = true;
             uploadProgressRegion.setAttribute("aria-busy", "false");
             const cancelled = error.name === "AbortError";
-            uploadStatus.textContent = cancelled ? "Upload cancelled." : "Upload failed.";
+            const busy = error.status === 429;
+            uploadStatus.textContent = cancelled
+                ? "Transfer stopped. Acceptance is unconfirmed; retry the same files and pipeline safely."
+                : busy
+                    ? "Upload capacity is temporarily full."
+                    : "Upload not confirmed. Retry the same files and pipeline safely.";
             setAlert(cancelled ? "" : error.message || "Upload failed");
-            if ([400, 403, 409].includes(error.status)) {
+            if ([403, 409].includes(error.status)) {
                 selectedPipelineVersionId = "";
                 await loadPipelines();
                 setPipelineAlert("The selected version is no longer eligible. Choose again from the refreshed list.");
@@ -369,9 +433,18 @@
         uploadBatch,
         cancelUpload,
         loadPipelines,
+        validateBatch,
     };
     loadPipelines().catch((error) => {
         setPipelineAlert(error.message || "Unable to load available pipelines.");
         renderSelectedFiles();
     });
+    if (submissionId) {
+        uploadStatus.textContent = "Checking previous upload acceptance...";
+        resolveAcceptance().then(accepted => {
+            if (!accepted) uploadStatus.textContent = "Previous upload unconfirmed. Select the same files and pipeline to retry safely.";
+        }).catch(() => {
+            uploadStatus.textContent = "Unable to check previous upload. Select the same files and pipeline to retry safely.";
+        });
+    }
 })();

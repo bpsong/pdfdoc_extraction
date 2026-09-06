@@ -354,12 +354,8 @@ def test_upload_endpoint_accepts_valid_pdf(tmp_path, monkeypatch):
 
     payload = make_upload_payload(data=b"%PDF-1.7 some content")
     resp = client.post("/upload", files=payload, follow_redirects=False)
-    # Successful upload should redirect (303)
-    assert resp.status_code == 303
-    # The background task may run synchronously or asynchronously; give a short moment.
-    time.sleep(0.1)
-    # Ensure FakeFileProcessor exists (background may or may not have executed in this test harness)
-    assert isinstance(fake_fp, object)
+    assert resp.status_code == 410
+    assert fake_fp.processed == []
 
 
 def test_upload_endpoint_rejects_invalid_pdf_and_removes_temp(tmp_path, monkeypatch):
@@ -370,8 +366,7 @@ def test_upload_endpoint_rejects_invalid_pdf_and_removes_temp(tmp_path, monkeypa
 
     payload = make_upload_payload(data=b"NOT_A_PDF")
     resp = client.post("/upload", files=payload)
-    # Should respond with 400 Bad Request due to invalid PDF header
-    assert resp.status_code == 400
+    assert resp.status_code == 410
     # Ensure temporary files in upload_dir are removed (no lingering temp file)
     files = list(upload_dir.iterdir())
     # Assert there are no temp files matching pattern "_temp.pdf"

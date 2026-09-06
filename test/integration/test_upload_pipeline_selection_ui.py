@@ -21,6 +21,9 @@ def test_upload_page_requires_explicit_pipeline_selection_contract(monkeypatch):
     assert 'id="start-processing-button"' in response.text
     assert 'disabled' in response.text
     assert "operator_pipeline_view_models.js" in response.text
+    assert 'data-max-upload-files="20"' in response.text
+    assert 'data-max-upload-request-mb="200"' in response.text
+    assert "20 files and 200 MB per batch" in response.text
     assert "pipeline_secrets" not in response.text
 
 

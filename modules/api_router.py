@@ -23,7 +23,7 @@ Architecture Reference:
     with the overall system, refer to docs/design_architecture.md.
 """
 
-from typing import List, Dict, Any, Optional, Tuple, cast
+from typing import AsyncIterator, List, Dict, Any, Optional, Tuple, cast
 import csv
 import os
 import json
@@ -34,13 +34,9 @@ import sqlite3
 import uuid
 import yaml
 from datetime import datetime, timezone, timedelta
-from dataclasses import dataclass
-from email.message import EmailMessage
-from email.parser import BytesParser
-from email.policy import default
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -80,6 +76,13 @@ from .services.ingestion_assignment_service import (
     IngestionAssignmentError,
     IngestionAssignmentService,
 )
+from .services.upload_receiver import (
+    UploadAdmissionController,
+    receive_multipart_upload,
+    upload_limits,
+)
+from .services.upload_storage_lock import UploadStorageBusy, upload_storage_access
+from .services.upload_submission_service import submission_fingerprint, submission_status
 from .services.ingress_binding_service import (
     IngressBindingConflictError,
     IngressBindingService,
@@ -462,52 +465,6 @@ def _safe_pdf_candidate(raw_path: Any, allowed_roots: list[Path]) -> Path | None
     return None
 
 
-# Background task function to process the uploaded file
-def process_file_in_background(file_processor: FileProcessor, temp_path: str, file_id: str, original_filename: Optional[str]) -> None:
-    """Process the uploaded file in the background.
-    
-    Args:
-        file_processor: The FileProcessor instance
-        temp_path: Path to the temporarily saved file
-        file_id: The file ID to use for processing
-        original_filename: The original filename of the uploaded file
-    """
-    logger = logging.getLogger("api_router")
-    try:
-        logger.info(f"Processing file {file_id} in the background")
-        
-        # Get the processing directory from config
-        config, _, _, _, _ = get_dependencies()
-        processing_dir = str(config.get('watch_folder.processing_dir'))
-        if not processing_dir:
-            raise ValueError("watch_folder.processing_dir is not configured")
-        
-        # Generate the final filename
-        final_name = f"{file_id}.pdf"
-        final_processing_path = os.path.join(processing_dir, final_name)
-        
-        # Move the file from temp location to processing directory
-        os.replace(temp_path, final_processing_path)
-        
-        # Process the file (create status and trigger workflow)
-        file_processor.process_file(
-            filepath=final_processing_path,
-            unique_id=file_id,
-            source="web",
-            original_filename=original_filename
-        )
-        
-        logger.info(f"File {file_id} processed successfully in the background")
-    except Exception as e:
-        logger.error(f"Error processing file {file_id} in the background: {e}")
-        # Clean up the temp file if it still exists
-        try:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-        except Exception:
-            pass
-
-
 def build_router() -> APIRouter:
     """Build and return the FastAPI router with all API endpoints.
 
@@ -522,6 +479,23 @@ def build_router() -> APIRouter:
         with the overall system, refer to docs/design_architecture.md.
     """
     router = APIRouter(dependencies=[Depends(require_csrf_for_cookie_auth)])
+    upload_admission = UploadAdmissionController()
+
+    async def _admit_upload_request() -> AsyncIterator[None]:
+        """Hold one configured upload slot for the duration of a request."""
+        config, _, _, _, _ = get_dependencies()
+        capacity = upload_limits(config).max_concurrent_uploads
+        async with upload_admission.admit(capacity):
+            try:
+                with upload_storage_access(config):
+                    # Hold through receiving, finalization, commit, and error cleanup.
+                    yield
+            except UploadStorageBusy as exc:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Upload storage is temporarily unavailable. Try again shortly.",
+                    headers={"Retry-After": "1"},
+                ) from exc
     logger = logging.getLogger("api_router")
 
     async def _extract_login_credentials(request: Request) -> Tuple[str, str]:
@@ -556,184 +530,6 @@ def build_router() -> APIRouter:
         if request.client and request.client.host:
             return request.client.host
         return "unknown"
-
-    @dataclass
-    class ParsedUpload:
-        """Simple data container for a parsed upload payload."""
-
-        filename: str
-        content_type: str
-        data: bytes
-
-    @dataclass
-    class UploadLimits:
-        """Server-side limits for multipart upload requests."""
-
-        max_file_bytes: int
-        max_files: int
-        max_request_bytes: int
-
-    def _config_int(config: ConfigManager, key: str, default_value: int) -> int:
-        """Read a positive integer config value with a safe fallback."""
-        try:
-            value = config.get(key, default_value)
-            parsed = int(value)
-        except (TypeError, ValueError):
-            return default_value
-        return parsed if parsed > 0 else default_value
-
-    def _upload_limits(config: ConfigManager) -> UploadLimits:
-        """Return configured upload limits with conservative defaults."""
-        max_upload_mb = _config_int(
-            config,
-            "web.max_upload_mb",
-            _config_int(config, "ui.max_upload_mb", 50),
-        )
-        max_files = _config_int(config, "web.max_upload_files", 20)
-        default_request_mb = max(1, int(max_upload_mb * max_files * 1.25))
-        max_request_mb = _config_int(
-            config,
-            "web.max_upload_request_mb",
-            default_request_mb,
-        )
-        return UploadLimits(
-            max_file_bytes=max_upload_mb * 1024 * 1024,
-            max_files=max_files,
-            max_request_bytes=max_request_mb * 1024 * 1024,
-        )
-
-    def _reject_large_content_length(request: Request, limits: UploadLimits) -> None:
-        """Reject oversized requests before reading the body into memory."""
-        content_length = request.headers.get("content-length")
-        if content_length is None:
-            return
-        try:
-            length = int(content_length)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid Content-Length header",
-            )
-        if length > limits.max_request_bytes:
-            raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=(
-                    "Upload request is too large. "
-                    f"Maximum request size is {limits.max_request_bytes // (1024 * 1024)} MB."
-                ),
-            )
-
-    async def _parse_multipart_uploads(
-        request: Request,
-        *,
-        field_names: set[str] | None = None,
-        max_files: int | None = None,
-    ) -> list[ParsedUpload]:
-        """Parse the multipart body and extract one or more uploaded files."""
-
-        content_type = request.headers.get("content-type", "")
-        if "multipart/form-data" not in content_type.lower():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported content type")
-
-        config, _, _, _, _ = get_dependencies()
-        limits = _upload_limits(config)
-        effective_max_files = max_files if max_files is not None else limits.max_files
-        _reject_large_content_length(request, limits)
-
-        body = await request.body()
-        if not body:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty upload payload")
-        if len(body) > limits.max_request_bytes:
-            raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=(
-                    "Upload request is too large. "
-                    f"Maximum request size is {limits.max_request_bytes // (1024 * 1024)} MB."
-                ),
-            )
-
-        header_bytes = f"Content-Type: {content_type}\r\n\r\n".encode("latin-1", errors="ignore")
-        message = cast(EmailMessage, BytesParser(policy=cast(Any, default)).parsebytes(header_bytes + body))
-        accepted_names = field_names or {"file"}
-        uploads: list[ParsedUpload] = []
-
-        for part in message.iter_parts():
-            if part.get_content_disposition() != "form-data":
-                continue
-            if part.get_param("name", header="content-disposition") not in accepted_names:
-                continue
-            filename = part.get_filename() or "uploaded_file"
-            # get_payload(decode=True) may return bytes or (rarely) str/other types depending on part.
-            # Normalize to bytes to satisfy type expectations and avoid Pylance type errors.
-            raw_payload = part.get_payload(decode=True)
-            if isinstance(raw_payload, (bytes, bytearray)):
-                file_bytes = bytes(raw_payload)
-            elif raw_payload is None:
-                file_bytes = b""
-            else:
-                # Fallback: convert to str then encode.
-                try:
-                    file_bytes = str(raw_payload).encode("utf-8", errors="ignore")
-                except Exception:
-                    file_bytes = b""
-            if len(uploads) >= effective_max_files:
-                raise HTTPException(
-                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                    detail=f"Too many files uploaded. Maximum file count is {effective_max_files}.",
-                )
-            if len(file_bytes) > limits.max_file_bytes:
-                raise HTTPException(
-                    status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                    detail=(
-                        f"{filename} is too large. "
-                        f"Maximum file size is {limits.max_file_bytes // (1024 * 1024)} MB."
-                    ),
-                )
-            content = part.get_content_type() or "application/octet-stream"
-            uploads.append(ParsedUpload(filename=filename, content_type=content, data=file_bytes))
-
-        if not uploads:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No file field provided")
-        return uploads
-
-    async def _parse_multipart_upload(request: Request) -> ParsedUpload:
-        """Parse the multipart body and extract the uploaded file."""
-
-        return (await _parse_multipart_uploads(request, field_names={"file"}, max_files=1))[0]
-
-    async def _multipart_scalar_values(
-        request: Request, field_name: str
-    ) -> list[str]:
-        """Return all scalar multipart values for one exact field name."""
-        content_type = request.headers.get("content-type", "")
-        if "multipart/form-data" not in content_type.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Unsupported content type",
-            )
-        body = await request.body()
-        header_bytes = (
-            f"Content-Type: {content_type}\r\n\r\n".encode(
-                "latin-1", errors="ignore"
-            )
-        )
-        message = cast(
-            EmailMessage,
-            BytesParser(policy=cast(Any, default)).parsebytes(header_bytes + body),
-        )
-        values: list[str] = []
-        for part in message.iter_parts():
-            if part.get_content_disposition() != "form-data":
-                continue
-            if part.get_param("name", header="content-disposition") != field_name:
-                continue
-            if part.get_filename() is not None:
-                continue
-            raw = part.get_payload(decode=True)
-            values.append(
-                bytes(raw or b"").decode("utf-8", errors="strict").strip()
-            )
-        return values
 
     async def _json_body(request: Request) -> dict[str, Any]:
         """Parse an optional JSON request body."""
@@ -944,83 +740,13 @@ def build_router() -> APIRouter:
 
     @router.post("/upload")
     async def upload_pdf(
-        request: Request,
-        background_tasks: BackgroundTasks,
         user: str = Depends(get_current_user),
     ):
-        """Upload a PDF file for processing.
-
-        Args:
-            background_tasks: FastAPI BackgroundTasks for processing the file asynchronously.
-            file: The uploaded PDF file.
-            user: The authenticated user identifier, injected via dependency.
-
-        Returns:
-            RedirectResponse: Redirects to the app processing page immediately after file upload.
-
-        Raises:
-            HTTPException: 400 if the upload or processing fails.
-
-        HTTP Error Codes:
-            - 303: Successful upload, redirects to the app processing page
-            - 400: Invalid PDF file or upload/processing failure
-            - 401: Authentication required or failed
-        """
-        config, _, _, _, file_processor = get_dependencies()
-        try:
-            upload = await _parse_multipart_upload(request)
-            # Generate a UUID for the file
-            file_id = str(uuid.uuid4())
-            
-            # Get the upload directory from config
-            upload_dir = str(config.get('web.upload_dir'))
-            if not upload_dir:
-                raise ValueError("web.upload_dir is not configured")
-            
-            # Create a temporary path for the uploaded file
-            temp_filename = f"{file_id}_temp.pdf"
-            temp_path = os.path.join(upload_dir, temp_filename)
-            
-            # Save the uploaded file immediately to the temporary location
-            with open(temp_path, "wb") as out_f:
-                out_f.write(upload.data)
-            
-            # Validate PDF header before scheduling background processing.
-            # Use 5 bytes ('%PDF-'), 3 attempts and 0.2s delay to match watch-folder behavior.
-            try:
-                if not utils_mod.is_pdf_header(temp_path, read_size=5, attempts=3, delay=0.2):
-                    # remove temp file and return a 400 to the client
-                    try:
-                        os.remove(temp_path)
-                    except Exception:
-                        pass
-                    raise HTTPException(status_code=400, detail="Invalid PDF header")
-            except HTTPException:
-                # re-raise known HTTP errors
-                raise
-            except Exception as e:
-                # Any unexpected validation error -> cleanup and respond 400
-                try:
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                except Exception:
-                    pass
-                logger.error(f"PDF header validation error: {e}")
-                raise HTTPException(status_code=400, detail="Invalid PDF header")
-            # Reset file pointer to beginning for any future reads
-            # Log the successful immediate save
-            logger.info(f"File saved immediately with ID: {file_id}")
-
-            # Add the processing task to background tasks
-            background_tasks.add_task(process_file_in_background, file_processor, temp_path, file_id, upload.filename)
-            
-            # Redirect to the app processing page immediately after upload.
-            return RedirectResponse(url="/app/processing", status_code=status.HTTP_303_SEE_OTHER)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"Error uploading file: {e}")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        """Reject the retired non-durable single-file upload endpoint."""
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="This upload endpoint has been retired. Use /api/batches/upload.",
+        )
 
     @router.get("/api/pipelines/available")
     def available_pipelines(
@@ -1120,68 +846,80 @@ def build_router() -> APIRouter:
         except IngressBindingConflictError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
 
+    @router.get("/api/upload-submissions/{submission_id}")
+    async def get_upload_submission(submission_id: str, user: str = Depends(get_current_user)):
+        config, _, _, _, _ = get_dependencies()
+        with connect(config) as conn:
+            return submission_status(conn, user, submission_id)
+
     @router.post("/api/batches/upload")
     async def upload_pdf_batch(
         request: Request,
-        background_tasks: BackgroundTasks,
+        _upload_slot: None = Depends(_admit_upload_request),
         user: str = Depends(get_current_user),
     ):
         """Upload one or more PDFs as a single SQLite-backed processing batch."""
-        config, _, _, _, _ = get_dependencies()
-        selection_values = await _multipart_scalar_values(
-            request, "pipeline_version_id"
-        )
-        if len(selection_values) != 1 or not selection_values[0]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Exactly one pipeline_version_id is required",
-            )
-        pipeline_version_id = selection_values[0]
-        with connect(config) as conn:
-            user_record = UserRepository(conn).get(user)
-            role = str(user_record["role"]) if user_record else "operator"
+        submission_id = request.headers.get("Idempotency-Key")
+        if submission_id is not None:
             try:
-                pipeline_summary = IngestionAssignmentService(
-                    conn, config
-                ).resolve_selection(pipeline_version_id, role=role)
-            except IngestionAssignmentError as exc:
-                response_status = (
-                    status.HTTP_403_FORBIDDEN
-                    if "operators" in str(exc)
-                    else status.HTTP_400_BAD_REQUEST
-                )
-                raise HTTPException(status_code=response_status, detail=str(exc))
-        uploads = await _parse_multipart_uploads(request, field_names={"files", "file"})
+                submission_id = str(uuid.UUID(submission_id))
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Idempotency-Key must be a UUID") from exc
+        config, _, _, _, _ = get_dependencies()
         processing_dir = str(config.get("watch_folder.processing_dir") or "")
         if not processing_dir:
             raise HTTPException(status_code=500, detail="Processing directory misconfigured")
-        Path(processing_dir).mkdir(parents=True, exist_ok=True)
+        processing_root = Path(processing_dir).resolve()
+        processing_root.mkdir(parents=True, exist_ok=True)
+        received = await receive_multipart_upload(
+            request,
+            config,
+            staging_root=processing_root / ".upload_staging",
+        )
+        pipeline_version_id = received.pipeline_version_id
 
         file_descriptors: list[dict[str, Any]] = []
-        saved_paths: list[str] = []
+        finalized_paths: list[Path] = []
         try:
-            for index, upload in enumerate(uploads):
+            fingerprint = submission_fingerprint(received) if submission_id else None
+            with connect(config) as conn:
+                user_record = UserRepository(conn).get(user)
+                role = str(user_record["role"]) if user_record else "operator"
+                try:
+                    IngestionAssignmentService(conn, config).resolve_selection(
+                        pipeline_version_id, role=role
+                    )
+                except IngestionAssignmentError as exc:
+                    response_status = (
+                        status.HTTP_403_FORBIDDEN
+                        if "operators" in str(exc)
+                        else status.HTTP_400_BAD_REQUEST
+                    )
+                    raise HTTPException(status_code=response_status, detail=str(exc))
+
+            for index, upload in enumerate(received.files):
                 original_filename = os.path.basename(upload.filename or f"uploaded_{index + 1}.pdf")
                 if not original_filename.lower().endswith(".pdf"):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"{original_filename} is not a PDF file",
                     )
-                if not upload.data.startswith(b"%PDF-"):
+                with upload.path.open("rb") as source_file:
+                    pdf_header = source_file.read(5)
+                if pdf_header != b"%PDF-":
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"{original_filename} has an invalid PDF header",
                     )
 
                 document_id = str(uuid.uuid4())
-                final_path = str(Path(processing_dir, f"{document_id}.pdf").resolve())
-                with open(final_path, "wb") as out_file:
-                    out_file.write(upload.data)
-                saved_paths.append(final_path)
+                final_path = processing_root / f"web-upload-{document_id}.pdf"
+                os.replace(upload.path, final_path)
+                finalized_paths.append(final_path)
                 file_descriptors.append(
                     {
                         "document_id": document_id,
-                        "file_path": final_path,
+                        "file_path": str(final_path),
                         "original_filename": original_filename,
                         "status": "queued",
                         "metadata": {
@@ -1189,7 +927,7 @@ def build_router() -> APIRouter:
                             "ingestion_source": "web",
                             "uploaded_by": user,
                             "content_type": upload.content_type,
-                            "size_bytes": len(upload.data),
+                            "size_bytes": upload.size_bytes,
                         },
                     }
                 )
@@ -1208,6 +946,8 @@ def build_router() -> APIRouter:
                             "file_count": len(file_descriptors),
                         },
                         status="queued",
+                        submission_id=submission_id,
+                        fingerprint=fingerprint,
                     )
                 except IngestionAssignmentError as exc:
                     raise HTTPException(
@@ -1215,6 +955,9 @@ def build_router() -> APIRouter:
                         detail=str(exc),
                     )
 
+            if created.get("replayed"):
+                for path in finalized_paths:
+                    path.unlink(missing_ok=True)
             batch = created["batch"]
             documents = created["documents"]
             return {
@@ -1224,22 +967,23 @@ def build_router() -> APIRouter:
                 "pipeline": created["pipeline"],
             }
         except HTTPException:
-            for path in saved_paths:
+            for path in [item.path for item in received.files] + finalized_paths:
                 try:
-                    if os.path.exists(path):
-                        os.remove(path)
+                    path.unlink(missing_ok=True)
                 except OSError:
                     logger.warning("Failed to remove rejected upload file: %s", path)
             raise
         except Exception as exc:
-            for path in saved_paths:
+            for path in [item.path for item in received.files] + finalized_paths:
                 try:
-                    if os.path.exists(path):
-                        os.remove(path)
+                    path.unlink(missing_ok=True)
                 except OSError:
                     logger.warning("Failed to remove upload file after error: %s", path)
-            logger.error("Batch upload failed: %s", exc)
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+            logger.exception("Batch upload failed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Unable to accept upload batch",
+            ) from exc
 
     @router.get("/api/files", response_model=List[FileStatus])
     def list_files(user: str = Depends(get_current_user)):

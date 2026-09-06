@@ -8,6 +8,8 @@ from typing import Any
 from modules.config_protocol import ConfigProvider
 from modules.db.connection import immediate_transaction
 from modules.db.repositories import AuditRepository
+from modules.db.repositories import UploadSubmissionRepository
+from modules.db.connection import json_loads
 from modules.services.batch_service import BatchService
 from modules.services.processing_job_service import ProcessingJobService
 from modules.services.pipeline_definition_service import (
@@ -130,10 +132,19 @@ class IngestionAssignmentService:
         metadata: dict[str, Any] | None = None,
         ingress_binding_id: str | None = None,
         status: str = "queued",
+        submission_id: str | None = None,
+        fingerprint: str | None = None,
     ) -> dict[str, Any]:
         """Create one assigned batch, its roots/artifacts, and audit atomically."""
         summary = self.resolve_selection(pipeline_version_id, role=role)
         with immediate_transaction(self.conn):
+            receipts = UploadSubmissionRepository(self.conn)
+            if submission_id:
+                previous = receipts.get(str(user), submission_id)
+                if previous:
+                    if previous["fingerprint"] != fingerprint:
+                        raise IngestionAssignmentError("Submission ID already used for different upload content.")
+                    return {**json_loads(previous["response_json"]), "replayed": True}
             summary = self.resolve_selection(pipeline_version_id, role=role)
             created = BatchService(self.conn).create_ingestion_batch_with_documents(
                 source=source,
@@ -182,4 +193,6 @@ class IngestionAssignmentService:
                 batch_id=str(created["batch"]["id"]),
                 document_ids=[str(document["id"]) for document in created["documents"]],
             )
+            if submission_id:
+                receipts.record(str(user), submission_id, str(fingerprint), {**created, "pipeline": summary})
         return {**created, "pipeline": summary}

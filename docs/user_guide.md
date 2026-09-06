@@ -327,7 +327,12 @@ While the batch is being submitted, **Upload & Process** shows aggregate transfe
 progress for the selected files. This measures browser-to-server upload only;
 pipeline processing progress appears on the batch details page after submission.
 While an upload is in progress, select **Cancel upload** to stop the browser
-transfer and return to the file-selection screen. Keyboard users can focus the
+transfer. The application checks whether the server already accepted the batch
+and opens its processing page if it did. An unconfirmed result does not mean
+processing was cancelled: retry the same files and pipeline in the same browser
+tab to reuse the submission safely. Keep the tab's session storage intact.
+Stalled transfers expire after 30 seconds without data, and receiving/staging
+expires after 10 minutes by default. Keyboard users can focus the
 drop zone and press **Enter** or **Space** to open the file picker.
 
 Only active, eligible pipeline versions appear. One choice applies to the
@@ -336,7 +341,13 @@ batches. If the required version is missing, select **Refresh** once and then
 ask an administrator to publish and activate it; do not choose a similar
 pipeline merely to continue.
 
-Unless an administrator changes the upload settings, the web interface accepts up to 20 files in one upload and up to 50 MB per file. The application also enforces an overall request-size limit. If an upload is rejected as too large, reduce the batch size or ask an administrator to review `web.max_upload_mb`, `web.max_upload_files`, and `web.max_upload_request_mb`.
+Unless an administrator changes the upload settings, the web interface accepts up to 20 files in one upload, up to 50 MB per file, and up to 200 MB for the complete request. At most two uploads are received concurrently per web process. File data is staged on disk while it arrives. If an upload is rejected as too large or capacity is temporarily full, reduce the batch size or retry shortly; administrators can review `web.max_upload_mb`, `web.max_upload_files`, `web.max_upload_request_mb`, and `web.max_concurrent_uploads`.
+
+Run only one web process per processing directory. A second instance fails startup
+to protect active uploads from cleanup. The two hidden `.lock` files in that
+directory are permanent coordination files; do not delete them while the app runs.
+If reconciliation temporarily owns upload storage, uploads return a retryable
+`503` response. Process exit releases ownership automatically, even after a crash.
 
 **Monitor processing:**
 
@@ -599,6 +610,10 @@ watch_folder:
 
 web:
   upload_dir: "web_upload"            # Web-upload staging directory (must pre-exist; validated at startup)
+  max_upload_mb: 50                    # Maximum size of one PDF in MiB
+  max_upload_files: 20                 # Maximum PDFs in one request
+  max_upload_request_mb: 200           # Maximum complete multipart request in MiB
+  max_concurrent_uploads: 2            # Concurrent receivers per web process
   cors_allowed_origins: []            # Keep empty for same-origin browser use
 
 database:

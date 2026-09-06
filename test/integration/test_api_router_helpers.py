@@ -92,28 +92,8 @@ def test_router_auth_token_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert asyncio.run(bearer(_request())) is None
 
 
-def test_process_file_in_background_success_and_cleanup(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    config = ConfigStub({"watch_folder": {"processing_dir": str(tmp_path)}})
-    processor = Mock()
-    moved = []
-    monkeypatch.setattr(router, "get_dependencies", lambda: (config, None, None, None, processor))
-    monkeypatch.setattr(router.os, "replace", lambda source, target: moved.append((source, target)))
-    router.process_file_in_background(processor, str(tmp_path / "temp.pdf"), "file-1", "original.pdf")
-    assert moved == [(str(tmp_path / "temp.pdf"), str(tmp_path / "file-1.pdf"))]
-    processor.process_file.assert_called_once_with(filepath=str(tmp_path / "file-1.pdf"), unique_id="file-1", source="web", original_filename="original.pdf")
-
-    temp = tmp_path / "failed.pdf"
-    temp.write_bytes(b"x")
-    monkeypatch.setattr(router, "get_dependencies", Mock(side_effect=RuntimeError("failure")))
-    router.process_file_in_background(processor, str(temp), "file-2", None)
-    assert not temp.exists()
-
-    missing_processing = tmp_path / "missing-processing.pdf"
-    missing_processing.write_bytes(b"x")
-    monkeypatch.setattr(router, "get_dependencies", lambda: (ConfigStub({}), None, None, None, processor))
-    monkeypatch.setattr(router.os, "remove", Mock(side_effect=OSError("cleanup failed")))
-    router.process_file_in_background(processor, str(missing_processing), "file-3", None)
-    assert missing_processing.exists()
+def test_legacy_background_upload_helper_is_removed() -> None:
+    assert not hasattr(router, "process_file_in_background")
 
 
 def _router_helpers() -> dict[str, object]:
@@ -159,36 +139,10 @@ def _run(awaitable):
     return asyncio.run(awaitable)
 
 
-def test_router_upload_and_versioned_body_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_router_versioned_body_helpers() -> None:
     helpers = _router_helpers()
-    config = ConfigStub({"web": {"max_upload_mb": "bad", "max_upload_files": 1, "max_upload_request_mb": 1}})
-    assert helpers["_client_identifier"](_body_request(b"", "application/json")) == "127.0.0.1"
-    no_client = _body_request(b"", "application/json")
-    no_client.scope["client"] = None
-    assert helpers["_client_identifier"](no_client) == "unknown"
-    config_int = next(
-        cell.cell_contents
-        for cell in helpers["_upload_limits"].__closure__
-        if getattr(cell.cell_contents, "__name__", "") == "_config_int"
-    )
-    assert config_int(config, "web.max_upload_mb", 9) == 9
-    assert helpers["_upload_limits"](config).max_files == 1
-    helpers["_reject_large_content_length"](_body_request(b"", "application/json"), helpers["_upload_limits"](config))
-
-    invalid_length = _body_request(b"", "application/json")
-    invalid_length.scope["headers"] = [(b"content-length", b"bad")]
-    with pytest.raises(HTTPException, match="Invalid Content-Length"):
-        helpers["_reject_large_content_length"](invalid_length, helpers["_upload_limits"](config))
-    with pytest.raises(HTTPException, match="Unsupported content type"):
-        _run(helpers["_parse_multipart_uploads"](_body_request(b"x", "text/plain")))
-    with pytest.raises(HTTPException, match="Empty upload payload"):
-        _run(helpers["_parse_multipart_uploads"](_body_request(b"", "multipart/form-data")))
-
-    config_large = ConfigStub({"web": {"max_upload_request_mb": 1}})
-    monkeypatch.setattr(router, "get_dependencies", lambda: (config_large, None, None, None, None))
-    with pytest.raises(HTTPException, match="too large"):
-        _run(helpers["_parse_multipart_uploads"](_body_request(b"x" * (1_048_577), "multipart/form-data")))
-
+    assert "_parse_multipart_uploads" not in helpers
+    assert "_multipart_scalar_values" not in helpers
     with pytest.raises(HTTPException, match="positive integer"):
         helpers["_required_revision"]({"expected_revision": 0})
     assert helpers["_required_revision"]({"expected_revision": 2}) == 2
@@ -196,107 +150,9 @@ def test_router_upload_and_versioned_body_helpers(monkeypatch: pytest.MonkeyPatc
         helpers["_raise_versioned_error"](sqlite3.IntegrityError("duplicate"))
     with pytest.raises(RuntimeError):
         helpers["_raise_versioned_error"](RuntimeError("unexpected"))
-
-
-def test_router_multipart_part_filtering_payload_fallbacks_and_limits(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_router_body_and_path_helpers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     helpers = _router_helpers()
-
-    class Part:
-        def __init__(self, disposition="form-data", name="file", payload=b"data", filename="x.pdf"):
-            self.disposition = disposition
-            self.name = name
-            self.payload = payload
-            self.filename = filename
-
-        def get_content_disposition(self):
-            return self.disposition
-
-        def get_param(self, name, header=None):
-            return self.name if name == "name" else None
-
-        def get_filename(self):
-            return self.filename
-
-        def get_payload(self, decode=True):
-            return self.payload
-
-        def get_content_type(self):
-            return "application/pdf"
-
-    class Message:
-        def __init__(self, parts):
-            self.parts = parts
-
-        def iter_parts(self):
-            return iter(self.parts)
-
-    parts = [
-        Part(disposition="attachment"),
-        Part(name="ignored"),
-        Part(payload=None, filename="empty.pdf"),
-        Part(payload=type("BadPayload", (), {"__str__": lambda self: (_ for _ in ()).throw(RuntimeError("bad"))})(), filename="bad.pdf"),
-        Part(payload=b"%PDF-", filename="good.pdf"),
-    ]
-    monkeypatch.setattr(router, "BytesParser", lambda policy: Mock(parsebytes=lambda body: Message(parts)))
-    monkeypatch.setattr(router, "get_dependencies", lambda: (ConfigStub({"web": {"max_upload_mb": 5}}), None, None, None, None))
-    parsed = _run(
-        helpers["_parse_multipart_uploads"](
-            _body_request(b"body", "multipart/form-data; boundary=test")
-        )
-    )
-    assert [upload.filename for upload in parsed] == ["empty.pdf", "bad.pdf", "good.pdf"]
-
-    monkeypatch.setattr(
-        router,
-        "BytesParser",
-        lambda policy: Mock(parsebytes=lambda body: Message([Part(), Part(filename="two.pdf")])),
-    )
-    with pytest.raises(HTTPException, match="Too many files"):
-        _run(
-            helpers["_parse_multipart_uploads"](
-                _body_request(b"body", "multipart/form-data; boundary=test"), max_files=1
-            )
-        )
-    monkeypatch.setattr(
-        router,
-        "BytesParser",
-        lambda policy: Mock(parsebytes=lambda body: Message([Part(payload=b"x" * (1_048_577))])),
-    )
-    monkeypatch.setattr(router, "get_dependencies", lambda: (ConfigStub({"web": {"max_upload_mb": 1}}), None, None, None, None))
-    with pytest.raises(HTTPException, match="too large"):
-        _run(
-            helpers["_parse_multipart_uploads"](
-                _body_request(b"body", "multipart/form-data; boundary=test")
-            )
-        )
-    monkeypatch.setattr(router, "BytesParser", lambda policy: Mock(parsebytes=lambda body: Message([])))
-    with pytest.raises(HTTPException, match="No file field"):
-        _run(
-            helpers["_parse_multipart_uploads"](
-                _body_request(b"body", "multipart/form-data; boundary=test")
-            )
-        )
-
-    scalar_parts = [
-        Part(disposition="attachment"),
-        Part(name="other", filename=None),
-        Part(name="field", filename="file.pdf"),
-        Part(name="field", filename=None, payload=b" value "),
-    ]
-    monkeypatch.setattr(router, "BytesParser", lambda policy: Mock(parsebytes=lambda body: Message(scalar_parts)))
-    assert _run(
-        helpers["_multipart_scalar_values"](
-            _body_request(b"body", "multipart/form-data; boundary=test"), "field"
-        )
-    ) == ["value"]
-
-
-def test_router_multipart_scalar_and_path_helpers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    helpers = _router_helpers()
-    with pytest.raises(HTTPException, match="Unsupported content type"):
-        _run(helpers["_multipart_scalar_values"](_body_request(b"x", "text/plain"), "field"))
+    assert "_multipart_scalar_values" not in helpers
     with pytest.raises(HTTPException, match="Invalid JSON"):
         _run(helpers["_json_body"](_body_request(b"{", "application/json")))
     assert _run(helpers["_json_body"](_body_request(b"", "application/json"))) == {}
@@ -351,31 +207,7 @@ def test_router_multipart_scalar_and_path_helpers(monkeypatch: pytest.MonkeyPatc
 
 def test_router_remaining_nested_helpers(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     helpers = _router_helpers()
-
-    request = _body_request(b"body", "multipart/form-data; boundary=test")
-    part = type(
-        "Part",
-        (),
-        {
-            "get_content_disposition": lambda self: "form-data",
-            "get_param": lambda self, name, header=None: "file",
-            "get_filename": lambda self: "file.pdf",
-            "get_payload": lambda self, decode=True: b"%PDF-",
-            "get_content_type": lambda self: "application/pdf",
-        },
-    )()
-    message = Mock(iter_parts=lambda: iter([part]))
-    monkeypatch.setattr(router, "BytesParser", lambda policy: Mock(parsebytes=lambda body: message))
-    monkeypatch.setattr(router, "get_dependencies", lambda: (ConfigStub({}), None, None, None, None))
-    assert _run(helpers["_parse_multipart_upload"](request)).filename == "file.pdf"
-
-    oversized = _body_request(b"", "application/json")
-    oversized.scope["headers"] = [(b"content-length", str(2 * 1024 * 1024).encode())]
-    with pytest.raises(HTTPException, match="request is too large"):
-        helpers["_reject_large_content_length"](
-            oversized,
-            helpers["_upload_limits"](ConfigStub({"web": {"max_upload_request_mb": 1}})),
-        )
+    assert "_parse_multipart_upload" not in helpers
     with pytest.raises(HTTPException, match="JSON or YAML"):
         _run(helpers["_versioned_import_body"](_body_request(b"x", "text/plain")))
     assert _run(helpers["_versioned_import_body"](_body_request(b"plain", "text/yaml"))) == "plain"

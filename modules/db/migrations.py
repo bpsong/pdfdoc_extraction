@@ -14,7 +14,7 @@ from modules.services.legacy_versioned_config_migration import (
 
 LEGACY_SCHEMA_VERSION = 2
 PROCESSING_QUEUE_SCHEMA_VERSION = 4
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 TARGET_VERSIONED_CONFIG_SCHEMA_VERSION = 3
 
 

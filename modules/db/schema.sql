@@ -432,3 +432,12 @@ WHEN OLD.pipeline_version_id IS NOT NULL AND (
 BEGIN
     SELECT RAISE(ABORT, 'document pipeline assignment is immutable');
 END;
+
+CREATE TABLE IF NOT EXISTS upload_submissions (
+    username TEXT NOT NULL,
+    submission_id TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    response_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (username, submission_id)
+);

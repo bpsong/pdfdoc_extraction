@@ -431,62 +431,10 @@ def _install_multipart_parser(monkeypatch, parts):
     monkeypatch.setattr(api, "BytesParser", lambda policy: Mock(parsebytes=lambda body: message))
 
 
-def test_upload_and_batch_routes_cover_validation_and_cleanup_branches(tmp_path: Path, monkeypatch) -> None:
-    config = Config({"web.upload_dir": str(tmp_path / "uploads"), "watch_folder.processing_dir": str(tmp_path / "processing")})
-    Path(config.values["web.upload_dir"]).mkdir()
-    processor = Mock()
-    monkeypatch.setattr(api, "get_dependencies", lambda: (config, None, None, None, processor))
-    upload_route = _route("upload_pdf")
-    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"%PDF-1.4", "file.pdf")])
-    response = _run(_route("upload_pdf")(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
-    assert response.status_code == 303
-
-    config.values["web.upload_dir"] = ""
-    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"%PDF-1.4", "file.pdf")])
-    with pytest.raises(HTTPException, match="not configured"):
-        _run(upload_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
-
-    config.values["web.upload_dir"] = str(tmp_path / "uploads")
-    monkeypatch.setattr(api.utils_mod, "is_pdf_header", lambda *args, **kwargs: False)
-    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"bad", "bad.pdf")])
-    monkeypatch.setattr(api.os, "remove", Mock(side_effect=OSError("locked")))
-    with pytest.raises(HTTPException, match="Invalid PDF header"):
-        _run(upload_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
-    monkeypatch.setattr(api.utils_mod, "is_pdf_header", Mock(side_effect=OSError("header")))
-    _install_multipart_parser(monkeypatch, [_multipart_part("file", b"%PDF-1.4", "file.pdf")])
-    with pytest.raises(HTTPException, match="Invalid PDF header"):
-        _run(upload_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="admin"))
-
-    batch_route = _route("upload_pdf_batch")
-    user_repo = Mock()
-    user_repo.get.return_value = {"role": "operator"}
-    assignment = Mock()
-    assignment.resolve_selection.return_value = {"id": "v1"}
-    monkeypatch.setattr(api, "UserRepository", lambda _conn: user_repo)
-    monkeypatch.setattr(api, "IngestionAssignmentService", lambda *_args: assignment)
-    monkeypatch.setattr(api, "connect", lambda _config: nullcontext(object()))
-    config.values["watch_folder.processing_dir"] = ""
-    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), _multipart_part("files", b"%PDF-1.4", "file.pdf")])
-    with pytest.raises(HTTPException, match="Processing directory"):
-        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
-
-    config.values["watch_folder.processing_dir"] = str(tmp_path / "processing")
-    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), _multipart_part("files", b"bad", "bad.pdf")])
-    with pytest.raises(HTTPException, match="invalid PDF header"):
-        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
-
-    valid_file = _multipart_part("files", b"%PDF-1.4", "valid.pdf")
-    assignment.create_batch.side_effect = api.IngestionAssignmentError("create failed")
-    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), valid_file])
-    monkeypatch.setattr(api.os, "remove", Mock(side_effect=OSError("locked")))
-    with pytest.raises(HTTPException, match="create failed"):
-        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
-    assignment.create_batch.side_effect = RuntimeError("unexpected")
-    _install_multipart_parser(monkeypatch, [_multipart_part("pipeline_version_id", b"v1"), valid_file])
-    with pytest.raises(HTTPException, match="unexpected"):
-        _run(batch_route(_request(b"body", "multipart/form-data; boundary=x"), BackgroundTasks(), user="operator"))
-
-
+def test_legacy_upload_route_is_retired() -> None:
+    with pytest.raises(HTTPException) as retired:
+        _run(_route("upload_pdf")(user="admin"))
+    assert retired.value.status_code == 410
 def test_remaining_admin_and_document_route_error_branches(monkeypatch) -> None:
     config = Config({})
     connection = Mock()
@@ -604,11 +552,5 @@ def test_schema_audit_payload_helper_is_exercised(monkeypatch):
     }
 
 
-def test_process_background_missing_directory_and_cleanup_failure(monkeypatch, tmp_path):
-    config = Config({"watch_folder.processing_dir": ""})
-    temp = tmp_path / "temp.pdf"
-    temp.write_bytes(b"data")
-    monkeypatch.setattr(api, "get_dependencies", lambda: (config, None, None, None, None))
-    monkeypatch.setattr(api.os, "remove", Mock(side_effect=OSError("locked")))
-    api.process_file_in_background(Mock(), str(temp), "file", "file.pdf")
-    assert temp.exists()
+def test_legacy_background_upload_helper_is_absent() -> None:
+    assert not hasattr(api, "process_file_in_background")

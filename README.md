@@ -315,11 +315,12 @@ The `admin` account has full access. The `operator` account cannot access admini
 - `GET /api/admin/runtime-health`: Run-scoped component and database diagnostics (admin only).
 
 ### File Operations
-- `POST /upload`: Legacy single-PDF upload endpoint; redirects to `/app/processing` after scheduling
+- `POST /upload`: Retired non-durable upload endpoint; returns `410 Gone`
 - `GET /api/pipelines/available`: List exact pipeline versions eligible for the current user
 - `POST /api/batches/upload`: Upload a batch of PDFs with a required
   `pipeline_version_id`, create SQLite batch/document records, and enqueue
-  durable processing jobs
+  durable processing jobs; multipart file data is streamed through disk-backed
+  staging under configured file-count, file-size, request-size, and concurrency limits
 - `GET /api/batches`: List ingestion batches
 - `GET /api/batches/{batch_id}`: Get batch details
 - `GET /api/batches/{batch_id}/documents`: List batch documents

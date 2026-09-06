@@ -38,6 +38,8 @@ from modules.config_manager import ConfigManager
 from modules.auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from modules.logging_config import setup_bootstrap_logging, setup_logging
 from modules.services.startup_service import run_startup_checks
+from modules.services.upload_receiver import reconcile_upload_files
+from modules.services.upload_storage_lock import web_process_ownership
 from modules.services.runtime_health_service import (
     RuntimeHealthReporter,
     RuntimeHealthService,
@@ -139,14 +141,23 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         """Run registered cleanup tasks when the ASGI application stops."""
-        try:
-            if health_reporter is not None:
-                health_reporter.start(status="ready")
-            yield
-        finally:
-            if health_reporter is not None:
-                health_reporter.stop()
-            shutdown_manager.shutdown()
+        with web_process_ownership(config):
+            try:
+                reconciliation = reconcile_upload_files(config)
+                if reconciliation.staging_removed or reconciliation.orphaned_final_removed:
+                    logger.info(
+                        "Upload reconciliation removed staging=%s orphaned_final=%s failures=%s",
+                        reconciliation.staging_removed,
+                        reconciliation.orphaned_final_removed,
+                        reconciliation.cleanup_failures,
+                    )
+                if health_reporter is not None:
+                    health_reporter.start(status="ready")
+                yield
+            finally:
+                if health_reporter is not None:
+                    health_reporter.stop()
+                shutdown_manager.shutdown()
 
     app = FastAPI(
         title="PDF Processing Web Interface",
@@ -560,6 +571,8 @@ def create_app() -> FastAPI:
             page_subtitle="Upload PDF files to split, extract data, and review results.",
             active_nav="upload",
             max_upload_mb=config.get("web.max_upload_mb", config.get("ui.max_upload_mb", 50)),
+            max_upload_files=config.get("web.max_upload_files", 20),
+            max_upload_request_mb=config.get("web.max_upload_request_mb", 200),
         )
 
     @app.get("/app/processing", response_class=HTMLResponse)

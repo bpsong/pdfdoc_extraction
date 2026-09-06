@@ -66,7 +66,10 @@ def test_initialization_and_loading_valid_config(temp_dir):
 
     manager = ConfigManager(config_path)
     for key, value in config_content.items():
-        assert manager.config[key] == value
+        if isinstance(value, dict):
+            assert all(manager.config[key][item] == expected for item, expected in value.items())
+        else:
+            assert manager.config[key] == value
     assert manager.config["database"]["path"] == "data/app_state.sqlite3"
     assert manager.config["review"]["default_queue_name"] == "default_review"
     assert "app_storage" not in manager.config
@@ -405,7 +408,10 @@ def test_dynamic_path_validation_with_list_in_pipeline(temp_dir, caplog):
     
     manager = ConfigManager(config_path)
     for key, value in config_content.items():
-        assert manager.config[key] == value
+        if isinstance(value, dict):
+            assert all(manager.config[key][item] == expected for item, expected in value.items())
+        else:
+            assert manager.config[key] == value
     assert manager.config["database"]["run_migrations_on_startup"] is True
     # Ensure no dynamic validation error messages present (updated wording)
     assert "does not exist or isn’t a directory" not in caplog.text

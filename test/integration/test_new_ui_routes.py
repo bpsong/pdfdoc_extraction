@@ -1,4 +1,6 @@
 from __future__ import annotations
+from contextlib import nullcontext
+import pytest
 
 from typing import Any, cast
 from unittest.mock import Mock
@@ -10,6 +12,7 @@ from starlette.routing import Route
 import web.server as web_server
 import modules.api_router as api_router
 from modules.auth_utils import AuthError
+from modules.services.upload_storage_lock import UploadStorageBusy, web_process_ownership
 
 
 TOKEN = "test-token"
@@ -111,12 +114,42 @@ def authenticate(client: TestClient) -> None:
 def test_app_lifespan_runs_shutdown_manager(monkeypatch) -> None:
     shutdown_manager = Mock()
     monkeypatch.setattr(web_server, "ShutdownManager", lambda: shutdown_manager)
+    monkeypatch.setattr(web_server, "web_process_ownership", lambda _config: nullcontext())
     client = build_client(monkeypatch)
 
     with client:
         pass
 
     shutdown_manager.shutdown.assert_called_once_with()
+
+
+def test_second_app_cannot_reconcile_while_first_app_serves(monkeypatch, tmp_path) -> None:
+    first = build_client(monkeypatch)
+    config = web_server.get_dependencies()[0]
+    config.values["watch_folder"] = {"processing_dir": str(tmp_path)}
+    reconciliation = Mock(staging_removed=0, orphaned_final_removed=0)
+    reconcile = Mock(return_value=reconciliation)
+    monkeypatch.setattr(web_server, "reconcile_upload_files", reconcile)
+    with first:
+        with pytest.raises(UploadStorageBusy):
+            with TestClient(web_server.create_app()):
+                pytest.fail("Second serving application was admitted")
+        assert first.get("/health/live").status_code == 200
+        assert reconcile.call_count == 1
+    with web_process_ownership(config):
+        pass
+
+
+def test_failed_startup_releases_web_ownership(monkeypatch, tmp_path) -> None:
+    client = build_client(monkeypatch)
+    config = web_server.get_dependencies()[0]
+    config.values["watch_folder"] = {"processing_dir": str(tmp_path)}
+    monkeypatch.setattr(web_server, "reconcile_upload_files", Mock(side_effect=RuntimeError("database unavailable")))
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        with client:
+            pass
+    with web_process_ownership(config):
+        pass
 
 
 def test_public_health_routes_are_minimal_and_use_runtime_readiness(monkeypatch) -> None:
