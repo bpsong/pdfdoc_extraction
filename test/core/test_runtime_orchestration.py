@@ -718,3 +718,4 @@ def test_watch_monitor_retry_cleanup_and_loop_exceptions(monkeypatch, tmp_path):
         Mock(side_effect=[OSError("scan"), KeyboardInterrupt]),
     )
     monitor._monitor_new_files()
+# pyright: reportArgumentType=false

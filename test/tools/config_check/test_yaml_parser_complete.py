@@ -159,3 +159,4 @@ def test_yaml_parser_remaining_ruamel_file_and_string_paths(tmp_path: Path) -> N
     assert "empty" in (parser._loads_with_ruamel("", "source")[1] or "")
     parser._yaml_loader = type("MappingLoader", (), {"load": lambda self, _stream: {"value": 1}})()
     assert parser._loads_with_ruamel("value: 1", "source")[0] == {"value": 1}
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalSubscript=false

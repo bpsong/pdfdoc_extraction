@@ -394,3 +394,4 @@ def test_document_resolver_table_retry_split_and_page_fallbacks() -> None:
             candidates=[{"page_number": 1, "value": {"name": "A"}}], page_count=1,
             document_instructions="", calls=[], findings=[], normalization_findings=[],
         )
+# pyright: reportArgumentType=false

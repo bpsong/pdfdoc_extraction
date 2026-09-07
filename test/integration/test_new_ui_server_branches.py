@@ -143,3 +143,4 @@ def test_server_admin_schema_route_and_json_http_exception(monkeypatch) -> None:
     response = client.get("/test-http-error")
     assert response.status_code == 418
     assert "detail" in response.json()
+# pyright: reportArgumentType=false

@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import multiprocessing
+from multiprocessing.process import BaseProcess
 from pathlib import Path
 from typing import Iterator
 
@@ -32,7 +33,7 @@ def _hold(root: str, kind: str, pipe) -> None:
 
 
 @contextmanager
-def held_by_child(root: Path, kind: str) -> Iterator[multiprocessing.Process]:
+def held_by_child(root: Path, kind: str) -> Iterator[BaseProcess]:
     context = multiprocessing.get_context("spawn")
     parent, child = context.Pipe()
     process = context.Process(target=_hold, args=(str(root), kind, child))

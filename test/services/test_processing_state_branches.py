@@ -109,3 +109,4 @@ def test_review_detail_and_pipeline_group_helpers() -> None:
     groups = _pipeline_groups(states)
     assert groups[0]["batch_count"] == 2
     assert groups[1]["pipeline_version_id"] is None
+# pyright: reportOptionalSubscript=false

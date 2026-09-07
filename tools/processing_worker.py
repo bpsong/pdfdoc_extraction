@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import sys
 from types import FrameType
+from typing import Protocol
 
 from modules.config_manager import ConfigManager
 from modules.logging_config import setup_bootstrap_logging, setup_logging
@@ -16,7 +17,14 @@ from modules.services.runtime_health_service import RuntimeHealthReporter
 from modules.services.startup_service import run_startup_checks
 
 
-def install_signal_handlers(worker: object) -> None:
+class StoppableWorker(Protocol):
+    """Worker contract required by the signal handler."""
+
+    def stop(self) -> None:
+        """Request graceful worker shutdown."""
+
+
+def install_signal_handlers(worker: StoppableWorker) -> None:
     """Translate process signals into a graceful stop after current work."""
 
     def request_stop(_signum: int, _frame: FrameType | None) -> None:

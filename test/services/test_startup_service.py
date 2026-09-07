@@ -139,3 +139,4 @@ def test_unknown_migration_mode_is_rejected(tmp_path):
 
     with pytest.raises(ValueError, match="Unsupported migration mode"):
         startup_service.run_startup_checks(config, migration_mode="invalid")
+# pyright: reportArgumentType=false

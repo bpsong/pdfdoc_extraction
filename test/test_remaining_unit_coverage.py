@@ -541,3 +541,4 @@ def test_workflow_loader_and_manager_defensive_child_paths(monkeypatch) -> None:
     assert manager._task_at_index(0) == (None, {})
     assert manager._task_at_index(0, definition={"pipeline": ["x"], "tasks": "bad"}) == ("x", {})
     manager._trigger_child_workflows({})
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false

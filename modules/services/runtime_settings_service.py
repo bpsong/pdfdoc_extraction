@@ -189,7 +189,10 @@ class RuntimeSettingsService:
 
     def _versioned_tasks(self) -> list[dict[str, Any]]:
         """Return steps from the newest published version of each active template."""
-        rows = self.conn.execute(
+        conn = self.conn
+        if conn is None:
+            return []
+        rows = conn.execute(
             """
             SELECT v.id AS pipeline_version_id, v.version_number,
                    v.definition_json, t.template_key, t.name

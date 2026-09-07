@@ -707,8 +707,9 @@ Prototype tests are separate under `test/pipeline_visual_editor_prototype/`.
 
 Live LlamaCloud checks are opt-in because they require credentials and external
 resources. Browser tests may require Playwright Chromium. Pyright has
-configuration but is not pinned in application requirements. Ruff and
-pytest-cov are not supported project checks unless added to the toolchain.
+configuration but is not pinned in the project dependency files. Ruff is not a
+supported project check. Pytest, pytest-cov, and Playwright are pinned in
+`requirements-dev.txt`; production installs use `requirements.txt`.
 
 ## Known architectural debt
 

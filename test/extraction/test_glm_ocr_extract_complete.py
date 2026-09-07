@@ -135,3 +135,4 @@ def test_ollama_host_validation_and_classification() -> None:
             _validate_ollama_host(value)
     with pytest.raises(TaskError, match="invalid port"):
         _validate_ollama_host("http://host:not-a-port")
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false

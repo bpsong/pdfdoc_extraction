@@ -30,7 +30,7 @@ def test_incomplete_upload_rejects_all_files_and_closes_spools(
     import starlette.formparsers as parsers
 
     spools = []
-    original = parsers.SpooledTemporaryFile
+    original = getattr(parsers, "SpooledTemporaryFile")
 
     def track_spool(*args, **kwargs):
         spool = original(*args, **kwargs)

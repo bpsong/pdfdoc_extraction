@@ -611,3 +611,4 @@ def test_runtime_validator_invalid_nested_shapes_are_skipped(tmp_path: Path) -> 
     assert validator._validate_reference_files(config) == ([], [])
     assert validator._validate_directory_permissions(config) == ([], [])
     assert validator._validate_csv_files(config)[0] == []
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportOptionalSubscript=false

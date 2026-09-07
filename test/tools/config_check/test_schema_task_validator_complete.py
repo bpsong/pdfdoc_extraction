@@ -123,3 +123,4 @@ def test_task_validator_structure_pipeline_and_import_exception_paths() -> None:
     with patch("importlib.import_module", side_effect=RuntimeError("x")):
         assert _validate_class_type("m", "C", "task").code == "task-import-class-type-error"
     assert _validate_task_imports("task", {"module": "m", "class": "C"})
+# pyright: reportArgumentType=false, reportCallIssue=false, reportOptionalMemberAccess=false

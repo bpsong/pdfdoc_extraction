@@ -4,6 +4,13 @@ dev_config.yaml
 config copy.yaml
 test/third_party/test_config.yaml
 *.yaml
+*.yml
+
+# Safe, synthetic configuration fixtures and distributable examples
+!test/fixtures/**/*.yaml
+!test/fixtures/**/*.yml
+!*.example.yaml
+!*.example.yml
 
 # Configuration backups and generated copies can retain live credentials
 *.yaml.*
@@ -57,6 +64,9 @@ test/files/
 
 # Generated output
 output/playwright/
+.playwright-mcp/
+pipeline_visual_editor_prototype/vite.stdout.log
+pipeline_visual_editor_prototype/vite.stderr.log
 tmp/
 experimenta/results/
 experimentb/llama-extract-sample_invoice.json

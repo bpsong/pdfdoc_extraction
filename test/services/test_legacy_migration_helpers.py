@@ -412,3 +412,4 @@ def test_migration_discovery_secret_collision_and_terminal_skips(tmp_path: Path,
     obj._backfill_review_items(
         batch_id="b", terminal=True, dependencies={"review": "v1", "other": "v2"}
     )
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false

@@ -141,3 +141,4 @@ def test_admin_settings_remaining_defensive_helpers(tmp_path: Path, monkeypatch)
     target = {"a": "not-a-map"}
     _set_nested(target, "a.b", 2)
     assert target == {"a": {"b": 2}}
+# pyright: reportAttributeAccessIssue=false

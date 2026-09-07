@@ -193,3 +193,4 @@ def test_split_child_preflight_is_provider_specific_for_llama_and_glm(
     assert llama_manager._is_llamacloud_extract_task(
         llama_config.get("tasks.extract")
     ) is True
+# pyright: reportArgumentType=false, reportOptionalSubscript=false

@@ -307,3 +307,4 @@ def test_local_file_storage_validation_format_and_copy_errors(tmp_path, monkeypa
     task.filename = "{id"
     with pytest.raises(TaskError, match="Failed to format filename"):
         task.run({"id": "doc", "file_path": str(source), "original_filename": "source.pdf"})
+# pyright: reportAttributeAccessIssue=false

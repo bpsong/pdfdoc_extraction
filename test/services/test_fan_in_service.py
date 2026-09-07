@@ -305,3 +305,4 @@ def test_fan_in_defensive_context_and_metadata_paths():
 
     service._get_document.return_value = None
     service._update_failure_metadata("missing", {"error": "boom"})
+# pyright: reportOptionalSubscript=false

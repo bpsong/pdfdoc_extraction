@@ -384,3 +384,4 @@ def test_portable_pipeline_dependency_mapping_is_reported(tmp_path: Path, monkey
         lambda *_args, **_kwargs: {"findings": []},
     )
     assert validate_portable_file(tmp_path / "pipeline.yaml", kind="pipeline").is_valid
+# pyright: reportArgumentType=false, reportOptionalCall=false, reportOptionalMemberAccess=false

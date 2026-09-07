@@ -247,3 +247,4 @@ def test_save_draft_and_diff_preview_use_normalized_fields() -> None:
     service._final_values = Mock(return_value={"a": 1, "b": 2})
     preview = service.diff_preview("r1", {"a": 3, "c": 4})
     assert preview["change_count"] == 2
+# pyright: reportOptionalSubscript=false

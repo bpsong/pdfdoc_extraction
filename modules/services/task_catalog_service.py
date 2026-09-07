@@ -163,7 +163,10 @@ class TaskCatalogService:
 
     def _versioned_configured_entries(self) -> list[dict[str, Any]]:
         """Return tasks used by the newest version of each active template."""
-        rows = self.conn.execute(
+        conn = self.conn
+        if conn is None:
+            return []
+        rows = conn.execute(
             """
             SELECT v.id, v.version_number, v.definition_json,
                    t.template_key, t.name

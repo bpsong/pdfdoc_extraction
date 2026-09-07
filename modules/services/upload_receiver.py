@@ -9,7 +9,7 @@ import asyncio
 import logging
 import sqlite3
 from threading import Lock
-from typing import AsyncGenerator, AsyncIterator, Awaitable, Callable
+from typing import AsyncGenerator, AsyncIterator
 import uuid
 
 import anyio
@@ -19,8 +19,9 @@ from starlette.formparsers import MultiPartException, MultiPartParser
 from python_multipart.exceptions import MultipartParseError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request as StarletteRequest
+from starlette.types import Message, Receive
 
-from ..config_manager import ConfigManager
+from ..config_protocol import ConfigProvider
 from ..db.connection import connect
 from .upload_storage_lock import upload_storage_access
 
@@ -168,7 +169,7 @@ class UploadAdmissionController:
                 self._active -= 1
 
 
-def _positive_int(config: ConfigManager, key: str, default: int) -> int:
+def _positive_int(config: ConfigProvider, key: str, default: int) -> int:
     try:
         value = int(config.get(key, default))
     except (TypeError, ValueError):
@@ -176,7 +177,7 @@ def _positive_int(config: ConfigManager, key: str, default: int) -> int:
     return value if value > 0 else default
 
 
-def upload_limits(config: ConfigManager) -> UploadLimits:
+def upload_limits(config: ConfigProvider) -> UploadLimits:
     """Resolve upload limits from deployment configuration."""
     return UploadLimits(
         max_file_bytes=_positive_int(config, "web.max_upload_mb", 50) * MIB,
@@ -211,10 +212,10 @@ def reject_large_content_length(request: Request, limits: UploadLimits) -> None:
 
 def _counting_receive(
     request: Request, max_request_bytes: int, idle_seconds: int = 30
-) -> Callable[[], Awaitable[dict]]:
+) -> Receive:
     received = 0
 
-    async def receive() -> dict:
+    async def receive() -> Message:
         nonlocal received
         try:
             message = await asyncio.wait_for(request.receive(), timeout=idle_seconds)
@@ -249,7 +250,7 @@ async def _remove_paths_after_cancellation(paths: list[Path]) -> None:
 
 async def receive_multipart_upload(
     request: Request,
-    config: ConfigManager,
+    config: ConfigProvider,
     admission: UploadAdmissionController | None = None,
     *,
     staging_root: Path | None = None,
@@ -266,7 +267,7 @@ async def receive_multipart_upload(
 
 async def _receive_multipart_upload(
     request: Request,
-    config: ConfigManager,
+    config: ConfigProvider,
     admission: UploadAdmissionController | None = None,
     *,
     staging_root: Path | None = None,
@@ -387,7 +388,7 @@ async def _receive_multipart_upload(
             raise
 
 
-def reconcile_upload_files(config: ConfigManager) -> UploadReconciliationResult:
+def reconcile_upload_files(config: ConfigProvider) -> UploadReconciliationResult:
     """Remove upload-owned files left unreferenced by an interrupted web process."""
     processing_dir = str(config.get("watch_folder.processing_dir") or "")
     if not processing_dir:
@@ -397,7 +398,7 @@ def reconcile_upload_files(config: ConfigManager) -> UploadReconciliationResult:
 
 
 def _reconcile_locked_upload_files(
-    config: ConfigManager, processing_dir: str
+    config: ConfigProvider, processing_dir: str
 ) -> UploadReconciliationResult:
     """Keep the reference snapshot and deletions inside one exclusive lock."""
     processing_root = Path(processing_dir).resolve()

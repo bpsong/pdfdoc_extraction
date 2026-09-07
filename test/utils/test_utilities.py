@@ -269,3 +269,4 @@ def test_retry_exhaustion_pdf_delay_and_resolution_exception(monkeypatch):
             raise TypeError("broken mapping")
 
     assert utils.resolve_field(BrokenMapping(data=1), "data") == (None, False)
+# pyright: reportArgumentType=false

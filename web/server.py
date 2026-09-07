@@ -15,7 +15,7 @@ from pathlib import Path
 import os
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 import json
 from urllib.parse import parse_qs
@@ -37,7 +37,7 @@ from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager
 from modules.auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from modules.logging_config import setup_bootstrap_logging, setup_logging
-from modules.services.startup_service import run_startup_checks
+from modules.services.startup_service import MigrationMode, run_startup_checks
 from modules.services.upload_receiver import reconcile_upload_files
 from modules.services.upload_storage_lock import web_process_ownership
 from modules.services.runtime_health_service import (
@@ -126,10 +126,10 @@ def create_app() -> FastAPI:
         file_logging=os.getenv("DOCFLOW_STDIO_CAPTURED") != "1",
     )
     logger = logging.getLogger("web.server")
-    run_startup_checks(
-        config,
-        migration_mode=os.getenv("DOCFLOW_STARTUP_MODE", "verify"),
-    )
+    startup_mode = os.getenv("DOCFLOW_STARTUP_MODE", "verify")
+    if startup_mode not in {"migrate", "verify"}:
+        raise RuntimeError(f"Unsupported startup mode: {startup_mode}")
+    run_startup_checks(config, migration_mode=cast(MigrationMode, startup_mode))
     production = _is_production()
     docs_enabled = not production or bool(config.get("web.production_docs_enabled", False))
     shutdown_manager = ShutdownManager()

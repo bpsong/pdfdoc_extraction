@@ -534,3 +534,4 @@ def test_split_adapter_errors_normalization_and_json_helpers(monkeypatch):
             return "legacy"
 
     assert _json_safe(Legacy()) == "legacy"
+# pyright: reportOptionalMemberAccess=false

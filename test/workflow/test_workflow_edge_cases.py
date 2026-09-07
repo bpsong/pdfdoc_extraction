@@ -448,3 +448,4 @@ def test_workflow_manager_skips_missing_children_and_missing_failure_roots(
     )
 
     loader.load_workflow.assert_called_once_with(start_task_index=0)
+# pyright: reportOptionalCall=false

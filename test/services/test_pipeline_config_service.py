@@ -308,3 +308,4 @@ def test_pipeline_config_service_remaining_model_and_storage_branches(monkeypatc
     service.versions.get_draft.return_value = None
     service._active_config = Mock(return_value={"pipeline": []})
     assert service._draft_config(None) == {"pipeline": []}
+# pyright: reportAttributeAccessIssue=false

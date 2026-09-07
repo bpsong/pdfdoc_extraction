@@ -21,13 +21,16 @@ subproject.
   ```powershell
   py -3.13 -m venv .venv
   .\.venv\Scripts\python.exe -m pip install --upgrade pip
-  .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+  .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
   ```
 
-- `requirements.txt` is the dependency manifest for the full application.
+- `requirements.txt` is the pinned runtime dependency manifest for the full
+  application. `requirements-dev.txt` includes it and adds test and browser
+  development tooling.
   `pyproject.toml` currently packages the `tools.config_check` CLI and does not
   replace the application requirements file.
-- Add or change Python dependencies in `requirements.txt`. Update
+- Add or change runtime Python dependencies in `requirements.txt`; put
+  development-only dependencies in `requirements-dev.txt`. Update
   `pyproject.toml` too only when the packaged config-check CLI needs the same
   dependency.
 - The production frontend uses the root `package.json`. Install its dependencies
@@ -189,12 +192,12 @@ Additional rules:
   ```
 
 - `pyrightconfig.json` is the current type-checker configuration, but Pyright is
-  not pinned in `requirements.txt`. Run `pyright` only when it is available or
+  not pinned in the dependency files. Run `pyright` only when it is available or
   the task explicitly adds it to the supported toolchain; report honestly when
   it was not run.
 - Ruff is not currently a project dependency. Do not claim or require Ruff
   checks without first adding and documenting the tooling. Pytest-cov is pinned
-  in `requirements.txt` for explicit coverage runs.
+  in `requirements-dev.txt` for explicit coverage runs.
 
 ## Task List Workflow
 

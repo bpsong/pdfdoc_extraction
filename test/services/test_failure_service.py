@@ -234,3 +234,4 @@ def test_failure_service_defensive_payload_and_grouping_branches():
         {"error": "failed", "output_json": "{}"},
     )
     assert metadata_fatal["message"] == "from metadata"
+# pyright: reportOptionalSubscript=false

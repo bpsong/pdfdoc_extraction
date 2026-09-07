@@ -264,3 +264,4 @@ def test_router_remaining_nested_helpers(monkeypatch: pytest.MonkeyPatch, tmp_pa
     with pytest.raises(HTTPException, match="Unable to read CSV"):
         monkeypatch.setattr(Path, "open", Mock(side_effect=OSError("read")))
         helpers["_pipeline_csv_metadata"](config, "bad.csv")
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportCallIssue=false, reportOptionalMemberAccess=false

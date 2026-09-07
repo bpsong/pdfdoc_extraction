@@ -86,7 +86,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
    ```powershell
    py -3.13 -m venv .venv
    .\.venv\Scripts\python.exe -m pip install --upgrade pip
-   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
    npm ci
    ```
 
@@ -125,6 +125,14 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Dependencies Installation
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+`requirements.txt` contains pinned application dependencies. Contributors and
+test environments should install `requirements-dev.txt`, which includes the
+runtime set plus pytest, coverage, and browser-test tooling:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 ```
 
 Key dependencies:
@@ -360,7 +368,8 @@ The `admin` account has full access. The `operator` account cannot access admini
 pdfdoc_extraction/
 ├── 📄 main.py                    # Application entry point
 ├── 📄 config.yaml               # Main configuration file
-├── 📄 requirements.txt          # Python dependencies
+├── 📄 requirements.txt          # Pinned runtime Python dependencies
+├── 📄 requirements-dev.txt      # Runtime plus test/browser tooling
 ├── 📁 modules/                  # Core application modules
 │   ├── api_router.py           # API endpoint management
 │   ├── config_manager.py       # Configuration management
@@ -409,7 +418,7 @@ pdfdoc_extraction/
    git clone <repository-url>
    cd pdfdoc_extraction
    py -3.13 -m venv .venv
-   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
    ```
 
 2. **Run tests**
