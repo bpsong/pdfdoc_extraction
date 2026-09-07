@@ -22,6 +22,40 @@ def test_available_pipeline_versions_are_redacted_and_ordered(tmp_path, monkeypa
     assert "tasks" not in pipelines[0]
 
 
+def test_available_pipeline_versions_only_include_latest_for_each_pipeline(
+    tmp_path, monkeypatch
+):
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    with connect(config) as conn:
+        template_id = conn.execute(
+            "SELECT template_id FROM pipeline_versions WHERE id = ?",
+            (config.pipeline_version_id,),
+        ).fetchone()["template_id"]
+        templates = PipelineTemplateService(
+            conn, configured_secret_aliases={"test-api"}
+        )
+        definition = templates.load_version(config.pipeline_version_id)["definition"]
+        definition["tasks"]["extract"]["label"] = "Latest extraction"
+        saved = templates.save_draft(
+            template_id,
+            expected_revision=2,
+            definition=definition,
+            user="admin",
+        )
+        latest = templates.publish(
+            template_id,
+            expected_revision=saved["revision"],
+            user="admin",
+        )["version"]
+
+    response = client.get("/api/pipelines/available?source=upload")
+
+    assert response.status_code == 200
+    pipelines = response.json()["pipelines"]
+    assert [item["pipeline_version_id"] for item in pipelines] == [latest["id"]]
+    assert pipelines[0]["version_number"] == 2
+
+
 def test_upload_requires_exactly_one_pipeline_version_before_writes(
     tmp_path, monkeypatch
 ):

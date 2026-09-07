@@ -30,7 +30,7 @@ class IngestionAssignmentService:
         self.config = config
 
     def available_versions(self, *, role: str) -> list[dict[str, Any]]:
-        """Return safe active versions available to the current role."""
+        """Return the latest safe version of each active pipeline for the role."""
         where_selectable = "" if role == "admin" else " AND t.operator_selectable = 1"
         rows = self.conn.execute(
             f"""
@@ -42,6 +42,11 @@ class IngestionAssignmentService:
             FROM pipeline_versions v
             JOIN pipeline_templates t ON t.id = v.template_id
             WHERE t.status = 'active'{where_selectable}
+              AND v.version_number = (
+                  SELECT MAX(latest.version_number)
+                  FROM pipeline_versions latest
+                  WHERE latest.template_id = v.template_id
+              )
             ORDER BY t.name, t.template_key, v.version_number DESC
             """
         ).fetchall()

@@ -67,7 +67,7 @@ def context(tmp_path):
         yield config, conn, IngestionAssignmentService(conn, config)
 
 
-def test_available_versions_filter_role_and_keep_all_versions(context):
+def test_available_versions_filter_role_and_keep_only_latest_version(context):
     _, conn, service = context
     template, first = publish_pipeline(conn, key="invoice", selectable=False)
     templates = PipelineTemplateService(
@@ -93,10 +93,8 @@ def test_available_versions_filter_role_and_keep_all_versions(context):
 
     assert service.available_versions(role="operator") == []
     admin = service.available_versions(role="admin")
-    assert [item["pipeline_version_id"] for item in admin] == [
-        second["id"],
-        first["id"],
-    ]
+    assert [item["pipeline_version_id"] for item in admin] == [second["id"]]
+    assert admin[0]["version_number"] == 2
     assert all("definition" not in item for item in admin)
 
 
