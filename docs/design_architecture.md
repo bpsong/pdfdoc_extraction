@@ -250,6 +250,39 @@ sequenceDiagram
 - **Legacy web upload:** `POST /upload` is retired and returns `410 Gone`.
   Legacy read-only response shapes remain for compatibility.
 
+### Watch-folder administration
+
+`/app/admin/watch-folders` independently manages binding configuration. A binding
+is enabled, paused (assignment retained), unbound (assignment cleared), or retired
+(disabled and immutable). Paused/unbound paths remain reserved. Retired paths
+are reusable through a new binding identity; historical batch references remain
+intact. Only unreferenced settings may be permanently deleted. No lifecycle
+action deletes source directories or PDFs.
+
+Schema version 7 rebuilds binding constraints to allow nullable assignments and
+adds retirement timestamps and optimistic revisions. The migration preserves
+binding IDs and checks foreign keys before committing. Configuration changes
+advance revisions; monitoring observations do not. Pause/unbind/retire do not
+require a healthy filesystem or executable assignment.
+
+Before each file claim, the coordinator re-reads the binding under SQLite's
+write lock, verifies the source directory and exact-version eligibility, and
+serializes the claim against administrative mutations. A started claim may
+finish before an update; subsequent claims use the current configuration.
+New batch metadata retains the source folder and binding revision. Earlier
+records are not backfilled with guessed source snapshots.
+
+`watch_folder_health` stores scan/success/ingestion timestamps, scan issues, and
+ignored-file counts. The UI distinguishes configuration state from scan health;
+missing/old observations are stale after the larger of 30 seconds or three poll
+intervals. Test access/Check now run non-ingesting directory-existence/listing
+checks in the web process. They do not test destructive filesystem permissions,
+enqueue work, start a watcher, or replace coordinator scan timestamps.
+
+The page presents exact-version upgrades, lifecycle confirmations, filters,
+bounded activity history, and binding-scoped Reports links. Audit Log includes
+the existing `admin_` family plus `watch_binding.*` configuration events.
+
 ### Pipeline construction
 
 The exact `pipeline_version_id` assigned before ingestion determines order and
@@ -442,7 +475,7 @@ review; mixed terminal outcomes produce `completed_with_errors`.
 | Versioned pipelines | `pipeline_templates`, `pipeline_drafts`, `pipeline_versions`, `pipeline_version_schema_dependencies` |
 | Versioned review forms | `review_schema_templates`, `review_schema_drafts`, `review_schema_versions` |
 | Ingress configuration | `watch_folder_bindings` |
-| Runtime health | `runtime_component_health` |
+| Runtime health | `runtime_component_health`, `watch_folder_health` |
 | Schema management | `schema_migrations` |
 
 [`modules/db/connection.py`](../modules/db/connection.py) resolves the database
@@ -586,7 +619,7 @@ state.
 
 Operator pages cover upload, processing, split and extraction inspection,
 review, failures, reports, and settings. Admin pages cover the overview, fixed
-user accounts, versioned pipelines and review forms, the task catalog, legacy
+user accounts, watch folders, versioned pipelines and review forms, the task catalog, legacy
 schema validation, and the filtered administrative audit log.
 
 Extraction and human-review pages mount the local PDF.js module and worker to

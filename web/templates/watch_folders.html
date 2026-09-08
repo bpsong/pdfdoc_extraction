@@ -1,0 +1,45 @@
+{% extends "app_base.html" %}
+{% block header_actions %}<button id="watch-add" class="btn btn-primary btn-sm" type="button">Add watch folder</button>{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/watch_folders.css">
+<section id="watch-workspace" aria-label="Watch-folder management">
+    <div class="watch-filters">
+        <input id="watch-search" class="input input-bordered input-sm" aria-label="Search folders or pipelines" placeholder="Search folders or pipelines">
+        <select id="watch-status" class="select select-bordered select-sm" aria-label="Binding status"><option value="">All statuses</option><option>enabled</option><option>paused</option><option>unbound</option></select>
+        <select id="watch-health" class="select select-bordered select-sm" aria-label="Health filter"><option value="">All health</option><option>healthy</option><option>unhealthy</option><option>stale</option></select>
+        <label><input id="watch-updates" type="checkbox" class="checkbox checkbox-sm"> Updates available</label>
+        <label><input id="watch-retired" type="checkbox" class="checkbox checkbox-sm"> Show retired</label>
+        <button id="watch-refresh" class="btn btn-outline btn-sm" type="button">Refresh</button>
+    </div>
+    <p id="watch-message" role="status" aria-live="polite"></p>
+    <div class="watch-table-wrap"><table class="table watch-table"><thead><tr><th>Folder</th><th>Status</th><th>Pipeline</th><th>Version</th><th>Health</th><th>Last activity</th><th>Actions</th></tr></thead><tbody id="watch-rows"><tr><td colspan="7">Loading watch folders…</td></tr></tbody></table></div>
+    <p id="watch-summary" class="watch-muted"></p>
+</section>
+<dialog id="watch-dialog" aria-labelledby="watch-title">
+    <form id="watch-form" class="watch-drawer">
+        <header><h2 id="watch-title">Edit watch folder</h2><button id="watch-close" class="btn btn-ghost btn-sm" type="button" aria-label="Close watch folder editor">✕</button></header>
+        <div class="watch-drawer-body">
+            <label>Folder path<textarea id="watch-path" class="textarea textarea-bordered" rows="3" required spellcheck="false"></textarea></label>
+            <button id="watch-test" class="btn btn-outline btn-sm" type="button">Test access</button>
+            <p id="watch-check-result" role="status" aria-live="polite"></p>
+            <label>Pipeline<select id="watch-pipeline" class="select select-bordered"><option value="">Unbound</option></select></label>
+            <label>Published version<select id="watch-version" class="select select-bordered"></select></label>
+            <button id="watch-upgrade" type="button" class="btn btn-outline btn-sm">Use latest version</button>
+            <p class="watch-notice">New files use the selected version. Queued and existing documents keep their assigned version.</p>
+            <label class="watch-toggle"><input id="watch-enabled" type="checkbox" class="toggle toggle-success"> Watch folder enabled</label>
+            <p class="watch-muted">When disabled, new files will not be ingested from this folder.</p>
+            <p id="watch-error" class="text-error" role="alert"></p>
+            <div id="watch-existing-actions" class="watch-actions">
+                <button type="button" data-lifecycle="unbind" class="btn btn-outline btn-sm">Unbind pipeline</button>
+                <button type="button" data-lifecycle="retire" class="btn btn-outline btn-sm text-error">Retire binding</button>
+                <button id="watch-delete" type="button" data-lifecycle="delete" class="btn btn-outline btn-sm text-error">Delete unused binding</button>
+                <p class="watch-muted">Retirement preserves history and releases the path. Neither action deletes files from disk.</p>
+            </div>
+        </div>
+        <footer><button id="watch-cancel" class="btn btn-outline" type="button">Cancel</button><button id="watch-save" class="btn btn-primary" type="submit">Save changes</button></footer>
+    </form>
+</dialog>
+<dialog id="watch-confirm" class="watch-confirm" aria-labelledby="watch-confirm-title"><form method="dialog"><h2 id="watch-confirm-title">Confirm change</h2><p id="watch-confirm-text"></p><div class="watch-actions"><button class="btn btn-outline" value="cancel" autofocus>Cancel</button><button class="btn btn-primary" value="confirm">Confirm</button></div></form></dialog>
+<dialog id="watch-activity" class="watch-confirm" aria-labelledby="watch-activity-title"><h2 id="watch-activity-title">Folder activity</h2><div id="watch-activity-body"></div><div class="watch-actions"><button id="watch-activity-prev" class="btn btn-outline btn-sm">Previous</button><button id="watch-activity-next" class="btn btn-outline btn-sm">Next</button><button id="watch-activity-close" class="btn btn-primary btn-sm">Close</button></div></dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/js/watch_folder_view_models.js" defer></script><script src="/static/js/watch_folders.js" defer></script>{% endblock %}

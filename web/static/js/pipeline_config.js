@@ -65,11 +65,6 @@
     const importButton = document.getElementById("pipeline-import-button");
     const importFile = document.getElementById("pipeline-import-file");
     const exportButton = document.getElementById("pipeline-export-button");
-    const bindingPath = document.getElementById("pipeline-binding-path");
-    const bindingVersion = document.getElementById("pipeline-binding-version");
-    const bindingAdd = document.getElementById("pipeline-binding-add");
-    const bindingFindings = document.getElementById("pipeline-binding-findings");
-    const bindingList = document.getElementById("pipeline-binding-list");
     const templateDialog = document.getElementById("pipeline-template-dialog");
     const templateForm = document.getElementById("pipeline-template-form");
     const templateDialogTitle = document.getElementById("pipeline-template-dialog-title");
@@ -176,58 +171,10 @@
         }
     }
 
-    function bindingEligibility() {
-        if (!state.templateId || !state.template) {
-            return {
-                canBind: false,
-                message: "Select a pipeline template before adding a watch-folder binding.",
-            };
-        }
-        if (!state.versions.length) {
-            return {
-                canBind: false,
-                message: "To add a watch-folder binding, publish a version first, then activate this pipeline.",
-            };
-        }
-        if (state.template.status === "archived") {
-            return {
-                canBind: false,
-                message: "Archived pipelines cannot have enabled watch-folder bindings.",
-            };
-        }
-        if (state.template.status !== "active") {
-            return {
-                canBind: false,
-                message: "To add a watch-folder binding, activate this pipeline first.",
-            };
-        }
-        return { canBind: true, message: "" };
-    }
-
-    function renderBindingVersionOptions() {
-        bindingVersion.innerHTML = '<option value="">Select version</option>' + state.versions.map((version) => `<option value="${escapeHtml(version.id)}">v${escapeHtml(version.version_number)} · ${escapeHtml(String(version.content_hash || "").slice(0, 10))}</option>`).join("");
-    }
-
-    function syncBindingControls() {
-        const eligibility = bindingEligibility();
-        bindingPath.disabled = !eligibility.canBind;
-        bindingVersion.disabled = !eligibility.canBind;
-        bindingAdd.disabled = !eligibility.canBind;
-        bindingFindings.textContent = eligibility.message;
-    }
-
     async function loadBindings() {
         const payload = await window.DocFlow.apiGet("/api/admin/watch-folder-bindings");
-        const bindings = payload.bindings || [];
-        renderBindingVersionOptions();
-        syncBindingControls();
-        bindingList.innerHTML = bindings.length ? bindings.map((binding) => `
-            <div class="flex flex-wrap items-center gap-2 rounded-lg border border-base-300 p-2 text-sm">
-                <span class="font-mono">${escapeHtml(binding.folder_path)}</span>
-                <span class="badge ${binding.enabled ? "badge-success" : "badge-ghost"} badge-sm">${binding.enabled ? "enabled" : "disabled"}</span>
-                <span class="text-base-content/60">${escapeHtml(binding.pipeline && binding.pipeline.name || "")} v${escapeHtml(binding.pipeline && binding.pipeline.version_number || "—")}</span>
-            </div>
-        `).join("") : '<div class="empty-panel py-3">No watch-folder bindings</div>';
+        const count = (payload.bindings || []).filter(item => item.pipeline_template_id === state.templateId && !item.retired_at).length;
+        document.getElementById("pipeline-watch-summary").textContent = `${count} watch folders use this pipeline. Manage watch folders →`;
     }
 
     function stepsOf(model) {
@@ -1809,9 +1756,6 @@
             templateClone.disabled = true;
             templateActivate.disabled = true;
             templateActivate.textContent = "Activate for uploads";
-            renderBindingVersionOptions();
-            syncBindingControls();
-            bindingList.innerHTML = '<div class="empty-panel py-3">No watch-folder bindings</div>';
             render();
             return;
         }
@@ -2855,8 +2799,6 @@
         state.templateId = templateSelect.value;
         state.template = null;
         state.versions = [];
-        renderBindingVersionOptions();
-        syncBindingControls();
         loadPipelineConfig().catch((error) => window.DocFlow.showToast(error.message, "error"));
     });
     templateCreate.addEventListener("click", () => {
@@ -2983,30 +2925,7 @@
             window.location.href = `/api/admin/pipeline-templates/${encodeURIComponent(state.templateId)}/draft/export?format=yaml`;
         }
     });
-    bindingAdd.addEventListener("click", async () => {
-        bindingFindings.textContent = "";
-        const eligibility = bindingEligibility();
-        if (!eligibility.canBind) {
-            bindingFindings.textContent = eligibility.message;
-            return;
-        }
-        if (!bindingPath.value.trim() || !bindingVersion.value) {
-            bindingFindings.textContent = "Choose a folder and exact published version.";
-            return;
-        }
-        try {
-            const binding = await window.DocFlow.apiPost("/api/admin/watch-folder-bindings", {
-                folder_path: bindingPath.value.trim(),
-                pipeline_version_id: bindingVersion.value,
-                enabled: true,
-            });
-            bindingFindings.textContent = (binding.validation_findings || []).map((item) => item.message).join(" ");
-            bindingPath.value = "";
-            await loadBindings();
-        } catch (error) {
-            bindingFindings.textContent = error.message;
-        }
-    });
+
     window.addEventListener("beforeunload", (event) => {
         if (!state.dirty) {
             return;

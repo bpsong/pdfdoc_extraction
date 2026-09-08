@@ -330,6 +330,16 @@ CREATE TABLE IF NOT EXISTS runtime_component_health (
     PRIMARY KEY(run_id, component)
 );
 
+CREATE TABLE IF NOT EXISTS watch_folder_health (
+    binding_id TEXT PRIMARY KEY,
+    last_scan_at TEXT,
+    last_success_at TEXT,
+    last_ingested_at TEXT,
+    issue TEXT,
+    ignored_count INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(binding_id) REFERENCES watch_folder_bindings(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_documents_batch_id ON documents(batch_id);
 CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status);
 CREATE INDEX IF NOT EXISTS idx_task_runs_document_id ON task_runs(document_id);

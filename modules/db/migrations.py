@@ -14,7 +14,7 @@ from modules.services.legacy_versioned_config_migration import (
 
 LEGACY_SCHEMA_VERSION = 2
 PROCESSING_QUEUE_SCHEMA_VERSION = 4
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 TARGET_VERSIONED_CONFIG_SCHEMA_VERSION = 3
 
 
@@ -107,6 +107,7 @@ def initialize_database(config_manager: ConfigProvider) -> None:
     migration: LegacyVersionedConfigMigration | None = None
     with connect(config_manager) as conn:
         prepare_versioned_config_schema(conn)
+        upgrade_watch_folder_management(conn)
         existing = conn.execute(
             "SELECT version FROM schema_migrations WHERE version = ?",
             (SCHEMA_VERSION,),
@@ -181,3 +182,43 @@ def initialize_database(config_manager: ConfigProvider) -> None:
             raise
     if migration is not None:
         migration.apply_runtime_config()
+
+
+def upgrade_watch_folder_management(conn: sqlite3.Connection) -> None:
+    """Rebuild binding constraints while preserving identities and references."""
+    if "revision" in _table_columns(conn, "watch_folder_bindings"):
+        return
+    conn.execute("PRAGMA foreign_keys = OFF")
+    try:
+        with immediate_transaction(conn):
+            conn.execute("""
+                CREATE TABLE watch_folder_bindings_next (
+                    id TEXT PRIMARY KEY, folder_path TEXT NOT NULL,
+                    normalized_path TEXT NOT NULL COLLATE NOCASE,
+                    pipeline_template_id TEXT, pipeline_version_id TEXT,
+                    enabled INTEGER NOT NULL DEFAULT 0 CHECK(enabled IN (0,1)),
+                    created_by TEXT, created_at TEXT NOT NULL,
+                    updated_by TEXT, updated_at TEXT NOT NULL,
+                    retired_at TEXT, revision INTEGER NOT NULL DEFAULT 1,
+                    CHECK ((pipeline_template_id IS NULL) = (pipeline_version_id IS NULL)),
+                    CHECK (enabled = 0 OR (pipeline_version_id IS NOT NULL AND retired_at IS NULL)),
+                    FOREIGN KEY(pipeline_version_id, pipeline_template_id)
+                        REFERENCES pipeline_versions(id, template_id)
+                )
+            """)
+            conn.execute("""
+                INSERT INTO watch_folder_bindings_next
+                    (id,folder_path,normalized_path,pipeline_template_id,pipeline_version_id,
+                     enabled,created_by,created_at,updated_by,updated_at)
+                SELECT id,folder_path,normalized_path,pipeline_template_id,pipeline_version_id,
+                       enabled,created_by,created_at,updated_by,updated_at
+                FROM watch_folder_bindings
+            """)
+            conn.execute("DROP TABLE watch_folder_bindings")
+            conn.execute("ALTER TABLE watch_folder_bindings_next RENAME TO watch_folder_bindings")
+            conn.execute("CREATE UNIQUE INDEX idx_watch_folder_live_path ON watch_folder_bindings(normalized_path) WHERE retired_at IS NULL")
+            conn.execute("CREATE INDEX idx_watch_folder_bindings_enabled ON watch_folder_bindings(enabled, normalized_path)")
+            if conn.execute("PRAGMA foreign_key_check").fetchall():
+                raise RuntimeError("Watch-folder migration would break historical references.")
+    finally:
+        conn.execute("PRAGMA foreign_keys = ON")

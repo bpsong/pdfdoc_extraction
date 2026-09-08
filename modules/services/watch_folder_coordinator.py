@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from pathlib import Path
 import shutil
 from threading import Event, RLock
@@ -10,7 +11,8 @@ import uuid
 from typing import Any
 
 from modules.config_protocol import ConfigProvider
-from modules.db.connection import connect
+from modules.db.connection import connect, immediate_transaction
+from modules.db.repositories import WatchFolderBindingRepository
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.ingress_binding_service import IngressBindingService
 from modules.services.runtime_health_service import RuntimeHealthReporter
@@ -64,7 +66,14 @@ class WatchFolderCoordinator:
                 if not binding["enabled"]:
                     continue
                 try:
-                    processed += self._scan_binding(binding)
+                    before = self._scan_issue_count
+                    count = self._scan_binding(binding)
+                    processed += count
+                    with connect(self.config) as health_conn:
+                        repo = WatchFolderBindingRepository(health_conn)
+                        if repo.get(binding["id"]):
+                            repo.record_health(binding["id"], issue="Folder scan or file claim failed." if self._scan_issue_count > before else None,
+                                               ingested=count, ignored_count=sum(key[0] == binding["id"] for key in self._ignored_invalid))
                 except Exception:
                     self._scan_issue_count += 1
                     logger.exception(
@@ -123,7 +132,25 @@ class WatchFolderCoordinator:
     def _claim_and_process(
         self, source_path: Path, binding: dict[str, Any]
     ) -> bool:
+        """Serialize a claim with binding mutations across application processes."""
+        with connect(self.config) as conn:
+            with immediate_transaction(conn):
+                current = WatchFolderBindingRepository(conn).get(binding["id"])
+                if not current or not current["enabled"] or current.get("retired_at"):
+                    return False
+                if Path(current["folder_path"]).resolve() != source_path.parent.resolve():
+                    return False
+                return self._claim_current(source_path, current, conn)
+
+    def _claim_current(self, source_path: Path, binding: dict[str, Any], conn: Any) -> bool:
         """Move first to claim, then persist one durable processing job."""
+        try:
+            IngestionAssignmentService(conn, self.config).resolve_selection(
+                str(binding["pipeline_version_id"]), role="system"
+            )
+        except ValueError:
+            self._scan_issue_count += 1
+            return False
         document_id = str(uuid.uuid4())
         destination = self.processing_dir / f"{document_id}.pdf"
         try:
@@ -132,13 +159,14 @@ class WatchFolderCoordinator:
                 windows_long_path(str(destination)),
             )
         except OSError:
+            self._scan_issue_count += 1
             logger.warning(
                 "Watch file claim failed for binding_id=%s", binding["id"]
             )
             return False
 
         try:
-            with connect(self.config) as conn:
+            with nullcontext(conn):
                 created = IngestionAssignmentService(conn, self.config).create_batch(
                     pipeline_version_id=str(binding["pipeline_version_id"]),
                     role="system",
@@ -154,13 +182,14 @@ class WatchFolderCoordinator:
                         }
                     ],
                     user=None,
-                    metadata={"ingress_binding_id": binding["id"]},
+                    metadata={"ingress_binding_id": binding["id"], "source_folder": binding["folder_path"], "binding_revision": binding.get("revision", 1)},
                     ingress_binding_id=str(binding["id"]),
                     status="queued",
                 )
             batch = created["batch"]
             document = created["documents"][0]
         except Exception:
+            self._scan_issue_count += 1
             self._restore_claim(destination, source_path)
             logger.exception(
                 "Watch assignment failed for binding_id=%s", binding["id"]

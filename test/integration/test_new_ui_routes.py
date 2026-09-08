@@ -507,7 +507,7 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert 'id="pipeline-publish-dialog"' in response.text
     assert 'id="pipeline-publish-dialog-confirm"' in response.text
     assert response.text.count('class="admin-panel ') == 9
-    assert response.text.count('class="admin-panel-header"') == 7
+    assert response.text.count('class="admin-panel-header"') == 6
     assert "/static/js/pipeline_config.js?v=publish-confirmation-modal-1" in response.text
 
 

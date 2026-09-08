@@ -66,11 +66,11 @@ def test_schema_and_pipeline_editors_share_admin_panel_structure() -> None:
     assert schema_template.count('class="admin-panel-header"') == 3
     assert "schema-panel-header" not in schema_template
     assert pipeline_template.count('class="admin-panel ') == 9
-    assert pipeline_template.count('class="admin-panel-header"') == 7
+    assert pipeline_template.count('class="admin-panel-header"') == 6
     assert 'class="card ' not in pipeline_template
     assert 'class="panel-header"' not in pipeline_template
     assert schema_template.count("admin-panel-title") == 3
-    assert pipeline_template.count("admin-panel-title") == 7
+    assert pipeline_template.count("admin-panel-title") == 6
     assert ".admin-panel" in styles
     assert ".admin-panel-header" in styles
     assert ".admin-panel-heading" in styles

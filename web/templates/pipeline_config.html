@@ -136,22 +136,8 @@
         </div>
         <pre class="pipeline-diff-preview" id="pipeline-diff-preview">No diff loaded</pre>
     </section>
-    <section class="admin-panel pipeline-bindings-panel">
-        <div class="admin-panel-header">
-            <div class="admin-panel-heading">
-                <h2 class="admin-panel-title">Watch-folder bindings</h2>
-                <p class="admin-panel-subtitle">Enabled bindings require one exact published version from an active pipeline.</p>
-            </div>
-        </div>
-        <div class="p-4">
-            <div class="grid gap-2 md:grid-cols-[2fr_1fr_auto]">
-                <label class="form-control"><span class="label-text">Folder path</span><input id="pipeline-binding-path" class="input input-bordered input-sm" placeholder="D:\incoming\invoices"></label>
-                <label class="form-control"><span class="label-text">Published version</span><select id="pipeline-binding-version" class="select select-bordered select-sm"></select></label>
-                <button id="pipeline-binding-add" class="btn btn-outline btn-sm self-end" type="button">Add binding</button>
-            </div>
-            <div id="pipeline-binding-findings" class="mt-2 text-sm" role="status" aria-live="polite"></div>
-            <div id="pipeline-binding-list" class="mt-3 space-y-2"></div>
-        </div>
+    <section class="admin-panel pipeline-bindings-panel p-4">
+        <a id="pipeline-watch-summary" href="/app/admin/watch-folders">Manage watch folders →</a>
     </section>
 </div>
 <input id="pipeline-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">

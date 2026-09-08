@@ -752,6 +752,15 @@ def create_app() -> FastAPI:
             admin_required=True,
         )
 
+    @app.get("/app/admin/watch-folders", response_class=HTMLResponse)
+    async def app_watch_folders_page(request: Request):
+        """Serve independent watch-folder administration."""
+        return await render_app_page(
+            request, "watch_folders.html", page_title="Watch folders",
+            page_subtitle="Route incoming PDFs to published pipeline versions.",
+            active_nav="watch_folders", admin_required=True,
+        )
+
     @app.get("/app/admin/pipeline", response_class=HTMLResponse)
     async def app_pipeline_config_page(request: Request):
         """Serve the admin pipeline configuration page."""

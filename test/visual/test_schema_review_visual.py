@@ -781,9 +781,7 @@ def test_phase14_pipeline_admin_versioning_diff_bindings_and_errors(
     assert "2 immutable version" in (
         page.locator("#pipeline-version-history").text_content() or ""
     )
-    assert page.locator("#pipeline-binding-list").get_by_text(
-        "Phase 14 Long Invoice Processing Pipeline"
-    ).count() >= 1
+    assert page.locator("#pipeline-watch-summary").is_visible()
 
     page.locator("#pipeline-draft-list .pipeline-step-main").nth(2).click()
     exact_schema = page.get_by_label("Published review form version")
@@ -812,44 +810,17 @@ def test_phase14_pipeline_admin_versioning_diff_bindings_and_errors(
     _capture_phase14(page, "07-pipeline-admin-server-error")
 
 
-def test_pipeline_binding_controls_explain_lifecycle_requirements(
+def test_pipeline_links_to_watch_folder_management(
     page: Page, visual_app: dict[str, str]
 ) -> None:
-    """Disable bindings until the selected pipeline is published and active."""
+    """Bindings are managed independently of the selected pipeline."""
     page.goto(f"{visual_app['base_url']}/app/admin/pipeline")
-    page.wait_for_function(
-        "() => document.querySelectorAll('#pipeline-template-select option').length >= 4"
-    )
-
-    page.locator("#pipeline-template-select").select_option(
-        visual_app["inactive_template_id"]
-    )
-    page.get_by_text(
-        "To add a watch-folder binding, publish a version first, then activate this pipeline."
-    ).wait_for()
-    assert page.locator("#pipeline-binding-path").is_disabled()
-    assert page.locator("#pipeline-binding-version").is_disabled()
-    assert page.locator("#pipeline-binding-add").is_disabled()
-
-    page.locator("#pipeline-template-select").select_option(
-        visual_app["inactive_published_template_id"]
-    )
-    page.get_by_text(
-        "To add a watch-folder binding, activate this pipeline first."
-    ).wait_for()
-    assert page.locator("#pipeline-binding-path").is_disabled()
-    assert page.locator("#pipeline-binding-version").is_disabled()
-    assert page.locator("#pipeline-binding-add").is_disabled()
-
-    page.locator("#pipeline-template-select").select_option(
-        visual_app["active_template_id"]
-    )
-    page.wait_for_function(
-        "() => document.querySelector('#pipeline-binding-version option')?.value === '' && document.querySelectorAll('#pipeline-binding-version option').length > 1"
-    )
-    assert not page.locator("#pipeline-binding-path").is_disabled()
-    assert not page.locator("#pipeline-binding-version").is_disabled()
-    assert not page.locator("#pipeline-binding-add").is_disabled()
+    page.locator("#pipeline-watch-summary").click()
+    page.wait_for_url("**/app/admin/watch-folders")
+    page.locator("#watch-add").click()
+    page.locator("#watch-dialog[open]").wait_for()
+    assert page.locator("#watch-pipeline").input_value() == ""
+    assert not page.locator("#watch-enabled").is_checked()
 
 
 def test_phase14_upload_selection_validation_and_success(

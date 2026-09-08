@@ -27,6 +27,7 @@ REQUIRED_RUNTIME_TABLES = frozenset(
         "users",
         "upload_submissions",
         "watch_folder_bindings",
+        "watch_folder_health",
     }
 )
 

@@ -5,6 +5,12 @@
 {% endblock %}
 
 {% block content %}
+<section id="reports-binding" class="hidden card bg-base-100 p-4 mb-4" aria-label="Watch-folder batches">
+    <h2 class="font-semibold">Watch-folder batches</h2>
+    <p id="reports-binding-path" class="text-sm break-all"></p>
+    <div id="reports-binding-rows"></div>
+    <div class="flex gap-2 mt-4"><button id="reports-binding-prev" class="btn btn-outline btn-sm">Previous</button><button id="reports-binding-next" class="btn btn-outline btn-sm">Next</button><a href="/app/reports" class="btn btn-ghost btn-sm">All reports</a></div>
+</section>
 <div class="app-workspace" id="reports-workspace">
     <div class="page-grid reports-summary-grid">
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">

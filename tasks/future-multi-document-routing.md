@@ -115,6 +115,13 @@ task definitions. Keeping bindings separate allows multiple folders to use the
 same pipeline and allows operational folder changes without publishing a new
 workflow version.
 
+The dedicated **Watch folders** page now provides pause/resume, unbind/rebind,
+explicit latest-version upgrades, and retirement. Paused/unbound paths remain
+reserved; retirement preserves history and releases the path. Used bindings
+cannot be permanently deleted. Per-binding scan health, access diagnostics,
+filters, and paginated activity are available without editing pipeline drafts.
+See [the management task plan](tasks-watch-folder-management.md) for verification.
+
 Conceptually:
 
 ```yaml
@@ -248,9 +255,9 @@ history. The filesystem continues to hold PDFs and other large business
 artifacts.
 
 Persisted audit events cover template/draft/version/binding operations and the
-ingestion assignment. The current Audit Log page displays only the older
-`admin_` event family, so dot-named versioning and assignment events may require
-API/database inspection until that UI filter is expanded. Event families
+ingestion assignment. Audit Log displays the older `admin_` family and
+`watch_binding.*` lifecycle events. Other dot-named versioning and assignment
+events may require approved support inspection. Event families
 include:
 
 - template creation, rename, clone, activation, deactivation, and archive;

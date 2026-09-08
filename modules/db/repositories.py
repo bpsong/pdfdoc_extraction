@@ -1177,7 +1177,7 @@ class AuditRepository:
         select_clause: str = "SELECT *",
     ) -> tuple[str, list[Any]]:
         """Build an admin-audit query over immutable audit events."""
-        sql = f"{select_clause} FROM audit_events WHERE event_type LIKE 'admin_%'"
+        sql = f"{select_clause} FROM audit_events WHERE (event_type LIKE 'admin_%' OR event_type LIKE 'watch_binding.%')"
         params: list[Any] = []
         if event_type:
             sql += " AND event_type = ?"
@@ -1818,6 +1818,52 @@ class WatchFolderBindingRepository:
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+
+    def set_lifecycle(self, binding_id: str, *, retired_at: str | None) -> None:
+        """Advance configuration revision without changing historical references."""
+        self.conn.execute(
+            "UPDATE watch_folder_bindings SET retired_at = ?, revision = revision + 1 WHERE id = ?",
+            (retired_at, binding_id),
+        )
+
+    def health(self, binding_id: str) -> dict[str, Any]:
+        """Read the most recent coordinator observation."""
+        return _row_to_dict(self.conn.execute(
+            "SELECT * FROM watch_folder_health WHERE binding_id = ?", (binding_id,)
+        ).fetchone()) or {}
+
+    def record_health(self, binding_id: str, *, issue: str | None,
+                      ingested: int = 0, ignored_count: int = 0) -> None:
+        """Persist scan evidence independently of configuration revisions."""
+        now = utc_now()
+        self.conn.execute("""
+            INSERT INTO watch_folder_health(binding_id,last_scan_at,last_success_at,last_ingested_at,issue,ignored_count)
+            VALUES (?,?,?,?,?,?)
+            ON CONFLICT(binding_id) DO UPDATE SET
+                last_scan_at=excluded.last_scan_at,
+                last_success_at=COALESCE(excluded.last_success_at,watch_folder_health.last_success_at),
+                last_ingested_at=COALESCE(excluded.last_ingested_at,watch_folder_health.last_ingested_at),
+                issue=excluded.issue, ignored_count=excluded.ignored_count
+        """, (binding_id, now, None if issue else now, now if ingested else None, issue, ignored_count))
+
+    def latest_version(self, template_id: str | None) -> dict[str, Any] | None:
+        """Return the latest publication without resolving secrets."""
+        return _row_to_dict(self.conn.execute(
+            "SELECT id,version_number,published_at FROM pipeline_versions WHERE template_id=? ORDER BY version_number DESC LIMIT 1",
+            (template_id,),
+        ).fetchone())
+
+    def activity(self, binding_id: str, *, offset: int = 0) -> dict[str, Any]:
+        """Return bounded ingestion and configuration history."""
+        batches = self.conn.execute(
+            "SELECT id,status,created_at,pipeline_version_id FROM batches WHERE ingress_binding_id=? ORDER BY created_at DESC LIMIT 20 OFFSET ?",
+            (binding_id, offset),
+        ).fetchall()
+        events = self.conn.execute(
+            "SELECT * FROM audit_events WHERE json_extract(event_json,'$.binding_id')=? ORDER BY created_at DESC LIMIT 20 OFFSET ?",
+            (binding_id, offset),
+        ).fetchall()
+        return {"batches": [dict(row) for row in batches], "events": [dict(row) for row in events]}
 
     def create(
         self,

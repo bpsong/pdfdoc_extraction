@@ -1,15 +1,15 @@
 ﻿<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.5
-Release Date: 2026-09-03
+Version: 3.7
+Release Date: 2026-09-08
 Author: [Your Organization/Name]
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 3.5
-Release Date: 2026-09-03
+Version: 3.7
+Release Date: 2026-09-08
 Author: [Your Organization/Name]
 
 ---
@@ -97,6 +97,7 @@ Author: [Your Organization/Name]
 | 3.4     | 2026-09-03 | [Your Organization] | Documented the local PDF.js source viewer, provider-specific source-location behavior, and the GLM-OCR resolver context default of 18000 |
 | 3.5     | 2026-09-03 | [Your Organization] | Added upload transfer progress, text confidence bands, and concise screen-reader announcements for dynamic operator updates |
 | 3.6     | 2026-09-04 | [Your Organization] | Added keyboard-friendly upload activation, cancellable uploads, queue retry actions, consistent DaisyUI table styling, and lightweight contextual help |
+| 3.7 | 2026-09-08 | [Your Organization] | Added independent Watch folders management, lifecycle, explicit upgrades, diagnostics, and activity history. |
 
 ---
 
@@ -127,7 +128,7 @@ This quick start separates administrator setup from normal operator work.
    save and validate its draft, publish a version, and set the pipeline to
    **Active**. Section 4.5.5 gives the complete procedure.
 6. For folder ingestion, create each real incoming folder on disk and add its
-   exact-version binding in the **Watch-folder bindings** panel on **Pipeline**.
+   exact-version binding on **Watch folders** under Admin → Configuration.
 7. Run the Config Check tool described in section 4.12 before processing production documents.
 
 **Operator: process documents**
@@ -461,7 +462,7 @@ Migrated capabilities:
 - administrators validate stored drafts in **Review Forms** and **Pipeline**;
   **Validation** remains the deployment/pasted-file diagnostic surface;
 - administrator actions are retained in SQLite audit history; the current
-  **Audit Log** page shows the `admin_` subset described in section 4.5.5.
+  **Audit Log** page shows `admin_` and `watch_binding.` events described in section 4.5.5.
 
 Administrators should use the unified Review Form Editor to maintain review schemas. Operators should use the review queue rather than editing schema files directly.
 
@@ -550,7 +551,7 @@ Must pre-exist (startup validates and will fail if missing):
 - `watch_folder.dir` — Startup-compatibility folder. The application will not
   create it; do not rely on it as an implicit pipeline binding.
 - `web.upload_dir` — Staging folder used by the web upload handler. The application validates this at startup.
-- Each directory entered in **Pipeline** > **Watch-folder bindings** — the
+- Each directory entered in **Watch folders** — the
   binding service requires it to exist, be accessible, and not overlap another
   bound path.
 - Any deployment config key that ends with `_file` — the referenced file must
@@ -894,14 +895,13 @@ The administrator menu provides these workflows:
   validate it, publish immutable versions, inspect version history and
   dependencies, and export a portable definition. A schema must be published
   before it can be selected in a pipeline draft.
-- **Watch-folder bindings:** in the bottom panel of **Pipeline**, add an
-  existing incoming folder and pin it to an exact published version of the
-  selected pipeline. The current visual page lists existing bindings but does
-  not provide edit, disable, or delete controls; see the procedure below.
+- **Watch folders:** independently manage paths and exact published versions,
+  pause/resume, unbind, upgrade, retire, and delete unused settings. Inspect
+  access findings, scan health, and binding activity; see the procedure below.
 - **Task Catalog:** inspect the workflow task classes available to the pipeline.
 - **Validation:** review active configuration, schema, and pipeline findings.
-- **Audit Log:** inspect the legacy `admin_` configuration/governance event
-  subset; newer dot-named versioned events require the support path below.
+- **Audit Log:** inspect `admin_` configuration/governance and `watch_binding.`
+  lifecycle events. Other versioned event families use the support path below.
 
 ##### Create and publish a pipeline visually
 
@@ -961,34 +961,53 @@ constraints and patterns, use the [review schema administrator guide](review_sch
 
 ##### Add a watch-folder binding visually
 
-The binding fields become available only after the selected pipeline has at
-least one published version and is **Active**. The panel explains whether
-publishing or activation is still required.
+1. Create the incoming folder and grant the application account directory-list,
+   read, and file-move/delete permissions. Drive roots are not allowed.
+2. Open **Admin → Configuration → Watch folders**, then **Add watch folder**.
+3. Enter the path and use **Test access**. This checks existence and directory
+   listing only; it does not prove file-move/delete permissions.
+4. Choose an active **Pipeline** and **Published version**. The newest
+   publication is selected initially, but the saved binding pins that exact version.
+5. Enable **Watch folder enabled** and save. Alternatively, leave it paused or
+   save an unbound folder for later assignment.
+6. Confirm the row's state and findings before placing a complete test PDF in it.
+   Use **Activity** to follow batches or open the folder-specific Reports view.
 
-1. Create the real incoming folder on disk and grant the application account
-   read, move/delete, and directory-list permissions. Do not bind a drive root.
-2. On **Pipeline**, select the template whose version will process the folder.
-   Save and validate the draft, select **Publish**, then set the template to
-   **Active**. In **Watch-folder bindings**, enter the absolute folder path,
-   choose an exact published version, and select **Add binding**.
-3. Confirm the list shows the normalized path, **enabled**, pipeline name, and
-   version. Resolve any accessibility or eligibility finding before adding a PDF.
-4. Place a test PDF in the folder and verify its watch-folder batch in
-   **Reports** and **Processing Overview**.
+**Editing and lifecycle:** **Edit** changes the path or assignment without
+republishing a pipeline. **Use latest version** selects the newest publication;
+save to apply it. Older published versions can be selected explicitly. A stale
+revision conflict requires refreshing and reopening the editor before retrying.
 
-Paths must be unique and non-overlapping: a folder cannot duplicate, contain,
-or be contained by another binding. Multiple distinct folders may use the same
-pipeline version. A binding never follows “latest”; publish does not retarget
-it. Changes affect only files claimed afterward, while existing documents keep
-their assigned version.
+**Pause** stops new ingestion while retaining the assignment. **Resume** validates
+the folder and pipeline, then permits ingestion of files already present.
+**Unbind pipeline** clears the assignment and stops ingestion. Pause, unbind,
+and retirement remain available when a folder has disappeared or become
+inaccessible. An already-started file claim may complete; subsequent claims
+respect the change. Existing batches/documents retain their exact versions.
 
-The current visual editor can add and list bindings only. To correct, disable,
-retarget, or delete a binding, use the authenticated administrator API
-`PATCH /api/admin/watch-folder-bindings/{binding_id}` or
-`DELETE /api/admin/watch-folder-bindings/{binding_id}` through an approved
-administration tool, or ask the application maintainer. Do not edit SQLite
-directly. Disable a binding before archiving its pipeline. Deletion is rejected
-after a batch references the binding so ingestion history remains explainable.
+**Retire binding** preserves history and releases the path for reuse. Retired
+bindings cannot be edited and are hidden until **Show retired** is selected.
+**Delete unused binding** permanently removes a setting only when no batch
+references it. Neither operation deletes directories or PDFs on disk.
+Paused and unbound paths remain reserved; current paths cannot duplicate,
+contain, or be contained by another current binding.
+
+**Health and diagnostics:** rows show scan time, last ingestion, ignored-file
+count, and access/scan findings. Enabled is a configuration state, not proof
+that the coordinator is running. **Stale** means no recent scan observation;
+start/check the supervisor and use Refresh. A web-only process cannot scan
+folders. **Check now** runs a non-ingesting directory-access check and refreshes
+the displayed state; it does not enqueue documents or replace scan timestamps.
+Search and filters cover path/pipeline, state, health, available updates, and
+retired records. Activity and Reports paginate in groups of 20.
+
+**Administrative APIs:** list/create at
+`/api/admin/watch-folder-bindings`; PATCH/DELETE at the same path plus
+`/{binding_id}`; paged activity at `/{binding_id}/activity?offset=0`.
+PATCH accepts `expected_revision` and optional `action` values `pause`,
+`resume`, `unbind`, or `retire`. The browser supplies its loaded revision.
+`POST /api/admin/watch-folder-check` accepts `folder_path`.
+All these routes require administrator access; cookie mutations require CSRF.
 
 ##### Use Overview, Settings, Task Catalog, and Validation
 
@@ -1014,7 +1033,7 @@ after a batch references the binding so ingestion history remains explainable.
 ##### Administrator Audit History
 
 The **Audit Log** page at `/app/admin/audit` shows the append-only subset of
-administrator history whose event type begins with `admin_`. It is available
+administrator history whose event type begins with `admin_` or `watch_binding.`. It is available
 only to the administrator role. Operational document events such as review
 activity, processing failures, splitting, and fan-in completion are stored in
 the same audit stream but are not shown on this page.
@@ -1038,11 +1057,10 @@ The following administrator events are currently recorded:
 | `admin_schema_updated` | An existing schema is changed. |
 | `admin_schema_duplicated` | An existing schema is copied to a new schema name. |
 
-The versioned pipeline, review-form, and watch-binding services record newer
-events with names such as `pipeline.template.created`,
-`pipeline.version.published`, `review_schema.version.published`, and
-`watch_binding.created`. These records are retained in SQLite but do not begin
-with `admin_`, so the current **Audit Log** page does not display them. Use
+The versioned services also record events such as `pipeline.template.created`,
+`pipeline.version.published`, and `review_schema.version.published`.
+**Audit Log** includes `watch_binding.*` lifecycle changes and their previous
+configuration. Other dot-named event families remain outside that page. Use
 SQLite backup/retention controls and an approved support query when that newer
 governance history must be inspected; never change or delete audit rows. Do not
 interpret an empty **Recent Admin Activity** panel as evidence that no
@@ -2392,11 +2410,11 @@ deployment source for the database path, web/watch processing paths, logging,
 custom-task approvals, and provider secret aliases.
 
 **Q: How do I give each pipeline a watch folder?**
-A: Create the incoming directory first. In **Pipeline**, select the active
-template, enter the absolute path under **Watch-folder bindings**, choose an
-exact published version, and select **Add binding**. Paths cannot overlap.
-Publishing a newer version does not update the binding. See section 4.5.5 for
-the current UI limitation on correcting, disabling, or deleting bindings.
+A: Create the incoming directory first. Open **Watch folders**, select
+**Add watch folder**, enter the path, select an active pipeline and an exact
+published version, enable it, and save. Current paths cannot overlap.
+Publishing does not update bindings automatically; use **Edit** → **Use latest
+version** → **Save changes**. See section 4.5.5 for lifecycle and health controls.
 
 **Q: Why is a published pipeline missing from Upload & Process?**
 A: Publication and activation are separate. Confirm that the template lifecycle
@@ -2521,7 +2539,8 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Settings | `/app/settings` | Operator and administrator | Select **Settings** from the left navigation menu. |
 | Overview | `/app/admin` | Administrator only | Sign in as the administrator, then select **Overview** from the left navigation menu. |
 | Users | `/app/admin/users` | Administrator only | Sign in as the administrator, then select **Users** from the left navigation menu. |
-| Pipeline and watch-folder bindings | `/app/admin/pipeline` | Administrator only | Sign in as the administrator, select **Pipeline**, and use the binding panel at the bottom for folder routing. |
+| Pipeline | `/app/admin/pipeline` | Administrator only | Select **Pipeline** to manage templates and publications. |
+| Watch folders | `/app/admin/watch-folders` | Administrator only | Select **Watch folders** to manage routing, lifecycle, health, and history. |
 | Review Forms | `/app/schemas` | Administrator only | Sign in as the administrator, then select **Review Forms** from the left navigation menu. |
 | Review form draft | `/app/schemas/{schema_name}` | Administrator only | Select a form in **Review Forms**; this is the bookmarkable editor view for that stable key. |
 | Task Catalog | `/app/admin/tasks` | Administrator only | Sign in as the administrator, then select **Task Catalog** from the left navigation menu. |

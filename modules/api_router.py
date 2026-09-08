@@ -776,7 +776,27 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         with connect(config) as conn:
-            return {"bindings": IngressBindingService(conn, config).list()}
+            return {"bindings": IngressBindingService(conn, config).management_list()}
+
+    @router.post("/api/admin/watch-folder-check")
+    async def check_watch_folder(request: Request, user: str = Depends(get_current_user)):
+        """Run a non-ingesting filesystem diagnostic in the application account."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        with connect(config) as conn:
+            return IngressBindingService(conn, config).check_access(str(payload.get("folder_path") or ""))
+
+    @router.get("/api/admin/watch-folder-bindings/{binding_id}/activity")
+    def watch_folder_activity(binding_id: str, offset: int = Query(0, ge=0), user: str = Depends(get_current_user)):
+        """Read a bounded page of binding history."""
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        with connect(config) as conn:
+            service = IngressBindingService(conn, config)
+            if service.bindings.get(binding_id) is None:
+                raise HTTPException(status_code=404, detail="Unknown binding")
+            return service.bindings.activity(binding_id, offset=offset)
 
     @router.post("/api/admin/watch-folder-bindings")
     async def create_watch_folder_binding(
@@ -787,6 +807,8 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         payload = await _json_body(request)
+        if "enabled" in payload and type(payload["enabled"]) is not bool:
+            raise HTTPException(status_code=422, detail="enabled must be a boolean")
         try:
             with connect(config) as conn:
                 binding = IngressBindingService(conn, config).create(
@@ -811,10 +833,19 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         payload = await _json_body(request)
+        if "enabled" in payload and not isinstance(payload["enabled"], bool):
+            raise HTTPException(status_code=422, detail="enabled must be a boolean")
+        if "expected_revision" in payload and (type(payload["expected_revision"]) is not int or payload["expected_revision"] < 1):
+            raise HTTPException(status_code=422, detail="expected_revision must be a positive integer")
+        for field in ("action", "folder_path", "pipeline_version_id"):
+            if payload.get(field) is not None and not isinstance(payload[field], str):
+                raise HTTPException(status_code=422, detail=f"{field} must be a string")
         try:
             with connect(config) as conn:
                 return IngressBindingService(conn, config).update(
                     binding_id,
+                    action=payload.get("action"),
+                    expected_revision=payload.get("expected_revision"),
                     folder_path=payload.get("folder_path"),
                     pipeline_version_id=payload.get("pipeline_version_id"),
                     enabled=(

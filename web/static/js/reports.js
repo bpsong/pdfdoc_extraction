@@ -306,6 +306,19 @@
     }
 
     async function loadReports() {
+        const bindingId = new URLSearchParams(window.location.search).get("ingress_binding_id");
+        if (bindingId) {
+            document.getElementById("reports-workspace").hidden = true;
+            const section = document.getElementById("reports-binding");
+            section.classList.remove("hidden");
+            const offset = Number(section.dataset.offset || 0);
+            const result = await window.DocFlow.apiGet(`/api/admin/watch-folder-bindings/${encodeURIComponent(bindingId)}/activity?offset=${offset}`);
+            document.getElementById("reports-binding-path").textContent = `Binding ${bindingId} · page ${offset / 20 + 1}`;
+            document.getElementById("reports-binding-rows").innerHTML = result.batches.map(batch => `<p class="py-3 border-b"><a href="/app/batches/${encodeURIComponent(batch.id)}">${escapeHtml(batch.created_at)} · ${escapeHtml(batch.status)}</a></p>`).join("") || '<p class="py-4">No batches on this page.</p>';
+            document.getElementById("reports-binding-prev").disabled = offset === 0;
+            document.getElementById("reports-binding-next").disabled = result.batches.length < 20;
+            return;
+        }
         const payload = await window.DocFlow.apiGet("/api/reports/summary");
         render(payload || {});
     }
@@ -313,6 +326,12 @@
     document.getElementById("reports-refresh-button").addEventListener("click", () => {
         loadReports().catch((error) => window.DocFlow.showToast(error.message || "Unable to load reports", "error"));
     });
+
+    ["prev", "next"].forEach(direction => document.getElementById(`reports-binding-${direction}`).addEventListener("click", () => {
+        const section = document.getElementById("reports-binding");
+        section.dataset.offset = Math.max(0, Number(section.dataset.offset || 0) + (direction === "next" ? 20 : -20));
+        loadReports().catch(error => window.DocFlow.showToast(error.message, "error"));
+    }));
 
     document.getElementById("reports-recent-body").addEventListener("click", (event) => {
         const row = event.target.closest(".reports-batch-row");

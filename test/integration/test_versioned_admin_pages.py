@@ -17,7 +17,8 @@ def test_admin_pages_render_versioned_workspace_contracts(monkeypatch):
     assert 'versioned_admin_view_models.js' in schemas.text
     assert pipelines.status_code == 200
     assert 'id="pipeline-template-select"' in pipelines.text
-    assert 'id="pipeline-binding-version"' in pipelines.text
+    assert 'id="pipeline-watch-summary"' in pipelines.text
+    assert 'id="pipeline-binding-version"' not in pipelines.text
     assert 'id="pipeline-draft-revision"' in pipelines.text
     assert 'id="pipeline-template-dialog"' in pipelines.text
     assert 'id="pipeline-template-dialog-key"' in pipelines.text
