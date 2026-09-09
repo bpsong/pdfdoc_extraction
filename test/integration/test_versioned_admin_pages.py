@@ -25,6 +25,7 @@ def test_admin_pages_render_versioned_workspace_contracts(monkeypatch):
     assert 'id="pipeline-publish-dialog"' in pipelines.text
     assert 'id="pipeline-publish-dialog-confirm"' in pipelines.text
     assert 'versioned_admin_view_models.js' in pipelines.text
+    assert 'pipeline_config.js?v=watch-folders-management-2' in pipelines.text
 
 
 def test_operator_is_redirected_from_versioned_admin_pages(monkeypatch):
