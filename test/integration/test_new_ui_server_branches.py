@@ -13,6 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 import web.server as web_server
+import modules.api_router as api_router
 from modules.auth_utils import AuthenticationSetupRequired, AuthError, LoginRateLimitError
 from test.integration.test_new_ui_routes import authenticate, build_client
 
@@ -89,15 +90,29 @@ def test_server_login_form_and_json_error_variants(monkeypatch) -> None:
         def get_current_user(self, token):
             return "admin" if token == "token" else (_ for _ in ()).throw(AuthError("token invalid"))
 
+        def refresh_access_token(self, token):
+            self.get_current_user(token)
+            return "refreshed-token"
+
         def is_admin(self, _username):
             return True
 
     config = ConfigStub({"ui": {"admin_enabled": True}})
     auth = AuthStub()
     monkeypatch.setattr(web_server, "get_dependencies", lambda: (config, auth, None, None, None))
+    monkeypatch.setattr(api_router, "get_dependencies", lambda: (config, auth, None, None, None))
     success = client.post("/login", data={"username": "admin", "password": "pw"}, follow_redirects=False)
     assert success.status_code == 303
     assert "access_token" in success.cookies
+
+    csrf_token = success.cookies.get("csrf_token")
+    refreshed = client.post(
+        "/api/session/refresh",
+        headers={"X-CSRF-Token": csrf_token},
+    )
+    assert refreshed.status_code == 200
+    assert refreshed.json() == {"expires_in": 600}
+    assert refreshed.cookies.get("access_token") == "refreshed-token"
 
     for failure, expected in ((AuthenticationSetupRequired("setup"), 503), (LoginRateLimitError(), 429), (AuthError("bad"), 200)):
         monkeypatch.setattr(web_server, "get_dependencies", lambda failure=failure: (config, AuthStub(failure), None, None, None))

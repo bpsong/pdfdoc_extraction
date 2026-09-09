@@ -167,7 +167,7 @@ class IngressBindingService:
             if action != "unbind" and (pipeline_version_id is not None or target_enabled):
                 summary = self._validate_version(target_version, enabled=target_enabled)
             self._reject_path_conflict(normalized, exclude_id=binding_id)
-            updated = self.bindings.update(
+            self.bindings.update(
                 binding_id,
                 folder_path=display,
                 normalized_path=normalized,
@@ -178,6 +178,8 @@ class IngressBindingService:
             )
             self.bindings.set_lifecycle(binding_id, retired_at=utc_now() if action == "retire" else None)
             updated = self.bindings.get(binding_id)
+            if updated is None:
+                raise KeyError(f"Unknown watch-folder binding: {binding_id}")
             self._audit(f"watch_binding.{action or 'updated'}", updated, user=user, previous=current)
         return self._payload(updated)
 

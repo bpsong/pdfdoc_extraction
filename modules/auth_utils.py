@@ -272,13 +272,14 @@ class AuthUtils:
         Returns:
             A JWT string signed with the configured secret and algorithm.
         """
+        now = datetime.now(timezone.utc)
         to_encode = data.copy()
         if expires_delta:
-            expire = datetime.now(timezone.utc) + expires_delta
+            expire = now + expires_delta
         else:
-            expire = datetime.now(timezone.utc) + timedelta(minutes=self.token_exp_minutes)
+            expire = now + timedelta(minutes=self.token_exp_minutes)
             
-        to_encode.update({"exp": expire})
+        to_encode.update({"iat": now, "exp": expire})
         self.logger.debug(f"Creating token for subject='{data.get('sub')}', expires at {expire}")
         
         encoded_jwt = jwt.encode(to_encode, self.secret_key, algorithm=self.algorithm)
@@ -406,6 +407,26 @@ class AuthUtils:
         except Exception as e:
             self.logger.error(f"Unexpected error in get_current_user: {e}", exc_info=True)
             raise AuthError(f"Token validation error: {e}")
+
+    def refresh_access_token(self, token: str) -> str:
+        """Validate an active token and issue a new full-duration token.
+
+        Expired, revoked, or otherwise invalid tokens cannot be refreshed. This
+        keeps the configured token lifetime acting as an inactivity timeout
+        without weakening the existing user and token-version checks.
+        """
+
+        username = self.get_current_user(token)
+        user = self.get_user(username)
+        if user is None:  # Defensive: get_current_user already checks this.
+            raise AuthError("Invalid token subject")
+        return self.create_access_token(
+            data={
+                "sub": username,
+                "role": user["role"],
+                "ver": user["token_version"],
+            }
+        )
 
     def get_user(self, username: str) -> dict[str, Any] | None:
         """Return a user record for authorization checks."""

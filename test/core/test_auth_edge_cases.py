@@ -110,6 +110,34 @@ def test_token_creation_and_decode_failure(tmp_path, monkeypatch):
         auth.decode_token("broken")
 
 
+def test_refresh_access_token_reissues_valid_current_user_token(tmp_path):
+    config = _config(tmp_path)
+    with connect(config) as conn:
+        UserRepository(conn).initialize(
+            {
+                "admin": _hash("AdminPassword1!"),
+                "operator": _hash("OperatorPass1!"),
+            }
+        )
+    auth = AuthUtils(config)
+    original = auth.login("admin", "AdminPassword1!")
+
+    refreshed = auth.refresh_access_token(original)
+    payload = auth.decode_token(refreshed)
+
+    assert payload["sub"] == "admin"
+    assert payload["role"] == "admin"
+    assert payload["ver"] == 1
+    assert payload["iat"] <= payload["exp"]
+
+
+def test_refresh_access_token_rejects_invalid_token(tmp_path):
+    auth = AuthUtils(_config(tmp_path))
+
+    with pytest.raises(AuthError, match="Invalid token"):
+        auth.refresh_access_token("invalid")
+
+
 def test_login_reports_setup_unknown_user_and_invalid_password(tmp_path, monkeypatch):
     config = _config(tmp_path)
     auth = AuthUtils(config)

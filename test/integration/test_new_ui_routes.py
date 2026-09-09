@@ -69,6 +69,12 @@ class FakeAuth:
             return self.username
         raise AuthError("Invalid token")
 
+    def refresh_access_token(self, token: str) -> str:
+        """Return a renewed token after applying the normal validation stub."""
+
+        self.get_current_user(token)
+        return "refreshed-token"
+
     def is_admin(self, username: str) -> bool:
         """Treat the configured admin identity as privileged."""
         return username == "admin"

@@ -36,8 +36,8 @@ import yaml
 from datetime import datetime, timezone, timedelta
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
-from fastapi.responses import FileResponse, RedirectResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, Response
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
@@ -183,6 +183,12 @@ class TokenResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+    expires_in: int
+
+
+class SessionRefreshResponse(BaseModel):
+    """Browser session renewal metadata that does not expose the JWT body."""
+
     expires_in: int
 
 
@@ -737,6 +743,42 @@ def build_router() -> APIRouter:
             )
         except AuthError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    @router.post("/api/session/refresh", response_model=SessionRefreshResponse)
+    async def refresh_session(
+        request: Request,
+        response: Response,
+    ) -> SessionRefreshResponse:
+        """Renew a valid browser session after explicit user activity."""
+
+        token = request.cookies.get("access_token")
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+
+        _, auth, _, _, _ = get_dependencies()
+        try:
+            refreshed_token = auth.refresh_access_token(token)
+        except AuthError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=str(exc),
+            ) from exc
+
+        expires_delta = timedelta(minutes=auth.token_exp_minutes)
+        expires_at = datetime.now(timezone.utc) + expires_delta
+        response.set_cookie(
+            key="access_token",
+            value=refreshed_token,
+            httponly=True,
+            samesite="lax",
+            path="/",
+            max_age=int(expires_delta.total_seconds()),
+            expires=expires_at.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+        )
+        return SessionRefreshResponse(expires_in=int(expires_delta.total_seconds()))
 
     @router.post("/upload")
     async def upload_pdf(

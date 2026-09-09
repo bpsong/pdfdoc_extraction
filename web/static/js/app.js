@@ -6,6 +6,7 @@
     const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "TRACE"]);
     const FAILURE_NOTIFICATION_CACHE_KEY = "docflow.failureNotifications";
     const FAILURE_NOTIFICATION_CACHE_TTL_MS = 60_000;
+    const SESSION_REFRESH_INTERVAL_MS = 30_000;
     const STATUS_BADGE_CLASSES = Object.freeze({
         received: "badge-ghost",
         queued: "badge-ghost",
@@ -32,6 +33,8 @@
     });
     let announcementTimer = null;
     let lastFailureNotificationCount = null;
+    let lastSessionRefreshAt = 0;
+    let sessionRefreshInFlight = false;
 
     function readCookie(name) {
         const prefix = `${encodeURIComponent(name)}=`;
@@ -96,6 +99,46 @@
         }
 
         return response.json();
+    }
+
+    async function refreshSessionAfterActivity() {
+        const now = Date.now();
+        if (
+            sessionRefreshInFlight
+            || now - lastSessionRefreshAt < SESSION_REFRESH_INTERVAL_MS
+        ) {
+            return;
+        }
+
+        sessionRefreshInFlight = true;
+        lastSessionRefreshAt = now;
+        try {
+            const response = await fetch("/api/session/refresh", {
+                method: "POST",
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json",
+                    ...csrfHeaders("POST"),
+                },
+            });
+            if (response.status === 401) {
+                window.location.href = "/login";
+            }
+        } catch (error) {
+            // A transient refresh failure should not interrupt the current task.
+            // The next user interaction will retry after the throttle interval.
+        } finally {
+            sessionRefreshInFlight = false;
+        }
+    }
+
+    function initializeSlidingSession() {
+        ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) => {
+            document.addEventListener(eventName, refreshSessionAfterActivity, {
+                passive: true,
+            });
+        });
+        refreshSessionAfterActivity();
     }
 
     async function apiGet(url) {
@@ -407,6 +450,7 @@
     document.addEventListener("DOMContentLoaded", () => {
         initializeSidebar();
         setActiveNav();
+        initializeSlidingSession();
         refreshFailureNotifications();
     });
 })();

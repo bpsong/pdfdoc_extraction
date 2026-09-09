@@ -644,7 +644,9 @@ review:
   allow-list switch for browser configuration saves. A save remains limited to
   the non-secret keys displayed on **Overview**.
 - **auth:** Defines login failure rate limiting, attempt window, and cooldown.
-  Session duration is `web.token_exp_minutes`.
+  `web.token_exp_minutes` is the browser inactivity timeout. While an
+  authenticated user interacts with the app, the browser renews the signed JWT
+  periodically. An expired or revoked JWT cannot be renewed.
 - **pipeline_secrets:** Maps administrator-visible aliases to deployment-owned
   provider credentials. Pipeline drafts store only `$secret` aliases, never
   resolved values.

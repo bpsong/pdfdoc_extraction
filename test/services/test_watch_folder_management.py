@@ -108,7 +108,9 @@ def test_health_checks_are_non_ingesting_and_do_not_change_revision(tmp_path: Pa
         assert conn.execute("SELECT COUNT(*) FROM batches").fetchone()[0] == 0
         service.bindings.record_health(binding["id"], issue=None)
         assert service.management_list()[0]["health_status"] == "healthy"
-        assert service.bindings.get(binding["id"])["revision"] == 1
+        persisted = service.bindings.get(binding["id"])
+        assert persisted is not None
+        assert persisted["revision"] == 1
         service.bindings.record_health(binding["id"], issue="Cannot list folder")
         assert service.management_list()[0]["health_status"] == "unhealthy"
 
@@ -137,6 +139,7 @@ def test_v6_migration_preserves_referenced_binding(tmp_path: Path) -> None:
     initialize_database(config)
     with connect(config) as conn:
         migrated = WatchFolderBindingRepository(conn).get(binding["id"])
+        assert migrated is not None
         for key in ("id", "folder_path", "normalized_path", "pipeline_version_id", "enabled", "created_at"):
             assert migrated[key] == binding[key]
         assert migrated["revision"] == 1
