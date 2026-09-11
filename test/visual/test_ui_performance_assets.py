@@ -20,7 +20,7 @@ def test_failure_notifications_are_cached_between_page_navigations() -> None:
     assert "Date.now() - cached.cachedAt < FAILURE_NOTIFICATION_CACHE_TTL_MS" in app_source
     assert "writeFailureNotificationCache(count)" in app_source
     assert "refreshFailureNotifications({ force: true })" in processing_source
-    assert "app.js?v=ui-operator-feedback-layout" in base_template
+    assert "app.js?v=review-status-vocabulary" in base_template
 
 
 def test_admin_dashboard_renders_independent_requests_as_they_complete() -> None:

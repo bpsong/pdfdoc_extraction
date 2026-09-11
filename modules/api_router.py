@@ -2464,6 +2464,7 @@ def build_router() -> APIRouter:
             fields = [_parsed_field_payload(field) for field in extractions.get_fields(document_id)]
             files = [_parsed_file_payload(file_record) for file_record in documents.list_files(document_id)]
             open_review = reviews.find_open_for_document(document_id)
+            latest_review = reviews.find_latest_for_document(document_id)
             siblings = [
                 {
                     "id": sibling["id"],
@@ -2505,6 +2506,13 @@ def build_router() -> APIRouter:
             else None,
             "fields": fields,
             "review_item_id": open_review.get("id") if open_review else None,
+            "review": {
+                "id": latest_review.get("id"),
+                "status": latest_review.get("status"),
+                "completed_at": latest_review.get("completed_at"),
+            }
+            if latest_review
+            else None,
         }
 
     @router.get("/api/documents/{document_id}/file/pdf")

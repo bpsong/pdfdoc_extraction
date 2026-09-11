@@ -409,6 +409,12 @@ Human review is a persisted stop and new-flow restart:
 8. `ResumeManager` reconstructs context from SQLite, prevents duplicate
    downstream work, and starts a new flow at the next task.
 
+While the synchronous completion request is in flight, the review page keeps
+the operator informed with a live status message and changes the action to
+`Saving review…`. Review actions are disabled for that interval so a slow
+resume cannot be mistaken for an unresponsive page or trigger duplicate
+submissions. A failed request restores the controls and reports the error.
+
 Only pending or in-review items may be claimed or released. Resume acquisition
 uses an atomic `review_completed` to `resuming` transition, so overlapping
 requests cannot start the same downstream work twice. When the review gate is
@@ -627,7 +633,20 @@ render source PDFs in a canvas-based viewer. Selecting an extracted field can
 navigate to its provider-supplied source location: LlamaCloud citation boxes
 are highlighted when available, while GLM-OCR page-only evidence navigates to
 the cited page without inventing a bounding box. The source PDF remains served
-through the authenticated, same-origin preview endpoint.
+through the authenticated, same-origin preview endpoint. At desktop widths,
+the human-review route constrains the PDF and editor panels to the viewport;
+each panel owns its scroll position and a keyboard-accessible separator stores
+the operator's preferred split in `localStorage`. A workspace resize observer
+adapts the split to available width, including sidebar changes, without saving
+temporary constraints as the preference. Workspaces narrower than 780 pixels
+stack the panels in a scrollable workspace. Completed-review presentation
+preserves the distinct `corrected` field status.
+
+Extraction field flags remain immutable evidence of why review was requested.
+The extraction API also exposes the latest review item's status so presentation
+layers can distinguish an outstanding `required` field from one accepted by a
+completed human review. This changes display vocabulary only: SQLite review
+items and extracted-field records remain the authoritative state and history.
 
 Tailwind scans production templates and JavaScript. Rebuild committed CSS
 after utility-class or frontend dependency changes:

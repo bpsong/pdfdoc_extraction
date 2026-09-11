@@ -445,6 +445,59 @@ fields:
                 "editable_fields": ["supplier", "invoice_amount", "approved", "reviewed_at", "address", "tags", "line_items"],
             },
         )
+        completed_batch = BatchService(conn).create_ingestion_batch(
+            source="visual",
+            file_path=str(pdf_path),
+            original_filename="reviewed-invoice.pdf",
+        )
+        completed_document_id = completed_batch["document"]["id"]
+        DocumentRepository(conn).add_file(
+            document_id=completed_document_id,
+            file_type="original_pdf",
+            file_path=str(pdf_path),
+        )
+        completed_extraction = ExtractionRepository(conn).save_result(
+            document_id=completed_document_id,
+            provider="visual",
+            data={"supplier": "Acme", "invoice_amount": 70},
+        )
+        ExtractionRepository(conn).save_fields(
+            document_id=completed_document_id,
+            extraction_result_id=completed_extraction["id"],
+            fields=[
+                {
+                    "field_key": "supplier",
+                    "field_alias": "Supplier",
+                    "extracted_value": "Acme",
+                    "confidence": None,
+                    "requires_review": True,
+                    "review_status": "required",
+                },
+                {
+                    "field_key": "invoice_amount",
+                    "field_alias": "Invoice amount",
+                    "extracted_value": 70,
+                    "corrected_value": 75,
+                    "final_value": 75,
+                    "confidence": 0.82,
+                    "requires_review": True,
+                    "review_status": "corrected",
+                },
+            ],
+        )
+        completed_review = ReviewRepository(conn).create_review_item(
+            batch_id=completed_batch["batch"]["id"],
+            document_id=completed_document_id,
+            queue_name="visual_review",
+            reason="low_confidence",
+            scope="low_confidence_fields",
+            metadata={
+                "schema_file": "invoice.yaml",
+                "highlight_fields": ["supplier", "invoice_amount"],
+            },
+        )
+        ReviewRepository(conn).complete(completed_review["id"], "admin")
+        DocumentRepository(conn).update_status(completed_document_id, "completed")
     source_pdf = tmp_path / "web_upload" / "phase14-source-package.pdf"
     child_review_pdf = tmp_path / "web_upload" / "phase14-child-review.pdf"
     child_failed_pdf = tmp_path / "web_upload" / "phase14-child-failed.pdf"
@@ -530,6 +583,8 @@ fields:
 
     return {
         "review_id": str(review["id"]),
+        "completed_review_id": str(completed_review["id"]),
+        "completed_document_id": str(completed_document_id),
         "extraction_document_id": str(document_id),
         "failed_document_id": str(failed_child["id"]),
         "batch_id": str(batch["batch"]["id"]),

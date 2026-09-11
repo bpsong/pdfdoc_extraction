@@ -20,6 +20,7 @@
         review_required: "badge-warning",
         in_review: "badge-info",
         review_completed: "badge-success",
+        reviewed: "badge-success",
         completed: "badge-success",
         completed_with_errors: "badge-warning",
         corrected: "badge-success",

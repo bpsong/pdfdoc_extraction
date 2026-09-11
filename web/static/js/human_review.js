@@ -17,6 +17,9 @@
         sourceValueMode: "review",
         sourceValueReveals: new Set(),
         pdfViewer: null,
+        panePercent: 52,
+        preferredPanePercent: 52,
+        completionPending: false,
     };
 
     const elements = {};
@@ -33,16 +36,19 @@
         elements.reasonSummary = document.getElementById("review-reason-summary");
         elements.fieldsContainer = document.getElementById("review-fields-container");
         elements.lockBanner = document.getElementById("review-lock-banner");
+        elements.completionBanner = document.getElementById("review-completion-banner");
         elements.lockSummary = document.getElementById("review-lock-summary");
         elements.claimButton = document.getElementById("review-claim-button");
         elements.releaseButton = document.getElementById("review-release-button");
         elements.saveButton = document.getElementById("review-save-button");
+        elements.actionStatus = document.getElementById("review-action-status");
         elements.completeButton = document.getElementById("review-complete-button");
         elements.diffButton = document.getElementById("review-diff-button");
         elements.sourceModeSelect = document.getElementById("review-source-mode-select");
         elements.diffPanel = document.getElementById("review-diff-panel");
         elements.diffBody = document.getElementById("review-diff-body");
         elements.diffCloseButton = document.getElementById("review-diff-close-button");
+        elements.paneDivider = document.getElementById("review-pane-divider");
     }
 
     function escapeHtml(value) {
@@ -373,7 +379,7 @@
     }
 
     function setConstraintState(input, wrapper) {
-        const invalid = Boolean(input.value) && input.validity && !input.validity.valid;
+        const invalid = !input.disabled && Boolean(input.value) && input.validity && !input.validity.valid;
         input.classList.toggle("input-error", invalid);
         input.classList.toggle("textarea-error", invalid);
         wrapper.classList.toggle("review-input-invalid", invalid);
@@ -458,7 +464,8 @@
     function confidenceBadge(field) {
         const confidence = field && field.confidence;
         if (confidence === null || confidence === undefined || confidence === "") {
-            return '<span class="badge badge-ghost badge-sm">Missing confidence</span>';
+            const label = isComplete() ? "No model confidence" : "Missing confidence";
+            return `<span class="badge badge-ghost badge-sm" title="Original extraction confidence">${label}</span>`;
         }
         const numeric = Number(confidence);
         const badgeClass = Number.isNaN(numeric)
@@ -470,7 +477,7 @@
                     : "badge-success";
         const text = Number.isNaN(numeric) ? String(confidence) : `${Math.round(numeric * 100)}%`;
         const band = Number.isNaN(numeric) ? "Unknown" : numeric < 0.7 ? "Low" : numeric < 0.9 ? "Medium" : "High";
-        return `<span class="badge ${badgeClass} badge-sm">${band} confidence · ${escapeHtml(text)}</span>`;
+        return `<span class="badge ${badgeClass} badge-sm" title="Original extraction confidence">${band} confidence · ${escapeHtml(text)}</span>`;
     }
 
     function hasOwnLock() {
@@ -681,11 +688,15 @@
                     : provider || "Provider unavailable";
             elements.providerBadge.classList.remove("hidden");
         }
-        elements.statusBadge.innerHTML = statusBadge(state.reviewItem && state.reviewItem.status);
+        elements.statusBadge.innerHTML = isComplete()
+            ? '<span class="badge badge-success badge-sm">Review complete</span>'
+            : statusBadge(state.reviewItem && state.reviewItem.status);
         elements.statusBadge.classList.remove("hidden");
 
         const reasons = state.metadata.reasons || [];
-        if (reasons.length) {
+        if (isComplete()) {
+            elements.reasonSummary.textContent = "Original extraction confidence is retained for reference.";
+        } else if (reasons.length) {
             elements.reasonSummary.textContent = reasons.map((reason) => titleCase(reason.reason)).join(", ");
         } else {
             elements.reasonSummary.textContent = titleCase(state.reviewItem && state.reviewItem.reason);
@@ -704,6 +715,13 @@
             elements.lockBanner.textContent = `Locked by ${lockedBy || "another operator"} until ${window.DocFlow.formatDateTime(state.lock.expires_at)}.`;
         }
 
+        if (elements.completionBanner) {
+            elements.completionBanner.classList.toggle("hidden", !completed);
+            elements.completionBanner.innerHTML = completed
+                ? '<strong>Review complete.</strong> The values below were accepted by a reviewer. Original extraction confidence remains visible for reference; no further review action is required.'
+                : "";
+        }
+
         if (elements.lockSummary) {
             const showOwnLockSummary = Boolean(state.lock && ownsLock);
             elements.lockSummary.classList.toggle("hidden", !showOwnLockSummary);
@@ -712,13 +730,37 @@
                 : "";
         }
 
-        const claimDisabled = completed || Boolean(state.lock);
+        const claimDisabled = completed || Boolean(state.lock) || state.completionPending;
         elements.claimButton.disabled = claimDisabled;
         elements.claimButton.classList.toggle("hidden", claimDisabled);
-        elements.releaseButton.disabled = completed || !ownsLock;
-        elements.saveButton.disabled = completed || !ownsLock;
-        elements.completeButton.disabled = completed || !ownsLock;
-        elements.diffButton.disabled = completed || !ownsLock;
+        elements.releaseButton.disabled = completed || !ownsLock || state.completionPending;
+        elements.saveButton.disabled = completed || !ownsLock || state.completionPending;
+        elements.completeButton.disabled = completed || !ownsLock || state.completionPending;
+        elements.diffButton.disabled = completed || !ownsLock || state.completionPending;
+        if (!state.completionPending) {
+            elements.completeButton.innerHTML = "Complete Review";
+            elements.completeButton.removeAttribute("aria-busy");
+        }
+    }
+
+    function setCompletionPending(pending) {
+        state.completionPending = pending;
+        elements.workspace.classList.toggle("is-completing", pending);
+        if (elements.actionStatus) {
+            elements.actionStatus.classList.toggle("hidden", !pending);
+            elements.actionStatus.innerHTML = pending
+                ? '<span class="review-action-spinner" aria-hidden="true"></span><span>Saving review and finishing workflow…</span>'
+                : "";
+        }
+        if (pending) {
+            elements.completeButton.disabled = true;
+            elements.completeButton.setAttribute("aria-busy", "true");
+            elements.completeButton.innerHTML = '<span class="review-action-spinner" aria-hidden="true"></span><span>Saving review…</span>';
+            elements.claimButton.disabled = true;
+            elements.releaseButton.disabled = true;
+            elements.saveButton.disabled = true;
+            elements.diffButton.disabled = true;
+        }
     }
 
     function renderScalarInput(field, pathParts, value, editable) {
@@ -802,7 +844,7 @@
         const editable = canEditPath(pathParts);
         const row = createElement("div", "review-field-row");
         row.dataset.fieldPath = pathString(pathParts);
-        row.classList.toggle("highlight", isHighlighted(pathParts));
+        row.classList.toggle("highlight", !isComplete() && isHighlighted(pathParts));
         row.classList.toggle("locked", !editable);
         row.addEventListener("click", () => selectPdfField(pathParts, field));
 
@@ -910,7 +952,7 @@
         value.forEach((item, index) => {
             const row = createElement("div", "review-array-row");
             const itemField = { ...(field.item_schema || { type: "string" }), key: String(index), label: `${field.label || field.key} ${index + 1}` };
-            row.classList.toggle("highlight", isHighlighted([...pathParts, index]));
+            row.classList.toggle("highlight", !isComplete() && isHighlighted([...pathParts, index]));
             appendConfidenceBadge(row, confidenceInfoForPath([...pathParts, index]));
             row.appendChild(renderScalarInput(itemField, [...pathParts, index], item, canEditPath(pathParts)));
             const removeButton = createElement("button", "btn btn-ghost btn-xs", "Remove");
@@ -988,7 +1030,7 @@
                 itemFields.forEach((itemField) => {
                     const cell = createElement("td");
                     const itemPath = [...pathParts, index, itemField.key];
-                    cell.classList.toggle("highlight", isHighlighted(itemPath));
+                    cell.classList.toggle("highlight", !isComplete() && isHighlighted(itemPath));
                     appendConfidenceBadge(cell, confidenceInfoForPath(itemPath), "review-cell-confidence");
                     cell.appendChild(renderScalarInput(itemField, itemPath, item ? item[itemField.key] : "", canEditPath(pathParts) && !itemField.readonly));
                     row.appendChild(cell);
@@ -1040,6 +1082,74 @@
         if (preferredField) {
             selectPdfField([preferredField.key], preferredField);
         }
+    }
+
+    function setPanePercent(percent, persist = true) {
+        if (!elements.workspace || !elements.paneDivider) {
+            return;
+        }
+        const width = elements.workspace.clientWidth || 1;
+        const narrow = width < 780;
+        elements.workspace.classList.toggle("is-narrow", narrow);
+        const minimum = narrow ? 35 : Math.max(35, Math.ceil((368 / width) * 100));
+        const maximum = narrow ? 70 : Math.min(70, Math.floor(((width - 396) / width) * 100));
+        state.panePercent = Math.min(maximum, Math.max(minimum, Math.round(percent)));
+        elements.workspace.style.setProperty("--review-pdf-pane-width", `${state.panePercent}%`);
+        elements.paneDivider.setAttribute("aria-valuemin", String(minimum));
+        elements.paneDivider.setAttribute("aria-valuemax", String(maximum));
+        elements.paneDivider.setAttribute("aria-valuenow", String(state.panePercent));
+        if (persist) {
+            state.preferredPanePercent = state.panePercent;
+            storageSet("docflow.review.pdfPanePercent", String(state.preferredPanePercent));
+        }
+    }
+
+    function initializePaneDivider() {
+        if (!elements.workspace || !elements.paneDivider) {
+            return;
+        }
+        const saved = Number(storageGet("docflow.review.pdfPanePercent"));
+        state.preferredPanePercent = Number.isFinite(saved) && saved ? saved : 52;
+        setPanePercent(state.preferredPanePercent, false);
+
+        elements.paneDivider.addEventListener("pointerdown", (event) => {
+            if (window.matchMedia("(max-width: 900px)").matches) {
+                return;
+            }
+            elements.paneDivider.setPointerCapture(event.pointerId);
+            elements.workspace.classList.add("is-resizing");
+        });
+        elements.paneDivider.addEventListener("pointermove", (event) => {
+            if (!elements.paneDivider.hasPointerCapture(event.pointerId)) {
+                return;
+            }
+            const bounds = elements.workspace.getBoundingClientRect();
+            setPanePercent(((event.clientX - bounds.left) / bounds.width) * 100);
+        });
+        const stopResize = (event) => {
+            if (elements.paneDivider.hasPointerCapture(event.pointerId)) {
+                elements.paneDivider.releasePointerCapture(event.pointerId);
+            }
+            elements.workspace.classList.remove("is-resizing");
+        };
+        elements.paneDivider.addEventListener("pointerup", stopResize);
+        elements.paneDivider.addEventListener("pointercancel", stopResize);
+        elements.paneDivider.addEventListener("dblclick", () => setPanePercent(52));
+        elements.paneDivider.addEventListener("keydown", (event) => {
+            if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                setPanePercent(state.panePercent + (event.key === "ArrowRight" ? 3 : -3));
+            } else if (event.key === "Home") {
+                event.preventDefault();
+                setPanePercent(35);
+            } else if (event.key === "End") {
+                event.preventDefault();
+                setPanePercent(70);
+            }
+        });
+        const refreshPaneSize = () => setPanePercent(state.preferredPanePercent, false);
+        window.addEventListener("resize", refreshPaneSize);
+        new ResizeObserver(refreshPaneSize).observe(elements.workspace);
     }
 
     function collectCorrections() {
@@ -1150,7 +1260,10 @@
     }
 
     async function completeReview() {
-        elements.completeButton.disabled = true;
+        if (state.completionPending) {
+            return;
+        }
+        setCompletionPending(true);
         try {
             await window.DocFlow.apiPost(
                 `/api/review/items/${encodeURIComponent(state.reviewItemId)}/complete`,
@@ -1159,6 +1272,8 @@
             window.DocFlow.showToast("Review completed", "success");
             window.location.href = "/app/review";
         } catch (error) {
+            setCompletionPending(false);
+            renderLockState();
             elements.completeButton.disabled = false;
             window.DocFlow.showToast(error.message || "Unable to complete review", "error");
         }
@@ -1189,6 +1304,7 @@
             return;
         }
         bindEvents();
+        initializePaneDivider();
         loadReviewItem();
     });
 })();

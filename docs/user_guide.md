@@ -397,7 +397,11 @@ Administrators also see **Overview**, **Users**, **Pipeline**, **Review Forms**,
 - **Extraction** shows the source or stored PDF, registered artifacts,
   extracted versus final values, confidence bands, review status, and the raw
   provider payload. **Previous** and **Next** move among documents in the same
-  batch. This page is evidence of processing, not an editing screen.
+  batch. This page is evidence of processing, not an editing screen. When a
+  human review is complete, fields that originally required attention are
+  labeled **Reviewed**, while operator-corrected fields retain **Corrected**.
+  Their confidence labels still describe the original
+  machine extraction; they do not indicate outstanding work.
 - **Reports** summarizes batches and documents, persisted statuses, ingestion
   sources, review counts, completed/failed totals, average processing time, and
   recent batches. Select a recent batch for details and its **Open processing dashboard** link.
@@ -419,10 +423,21 @@ Documents enter the review queue when the system cannot confidently accept the e
 4. If you opened an unclaimed item through **View**, select **Claim** at the top
    before editing. An active claim prevents another operator from editing it.
 5. Compare the PDF preview with the extracted fields shown beside it.
+   On desktop, the PDF and review-field panes scroll independently. Drag the
+   divider between them to change their widths, or focus the divider and use
+   the Left/Right arrow keys. The review actions remain available at the top
+   while either pane is scrolled. If the available workspace is too narrow,
+   the panes stack vertically. Resizing the window or opening the sidebar
+   temporarily adjusts the layout without replacing your saved divider position.
 6. Correct inaccurate or missing values.
 7. Select **Preview Diff** to review your changes.
 8. Select **Save Draft** if the review is incomplete, or **Complete Review** when all information has been checked.
 9. After completion, confirm that the document leaves the active queue and continues processing.
+
+A completed review displays **Review complete** and explains that no further
+review action is required. Confidence badges remain visible as historical
+extraction evidence. **No model confidence** means the extractor did not
+provide a confidence score; it does not mean the completed review is pending.
 
 The PDF preview is rendered with the local PDF.js viewer. Selecting a field
 value or its **Show source value** action navigates to the cited page and
@@ -448,7 +463,7 @@ If the review gate is configured with `confidence_threshold: 0.90`, a field cove
 2. Because this is below the configured 90% threshold, the document appears in **Review Queue**.
 3. An operator selects **Review Queue**, claims the document, and compares the amount with the PDF preview.
 4. The operator corrects the amount if necessary and selects **Preview Diff**.
-5. After the operator selects **Complete Review**, the corrected information is saved and processing continues.
+5. After the operator selects **Complete Review**, the button changes to **Saving review…** and the page shows **Saving review and finishing workflow…** while the corrected information is saved and processing continues. Keep the page open until the review queue appears; the button is disabled during this operation to prevent duplicate submissions. If the save fails, the action controls become available again and an error message explains what happened.
 
 #### Schema-Based Review Migration
 

@@ -1113,6 +1113,20 @@ class ReviewRepository:
         sql += " ORDER BY created_at DESC LIMIT 1"
         return _row_to_dict(self.conn.execute(sql, params).fetchone())
 
+    def find_latest_for_document(self, document_id: str) -> dict[str, Any] | None:
+        """Return the most recently created review item for a document."""
+        return _row_to_dict(
+            self.conn.execute(
+                """
+                SELECT * FROM review_items
+                WHERE document_id = ?
+                ORDER BY created_at DESC, rowid DESC
+                LIMIT 1
+                """,
+                (document_id,),
+            ).fetchone()
+        )
+
     def update_metadata(self, review_item_id: str, metadata: dict[str, Any]) -> None:
         """Replace review item metadata JSON."""
         with transaction(self.conn):

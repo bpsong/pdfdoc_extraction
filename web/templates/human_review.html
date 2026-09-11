@@ -6,6 +6,7 @@
     <button class="btn btn-outline btn-sm" id="review-claim-button" type="button">Claim</button>
     <button class="btn btn-outline btn-sm" id="review-release-button" type="button" disabled>Release</button>
     <button class="btn btn-outline btn-sm" id="review-save-button" type="button" disabled>Save Draft</button>
+    <span class="review-action-status hidden" id="review-action-status" role="status" aria-live="polite"></span>
     <button class="btn btn-primary btn-sm" id="review-complete-button" type="button" disabled>Complete Review</button>
 </div>
 {% endblock %}
@@ -13,7 +14,7 @@
 {% block content %}
 <div class="review-workspace" id="human-review-workspace" data-review-item-id="{{ review_item_id|default('') }}"
     data-review-operator="{{ username|default('') }}">
-    <section class="card bg-base-100 shadow-sm min-w-0">
+    <section class="card bg-base-100 shadow-sm min-w-0 review-pdf-panel">
         <div class="panel-header">
             <div class="min-w-0">
                 <h2 class="font-semibold truncate" id="review-document-title">Source PDF</h2>
@@ -27,6 +28,12 @@
             <div class="empty-panel">Source PDF unavailable</div>
         </div>
     </section>
+
+    <div class="review-pane-divider" id="review-pane-divider" role="separator" tabindex="0"
+        aria-label="Resize document and review panes" aria-orientation="vertical" aria-valuemin="35"
+        aria-valuemax="70" aria-valuenow="52" title="Drag to resize panes; use the arrow keys for small adjustments">
+        <span aria-hidden="true"></span>
+    </div>
 
     <section class="card bg-base-100 shadow-sm min-w-0 review-editor-panel">
         <div class="panel-header">
@@ -53,6 +60,7 @@
             </div>
         </div>
 
+        <div class="review-completion-banner hidden" id="review-completion-banner" role="status"></div>
         <div class="review-lock-banner hidden" id="review-lock-banner"></div>
 
         <div class="review-editor-scroll">
@@ -74,5 +82,5 @@
 
 {% block scripts %}
 <script src="/static/js/pdf_viewer.js?v=pdf-pager-input-2" defer></script>
-<script src="/static/js/human_review.js?v=ui-status-vocabulary-help" defer></script>
+<script src="/static/js/human_review.js?v=review-pane-regression-fixes" defer></script>
 {% endblock %}

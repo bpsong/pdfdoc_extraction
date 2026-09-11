@@ -16,6 +16,7 @@
     const providerLabel = document.getElementById("extraction-provider-label");
     const rawPayload = document.getElementById("extraction-raw-payload");
     const reviewLink = document.getElementById("extraction-review-link");
+    const reviewSummary = document.getElementById("extraction-review-summary");
     const previousButton = document.getElementById("previous-document-button");
     const nextButton = document.getElementById("next-document-button");
     let pdfViewer = null;
@@ -49,9 +50,10 @@
         return `<span class="badge ${window.DocFlow.statusBadgeClass(status, "unknown")} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "unknown"))}</span>`;
     }
 
-    function confidenceBadge(field) {
+    function confidenceBadge(field, review) {
         if (field.confidence === null || field.confidence === undefined) {
-            return '<span class="badge badge-ghost badge-sm">N/A confidence</span>';
+            const label = review && review.status === "completed" ? "No model confidence" : "N/A confidence";
+            return `<span class="badge badge-ghost badge-sm" title="Original extraction confidence">${label}</span>`;
         }
         const value = Number(field.confidence);
         const percent = Number.isFinite(value) ? `${Math.round(value * 100)}%` : "N/A";
@@ -62,7 +64,7 @@
             missing: "badge-ghost",
         };
         const band = titleCase(field.confidence_band || "unknown");
-        return `<span class="badge ${classes[field.confidence_band] || "badge-ghost"} badge-sm">${escapeHtml(band)} confidence · ${escapeHtml(percent)}</span>`;
+        return `<span class="badge ${classes[field.confidence_band] || "badge-ghost"} badge-sm" title="Original extraction confidence">${escapeHtml(band)} confidence · ${escapeHtml(percent)}</span>`;
     }
 
     function nestedConfidenceSummary(field) {
@@ -110,21 +112,28 @@
         `).join("");
     }
 
-    function renderFields(fields) {
+    function effectiveReviewStatus(field, review) {
+        if (review && review.status === "completed" && field.review_status === "required") {
+            return "reviewed";
+        }
+        return field.review_status;
+    }
+
+    function renderFields(fields, review) {
         if (!fields || !fields.length) {
             tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-base-content/50 py-10">No extraction fields</td></tr>';
             return;
         }
         tableBody.innerHTML = fields.map((field) => `
-            <tr class="${field.requires_review ? "bg-warning/10" : ""} cursor-pointer" data-field-key="${escapeHtml(field.field_key)}" tabindex="0">
+            <tr class="${field.requires_review && (!review || review.status !== "completed") ? "bg-warning/10" : ""} cursor-pointer" data-field-key="${escapeHtml(field.field_key)}" tabindex="0">
                 <td>
                     <div class="font-medium">${escapeHtml(field.field_alias || field.field_key)}</div>
                     <div class="text-xs text-base-content/50">${escapeHtml(field.field_key)}</div>
                 </td>
                 <td class="max-w-sm">${formatValue(field.extracted_value)}${nestedConfidenceSummary(field)}</td>
                 <td class="max-w-sm">${formatValue(field.final_value)}</td>
-                <td>${confidenceBadge(field)}</td>
-                <td>${statusBadge(field.review_status)}</td>
+                <td>${confidenceBadge(field, review)}</td>
+                <td>${statusBadge(effectiveReviewStatus(field, review))}</td>
             </tr>
         `).join("");
         tableBody.querySelectorAll("[data-field-key]").forEach((row) => {
@@ -170,9 +179,16 @@
         } else {
             reviewLink.classList.add("hidden");
         }
+        const completedReview = payload.review && payload.review.status === "completed";
+        if (reviewSummary) {
+            reviewSummary.classList.toggle("hidden", !completedReview);
+            reviewSummary.innerHTML = completedReview
+                ? '<strong>Human review complete.</strong> Fields that originally required attention are marked Reviewed. Confidence still describes the original extraction.'
+                : "";
+        }
         renderPreview(payload);
         renderFiles(payload.files || []);
-        renderFields(payload.fields || []);
+        renderFields(payload.fields || [], payload.review || null);
         wireSiblingButtons(payload);
     }
 

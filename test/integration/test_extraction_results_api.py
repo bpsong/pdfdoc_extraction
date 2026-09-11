@@ -130,12 +130,35 @@ def test_document_extraction_api_returns_ui_ready_payload(tmp_path, monkeypatch)
     assert payload["document"]["preview_url"] == f"/api/documents/{document_id}/file/pdf"
     assert payload["latest_extraction"]["provider_job_id"] == "job-123"
     assert payload["review_item_id"] == state["review"]["id"]
+    assert payload["review"] == {
+        "id": state["review"]["id"],
+        "status": "pending",
+        "completed_at": None,
+    }
     assert payload["fields"][0]["field_key"] == "supplier"
     assert payload["fields"][0]["confidence_band"] == "high"
     assert payload["fields"][1]["confidence_band"] == "low"
     assert payload["fields"][1]["confidence_details"]["nested_confidences"]["value"]["confidence"] == 0.62
     assert payload["fields"][1]["requires_review"] is True
     assert payload["files"][0]["filename"] == "invoice.pdf"
+
+
+def test_document_extraction_api_reports_completed_review_history(tmp_path, monkeypatch) -> None:
+    """Completed review state remains available after it leaves the open queue."""
+    client, config, state = _client(tmp_path, monkeypatch)
+    document_id = state["created"]["document"]["id"]
+    review_id = state["review"]["id"]
+    with connect(config) as conn:
+        ReviewRepository(conn).complete(review_id, "operator")
+
+    response = client.get(f"/api/documents/{document_id}/extraction")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["review_item_id"] is None
+    assert payload["review"]["id"] == review_id
+    assert payload["review"]["status"] == "completed"
+    assert payload["review"]["completed_at"]
 
 
 def test_document_extraction_api_presents_safe_glm_provider_metadata(
