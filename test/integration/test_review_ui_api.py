@@ -153,6 +153,16 @@ def test_review_queue_api_returns_ui_ready_items(tmp_path, monkeypatch) -> None:
     assert payload[0]["review_field_labels"] == ["Supplier"]
     assert payload[0]["lowest_confidence"] == 0.61
 
+    page = client.get(
+        "/api/review/items?paginated=true&limit=1&filter=low_confidence&sort_by=document&sort_dir=asc"
+    )
+    assert page.status_code == 200
+    page_payload = page.json()
+    assert page_payload["total"] == 1
+    assert page_payload["counts"]["all"] == 1
+    assert page_payload["items"][0]["id"] == state["review"]["id"]
+    assert page_payload["sort_by"] == "document"
+
 
 def test_review_detail_api_returns_schema_pdf_and_parsed_fields(tmp_path, monkeypatch) -> None:
     client, state = _client(tmp_path, monkeypatch)

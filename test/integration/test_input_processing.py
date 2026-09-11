@@ -14,7 +14,6 @@ from fastapi.testclient import TestClient
 
 from modules.file_processor import FileProcessor
 from modules.workflow_manager import WorkflowManager
-from modules.watch_folder_monitor import WatchFolderMonitor
 from modules import utils
 import modules.api_router as api_router
 
@@ -234,81 +233,6 @@ def test_process_web_upload_supports_bytes_like_input(monkeypatch, tmp_dirs, con
     assert len(wf.calls) == 1
     with open(moved_path, "rb") as f:
         assert f.read(5) == b"%PDF-"
-
-
-# --------------------------
-# Watch and Upload PDF Validation Tests
-# --------------------------
-
-def test_watch_folder_skips_invalid_pdf_header(tmp_path, monkeypatch):
-    watch_dir = tmp_path / "watch"
-    proc_dir = tmp_path / "proc"
-    watch_dir.mkdir()
-    proc_dir.mkdir()
-    # Create a fake PDF file in watch folder
-    sample = watch_dir / "some.pdf"
-    sample.write_bytes(b"NOTPDFDATA")
-    called = {"processed": False}
-    def fake_callback(new_filepath, uuid_str, source_label, original_filename=None, **kwargs):
-        called["processed"] = True
-
-    cfg = DummyConfig(watch_dir, proc_dir, tmp_path / "upload")
-    monitor = WatchFolderMonitor(config_manager=cfg, process_file_callback=fake_callback, retry_file_operation_func=None)
-
-    # Force _is_valid_pdf_header to return False (simulate invalid header)
-    monkeypatch.setattr(utils, "is_pdf_header", lambda fp, **kw: False)
-
-    # Also monkeypatch shutil.move to avoid actually moving files (but we expect it not to be called)
-    moved = {"count": 0}
-    def fake_move(src, dst):
-        moved["count"] += 1
-        # Do not perform actual move to keep file in place
-    monkeypatch.setattr("shutil.move", fake_move)
-
-    # Run one iteration of _monitor_new_files loop but exit quickly
-    # We'll set stop_event after one loop by patching time.sleep to set stop
-    def sleep_and_stop(sec):
-        monitor.stop()
-        return None
-    monkeypatch.setattr("time.sleep", sleep_and_stop)
-
-    # Run monitor (it will iterate once and stop)
-    monitor._monitor_new_files()
-
-    # Since header invalid, callback should not be invoked and file should remain in watch dir
-    assert not called["processed"]
-    assert sample.exists()
-    assert moved["count"] == 0
-
-
-def test_watch_folder_processes_valid_pdf_header(tmp_path, monkeypatch):
-    watch_dir = tmp_path / "watch2"
-    proc_dir = tmp_path / "proc2"
-    watch_dir.mkdir()
-    proc_dir.mkdir()
-    sample = watch_dir / "valid.pdf"
-    sample.write_bytes(b"%PDF-1.4 content")
-    processed: Dict[str, Optional[dict]] = {"args": None}
-    def fake_callback(new_filepath, uuid_str, source_label, original_filename=None, **kwargs):
-        processed["args"] = {"new_filepath": new_filepath, "uid": uuid_str, "source": source_label, "original": original_filename}
-
-    cfg = DummyConfig(watch_dir, proc_dir, tmp_path / "upload2")
-    monitor = WatchFolderMonitor(config_manager=cfg, process_file_callback=fake_callback, retry_file_operation_func=None)
-
-    # is_pdf_header returns True
-    monkeypatch.setattr(utils, "is_pdf_header", lambda fp, **kw: True)
-
-    # Let the loop run once and then stop via time.sleep
-    monkeypatch.setattr("time.sleep", lambda s: monitor.stop())
-
-    monitor._monitor_new_files()
-
-    # A file should have been moved into proc_dir and callback invoked
-    assert processed["args"] is not None
-    final_path = Path(processed["args"]["new_filepath"])
-    assert final_path.exists()
-    assert processed["args"]["original"] == "valid.pdf"
-    assert processed["args"]["source"] == "watch_folder"
 
 
 def _build_test_app(tmp_upload_dir, monkeypatch, is_pdf_header_result=True):

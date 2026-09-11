@@ -89,6 +89,10 @@ def test_failures_api_lists_details_and_clears_notifications(monkeypatch, tmp_pa
     assert "llx-secret" not in failures.text
     assert "[REDACTED]" in failures.text
 
+    sorted_failures = client.get("/api/failures?limit=1&offset=0&sort_by=document&sort_dir=asc")
+    assert sorted_failures.status_code == 200
+    assert sorted_failures.json()["sort_by"] == "document"
+
     detail = client.get(f"/api/failures/{document_id}")
     assert detail.status_code == 200
     detail_payload = detail.json()
@@ -114,4 +118,3 @@ def test_failures_api_lists_details_and_clears_notifications(monkeypatch, tmp_pa
         TaskRunRepository(conn).mark_failed(run["id"], "new split failure", {"fatal_failure": {"message": "new split failure"}})
 
     assert client.get("/api/failures/notifications").json()["count"] == 1
-

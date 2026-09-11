@@ -5,28 +5,20 @@
         items: [],
         filter: "all",
         search: "",
+        total: 0,
+        counts: {},
+        limit: 25,
+        offset: 0,
+        sortBy: "created_at",
+        sortDir: "desc",
+        queryKey: null,
     };
-
-    function escapeHtml(value) {
-        return String(value ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#039;");
-    }
-
-    function titleCase(value) {
-        return String(value || "")
-            .replace(/[_-]+/g, " ")
-            .replace(/\s+/g, " ")
-            .trim()
-            .replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Unknown";
-    }
+    const escapeHtml = window.DocFlow.escapeHtml;
+    const titleCase = window.DocFlow.titleCase;
 
     function statusBadge(status) {
         const badgeClass = window.DocFlow.statusBadgeClass(status, "pending");
-        return `<span class="badge ${badgeClass} badge-sm">${escapeHtml(window.DocFlow.statusLabel(status, "pending"))}</span>`;
+        return `<span class="badge ${badgeClass} badge-sm">${window.DocFlow.escapeHtml(window.DocFlow.statusLabel(status, "pending"))}</span>`;
     }
 
     function confidenceText(value) {
@@ -109,10 +101,10 @@
     }
 
     function renderCounts() {
-        const all = state.items.length;
-        const low = state.items.filter((item) => itemHasLowConfidence(item) && item.status !== "completed").length;
-        const inReview = state.items.filter((item) => item.status === "in_review").length;
-        const completed = state.items.filter((item) => item.status === "completed").length;
+        const all = Number(state.counts.all || 0);
+        const low = Number(state.counts.low_confidence || 0);
+        const inReview = Number(state.counts.in_review || 0);
+        const completed = Number(state.counts.completed || 0);
         document.getElementById("review-count-all").textContent = String(all);
         document.getElementById("review-count-low").textContent = String(low);
         document.getElementById("review-count-in-review").textContent = String(inReview);
@@ -144,7 +136,7 @@
 
     function renderRows() {
         const body = document.getElementById("review-queue-body");
-        const items = state.items.filter((item) => matchesFilter(item) && matchesSearch(item));
+        const items = state.items;
         if (!items.length) {
             body.innerHTML = '<tr><td colspan="7" class="text-center text-base-content/50 py-10">No review items</td></tr>';
             return;
@@ -183,6 +175,16 @@
         renderCounts();
         renderFilters();
         renderRows();
+        const start = state.total ? state.offset + 1 : 0;
+        const end = Math.min(state.offset + state.items.length, state.total);
+        document.getElementById("review-page-summary").textContent = `${start}-${end} of ${state.total}`;
+        document.getElementById("review-prev").disabled = state.offset === 0;
+        document.getElementById("review-next").disabled = state.offset + state.limit >= state.total;
+        document.querySelectorAll("[data-review-sort]").forEach((button) => {
+            const active = button.dataset.reviewSort === state.sortBy;
+            button.setAttribute("aria-sort", active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none");
+            button.querySelector("span").textContent = active ? (state.sortDir === "asc" ? "↑" : "↓") : "";
+        });
     }
 
     function announceReviewChanges(previousItems, nextItems) {
@@ -238,10 +240,27 @@
         });
         body.innerHTML = window.DocFlow.tableSkeletonRows(7, 4);
         try {
-            const payload = await window.DocFlow.apiGet("/api/review/items");
-            const nextItems = Array.isArray(payload) ? payload : [];
-            announceReviewChanges(state.items, nextItems);
+            const params = new URLSearchParams({
+                paginated: "true",
+                limit: String(state.limit),
+                offset: String(state.offset),
+                filter: state.filter,
+                search: state.search,
+                sort_by: state.sortBy,
+                sort_dir: state.sortDir,
+            });
+            const payload = await window.DocFlow.apiGet(`/api/review/items?${params}`);
+            const nextItems = Array.isArray(payload.items) ? payload.items : [];
+            const queryKey = params.toString();
+            if (state.queryKey === queryKey) {
+                announceReviewChanges(state.items, nextItems);
+            }
             state.items = nextItems;
+            state.queryKey = queryKey;
+            state.total = Number(payload.total || 0);
+            state.counts = payload.counts || {};
+            state.limit = Number(payload.limit || state.limit);
+            state.offset = Number(payload.offset || 0);
             render();
         } catch (error) {
             body.innerHTML = `
@@ -267,18 +286,41 @@
         document.querySelectorAll(".review-filter").forEach((button) => {
             button.addEventListener("click", () => {
                 state.filter = button.dataset.filter || "all";
-                render();
+                state.offset = 0;
+                loadReviewItems();
             });
         });
+        let searchTimer = null;
         document.getElementById("review-search-input").addEventListener("input", (event) => {
             state.search = event.target.value || "";
-            renderRows();
+            state.offset = 0;
+            window.clearTimeout(searchTimer);
+            searchTimer = window.setTimeout(loadReviewItems, 250);
         });
         document.getElementById("review-refresh-button").addEventListener("click", loadReviewItems);
         document.getElementById("review-queue-body").addEventListener("click", (event) => {
             if (event.target.closest("[data-review-retry]")) {
                 loadReviewItems();
             }
+        });
+        document.getElementById("review-prev").addEventListener("click", () => {
+            state.offset = Math.max(0, state.offset - state.limit);
+            loadReviewItems();
+        });
+        document.getElementById("review-next").addEventListener("click", () => {
+            state.offset += state.limit;
+            loadReviewItems();
+        });
+        document.getElementById("review-queue-region").addEventListener("click", (event) => {
+            const button = event.target.closest("[data-review-sort]");
+            if (!button) {
+                return;
+            }
+            const sortBy = button.dataset.reviewSort;
+            state.sortDir = state.sortBy === sortBy && state.sortDir === "asc" ? "desc" : "asc";
+            state.sortBy = sortBy;
+            state.offset = 0;
+            loadReviewItems();
         });
     }
 

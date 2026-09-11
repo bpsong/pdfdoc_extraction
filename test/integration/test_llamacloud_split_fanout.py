@@ -11,7 +11,6 @@ from modules.db.repositories import DocumentRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
 from modules.services.failure_service import FailureService
 from modules.exceptions import TaskError
-from modules.status_manager import StatusManager
 from modules.workflow_loader import WorkflowLoader
 from modules.workflow_manager import WorkflowManager
 from standard_step.split.llamacloud_split import LlamaCloudSplitTask
@@ -122,7 +121,6 @@ def test_split_fanout_starts_child_workflows_and_skips_parent_reference_update(t
 
     _patch_prefect(monkeypatch)
     WorkflowLoader._instance = None
-    StatusManager._instance = None
     monkeypatch.setattr("modules.workflow_loader.CleanupTask", CleanupTask)
     monkeypatch.setattr(
         WorkflowLoader,
@@ -221,7 +219,6 @@ def test_split_fanout_extract_preflight_failure_stops_children_once(tmp_path, mo
 
     _patch_prefect(monkeypatch)
     WorkflowLoader._instance = None
-    StatusManager._instance = None
     monkeypatch.setattr("modules.workflow_loader.CleanupTask", CleanupTask)
     monkeypatch.setattr(
         WorkflowLoader,

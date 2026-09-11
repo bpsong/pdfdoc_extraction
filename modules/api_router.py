@@ -1207,8 +1207,10 @@ def build_router() -> APIRouter:
         audit_user: str | None = Query(default=None, alias="user"),
         created_from: str | None = None,
         created_to: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
+        limit: int = Query(default=25, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        sort_by: str = Query(default="created_at"),
+        sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
         user: str = Depends(get_current_user),
     ):
         """Return filtered admin audit events."""
@@ -1222,6 +1224,8 @@ def build_router() -> APIRouter:
                 created_to=created_to,
                 limit=limit,
                 offset=offset,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
             )
 
     def _pipeline_model_payload(payload: dict[str, Any]) -> dict[str, Any] | None:
@@ -2263,11 +2267,31 @@ def build_router() -> APIRouter:
         return _file_status_from_document(document, details=details)
 
     @router.get("/api/batches")
-    def list_batches(user: str = Depends(get_current_user)):
+    def list_batches(
+        limit: int = Query(default=100, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        sort_by: str = Query(default="created_at"),
+        sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
+        paginated: bool = False,
+        user: str = Depends(get_current_user),
+    ):
         """List SQLite-backed ingestion batches."""
         config, _, _, _, _ = get_dependencies()
         with connect(config) as conn:
-            return BatchService(conn).list_batches()
+            service = BatchService(conn)
+            if paginated:
+                return service.list_batches_page(
+                    limit=limit,
+                    offset=offset,
+                    sort_by=sort_by,
+                    sort_dir=sort_dir,
+                )
+            return service.list_batches(
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
 
     @router.get("/api/batches/{batch_id}")
     def get_batch(batch_id: str, user: str = Depends(get_current_user)):
@@ -2391,14 +2415,21 @@ def build_router() -> APIRouter:
 
     @router.get("/api/failures")
     def list_failures(
-        limit: int = Query(default=100, ge=1, le=200),
+        limit: int = Query(default=25, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
+        sort_by: str = Query(default="failure_at"),
+        sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
         user: str = Depends(get_current_user),
     ):
         """List documents with failed task runs for operator examination."""
         config, _, _, _, _ = get_dependencies()
         with connect(config) as conn:
-            return FailureService(conn).list_failures(limit=limit, offset=offset)
+            return FailureService(conn).list_failures(
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
 
     @router.get("/api/failures/{document_id}")
     def get_failure_detail(document_id: str, user: str = Depends(get_current_user)):
@@ -2535,12 +2566,30 @@ def build_router() -> APIRouter:
     def list_review_items(
         status: str | None = None,
         queue_name: str | None = None,
+        paginated: bool = False,
+        limit: int = Query(default=25, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        filter_name: str = Query(default="all", alias="filter"),
+        search: str | None = None,
+        sort_by: str = Query(default="created_at"),
+        sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
         user: str = Depends(get_current_user),
     ):
         """List review items with optional status and queue filters."""
         config, _, _, _, _ = get_dependencies()
         with connect(config) as conn:
-            return ReviewService(conn, config).list_items(status=status, queue_name=queue_name)
+            service = ReviewService(conn, config)
+            if paginated:
+                return service.list_items_page(
+                    limit=limit,
+                    offset=offset,
+                    filter_name=filter_name,
+                    queue_name=queue_name,
+                    search=search,
+                    sort_by=sort_by,
+                    sort_dir=sort_dir,
+                )
+            return service.list_items(status=status, queue_name=queue_name)
 
     @router.get("/api/review/items/{review_item_id}")
     def get_review_item(review_item_id: str, user: str = Depends(get_current_user)):

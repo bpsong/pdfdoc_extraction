@@ -51,6 +51,64 @@ class ReviewService:
             for item in self.reviews.list_queue(status=status, queue_name=queue_name)
         ]
 
+    def list_items_page(
+        self,
+        *,
+        limit: int = 25,
+        offset: int = 0,
+        filter_name: str = "all",
+        queue_name: str | None = None,
+        search: str | None = None,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> dict[str, Any]:
+        """Return a filtered and sorted review page with queue counts."""
+        safe_limit = min(max(int(limit), 1), 100)
+        safe_offset = max(int(offset), 0)
+        safe_filter = filter_name if filter_name in {"all", "low_confidence", "in_review", "completed"} else "all"
+        safe_sort_by = sort_by if sort_by in {"document", "type", "fields", "confidence", "queue", "status", "created_at"} else "created_at"
+        safe_sort_dir = "asc" if str(sort_dir).lower() == "asc" else "desc"
+        status = safe_filter if safe_filter in {"in_review", "completed"} else None
+        low_confidence = safe_filter == "low_confidence"
+        items = self.reviews.list_queue_page(
+            limit=safe_limit,
+            offset=safe_offset,
+            status=status,
+            queue_name=queue_name,
+            low_confidence=low_confidence,
+            search=search,
+            sort_by=safe_sort_by,
+            sort_dir=safe_sort_dir,
+        )
+        total = self.reviews.count_queue_page(
+            status=status,
+            queue_name=queue_name,
+            low_confidence=low_confidence,
+            search=search,
+        )
+        counts = {
+            "all": self.reviews.count_queue_page(queue_name=queue_name, search=search),
+            "low_confidence": self.reviews.count_queue_page(
+                queue_name=queue_name, low_confidence=True, search=search
+            ),
+            "in_review": self.reviews.count_queue_page(
+                status="in_review", queue_name=queue_name, search=search
+            ),
+            "completed": self.reviews.count_queue_page(
+                status="completed", queue_name=queue_name, search=search
+            ),
+        }
+        return {
+            "items": [self._queue_item_payload(item) for item in items],
+            "total": total,
+            "counts": counts,
+            "limit": safe_limit,
+            "offset": safe_offset,
+            "filter": safe_filter,
+            "sort_by": safe_sort_by,
+            "sort_dir": safe_sort_dir,
+        }
+
     def get_detail(self, review_item_id: str) -> dict[str, Any] | None:
         """Return review item with document, fields, and lock state."""
         item = self.reviews.get(review_item_id)

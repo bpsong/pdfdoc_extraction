@@ -583,10 +583,14 @@ class AdminAuditService:
         created_to: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
     ) -> dict[str, Any]:
         """Return filtered admin audit events with parsed JSON payloads."""
         safe_limit = min(max(int(limit), 1), 500)
         safe_offset = max(int(offset), 0)
+        safe_sort_by = sort_by if sort_by in {"created_at", "user", "event_type"} else "created_at"
+        safe_sort_dir = "asc" if str(sort_dir).lower() == "asc" else "desc"
         events = self.audit.list_admin_events(
             event_type=event_type or None,
             user=user or None,
@@ -594,6 +598,8 @@ class AdminAuditService:
             created_to=created_to or None,
             limit=safe_limit,
             offset=safe_offset,
+            sort_by=safe_sort_by,
+            sort_dir=safe_sort_dir,
         )
         total = self.audit.count_admin_events(
             event_type=event_type or None,
@@ -606,6 +612,8 @@ class AdminAuditService:
             "total": total,
             "limit": safe_limit,
             "offset": safe_offset,
+            "sort_by": safe_sort_by,
+            "sort_dir": safe_sort_dir,
             "filters": {
                 "event_type": event_type,
                 "user": user,

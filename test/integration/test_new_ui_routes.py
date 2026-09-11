@@ -514,7 +514,7 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert 'id="pipeline-publish-dialog-confirm"' in response.text
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 6
-    assert "/static/js/pipeline_config.js?v=publish-confirmation-modal-1" in response.text
+    assert "/static/js/pipeline_config.js?v=watch-folders-management-2" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:
@@ -572,3 +572,5 @@ def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> No
     assert "Current Operator password" in users.text
     assert "/static/js/admin_users.js" in users.text
     assert "/static/js/admin_audit.js" in audit.text
+    assert 'id="admin-audit-pagination"' in audit.text
+    assert 'data-audit-sort="created_at"' in audit.text

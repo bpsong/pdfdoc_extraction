@@ -15,7 +15,6 @@ import main
 from modules import logging_config
 from modules.file_processor import FileProcessor
 from modules.shutdown_manager import ShutdownManager
-from modules.watch_folder_monitor import WatchFolderMonitor
 from tools import processing_worker as processing_worker_cli
 
 
@@ -679,43 +678,4 @@ def test_file_processor_error_and_compatibility_paths(monkeypatch, tmp_path):
     ) is False
 
 
-def test_watch_monitor_retry_cleanup_and_loop_exceptions(monkeypatch, tmp_path):
-    config = DictConfig(
-        {
-            "watch_folder.dir": str(tmp_path),
-            "watch_folder.processing_dir": str(tmp_path / "processing"),
-        }
-    )
-    monitor = WatchFolderMonitor(config, Mock(), None)
-    cleanup = Mock()
-    operation = Mock(side_effect=OSError("busy"))
-    monkeypatch.setattr("modules.watch_folder_monitor.time.sleep", Mock())
-
-    assert monitor._retry_file_operation(
-        operation,
-        attempts=2,
-        delay=0.01,
-        cleanup_func=cleanup,
-    ) is False
-    cleanup.assert_called_once_with()
-
-    returned_failure = Mock(side_effect=[False, True])
-    assert monitor._retry_file_operation(returned_failure, attempts=2, delay=0.01) is True
-    assert returned_failure.call_count == 2
-
-    cleanup.reset_mock()
-    always_false = Mock(return_value=False)
-    assert monitor._retry_file_operation(
-        always_false,
-        attempts=2,
-        delay=0.01,
-        cleanup_func=cleanup,
-    ) is False
-    cleanup.assert_called_once_with()
-
-    monkeypatch.setattr(
-        "modules.watch_folder_monitor.os.listdir",
-        Mock(side_effect=[OSError("scan"), KeyboardInterrupt]),
-    )
-    monitor._monitor_new_files()
 # pyright: reportArgumentType=false

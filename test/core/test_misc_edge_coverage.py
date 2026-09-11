@@ -16,7 +16,6 @@ from modules.services.reports_service import (
 from modules.services.runtime_settings_service import RuntimeSettingsService
 from modules.services.processing_state_service import _config_value
 from modules.services.user_service import UserService, UserServiceError
-from modules.watch_folder_monitor import WatchFolderMonitor
 from modules import utils
 
 
@@ -188,32 +187,6 @@ def test_user_service_rejects_missing_post_update_user(monkeypatch):
 
     service.users.update_password.assert_called_once_with("operator", "new-hash")
     service.audit.append.assert_not_called()
-
-
-def test_watch_monitor_start_registers_cleanup(monkeypatch, tmp_path):
-    monitor = WatchFolderMonitor(
-        Config(
-            {
-                "watch_folder.dir": str(tmp_path),
-                "watch_folder.processing_dir": str(tmp_path),
-            }
-        ),
-        Mock(),
-        None,
-    )
-    shutdown = Mock()
-    monkeypatch.setattr(
-        "modules.watch_folder_monitor.ShutdownManager",
-        lambda: shutdown,
-    )
-    monitor._process_existing_files = Mock()
-    monitor._monitor_new_files = Mock()
-
-    monitor.start()
-
-    shutdown.register_cleanup_task.assert_called_once_with(monitor.stop)
-    monitor._process_existing_files.assert_called_once_with()
-    monitor._monitor_new_files.assert_called_once_with()
 
 
 def test_utility_edge_values(monkeypatch, tmp_path):

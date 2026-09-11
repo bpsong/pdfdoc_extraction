@@ -14,21 +14,9 @@
     const sourceLink = document.getElementById("failure-source-link");
     let failures = [];
     let pdfViewer = null;
-
-    function escapeHtml(value) {
-        return String(value === null || value === undefined ? "" : value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-    }
-
-    function titleCase(value) {
-        return String(value || "unknown")
-            .replace(/_/g, " ")
-            .replace(/\b\w/g, (letter) => letter.toUpperCase());
-    }
+    const pageState = { total: 0, limit: 25, offset: 0, sortBy: "failure_at", sortDir: "desc" };
+    const escapeHtml = window.DocFlow.escapeHtml;
+    const titleCase = window.DocFlow.titleCase;
 
     function formatDateTime(value) {
         return window.DocFlow.formatDateTime(value) || "n/a";
@@ -43,11 +31,11 @@
     }
 
     function jsonBlock(value) {
-        return `<pre class="text-xs whitespace-pre-wrap bg-base-200 rounded p-3 overflow-auto max-h-80">${escapeHtml(JSON.stringify(value || {}, null, 2))}</pre>`;
+        return `<pre class="text-xs whitespace-pre-wrap bg-base-200 rounded p-3 overflow-auto max-h-80">${window.DocFlow.escapeHtml(JSON.stringify(value || {}, null, 2))}</pre>`;
     }
 
     function renderRows() {
-        countBadge.textContent = String(failures.length);
+        countBadge.textContent = String(pageState.total);
         if (!failures.length) {
             tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-base-content/50 py-10">No failed documents</td></tr>';
             return;
@@ -76,6 +64,19 @@
                 </tr>
             `;
         }).join("");
+    }
+
+    function renderPagination() {
+        const start = pageState.total ? pageState.offset + 1 : 0;
+        const end = Math.min(pageState.offset + failures.length, pageState.total);
+        document.getElementById("failures-page-summary").textContent = `${start}-${end} of ${pageState.total}`;
+        document.getElementById("failures-prev").disabled = pageState.offset === 0;
+        document.getElementById("failures-next").disabled = pageState.offset + pageState.limit >= pageState.total;
+        document.querySelectorAll("[data-failure-sort]").forEach((button) => {
+            const active = button.dataset.failureSort === pageState.sortBy;
+            button.setAttribute("aria-sort", active ? (pageState.sortDir === "asc" ? "ascending" : "descending") : "none");
+            button.querySelector("span").textContent = active ? (pageState.sortDir === "asc" ? "↑" : "↓") : "";
+        });
     }
 
     function renderDetail(payload) {
@@ -181,11 +182,21 @@
 
     async function loadFailures() {
         try {
-            const payload = await window.DocFlow.apiGet("/api/failures");
+            const params = new URLSearchParams({
+                limit: String(pageState.limit),
+                offset: String(pageState.offset),
+                sort_by: pageState.sortBy,
+                sort_dir: pageState.sortDir,
+            });
+            const payload = await window.DocFlow.apiGet(`/api/failures?${params}`);
             failures = Array.isArray(payload.failures) ? payload.failures : [];
+            pageState.total = Number(payload.total || 0);
+            pageState.limit = Number(payload.limit || pageState.limit);
+            pageState.offset = Number(payload.offset || 0);
             renderRows();
-            const params = new URLSearchParams(window.location.search);
-            const requestedDocument = params.get("document_id");
+            renderPagination();
+            const locationParams = new URLSearchParams(window.location.search);
+            const requestedDocument = locationParams.get("document_id");
             const first = requestedDocument || (failures[0] && failures[0].document && failures[0].document.id);
             if (first) {
                 await openFailure(first);
@@ -202,6 +213,26 @@
             return;
         }
         openFailure(button.dataset.failureDocument);
+    });
+
+    workspace.addEventListener("click", (event) => {
+        const sortButton = event.target.closest("[data-failure-sort]");
+        if (!sortButton) {
+            return;
+        }
+        const sortBy = sortButton.dataset.failureSort;
+        pageState.sortDir = pageState.sortBy === sortBy && pageState.sortDir === "asc" ? "desc" : "asc";
+        pageState.sortBy = sortBy;
+        pageState.offset = 0;
+        loadFailures();
+    });
+    document.getElementById("failures-prev").addEventListener("click", () => {
+        pageState.offset = Math.max(0, pageState.offset - pageState.limit);
+        loadFailures();
+    });
+    document.getElementById("failures-next").addEventListener("click", () => {
+        pageState.offset += pageState.limit;
+        loadFailures();
     });
 
     loadFailures();

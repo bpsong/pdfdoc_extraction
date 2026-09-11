@@ -94,6 +94,10 @@ def test_batch_api_endpoints_return_sqlite_state(tmp_path, monkeypatch):
     uploaded = _upload(client, config)
     batch_id = uploaded["batch_id"]
     assert client.get("/api/batches").json()[0]["id"] == batch_id
+    page = client.get("/api/batches?paginated=true&limit=1&offset=0&sort_by=filename&sort_dir=asc").json()
+    assert page["total"] == 1
+    assert page["batches"][0]["id"] == batch_id
+    assert page["sort_by"] == "filename"
     assert client.get(f"/api/batches/{batch_id}").json()["id"] == batch_id
     documents = client.get(f"/api/batches/{batch_id}/documents").json()
     assert documents[0]["batch_id"] == batch_id

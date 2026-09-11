@@ -78,6 +78,30 @@ def test_failure_service_humanizes_historical_extract_provider_errors(tmp_path):
     assert detail["latest_failed_task"]["error"] == expected
 
 
+def test_failure_service_paginates_and_sorts_in_sql(tmp_path):
+    config, first = _create_failed_document(tmp_path, error="zeta error")
+    second_pdf = tmp_path / "alpha.pdf"
+    second_pdf.write_bytes(b"%PDF-1.4")
+    with connect(config) as conn:
+        second = BatchService(conn).create_ingestion_batch(
+            source="web", file_path=str(second_pdf), original_filename="alpha.pdf"
+        )
+        run = TaskRunRepository(conn).create_started(
+            batch_id=second["batch"]["id"], document_id=second["document"]["id"],
+            task_key="validate", task_index=1, module_name="standard_step.rules.validate",
+            class_name="ValidateTask",
+        )
+        TaskRunRepository(conn).mark_failed(run["id"], "alpha error", {})
+        payload = FailureService(conn).list_failures(
+            limit=1, offset=1, sort_by="document", sort_dir="asc"
+        )
+
+    assert payload["total"] == 2
+    assert payload["failures"][0]["document"]["id"] == first["document"]["id"]
+    assert payload["sort_by"] == "document"
+    assert payload["sort_dir"] == "asc"
+
+
 def test_failure_notifications_clear_globally_until_new_failure(tmp_path):
     config, created = _create_failed_document(tmp_path)
 

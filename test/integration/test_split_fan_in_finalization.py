@@ -7,7 +7,6 @@ from modules.db.migrations import initialize_database
 from modules.db.repositories import AuditRepository, DocumentRepository
 from modules.services.batch_service import BatchService
 from modules.services.fan_in_service import FanInService
-from modules.status_manager import StatusManager
 from modules.workflow_loader import WorkflowLoader
 from modules.workflow_manager import WorkflowManager
 from standard_step.split.llamacloud_split import LlamaCloudSplitTask
@@ -115,7 +114,6 @@ def test_split_fan_in_finalizes_root_and_batch_after_child_workflows(tmp_path, m
 
     _patch_prefect(monkeypatch)
     WorkflowLoader._instance = None
-    StatusManager._instance = None
     monkeypatch.setattr("modules.workflow_loader.CleanupTask", CleanupTask)
     monkeypatch.setattr(
         WorkflowLoader,

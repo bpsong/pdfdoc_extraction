@@ -126,9 +126,51 @@ class BatchService:
         batch = self.batches.recompute_counts(batch["id"]) or batch
         return {"batch": batch, "documents": documents}
 
-    def list_batches(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+    def list_batches(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> list[dict[str, Any]]:
         """Return batches with persisted aggregate counts."""
-        return [self._with_progress(batch) for batch in self.batches.list(limit=limit, offset=offset)]
+        return [
+            self._with_progress(batch)
+            for batch in self.batches.list(
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                sort_dir=sort_dir,
+            )
+        ]
+
+    def list_batches_page(
+        self,
+        *,
+        limit: int = 25,
+        offset: int = 0,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> dict[str, Any]:
+        """Return one validated batch page and its total count."""
+        safe_limit = min(max(int(limit), 1), 100)
+        safe_offset = max(int(offset), 0)
+        safe_sort_by = sort_by if sort_by in {"created_at", "filename", "source", "status"} else "created_at"
+        safe_sort_dir = "asc" if str(sort_dir).lower() == "asc" else "desc"
+        return {
+            "batches": self.list_batches(
+                limit=safe_limit,
+                offset=safe_offset,
+                sort_by=safe_sort_by,
+                sort_dir=safe_sort_dir,
+            ),
+            "total": self.batches.count(),
+            "limit": safe_limit,
+            "offset": safe_offset,
+            "sort_by": safe_sort_by,
+            "sort_dir": safe_sort_dir,
+        }
 
     def get_batch(self, batch_id: str) -> dict[str, Any] | None:
         """Return one batch by id."""

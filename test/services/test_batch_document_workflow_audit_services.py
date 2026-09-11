@@ -4,7 +4,7 @@ from modules.db.connection import connect
 from modules.db.migrations import initialize_database
 from modules.services.audit_service import AuditService
 from modules.services.batch_service import BatchService
-from modules.services.document_service import DocumentService
+from modules.db.repositories import DocumentRepository, ExtractionRepository, ReviewRepository, TaskRunRepository
 from modules.services.workflow_state_service import WorkflowStateService
 
 
@@ -25,7 +25,7 @@ def test_services_coordinate_core_business_operations(tmp_path):
 
     with connect(config) as conn:
         batch_service = BatchService(conn)
-        document_service = DocumentService(conn)
+        documents = DocumentRepository(conn)
         workflow_service = WorkflowStateService(conn, pipeline=["extract", "review_gate", "store"])
         audit_service = AuditService(conn)
 
@@ -38,10 +38,10 @@ def test_services_coordinate_core_business_operations(tmp_path):
         batch = created["batch"]
         document = created["document"]
 
-        child = document_service.create_child_document(
+        child = documents.create_child(
             batch_id=batch["id"],
             parent_document_id=document["id"],
-            file_path=str(tmp_path / "child.pdf"),
+            file_path=str((tmp_path / "child.pdf").resolve()),
             page_start=1,
             page_end=1,
         )
@@ -63,7 +63,15 @@ def test_services_coordinate_core_business_operations(tmp_path):
             metadata={"reason": "review_required"},
         )
 
-        details = document_service.get_details(document["id"])
+        details = {
+            "document": documents.get(document["id"]),
+            "files": documents.list_files(document["id"]),
+            "task_runs": TaskRunRepository(conn).list_by_document(document["id"]),
+            "status_history": workflow_service.status_history(document["id"]),
+            "latest_extraction": ExtractionRepository(conn).get_latest_result(document["id"]),
+            "fields": ExtractionRepository(conn).get_fields(document["id"]),
+            "review_items": ReviewRepository(conn).list_queue(),
+        }
         refreshed_batch = batch_service.recompute(batch["id"])
         is_paused = workflow_service.is_paused(document["id"])
         next_task = workflow_service.next_task_after_current(document["id"])

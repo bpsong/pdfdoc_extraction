@@ -216,12 +216,32 @@ class BatchRepository:
     def get(self, batch_id: str) -> dict[str, Any] | None:
         return _row_to_dict(self.conn.execute("SELECT * FROM batches WHERE id = ?", (batch_id,)).fetchone())
 
-    def list(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+    def list(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> list[dict[str, Any]]:
+        sort_columns = {
+            "created_at": "created_at",
+            "filename": "original_filename COLLATE NOCASE",
+            "source": "source COLLATE NOCASE",
+            "status": "status COLLATE NOCASE",
+        }
+        order_column = sort_columns.get(sort_by, "created_at")
+        order_direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
         rows = self.conn.execute(
-            "SELECT * FROM batches ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            f"SELECT * FROM batches ORDER BY {order_column} {order_direction}, id {order_direction} LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    def count(self) -> int:
+        """Return the total number of ingestion batches."""
+        row = self.conn.execute("SELECT COUNT(*) AS count FROM batches").fetchone()
+        return int(row["count"] if row else 0)
 
     def update_status(self, batch_id: str, status: str) -> None:
         with transaction(self.conn):
@@ -960,6 +980,121 @@ class ReviewRepository:
         sql += " ORDER BY created_at"
         return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
 
+    def list_queue_page(
+        self,
+        *,
+        limit: int,
+        offset: int,
+        status: str | None = None,
+        queue_name: str | None = None,
+        low_confidence: bool = False,
+        search: str | None = None,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
+    ) -> list[dict[str, Any]]:
+        """Return one filtered, sorted review-queue page."""
+        where_sql, params = self._queue_page_filters(
+            status=status,
+            queue_name=queue_name,
+            low_confidence=low_confidence,
+            search=search,
+        )
+        sort_columns = {
+            "document": "COALESCE(documents.original_filename, documents.file_path) COLLATE NOCASE",
+            "type": "COALESCE(documents.document_type, documents.split_category, '') COLLATE NOCASE",
+            "fields": "(SELECT COUNT(*) FROM extracted_fields ef WHERE ef.document_id = review_items.document_id AND ef.requires_review = 1)",
+            "confidence": "(SELECT MIN(ef.confidence) FROM extracted_fields ef WHERE ef.document_id = review_items.document_id AND ef.requires_review = 1)",
+            "queue": "review_items.queue_name COLLATE NOCASE",
+            "status": "review_items.status COLLATE NOCASE",
+            "created_at": "review_items.created_at",
+        }
+        order_column = sort_columns.get(sort_by, sort_columns["created_at"])
+        order_direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
+        rows = self.conn.execute(
+            f"""
+            SELECT review_items.*
+            FROM review_items
+            JOIN documents ON documents.id = review_items.document_id
+            {where_sql}
+            ORDER BY {order_column} {order_direction}, review_items.id {order_direction}
+            LIMIT ? OFFSET ?
+            """,
+            [*params, limit, offset],
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def count_queue_page(
+        self,
+        *,
+        status: str | None = None,
+        queue_name: str | None = None,
+        low_confidence: bool = False,
+        search: str | None = None,
+    ) -> int:
+        """Count review items matching the paginated queue filters."""
+        where_sql, params = self._queue_page_filters(
+            status=status,
+            queue_name=queue_name,
+            low_confidence=low_confidence,
+            search=search,
+        )
+        row = self.conn.execute(
+            f"""
+            SELECT COUNT(*) AS count
+            FROM review_items
+            JOIN documents ON documents.id = review_items.document_id
+            {where_sql}
+            """,
+            params,
+        ).fetchone()
+        return int(row["count"] if row else 0)
+
+    @staticmethod
+    def _queue_page_filters(
+        *,
+        status: str | None,
+        queue_name: str | None,
+        low_confidence: bool,
+        search: str | None,
+    ) -> tuple[str, list[Any]]:
+        clauses = ["1=1"]
+        params: list[Any] = []
+        if status:
+            clauses.append("review_items.status = ?")
+            params.append(status)
+        if queue_name:
+            clauses.append("review_items.queue_name = ?")
+            params.append(queue_name)
+        if low_confidence:
+            clauses.append(
+                """(
+                    LOWER(review_items.reason) LIKE '%confidence%'
+                    OR COALESCE(json_array_length(json_extract(review_items.metadata_json, '$.low_confidence_fields')), 0) > 0
+                    OR EXISTS (
+                        SELECT 1 FROM extracted_fields ef
+                        WHERE ef.document_id = review_items.document_id AND ef.requires_review = 1
+                    )
+                )"""
+            )
+            clauses.append("review_items.status != 'completed'")
+        if search:
+            pattern = f"%{search.strip().lower()}%"
+            clauses.append(
+                """(
+                    LOWER(COALESCE(documents.original_filename, documents.file_path, '')) LIKE ?
+                    OR LOWER(COALESCE(documents.document_type, documents.split_category, '')) LIKE ?
+                    OR LOWER(COALESCE(review_items.reason, '')) LIKE ?
+                    OR LOWER(COALESCE(review_items.queue_name, '')) LIKE ?
+                    OR EXISTS (
+                        SELECT 1 FROM extracted_fields ef
+                        WHERE ef.document_id = review_items.document_id
+                          AND LOWER(COALESCE(ef.field_alias, ef.field_key, '')) LIKE ?
+                    )
+                )"""
+            )
+            params.extend([pattern] * 5)
+        return f"WHERE {' AND '.join(clauses)}", params
+
     def find_open_for_document(
         self,
         document_id: str,
@@ -1136,6 +1271,8 @@ class AuditRepository:
         created_to: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        sort_by: str = "created_at",
+        sort_dir: str = "desc",
     ) -> list[dict[str, Any]]:
         sql, params = self._admin_event_query(
             event_type=event_type,
@@ -1143,7 +1280,14 @@ class AuditRepository:
             created_from=created_from,
             created_to=created_to,
         )
-        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        sort_columns = {
+            "created_at": "created_at",
+            "user": "user",
+            "event_type": "event_type",
+        }
+        order_column = sort_columns.get(sort_by, "created_at")
+        order_direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
+        sql += f" ORDER BY {order_column} {order_direction}, id {order_direction} LIMIT ? OFFSET ?"
         params.extend([limit, offset])
         rows = self.conn.execute(sql, params).fetchall()
         return [dict(row) for row in rows]

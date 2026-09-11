@@ -377,7 +377,6 @@ pdfdoc_extraction/
 │   ├── db/                     # SQLite connection, migrations, repositories
 │   ├── services/               # Batch, review, reports, audit, settings, artifact services
 │   ├── services/watch_folder_coordinator.py # Multi-binding watch-folder routing
-│   ├── watch_folder_monitor.py # Legacy single-folder compatibility component
 │   └── workflow_manager.py     # Workflow orchestration
 ├── 📁 standard_step/           # Processing pipeline steps
 │   ├── extraction/             # Data extraction tasks

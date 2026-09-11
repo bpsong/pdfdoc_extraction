@@ -61,18 +61,12 @@ def config_manager(basic_fields_config):
     return DummyConfigManager(tasks_conf)
 
 
-@pytest.fixture(autouse=True)
-def patch_status_manager():
-    """Compatibility fixture retained for tests that still request it."""
-    return None
-
-
 def read_json_file(path: Path) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def test_write_scalar_only_json(temp_dir, config_manager, patch_status_manager):
+def test_write_scalar_only_json(temp_dir, config_manager):
     """Scalar-only data should be written as JSON and preserve aliases."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
@@ -95,7 +89,7 @@ def test_write_scalar_only_json(temp_dir, config_manager, patch_status_manager):
     assert "items" not in content
 
 
-def test_write_with_table_preserves_list_of_objects(temp_dir, config_manager, patch_status_manager):
+def test_write_with_table_preserves_list_of_objects(temp_dir, config_manager):
     """When a field is configured as is_table, the list-of-objects must be preserved."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
@@ -180,7 +174,7 @@ def test_versioned_pipeline_uses_explicit_json_extraction_fields(temp_dir):
     assert content == {"Published total": 70.0}
 
 
-def test_filename_generation_and_uniqueness(temp_dir, config_manager, patch_status_manager):
+def test_filename_generation_and_uniqueness(temp_dir, config_manager):
     """Filename template should be formatted and uniqueness handled by appending suffixes."""
     # filename template pulls supplier_name into filename
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
@@ -203,7 +197,7 @@ def test_filename_generation_and_uniqueness(temp_dir, config_manager, patch_stat
     assert out2.name != out1.name
 
 
-def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch, patch_status_manager):
+def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch):
     """If writing fails, context must include error and error_step and status updated to failed."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
@@ -230,7 +224,7 @@ def test_error_handling_on_write_failure(temp_dir, config_manager, monkeypatch, 
     assert "disk full" in result["error"]
 
 
-def test_validation_missing_data_returns_context(temp_dir, config_manager, patch_status_manager):
+def test_validation_missing_data_returns_context(temp_dir, config_manager):
     """If context lacks 'data', the task should skip writing and return context unchanged."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
@@ -244,7 +238,7 @@ def test_validation_missing_data_returns_context(temp_dir, config_manager, patch
     assert "output_path" not in result
 
 
-def test_empty_data_dict_creates_minimal_json(temp_dir, config_manager, patch_status_manager):
+def test_empty_data_dict_creates_minimal_json(temp_dir, config_manager):
     """Empty data dict should create a minimal JSON file with warning."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
@@ -261,7 +255,7 @@ def test_empty_data_dict_creates_minimal_json(temp_dir, config_manager, patch_st
     assert "_empty" in content or len(content) > 0  # Should have some content
 
 
-def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager, patch_status_manager):
+def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager):
     """Non-dict items in table should be converted to string representation."""
     # Update config to include a table field
     config_with_table = {
@@ -316,7 +310,7 @@ def test_non_dict_items_in_table_converts_to_string(temp_dir, config_manager, pa
     assert content["items"][4] == {"description": "Item 2", "quantity": "1"}
 
 
-def test_special_characters_in_data_handled_safely(temp_dir, config_manager, patch_status_manager):
+def test_special_characters_in_data_handled_safely(temp_dir, config_manager):
     """Special characters and newlines in data should be preserved in JSON."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)
@@ -343,7 +337,7 @@ def test_special_characters_in_data_handled_safely(temp_dir, config_manager, pat
     assert content["notes"] == "Unicode: ñáéíóú, Emojis: 🚀💡, Symbols: ©®™"
 
 
-def test_large_data_handling(temp_dir, config_manager, patch_status_manager):
+def test_large_data_handling(temp_dir, config_manager):
     """Large datasets should be handled without issues."""
     params = {"data_dir": str(temp_dir), "filename": "{supplier_name}.json"}
     task = StoreMetadataAsJson(cast(ConfigManager, config_manager), **params)

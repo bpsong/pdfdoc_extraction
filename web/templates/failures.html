@@ -12,10 +12,10 @@
                 <table class="table table-sm">
                     <thead>
                         <tr class="text-xs text-base-content/50">
-                            <th>Document</th>
-                            <th>Failed Task</th>
-                            <th>Error</th>
-                            <th>Failed At</th>
+                            <th><button class="btn btn-ghost btn-xs" data-failure-sort="document" type="button">Document <span aria-hidden="true"></span></button></th>
+                            <th><button class="btn btn-ghost btn-xs" data-failure-sort="task" type="button">Failed Task <span aria-hidden="true"></span></button></th>
+                            <th><button class="btn btn-ghost btn-xs" data-failure-sort="error" type="button">Error <span aria-hidden="true"></span></button></th>
+                            <th><button class="btn btn-ghost btn-xs" data-failure-sort="failure_at" type="button">Failed At <span aria-hidden="true"></span></button></th>
                             <th>Action</th>
                         </tr>
                     </thead>
@@ -25,6 +25,13 @@
                         </tr>
                     </tbody>
                 </table>
+            </div>
+            <div class="flex items-center justify-between gap-3 mt-3" id="failures-pagination">
+                <span class="text-xs text-base-content/60" id="failures-page-summary">Loading</span>
+                <div class="join">
+                    <button class="btn btn-outline btn-sm join-item" id="failures-prev" type="button">Previous</button>
+                    <button class="btn btn-outline btn-sm join-item" id="failures-next" type="button">Next</button>
+                </div>
             </div>
         </div>
     </section>
@@ -48,5 +55,5 @@
 
 {% block scripts %}
 <script src="/static/js/pdf_viewer.js?v=pdfjs-4-10-38" defer></script>
-<script src="/static/js/failures.js" defer></script>
+<script src="/static/js/failures.js?v=pagination-sort" defer></script>
 {% endblock %}

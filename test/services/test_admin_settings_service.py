@@ -123,3 +123,20 @@ def test_admin_audit_service_filters_admin_events_only(tmp_path: Path) -> None:
     assert result["total"] == 1
     assert result["events"][0]["id"] == admin_event["id"]
     assert result["events"][0]["event_type"] == "admin_pipeline_published"
+
+
+def test_admin_audit_service_paginates_and_sorts(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+
+    with connect(config) as conn:
+        audits = AuditRepository(conn)
+        audits.append(event_type="admin_zeta", event={}, user="z-user")
+        audits.append(event_type="admin_alpha", event={}, user="a-user")
+        result = AdminAuditService(conn).list_events(
+            limit=1, offset=1, sort_by="event_type", sort_dir="asc"
+        )
+
+    assert result["total"] == 2
+    assert result["events"][0]["event_type"] == "admin_zeta"
+    assert result["sort_by"] == "event_type"
+    assert result["sort_dir"] == "asc"

@@ -178,6 +178,23 @@
         }).format(value);
     }
 
+    function escapeHtml(value) {
+        return String(value === null || value === undefined ? "" : value)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function titleCase(value) {
+        return String(value || "unknown")
+            .replace(/[_-]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .replace(/\b\w/g, (letter) => letter.toUpperCase()) || "Unknown";
+    }
+
     function normalizeStatus(status, fallback) {
         return String(status || fallback || "unknown").toLowerCase();
     }
@@ -437,6 +454,8 @@
         apiPut,
         csrfHeaders,
         formatDateTime,
+        escapeHtml,
+        titleCase,
         normalizeStatus,
         statusLabel,
         statusBadgeClass,

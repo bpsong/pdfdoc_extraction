@@ -46,12 +46,6 @@ def sample_extraction_config():
     }
 
 
-@pytest.fixture(autouse=True)
-def patch_status_manager():
-    """Compatibility fixture retained for tests that still request it."""
-    return None
-
-
 def read_csv_rows(path: str) -> List[Dict[str, Any]]:
     with open(path, newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)

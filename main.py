@@ -5,7 +5,7 @@ This module handles:
 - Command-line argument parsing for configuration and server options.
 - Configuration loading and validation via ConfigManager.
 - Logging setup based on configuration.
-- Initialization of core components: ShutdownManager, WatchFolderMonitor, WorkflowManager, FileProcessor.
+- Initialization of core components: ShutdownManager, WatchFolderCoordinator, WorkflowManager, FileProcessor.
 - Starting the web server (Uvicorn) as a subprocess with configured host, port, and reload options.
 - Starting the watch folder monitor to process incoming files.
 - Graceful shutdown handling on keyboard interrupt, including stopping the monitor and terminating the web server.
@@ -423,7 +423,7 @@ def main():
     worker_proc = None
     uvicorn_proc = None
     uvicorn_log_handle = None
-    watch_folder_monitor = None
+    watch_coordinator = None
     watch_thread = None
     exit_code = 0
     monitor_failure: list[BaseException] = []
@@ -450,24 +450,24 @@ def main():
         else:
             logger.info("Web server disabled via --no-web")
 
-        watch_folder_monitor = WatchFolderCoordinator(
+        watch_coordinator = WatchFolderCoordinator(
             config_manager,
             file_processor,
             health_reporter=watch_reporter,
         )
 
-        def run_watch_folder_monitor() -> None:
+        def run_watch_folder_coordinator() -> None:
             """Capture coordinator failures for the supervisor."""
             try:
                 watch_reporter.start(status="ready")
-                watch_folder_monitor.start()
+                watch_coordinator.start()
             except BaseException as exc:
                 monitor_failure.append(exc)
                 logger.exception("Watch folder monitoring stopped unexpectedly")
                 watch_reporter.stop(status="failed")
 
         watch_thread = threading.Thread(
-            target=run_watch_folder_monitor,
+            target=run_watch_folder_coordinator,
             name="watch-folder-coordinator",
             daemon=True,
         )
@@ -540,9 +540,9 @@ def main():
             supervisor_reporter.set_status("stopping")
         except Exception:
             logger.exception("Failed to record supervisor stopping state")
-        if watch_folder_monitor is not None:
+        if watch_coordinator is not None:
             try:
-                watch_folder_monitor.stop()
+                watch_coordinator.stop()
             except Exception as exc:
                 logger.warning("Error while stopping watch-folder coordinator: %s", exc)
         if watch_thread is not None and watch_thread.is_alive():

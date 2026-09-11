@@ -12,58 +12,9 @@ from typing import Optional
 from unittest.mock import patch, mock_open, Mock
 
 from modules.config_manager import ConfigManager
-from modules.status_manager import StatusManager
 from modules.workflow_manager import WorkflowManager
-from modules.watch_folder_monitor import WatchFolderMonitor
 from modules.utils import sanitize_filename
 from test.helpers_sqlite import TempConfig
-
-@pytest.fixture
-def watch_folder_monitor_instance():
-    config_manager = Mock()
-    config_manager.get.side_effect = lambda key: {
-        "watch_folder.dir": "test_watch_folder",
-        "watch_folder.processing_dir": "test_processing_folder"
-    }.get(key, None)
-    monitor = WatchFolderMonitor(config_manager, None, None)
-    monitor.retry_attempts = 3
-    monitor.retry_delay = 0.01  # reduce delay for faster tests
-    return monitor
-
-def test_is_valid_pdf_header_retry_success(watch_folder_monitor_instance):
-    # Simulate transient failure on first two attempts, success on third
-    file_content_sequence = [b'BADHD', b'BADHD', b'%PDF-']
-    open_mock = mock_open()
-    open_mock.return_value.read = lambda n: file_content_sequence.pop(0)
-
-    with patch("builtins.open", open_mock):
-        result = watch_folder_monitor_instance._is_valid_pdf_header("dummy_path")
-        assert result is True
-
-def test_is_valid_pdf_header_retry_failure(watch_folder_monitor_instance):
-    # Simulate failure on all attempts
-    open_mock = mock_open()
-    open_mock.return_value.read = lambda n: b'BADHD'
-
-    with patch("builtins.open", open_mock):
-        result = watch_folder_monitor_instance._is_valid_pdf_header("dummy_path")
-        assert result is False
-
-def test_is_valid_pdf_header_ioerror_retry(watch_folder_monitor_instance):
-    # Simulate IOError on first two attempts, success on third
-    call_count = {"count": 0}
-
-    def open_side_effect(*args, **kwargs):
-        if call_count["count"] < 2:
-            call_count["count"] += 1
-            raise IOError("File temporarily unavailable")
-        else:
-            m = mock_open(read_data=b'%PDF-')
-            return m()
-
-    with patch("builtins.open", side_effect=open_side_effect):
-        result = watch_folder_monitor_instance._is_valid_pdf_header("dummy_path")
-        assert result is True
 
 def test_end_to_end_workflow_execution(tmp_path, monkeypatch):
     """Run a pinned pipeline with synthetic extraction and real exports."""

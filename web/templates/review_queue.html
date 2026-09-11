@@ -39,12 +39,12 @@
         <table class="table table-sm table-zebra app-queue-table">
             <thead>
                 <tr>
-                    <th>Document</th>
-                    <th>Type</th>
-                    <th>Low Confidence Fields</th>
-                    <th>Lowest Confidence</th>
-                    <th>Queue</th>
-                    <th>Status</th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="document" type="button">Document <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="type" type="button">Type <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="fields" type="button">Low Confidence Fields <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="confidence" type="button">Lowest Confidence <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="queue" type="button">Queue <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="status" type="button">Status <span aria-hidden="true"></span></button></th>
                     <th class="text-right">Actions</th>
                 </tr>
             </thead>
@@ -54,10 +54,17 @@
                 <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-2/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span></div></td></tr>
             </tbody>
         </table>
+        <div class="flex items-center justify-between gap-3 p-3 border-t border-base-200" id="review-pagination">
+            <span class="text-xs text-base-content/60" id="review-page-summary">Loading</span>
+            <div class="join">
+                <button class="btn btn-outline btn-sm join-item" id="review-prev" type="button">Previous</button>
+                <button class="btn btn-outline btn-sm join-item" id="review-next" type="button">Next</button>
+            </div>
+        </div>
     </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/review_queue.js?v=ui-retry-table-polish" defer></script>
+<script src="/static/js/review_queue.js?v=pagination-sort" defer></script>
 {% endblock %}

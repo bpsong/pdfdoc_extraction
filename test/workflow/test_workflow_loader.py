@@ -5,14 +5,12 @@ from modules.workflow_loader import WorkflowLoader
 from modules.config_manager import ConfigManager
 from modules.config_protocol import VersionedTaskConfig
 from modules.shutdown_manager import ShutdownManager
-from modules.status_manager import StatusManager
 import yaml
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
-    # Reset ConfigManager, StatusManager, and WorkflowLoader singletons before each test
+    # Reset ConfigManager and WorkflowLoader singletons before each test
     ConfigManager._instance = None
-    StatusManager._instance = None
     WorkflowLoader._instance = None
     yield
 
@@ -44,10 +42,6 @@ def mock_all_dependencies(mocker, config_path, reset_singletons):
 
     # Mock ShutdownManager's shutdown method
     mocker.patch.object(ShutdownManager, 'shutdown')
-
-    # Mock StatusManager methods
-    mocker.patch.object(StatusManager, 'update_status')
-    mocker.patch.object(StatusManager, 'get_status')
 
     # Load the test config directly for mocking ConfigManager.get
     with open(config_path, 'r') as f:

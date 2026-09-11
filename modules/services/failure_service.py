@@ -27,17 +27,124 @@ class FailureService:
         self.settings = AppSettingsRepository(conn)
         self.audit = AuditRepository(conn)
 
-    def list_failures(self, *, limit: int = 100, offset: int = 0) -> dict[str, Any]:
+    def list_failures(
+        self,
+        *,
+        limit: int = 25,
+        offset: int = 0,
+        sort_by: str = "failure_at",
+        sort_dir: str = "desc",
+    ) -> dict[str, Any]:
         """Return failed documents with their latest failed task run."""
-        rows = self._group_failure_rows(self._failure_rows())
-        total = len(rows)
-        selected = rows[offset : offset + limit]
+        safe_limit = min(max(int(limit), 1), 100)
+        safe_offset = max(int(offset), 0)
+        sort_columns = {
+            "document": "source_filename COLLATE NOCASE",
+            "task": "failed_task_key COLLATE NOCASE",
+            "error": "failed_error COLLATE NOCASE",
+            "failure_at": "failure_at",
+        }
+        safe_sort_by = sort_by if sort_by in sort_columns else "failure_at"
+        safe_sort_dir = "asc" if str(sort_dir).lower() == "asc" else "desc"
+        order_direction = safe_sort_dir.upper()
+        self.conn.create_function("failure_group_key", 5, _sql_failure_group_key)
+        cte = self._failure_page_cte()
+        total_row = self.conn.execute(
+            f"{cte} SELECT COUNT(*) AS count FROM grouped WHERE group_rank = 1"
+        ).fetchone()
+        total = int(total_row["count"] if total_row else 0)
+        rows = [
+            dict(row)
+            for row in self.conn.execute(
+                f"""
+                {cte}
+                SELECT * FROM grouped
+                WHERE group_rank = 1
+                ORDER BY {sort_columns[safe_sort_by]} {order_direction}, id {order_direction}
+                LIMIT ? OFFSET ?
+                """,
+                (safe_limit, safe_offset),
+            ).fetchall()
+        ]
+        self._attach_failure_group_members(rows, cte)
         return {
             "total": total,
-            "failures": [self._failure_row_payload(row) for row in selected],
-            "limit": limit,
-            "offset": offset,
+            "failures": [self._failure_row_payload(row) for row in rows],
+            "limit": safe_limit,
+            "offset": safe_offset,
+            "sort_by": safe_sort_by,
+            "sort_dir": safe_sort_dir,
         }
+
+    @staticmethod
+    def _failure_page_cte() -> str:
+        """Return SQL selecting the latest failed run and its operator group."""
+        return """
+            WITH ranked AS (
+                SELECT
+                    documents.*,
+                    batches.original_filename AS batch_original_filename,
+                    batches.source AS batch_source,
+                    task_runs.id AS failed_task_run_id,
+                    task_runs.task_key AS failed_task_key,
+                    task_runs.task_index AS failed_task_index,
+                    task_runs.module_name AS failed_module_name,
+                    task_runs.class_name AS failed_class_name,
+                    task_runs.error AS failed_error,
+                    task_runs.started_at AS failed_started_at,
+                    task_runs.ended_at AS failed_ended_at,
+                    task_runs.output_json AS failed_output_json,
+                    COALESCE(task_runs.ended_at, task_runs.started_at, documents.updated_at) AS failure_at,
+                    COALESCE(parent_documents.original_filename, documents.original_filename, documents.file_path) AS source_filename,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY documents.id
+                        ORDER BY COALESCE(task_runs.ended_at, task_runs.started_at, documents.updated_at) DESC,
+                                 task_runs.id DESC
+                    ) AS document_rank
+                FROM task_runs
+                JOIN documents ON documents.id = task_runs.document_id
+                JOIN batches ON batches.id = documents.batch_id
+                LEFT JOIN documents AS parent_documents ON parent_documents.id = documents.parent_document_id
+                WHERE task_runs.status = 'failed'
+            ), keyed AS (
+                SELECT *, failure_group_key(
+                    parent_document_id, failed_task_key, failed_error, id, failed_task_run_id
+                ) AS failure_group_key
+                FROM ranked
+                WHERE document_rank = 1
+            ), grouped AS (
+                SELECT *,
+                    COUNT(*) OVER (PARTITION BY failure_group_key) AS group_count,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY failure_group_key
+                        ORDER BY failure_at DESC, id DESC
+                    ) AS group_rank
+                FROM keyed
+            )
+        """
+
+    def _attach_failure_group_members(self, rows: list[dict[str, Any]], cte: str) -> None:
+        """Attach member identifiers and split metadata for the selected groups."""
+        if not rows:
+            return
+        keys = [str(row["failure_group_key"]) for row in rows]
+        placeholders = ",".join("?" for _ in keys)
+        members = self.conn.execute(
+            f"{cte} SELECT * FROM keyed WHERE failure_group_key IN ({placeholders})",
+            keys,
+        ).fetchall()
+        by_group: dict[str, list[dict[str, Any]]] = {}
+        for member in members:
+            payload = dict(member)
+            by_group.setdefault(str(payload["failure_group_key"]), []).append(payload)
+        for row in rows:
+            group_members = by_group.get(str(row["failure_group_key"]), [row])
+            row["grouped_document_ids"] = [member.get("id") for member in group_members]
+            row["grouped_segments"] = [
+                segment
+                for member in group_members
+                if (segment := self._split_segment_payload(member)) is not None
+            ]
 
     def get_failure(self, document_id: str) -> dict[str, Any] | None:
         """Return detailed failure payload for one document."""
@@ -368,6 +475,20 @@ def _message_signature(value: Any) -> str:
     text = _redact_text(str(value or "")).strip().lower()
     text = re.sub(r"\s+", " ", text)
     return text[:500]
+
+
+def _sql_failure_group_key(
+    parent_document_id: Any,
+    failed_task_key: Any,
+    failed_error: Any,
+    document_id: Any,
+    task_run_id: Any,
+) -> str:
+    """Return the existing operator group key for SQLite pagination queries."""
+    task_key = str(failed_task_key or "")
+    if parent_document_id and "extract" in task_key.lower():
+        return f"source:{parent_document_id}:task:{task_key}:message:{_message_signature(failed_error)}"
+    return f"document:{document_id}:task_run:{task_run_id}"
 
 
 def _operator_failure_message(

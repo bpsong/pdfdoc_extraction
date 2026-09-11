@@ -14,17 +14,14 @@ from modules import config_manager as config_module
 from modules.db import migrations as migrations_module
 from modules import file_processor as file_processor_module
 from modules import resume_manager as resume_module
-from modules import status_manager as status_module
-from modules import watch_folder_monitor as watch_module
 from modules.db import connection as connection_module
-from modules.services import artifact_service, document_service, portable_config_service
+from modules.services import artifact_service, portable_config_service
 from modules.services import user_service as user_service_module
 from modules.auth_utils import PasswordPolicyError
 from modules.services.schema_service import SchemaService
 from modules.services.batch_service import BatchService
 from modules.services.runtime_settings_service import RuntimeSettingsService
 from modules.services.user_service import UserService
-from modules.services.versioned_admin_view_models import version_label
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.services.pipeline_definition_service import PipelineDefinitionError, PipelineDefinitionService
 from modules.workflow_loader import WorkflowLoader
@@ -116,18 +113,6 @@ def test_connection_json_invalid_text_and_batch_empty_progress() -> None:
 
 
 def test_document_artifact_user_and_portable_defensive_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    service = document_service.DocumentService.__new__(document_service.DocumentService)
-    service.documents = Mock()
-    service.state = Mock()
-    service.task_runs = Mock()
-    service.extractions = Mock()
-    service.reviews = Mock()
-    service.documents.get.return_value = None
-    assert service.get_document("missing") is None
-    service.update_status("doc", "queued")
-    service.state.transition_document.assert_called_once_with("doc", "queued")
-    assert service.get_details("missing") is None
-
     monkeypatch.setattr(artifact_service, "connect", lambda _config: nullcontext(object()))
     monkeypatch.setattr(artifact_service.DocumentRepository, "get", lambda _self, _id: None)
     assert artifact_service.register_document_artifact(_Config(), {"document_id": "missing"}, file_type="x", file_path=tmp_path / "x") is None
@@ -216,12 +201,6 @@ def test_runtime_settings_and_workflow_state_missing_branches() -> None:
         state.start_internal_task(batch_id="b", document_id="d", task_key="internal", task_index=0, module_name="m", class_name="C")
     state.documents.get.return_value = None
     assert state.next_task_after_current("d") is None
-
-
-def test_version_label_kind_validation_and_pipeline_fallback() -> None:
-    with pytest.raises(ValueError):
-        version_label({}, kind="unknown")
-    assert version_label({"name": "Invoices", "version_number": 2}, kind="pipeline") == "Invoices · v2"
 
 
 def test_schema_service_defensive_and_value_validation_paths(
@@ -438,49 +417,6 @@ def test_resume_manager_defensive_resume_and_failure_context_paths(
         task_runs,
     )
     assert context["continued_failures"][0]["error_step"] == "extract"
-
-
-def test_legacy_status_and_watch_monitor_failure_branches(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    status_module.StatusManager._instance = None
-    monkeypatch.chdir(tmp_path)
-    status = status_module.StatusManager(_Config())
-    assert status._processing_folder_path.endswith("processing_folder_default")
-    broken = Path(status._processing_folder_path) / "broken.txt"
-    broken.write_text("{", encoding="utf-8")
-    status.cleanup_status_files()
-    assert broken.exists()
-
-    config = _Config(
-        {
-            "watch_folder.dir": str(tmp_path / "watch"),
-            "watch_folder.processing_dir": str(tmp_path / "processing"),
-        }
-    )
-    monitor = watch_module.WatchFolderMonitor(config, Mock(), None)
-    monkeypatch.setattr(watch_module.os, "listdir", lambda _path: ["one.pdf"])
-    monitor._retry_file_operation = Mock(return_value=False)
-    monitor._process_existing_files()
-    assert str(tmp_path / "watch" / "one.pdf") in monitor.processed_files
-
-    monitor.processed_files.clear()
-    monitor._is_valid_pdf_header = Mock(return_value=True)
-    monitor._retry_file_operation = Mock(return_value=False)
-    monkeypatch.setattr(watch_module.time, "sleep", lambda _delay: monitor.stop_event.set())
-    monitor._monitor_new_files()
-    assert str(tmp_path / "watch" / "one.pdf") in monitor.processed_files
-
-    monitor.processed_files.clear()
-    monitor._retry_file_operation = Mock(side_effect=[True, False])
-    monitor._process_existing_files()
-    assert monitor.processed_files == set()
-
-    monitor.stop_event.clear()
-    monitor._retry_file_operation = Mock(side_effect=[True, False])
-    monkeypatch.setattr(watch_module.time, "sleep", lambda _delay: monitor.stop_event.set())
-    monitor._monitor_new_files()
-    assert monitor.processed_files == set()
 
 
 def test_workflow_loader_and_manager_defensive_child_paths(monkeypatch) -> None:
