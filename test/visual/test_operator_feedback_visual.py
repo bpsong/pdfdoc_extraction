@@ -39,6 +39,7 @@ def test_operator_feedback_surfaces_render_desktop_and_mobile(
 
     page.goto(f"{visual_app['base_url']}/app/batches/{visual_app['batch_id']}")
     page.locator("#pipeline-assignment-summary strong").wait_for()
+    page.locator("#processing-progress-region[aria-busy='false']").wait_for()
     assert page.locator("#processing-progress-region[aria-busy='false']").count() == 1
     assert page.locator("#processing-table-region[aria-busy='false']").count() == 1
     assert page.locator("#processing-table-body[aria-busy='false']").count() == 1
@@ -209,3 +210,22 @@ def test_review_completion_shows_pending_feedback(
     )
     assert page.locator("#review-complete-button").get_attribute("aria-busy") == "true"
     _capture(page, "11-review-completion-pending")
+
+
+def test_review_queue_actionable_views(page: Page, visual_app: dict[str, str]) -> None:
+    """Switch active/history views and retain server sorting and page size."""
+    page.goto(f"{visual_app['base_url']}/app/review")
+    page.locator('#review-queue-region[aria-busy="false"]').wait_for()
+    assert page.locator('#review-queue-body').get_by_text('Completed', exact=True).count() == 0
+    page.locator('#review-page-size').select_option('10')
+    page.locator('[data-review-sort="document"]').click()
+    page.locator('#review-queue-region[aria-busy="false"]').wait_for()
+    assert page.locator('[data-review-sort="document"]').locator('..').get_attribute('aria-sort') == 'ascending'
+    page.locator('[data-filter="completed"]').click()
+    page.locator('#review-queue-region[aria-busy="false"]').wait_for()
+    assert page.locator('#review-queue-body').get_by_text('Completed', exact=True).count() >= 1
+    assert page.locator('#review-ownership').is_hidden()
+    assert page.locator('#review-page-size').input_value() == '10'
+    _capture(page, '13-review-queue-history')
+    page.set_viewport_size({"width": 390, "height": 900})
+    _capture(page, '14-review-queue-mobile')

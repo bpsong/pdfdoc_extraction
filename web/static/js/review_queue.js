@@ -3,15 +3,16 @@
 
     const state = {
         items: [],
-        filter: "all",
+        filter: "active",
         search: "",
         total: 0,
         counts: {},
         limit: 25,
         offset: 0,
         sortBy: "created_at",
-        sortDir: "desc",
+        sortDir: "asc",
         queryKey: null,
+        pipeline: "",
     };
     const escapeHtml = window.DocFlow.escapeHtml;
     const titleCase = window.DocFlow.titleCase;
@@ -76,39 +77,11 @@
         return document.document_type || document.split_category || "Document";
     }
 
-    function matchesSearch(item) {
-        if (!state.search) {
-            return true;
-        }
-        const haystack = [
-            documentLabel(item),
-            documentType(item),
-            item.reason,
-            item.queue_name,
-            ...(item.review_field_labels || []),
-        ].join(" ").toLowerCase();
-        return haystack.includes(state.search.toLowerCase());
-    }
-
-    function matchesFilter(item) {
-        if (state.filter === "all") {
-            return true;
-        }
-        if (state.filter === "low_confidence") {
-            return itemHasLowConfidence(item) && item.status !== "completed";
-        }
-        return item.status === state.filter;
-    }
-
     function renderCounts() {
-        const all = Number(state.counts.all || 0);
-        const low = Number(state.counts.low_confidence || 0);
-        const inReview = Number(state.counts.in_review || 0);
-        const completed = Number(state.counts.completed || 0);
-        document.getElementById("review-count-all").textContent = String(all);
-        document.getElementById("review-count-low").textContent = String(low);
-        document.getElementById("review-count-in-review").textContent = String(inReview);
-        document.getElementById("review-count-completed").textContent = String(completed);
+        for (const key of ["active", "unclaimed", "mine", "others", "completed"]) {
+            document.getElementById(`review-count-${key}`).textContent = String(state.counts[key] || 0);
+        }
+        document.getElementById("review-ownership").classList.toggle("hidden", state.filter === "completed");
     }
 
     function renderFilters() {
@@ -116,22 +89,23 @@
             const active = button.dataset.filter === state.filter;
             button.classList.toggle("btn-primary", active);
             button.classList.toggle("btn-outline", !active);
+            button.setAttribute("aria-pressed", String(active));
         });
+    }
+
+    function activeOwner(item) {
+        return item.lock && Date.parse(item.lock.expires_at) > Date.now() ? item.lock.locked_by : null;
     }
 
     function actionButtons(item) {
         const id = encodeURIComponent(item.id);
-        if (item.status === "completed") {
-            return `<a class="btn btn-outline btn-xs" href="/app/review/${id}">Open</a>`;
+        const owner = activeOwner(item);
+        const operator = document.getElementById("review-queue-workspace").dataset.operator;
+        if (item.status === "completed" || owner) {
+            const label = item.status === "completed" ? "View" : owner === operator ? "Continue review" : "View";
+            return `<a class="btn btn-outline btn-xs" href="/app/review/${id}">${label}</a>`;
         }
-        const claimLabel = item.status === "in_review" ? "Open" : "Claim";
-        const claimClass = item.status === "in_review" ? "btn-outline" : "btn-primary";
-        return `
-            <div class="flex justify-end gap-2">
-                <button class="btn ${claimClass} btn-xs review-claim-action" type="button" data-review-id="${escapeHtml(item.id)}">${claimLabel}</button>
-                <a class="btn btn-ghost btn-xs" href="/app/review/${id}">View</a>
-            </div>
-        `;
+        return `<button class="btn btn-primary btn-xs review-claim-action" type="button" data-review-id="${escapeHtml(item.id)}">Claim &amp; review</button>`;
     }
 
     function renderRows() {
@@ -154,13 +128,13 @@
                         <a class="font-medium text-primary" href="/app/review/${encodeURIComponent(item.id)}">${escapeHtml(documentLabel(item))}</a>
                         <div class="text-xs text-base-content/50">${escapeHtml(createdAt)}</div>
                     </td>
-                    <td>${escapeHtml(titleCase(documentType(item)))}</td>
+                    <td>${escapeHtml(item.pipeline_name || "Unassigned")}</td>
                     <td class="max-w-sm">
                         <span class="text-sm">${escapeHtml(labelText)}${escapeHtml(extra)}</span>
                     </td>
                     <td>${confidenceBadge(item.lowest_confidence)}</td>
-                    <td>${escapeHtml(item.queue_name || "default_review")}</td>
-                    <td>${statusBadge(item.status)}</td>
+                    <td>${escapeHtml(createdAt)}</td>
+                    <td>${statusBadge(item.status === "completed" ? "completed" : activeOwner(item) ? "in_review" : "pending")}<div class="text-xs">${escapeHtml(item.status === "completed" ? "" : activeOwner(item) ? `Claimed by ${activeOwner(item)}` : "Unclaimed")}</div></td>
                     <td class="text-right">${actionButtons(item)}</td>
                 </tr>
             `;
@@ -182,7 +156,7 @@
         document.getElementById("review-next").disabled = state.offset + state.limit >= state.total;
         document.querySelectorAll("[data-review-sort]").forEach((button) => {
             const active = button.dataset.reviewSort === state.sortBy;
-            button.setAttribute("aria-sort", active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none");
+            button.closest("th").setAttribute("aria-sort", active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none");
             button.querySelector("span").textContent = active ? (state.sortDir === "asc" ? "↑" : "↓") : "";
         });
     }
@@ -225,9 +199,11 @@
     }
 
     let loadInFlight = false;
+    let loadQueued = false;
 
     async function loadReviewItems() {
         if (loadInFlight) {
+            loadQueued = true;
             return;
         }
         loadInFlight = true;
@@ -246,10 +222,15 @@
                 offset: String(state.offset),
                 filter: state.filter,
                 search: state.search,
+                pipeline_id: state.pipeline,
                 sort_by: state.sortBy,
                 sort_dir: state.sortDir,
             });
             const payload = await window.DocFlow.apiGet(`/api/review/items?${params}`);
+            if (loadQueued) return;
+            const pipelineSelect = document.getElementById("review-pipeline");
+            pipelineSelect.innerHTML = '<option value="">All pipelines</option>' + (payload.pipelines || []).map(p => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`).join("");
+            pipelineSelect.value = state.pipeline;
             const nextItems = Array.isArray(payload.items) ? payload.items : [];
             const queryKey = params.toString();
             if (state.queryKey === queryKey) {
@@ -274,6 +255,11 @@
             window.DocFlow.showToast(error.message || "Review queue failed to load", "error");
         } finally {
             loadInFlight = false;
+            if (loadQueued) {
+                loadQueued = false;
+                loadReviewItems();
+                return;
+            }
             [body, region].forEach((element) => {
                 if (element) {
                     element.setAttribute("aria-busy", "false");
@@ -283,6 +269,16 @@
     }
 
     function bindEvents() {
+        document.getElementById("review-pipeline").addEventListener("change", event => {
+            state.pipeline = event.target.value;
+            state.offset = 0;
+            loadReviewItems();
+        });
+        document.getElementById("review-page-size").addEventListener("change", event => {
+            state.limit = Number(event.target.value);
+            state.offset = 0;
+            loadReviewItems();
+        });
         document.querySelectorAll(".review-filter").forEach((button) => {
             button.addEventListener("click", () => {
                 state.filter = button.dataset.filter || "all";

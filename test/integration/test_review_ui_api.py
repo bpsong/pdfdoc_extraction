@@ -221,3 +221,57 @@ def test_review_ui_actions_claim_draft_diff_and_release(tmp_path, monkeypatch) -
     assert diff.json()["change_count"] == 1
     assert release.status_code == 200
     assert release.json()["released"] is True
+
+
+def test_review_queue_active_ownership_and_history(tmp_path, monkeypatch) -> None:
+    client, state = _client(tmp_path, monkeypatch)
+    review_id = state["review"]["id"]
+    def query(filter_name):
+        response = client.get("/api/review/items", params={"paginated": "true", "filter": filter_name, "limit": 1})
+        assert response.status_code == 200
+        return response.json()
+    assert query("active")["total"] == 1
+    assert query("unclaimed")["total"] == 1
+    assert query("completed")["total"] == 0
+    assert client.post(f"/api/review/items/{review_id}/claim").status_code == 200
+    assert query("mine")["total"] == 1
+    assert query("others")["total"] == 0
+    assert query("unclaimed")["total"] == 0
+    app = client.app
+    app.dependency_overrides[api_router.get_current_user] = lambda: "another_operator"
+    assert query("others")["total"] == 1
+    assert query("mine")["total"] == 0
+    app.dependency_overrides[api_router.get_current_user] = lambda: "operator"
+    config = api_router.get_dependencies()[0]
+    with connect(config) as conn:
+        conn.execute("UPDATE review_locks SET expires_at = '2000-01-01T00:00:00+00:00'")
+        conn.commit()
+    assert query("unclaimed")["total"] == 1
+    assert query("mine")["total"] == 0
+    with connect(config) as conn:
+        ReviewRepository(conn).complete(review_id)
+    assert query("active")["total"] == 0
+    assert query("completed")["total"] == 1
+
+
+def test_review_queue_sorts_before_paginating(tmp_path, monkeypatch) -> None:
+    client, state = _client(tmp_path, monkeypatch)
+    config = api_router.get_dependencies()[0]
+    with connect(config) as conn:
+        for filename in ("z-last.pdf", "a-first.pdf"):
+            created = BatchService(conn).create_ingestion_batch(
+                source="web", file_path=str(tmp_path / filename), original_filename=filename,
+            )
+            ReviewRepository(conn).create_review_item(
+                batch_id=created["batch"]["id"], document_id=created["document"]["id"],
+                queue_name="test", reason="manual", scope="all",
+            )
+    params = {"paginated": "true", "filter": "active", "limit": 1,
+              "sort_by": "document", "sort_dir": "asc"}
+    first = client.get("/api/review/items", params=params).json()
+    second = client.get("/api/review/items", params={**params, "offset": 1}).json()
+    assert first["total"] == 3
+    assert first["items"][0]["document"]["filename"] == "a-first.pdf"
+    assert second["items"][0]["document"]["filename"] == "invoice.pdf"
+    reverse = client.get("/api/review/items", params={**params, "sort_dir": "desc"}).json()
+    assert reverse["items"][0]["document"]["filename"] == "z-last.pdf"

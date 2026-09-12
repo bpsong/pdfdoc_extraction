@@ -1,3 +1,26 @@
+#review-queue-workspace .app-filter-bar > label {
+    min-width: 0;
+    max-width: 100%;
+}
+
+#review-search-input {
+    min-width: 0;
+    width: 100%;
+}
+
+#review-pagination {
+    position: sticky;
+    left: 0;
+    flex-wrap: wrap;
+}
+
+#review-pagination > label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
 .nav-link {
     display: flex;
     align-items: center;

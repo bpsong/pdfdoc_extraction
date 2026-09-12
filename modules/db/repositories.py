@@ -989,6 +989,9 @@ class ReviewRepository:
         queue_name: str | None = None,
         low_confidence: bool = False,
         search: str | None = None,
+        ownership: str | None = None,
+        operator: str = "",
+        pipeline_id: str | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
     ) -> list[dict[str, Any]]:
@@ -998,6 +1001,9 @@ class ReviewRepository:
             queue_name=queue_name,
             low_confidence=low_confidence,
             search=search,
+            ownership=ownership,
+            operator=operator,
+            pipeline_id=pipeline_id,
         )
         sort_columns = {
             "document": "COALESCE(documents.original_filename, documents.file_path) COLLATE NOCASE",
@@ -1007,12 +1013,15 @@ class ReviewRepository:
             "queue": "review_items.queue_name COLLATE NOCASE",
             "status": "review_items.status COLLATE NOCASE",
             "created_at": "review_items.created_at",
+            "pipeline": "COALESCE((SELECT name FROM pipeline_templates WHERE id = documents.pipeline_template_id), '') COLLATE NOCASE",
+            "completed_at": "review_items.completed_at",
         }
         order_column = sort_columns.get(sort_by, sort_columns["created_at"])
         order_direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
         rows = self.conn.execute(
             f"""
-            SELECT review_items.*
+            SELECT review_items.*,
+                (SELECT name FROM pipeline_templates WHERE id = documents.pipeline_template_id) AS pipeline_name
             FROM review_items
             JOIN documents ON documents.id = review_items.document_id
             {where_sql}
@@ -1030,6 +1039,9 @@ class ReviewRepository:
         queue_name: str | None = None,
         low_confidence: bool = False,
         search: str | None = None,
+        ownership: str | None = None,
+        operator: str = "",
+        pipeline_id: str | None = None,
     ) -> int:
         """Count review items matching the paginated queue filters."""
         where_sql, params = self._queue_page_filters(
@@ -1037,6 +1049,9 @@ class ReviewRepository:
             queue_name=queue_name,
             low_confidence=low_confidence,
             search=search,
+            ownership=ownership,
+            operator=operator,
+            pipeline_id=pipeline_id,
         )
         row = self.conn.execute(
             f"""
@@ -1049,6 +1064,14 @@ class ReviewRepository:
         ).fetchone()
         return int(row["count"] if row else 0)
 
+    def queue_pipelines(self) -> list[dict[str, Any]]:
+        """Return pipeline choices represented in review history or active work."""
+        return [dict(row) for row in self.conn.execute(
+            """SELECT DISTINCT p.id, p.name FROM pipeline_templates p
+            JOIN documents d ON d.pipeline_template_id = p.id
+            JOIN review_items r ON r.document_id = d.id ORDER BY p.name COLLATE NOCASE"""
+        )]
+
     @staticmethod
     def _queue_page_filters(
         *,
@@ -1056,9 +1079,25 @@ class ReviewRepository:
         queue_name: str | None,
         low_confidence: bool,
         search: str | None,
+        ownership: str | None = None,
+        operator: str = "",
+        pipeline_id: str | None = None,
     ) -> tuple[str, list[Any]]:
         clauses = ["1=1"]
         params: list[Any] = []
+        if ownership:
+            clauses.append("review_items.status IN ('pending', 'in_review')")
+            active_lock = "EXISTS (SELECT 1 FROM review_locks l WHERE l.review_item_id = review_items.id AND l.expires_at > ?)"
+            if ownership == "unclaimed":
+                clauses.append("NOT " + active_lock)
+                params.append(utc_now())
+            elif ownership in {"mine", "others"}:
+                comparison = "=" if ownership == "mine" else "!="
+                clauses.append(f"EXISTS (SELECT 1 FROM review_locks l WHERE l.review_item_id = review_items.id AND l.expires_at > ? AND l.locked_by {comparison} ?)")
+                params.extend([utc_now(), operator])
+        if pipeline_id:
+            clauses.append("documents.pipeline_template_id = ?")
+            params.append(pipeline_id)
         if status:
             clauses.append("review_items.status = ?")
             params.append(status)

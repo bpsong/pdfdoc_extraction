@@ -58,6 +58,8 @@ class ReviewService:
         offset: int = 0,
         filter_name: str = "all",
         queue_name: str | None = None,
+        operator: str = "",
+        pipeline_id: str | None = None,
         search: str | None = None,
         sort_by: str = "created_at",
         sort_dir: str = "desc",
@@ -65,11 +67,12 @@ class ReviewService:
         """Return a filtered and sorted review page with queue counts."""
         safe_limit = min(max(int(limit), 1), 100)
         safe_offset = max(int(offset), 0)
-        safe_filter = filter_name if filter_name in {"all", "low_confidence", "in_review", "completed"} else "all"
-        safe_sort_by = sort_by if sort_by in {"document", "type", "fields", "confidence", "queue", "status", "created_at"} else "created_at"
+        safe_filter = filter_name if filter_name in {"all", "active", "unclaimed", "mine", "others", "low_confidence", "in_review", "completed"} else "all"
+        safe_sort_by = sort_by if sort_by in {"document", "type", "fields", "confidence", "queue", "status", "created_at", "pipeline", "completed_at"} else "created_at"
         safe_sort_dir = "asc" if str(sort_dir).lower() == "asc" else "desc"
         status = safe_filter if safe_filter in {"in_review", "completed"} else None
         low_confidence = safe_filter == "low_confidence"
+        ownership = safe_filter if safe_filter in {"active", "unclaimed", "mine", "others"} else None
         items = self.reviews.list_queue_page(
             limit=safe_limit,
             offset=safe_offset,
@@ -77,6 +80,9 @@ class ReviewService:
             queue_name=queue_name,
             low_confidence=low_confidence,
             search=search,
+            ownership=ownership,
+            operator=operator,
+            pipeline_id=pipeline_id,
             sort_by=safe_sort_by,
             sort_dir=safe_sort_dir,
         )
@@ -85,6 +91,9 @@ class ReviewService:
             queue_name=queue_name,
             low_confidence=low_confidence,
             search=search,
+            ownership=ownership,
+            operator=operator,
+            pipeline_id=pipeline_id,
         )
         counts = {
             "all": self.reviews.count_queue_page(queue_name=queue_name, search=search),
@@ -98,12 +107,27 @@ class ReviewService:
                 status="completed", queue_name=queue_name, search=search
             ),
         }
+        for name in ("active", "unclaimed", "mine", "others"):
+            counts[name] = self.reviews.count_queue_page(
+                ownership=name, operator=operator, search=search,
+                queue_name=queue_name, pipeline_id=pipeline_id,
+            )
+        counts["completed"] = self.reviews.count_queue_page(
+            status="completed", search=search, queue_name=queue_name, pipeline_id=pipeline_id,
+        )
+        if total and safe_offset >= total:
+            return self.list_items_page(
+                limit=safe_limit, offset=((total - 1) // safe_limit) * safe_limit,
+                filter_name=safe_filter, queue_name=queue_name, operator=operator,
+                pipeline_id=pipeline_id, search=search, sort_by=safe_sort_by, sort_dir=safe_sort_dir,
+            )
         return {
             "items": [self._queue_item_payload(item) for item in items],
             "total": total,
             "counts": counts,
             "limit": safe_limit,
-            "offset": safe_offset,
+            "offset": safe_offset if total else 0,
+            "pipelines": self.reviews.queue_pipelines(),
             "filter": safe_filter,
             "sort_by": safe_sort_by,
             "sort_dir": safe_sort_dir,

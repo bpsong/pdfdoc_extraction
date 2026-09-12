@@ -7,30 +7,27 @@
 {% endblock %}
 
 {% block content %}
-<div class="app-workspace" id="review-queue-workspace">
+<div class="app-workspace" id="review-queue-workspace" data-operator="{{ username|default('') }}">
+    <p>Review documents that need attention. Completed reviews are available in History.</p>
+    <div class="flex items-center gap-2 flex-wrap" aria-label="Review views">
+        <button class="btn btn-primary btn-sm review-filter" data-filter="active" type="button">Needs review <span id="review-count-active">0</span></button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="completed" type="button">History <span id="review-count-completed">0</span></button>
+    </div>
+    <div id="review-ownership" class="flex items-center gap-2 flex-wrap" aria-label="Ownership filters">
+        <button class="btn btn-outline btn-sm review-filter" data-filter="active" type="button">All active</button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="unclaimed" type="button">Unclaimed <span id="review-count-unclaimed">0</span></button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="mine" type="button">Assigned to me <span id="review-count-mine">0</span></button>
+        <button class="btn btn-outline btn-sm review-filter" data-filter="others" type="button">Claimed by others <span id="review-count-others">0</span></button>
+    </div>
     <div class="app-filter-bar">
-        <div class="flex items-center gap-2 flex-wrap">
-            <button class="btn btn-primary btn-sm review-filter" data-filter="all" type="button">
-                All <span class="badge badge-sm ml-1" id="review-count-all">0</span>
-            </button>
-            <button class="btn btn-outline btn-sm review-filter" data-filter="low_confidence" type="button">
-                Low Confidence <span class="badge badge-sm ml-1" id="review-count-low">0</span>
-            </button>
-            <button class="btn btn-outline btn-sm review-filter" data-filter="in_review" type="button">
-                In Review <span class="badge badge-sm ml-1" id="review-count-in-review">0</span>
-            </button>
-            <button class="btn btn-outline btn-sm review-filter" data-filter="completed" type="button">
-                Completed <span class="badge badge-sm ml-1" id="review-count-completed">0</span>
-            </button>
-        </div>
-
+        <select id="review-pipeline" class="select select-bordered select-sm" aria-label="Pipeline"><option value="">All pipelines</option></select>
         <label class="input input-bordered input-sm flex items-center gap-2">
             <svg class="w-4 h-4 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                 aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
-            <input type="search" class="grow" id="review-search-input" placeholder="Search documents..." />
+            <input type="search" class="grow" id="review-search-input" placeholder="Search documents..." aria-label="Search documents" />
         </label>
     </div>
 
@@ -40,10 +37,10 @@
             <thead>
                 <tr>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="document" type="button">Document <span aria-hidden="true"></span></button></th>
-                    <th><button class="btn btn-ghost btn-xs" data-review-sort="type" type="button">Type <span aria-hidden="true"></span></button></th>
-                    <th><button class="btn btn-ghost btn-xs" data-review-sort="fields" type="button">Low Confidence Fields <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="pipeline" type="button">Pipeline <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="fields" type="button">Fields to check <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="confidence" type="button">Lowest Confidence <span aria-hidden="true"></span></button></th>
-                    <th><button class="btn btn-ghost btn-xs" data-review-sort="queue" type="button">Queue <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="created_at" type="button">Queued at <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="status" type="button">Status <span aria-hidden="true"></span></button></th>
                     <th class="text-right">Actions</th>
                 </tr>
@@ -56,6 +53,7 @@
         </table>
         <div class="flex items-center justify-between gap-3 p-3 border-t border-base-200" id="review-pagination">
             <span class="text-xs text-base-content/60" id="review-page-summary">Loading</span>
+            <label>Rows per page <select id="review-page-size" class="select select-bordered select-sm"><option>10</option><option selected>25</option><option>50</option><option>100</option></select></label>
             <div class="join">
                 <button class="btn btn-outline btn-sm join-item" id="review-prev" type="button">Previous</button>
                 <button class="btn btn-outline btn-sm join-item" id="review-next" type="button">Next</button>
@@ -66,5 +64,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/review_queue.js?v=pagination-sort" defer></script>
+<script src="/static/js/review_queue.js?v=actionable-queue" defer></script>
 {% endblock %}

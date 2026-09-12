@@ -465,6 +465,16 @@ If the review gate is configured with `confidence_threshold: 0.90`, a field cove
 4. The operator corrects the amount if necessary and selects **Preview Diff**.
 5. After the operator selects **Complete Review**, the button changes to **Saving review…** and the page shows **Saving review and finishing workflow…** while the corrected information is saved and processing continues. Keep the page open until the review queue appears; the button is disabled during this operation to prevent duplicate submissions. If the save fails, the action controls become available again and an error message explains what happened.
 
+The review queue opens on **Needs review**, with ownership filters for
+**Unclaimed**, **Assigned to me**, and **Claimed by others**. Expired claims
+become available again. **Claim & review** starts an available review;
+**Continue review** opens your active claim. Completed reviews are in **History**.
+
+Both views support pipeline/search filters, sortable column headers, and
+Previous/Next pagination with 10, 25, 50, or 100 rows per page. Sorting applies
+to all matching records before pagination. Changing filters or page size
+returns to page one and preserves the selected sort.
+
 #### Schema-Based Review Migration
 
 The current application replaces the previous separate review program. Operators and administrators perform all review work from **Review Queue**.

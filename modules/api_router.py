@@ -2579,6 +2579,7 @@ def build_router() -> APIRouter:
         offset: int = Query(default=0, ge=0),
         filter_name: str = Query(default="all", alias="filter"),
         search: str | None = None,
+        pipeline_id: str | None = None,
         sort_by: str = Query(default="created_at"),
         sort_dir: str = Query(default="desc", pattern="^(asc|desc)$"),
         user: str = Depends(get_current_user),
@@ -2594,6 +2595,8 @@ def build_router() -> APIRouter:
                     filter_name=filter_name,
                     queue_name=queue_name,
                     search=search,
+                    operator=user,
+                    pipeline_id=pipeline_id,
                     sort_by=sort_by,
                     sort_dir=sort_dir,
                 )
