@@ -21,6 +21,17 @@
     flex-wrap: wrap;
 }
 
+/* Text badges must retain room for ascenders and descenders at every size. */
+main .badge:not(#failure-notification-badge) {
+    height: auto;
+    min-height: 1.25rem;
+    padding-block: 0.125rem;
+    line-height: 1.35;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
 .nav-link {
     display: flex;
     align-items: center;
@@ -2931,5 +2942,32 @@
     .extraction-payload-panel {
         grid-template-columns: 1fr;
         grid-column: auto;
+    }
+}
+
+/* Reflow fields by their pane width, including when the divider is moved. */
+.review-editor-panel {
+    container-type: inline-size;
+    container-name: review-editor;
+}
+
+@container review-editor (max-width: 52rem) {
+    .review-detail-route .review-field-row,
+    .review-detail-route .review-field-row.source-hidden {
+        grid-template-columns: minmax(0, 1fr) max-content;
+        grid-template-areas: "label confidence" "input input" "source source";
+        align-items: start;
+    }
+
+    .review-editor-panel > .panel-header {
+        flex-wrap: wrap;
+    }
+}
+
+@container review-editor (max-width: 28rem) {
+    .review-detail-route .review-field-row,
+    .review-detail-route .review-field-row.source-hidden {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "label" "confidence" "input" "source";
     }
 }

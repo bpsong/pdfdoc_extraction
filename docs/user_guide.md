@@ -426,7 +426,9 @@ Documents enter the review queue when the system cannot confidently accept the e
    On desktop, the PDF and review-field panes scroll independently. Drag the
    divider between them to change their widths, or focus the divider and use
    the Left/Right arrow keys. The review actions remain available at the top
-   while either pane is scrolled. If the available workspace is too narrow,
+   while either pane is scrolled. Fields reflow according to the review pane's
+   width, including when you move the divider on a wide desktop. Text badges
+   keep enough vertical space for their labels. If the available workspace is too narrow,
    the panes stack vertically. Resizing the window or opening the sidebar
    temporarily adjusts the layout without replacing your saved divider position.
 6. Correct inaccurate or missing values.

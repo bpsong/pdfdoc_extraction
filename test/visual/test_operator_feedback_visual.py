@@ -229,3 +229,27 @@ def test_review_queue_actionable_views(page: Page, visual_app: dict[str, str]) -
     _capture(page, '13-review-queue-history')
     page.set_viewport_size({"width": 390, "height": 900})
     _capture(page, '14-review-queue-mobile')
+
+
+def test_badges_and_desktop_pane_reflow(page: Page, visual_app: dict[str, str]) -> None:
+    """Keep badge text and field controls inside narrow panes on wide desktops."""
+    page.set_viewport_size({"width": 1920, "height": 1080})
+    page.goto(f"{visual_app['base_url']}/app/review/{visual_app['review_id']}")
+    page.locator("#review-fields-container .review-field-row").first.wait_for()
+    divider = page.locator("#review-pane-divider")
+    divider.focus()
+    divider.press("End")
+    page.wait_for_function("() => document.querySelector('.review-editor-panel').clientWidth < 832")
+    assert page.locator('.review-field-row').evaluate_all("""rows => rows.every(row => {
+        const input = row.querySelector('input, textarea, select');
+        if (!input) return true;
+        const r = row.getBoundingClientRect(), b = input.getBoundingClientRect();
+        return b.left >= r.left && b.right <= r.right + 1;
+    })""")
+    assert page.locator('#review-fields-container .badge').evaluate_all("""badges => badges.every(b => {
+        const style = getComputedStyle(b);
+        return b.clientHeight >= parseFloat(style.lineHeight) && b.scrollWidth <= b.clientWidth + 1;
+    })""")
+    _capture(page, '15-badges-wide-desktop-narrow-pane')
+    page.set_viewport_size({"width": 1100, "height": 900})
+    _capture(page, '16-badges-compact-desktop')
