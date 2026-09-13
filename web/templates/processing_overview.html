@@ -2,6 +2,7 @@
 
 {% block content %}
 <div id="processing-workspace" class="app-workspace" data-batch-id="{{ batch_id|default('') }}">
+    <section id="processing-failure-notice" class="alert alert-warning text-left hidden" role="status" aria-live="polite" aria-atomic="true"></section>
     <section class="card bg-base-100 shadow-sm">
         <div class="card-body">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -65,5 +66,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/processing_overview.js?v=ui-retry-table-polish" defer></script>
+<script src="/static/js/processing_overview.js?v=failure-guidance" defer></script>
 {% endblock %}

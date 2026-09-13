@@ -5,12 +5,12 @@
     data-max-upload-mb="{{ max_upload_mb|default(50) }}"
     data-max-upload-files="{{ max_upload_files|default(20) }}"
     data-max-upload-request-mb="{{ max_upload_request_mb|default(200) }}">
-    <section class="card bg-base-100 shadow-sm" aria-labelledby="pipeline-selection-heading">
+    <section class="card bg-base-100 shadow-sm" id="upload-pipeline-section" aria-labelledby="pipeline-selection-heading">
         <div class="card-body gap-3">
             <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 id="pipeline-selection-heading" class="font-semibold">Choose a processing pipeline</h2>
-                    <p class="mt-1 text-sm text-base-content/60">One exact published version applies to every PDF in this batch. No pipeline is selected automatically.</p>
+                    <h2 id="pipeline-selection-heading" class="font-semibold">1. Select a pipeline</h2>
+                    <p class="mt-1 text-sm text-base-content/60">Choose one pipeline for all PDFs in this batch. Expand Pipeline details for more information.</p>
                 </div>
                 <button id="pipeline-selection-refresh" class="btn btn-ghost btn-sm" type="button">Refresh</button>
             </div>
@@ -20,6 +20,7 @@
             </div>
         </div>
     </section>
+    <h2 class="font-semibold" id="upload-files-heading">2. Upload PDFs</h2>
     <section id="upload-drop-zone" class="card bg-base-100 shadow-sm upload-dropzone" tabindex="0" role="button" aria-controls="pdf-file-input" aria-describedby="upload-drop-help" aria-label="Choose PDF files to upload">
         <div class="card-body items-center text-center py-12">
             <div class="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -77,7 +78,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M5 13l4 4L19 7" />
                     </svg>
-                    Start Processing
+                    3. Start processing
                 </button>
             </div>
         </div>
@@ -87,5 +88,5 @@
 
 {% block scripts %}
 <script src="/static/js/operator_pipeline_view_models.js?v=1" defer></script>
-<script src="/static/js/upload_process.js?v=streaming-upload-limits" defer></script>
+<script src="/static/js/upload_process.js?v=compact-numbered-upload" defer></script>
 {% endblock %}

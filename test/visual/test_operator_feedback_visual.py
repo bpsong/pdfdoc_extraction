@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import Page
+from playwright.sync_api import Page, expect
 
 from test.visual.test_schema_review_visual import page, visual_app
 
@@ -253,3 +253,60 @@ def test_badges_and_desktop_pane_reflow(page: Page, visual_app: dict[str, str]) 
     _capture(page, '15-badges-wide-desktop-narrow-pane')
     page.set_viewport_size({"width": 1100, "height": 900})
     _capture(page, '16-badges-compact-desktop')
+
+
+def test_compact_numbered_upload(page: Page, visual_app: dict[str, str]) -> None:
+    """Keep pipeline details optional and selection independent of disclosure."""
+    page.goto(f"{visual_app['base_url']}/app/upload")
+    radio = page.locator("input[name='pipeline-version']").first
+    radio.wait_for()
+    assert page.get_by_role('heading', name='1. Select a pipeline').is_visible()
+    assert page.get_by_role('heading', name='2. Upload PDFs').is_visible()
+    assert page.get_by_role('button', name='3. Start processing', exact=True).is_visible()
+    assert page.locator("input[name='pipeline-version']:checked").count() == 0
+    details = page.locator('.upload-pipeline-details').first
+    details.locator('summary').click()
+    assert details.get_attribute('open') is not None
+    assert page.locator("input[name='pipeline-version']:checked").count() == 0
+    assert details.get_by_text('Published', exact=False).is_visible()
+    radio.check()
+    assert page.locator("input[name='pipeline-version']:checked").count() == 1
+    assert page.locator('#start-processing-button').is_disabled()
+    assert page.locator('.upload-pipeline-card').first.evaluate('node => node.getBoundingClientRect().height < 150')
+    _capture(page, '17-compact-upload-desktop')
+    page.set_viewport_size({"width": 390, "height": 900})
+    assert page.evaluate('document.documentElement.scrollWidth <= innerWidth + 1')
+    _capture(page, '18-compact-upload-mobile')
+
+
+def test_batch_failure_guidance(page: Page, visual_app: dict[str, str]) -> None:
+    """Guide users to existing details without adding recovery requests."""
+    payload = {
+        "batch": {"id": visual_app["batch_id"], "status": "completed_with_errors"},
+        "pipeline": {"name": "Synthetic invoice pipeline", "template_key": "test", "version_number": 1},
+        "documents": [
+            {"id": "failed-doc", "original_filename": "failed-invoice.pdf", "status": "failed"},
+            {"id": "task-failed-doc", "original_filename": "long-invoice-" + "x" * 100 + ".pdf", "status": "completed", "task_runs": [{"status": "failed"}]},
+            {"id": "good-doc", "original_filename": "successful-invoice.pdf", "status": "completed"},
+        ],
+    }
+    endpoint = f"**/api/batches/{visual_app['batch_id']}/processing-state"
+    page.route(endpoint, lambda route: route.fulfill(json=payload))
+    page.goto(f"{visual_app['base_url']}/app/batches/{visual_app['batch_id']}")
+    notice = page.locator('#processing-failure-notice')
+    expect(notice).to_be_visible()
+    expect(notice).to_contain_text('2 documents have recorded failures')
+    assert notice.get_by_role('link').count() == 2
+    assert notice.get_by_role('link').first.get_attribute('href') == '/app/failures?document_id=failed-doc'
+    assert 'successful-invoice' not in notice.inner_text()
+    _capture(page, '19-batch-failure-guidance-desktop')
+    page.set_viewport_size({"width": 390, "height": 900})
+    assert notice.evaluate('el => el.scrollWidth <= el.clientWidth + 1')
+    _capture(page, '20-batch-failure-guidance-mobile')
+    payload['documents'] = [payload['documents'][0]]
+    page.reload()
+    expect(notice).to_contain_text('1 document has recorded failures')
+    payload['documents'] = []
+    page.reload()
+    expect(page.locator('#processing-progress-region')).to_have_attribute('aria-busy', 'false')
+    expect(notice).to_be_hidden()

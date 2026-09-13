@@ -17,10 +17,12 @@
     const splitResultsLink = document.getElementById("split-results-link");
     const clearFailureNotificationsButton = document.getElementById("clear-failure-notifications-button");
     const assignmentSummary = document.getElementById("pipeline-assignment-summary");
+    const failureNotice = document.getElementById("processing-failure-notice");
     const terminalStatuses = new Set(["completed", "completed_with_errors", "failed", "cancelled", "review_completed"]);
     let pollTimer = null;
     let refreshInFlight = false;
     let previousProcessingSnapshot = null;
+    let previousFailureContent = null;
 
     function escapeHtml(value) {
         return String(value === null || value === undefined ? "" : value)
@@ -274,6 +276,24 @@
         );
     }
 
+    function renderFailureNotice(states) {
+        const documents = states.flatMap((state) => state.documents || []).filter(hasFailureEvidence);
+        const content = documents.length ? `
+            <div class="min-w-0">
+                <p class="font-semibold">${documents.length} document${documents.length === 1 ? " has" : "s have"} recorded failures</p>
+                <p class="text-sm">Open failure details to see the reason and available actions. Check each document's status in the queue below.</p>
+                <ul class="mt-2 grid gap-2">
+                    ${documents.map((document) => `<li class="min-w-0"><a class="link break-all" href="/app/failures?document_id=${encodeURIComponent(document.id)}">View failure details: ${escapeHtml(document.original_filename || document.id)}</a></li>`).join("")}
+                </ul>
+            </div>` : "";
+        // Avoid repeating live-region announcements on every polling refresh.
+        if (previousFailureContent !== content) {
+            failureNotice.innerHTML = content;
+            previousFailureContent = content;
+        }
+        failureNotice.classList.toggle("hidden", !documents.length);
+    }
+
     function hasSplitEvidence(document) {
         return Boolean(
             document.parent_document_id
@@ -428,6 +448,7 @@
             renderPipeline(states);
             renderAssignment(states);
             renderRows(states);
+            renderFailureNotice(states);
             updateSplitLink(states);
             await updateFailureNotificationControl();
             const progress = aggregateProgress(states);
@@ -445,6 +466,7 @@
                 pollTimer = null;
             }
         } catch (error) {
+            failureNotice.classList.add("hidden");
             const message = error.message || "Unable to load processing state";
             refreshNote.innerHTML = `
                 <span class="text-error">${escapeHtml(message)}</span>

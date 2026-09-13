@@ -207,19 +207,25 @@
         pipelineList.innerHTML = availablePipelines.map((pipeline) => {
             const selected = pipeline.pipeline_version_id === selectedPipelineVersionId;
             return `
-                <label class="cursor-pointer rounded-lg border p-4 transition ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-base-300 hover:border-primary/50"}">
-                    <span class="flex items-start gap-3">
-                        <input class="radio radio-primary radio-sm mt-0.5" type="radio" name="pipeline-version" value="${escapeHtml(pipeline.pipeline_version_id)}" ${selected ? "checked" : ""}>
+                <div class="upload-pipeline-card rounded-lg border ${selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-base-300"}">
+                    <label class="upload-pipeline-choice cursor-pointer">
+                        <input class="radio radio-primary radio-sm" type="radio" name="pipeline-version" value="${escapeHtml(pipeline.pipeline_version_id)}" ${selected ? "checked" : ""}>
                         <span class="min-w-0">
                             <span class="block font-semibold">${escapeHtml(pipeline.name || pipeline.template_key)}</span>
-                            <span class="mt-0.5 block text-xs text-base-content/50">${escapeHtml(pipeline.template_key)} · Version ${escapeHtml(pipeline.version_number)} · ${escapeHtml(pipeline.step_count)} safe display step(s)</span>
-                            <span class="mt-0.5 block text-xs text-base-content/50">Published ${escapeHtml(window.DocFlow.formatDateTime(pipeline.published_at) || "—")}</span>
-                            ${pipeline.document_type ? `<span class="mt-2 inline-block badge badge-outline badge-sm">${escapeHtml(pipeline.document_type)}</span>` : ""}
-                            ${pipeline.description ? `<span class="mt-2 block text-sm text-base-content/70">${escapeHtml(pipeline.description)}</span>` : ""}
-                            ${pipeline.operator_instructions ? `<span class="mt-2 block rounded bg-base-200 p-2 text-xs">${escapeHtml(pipeline.operator_instructions)}</span>` : ""}
+                            <span class="block text-xs text-base-content/60">Version ${escapeHtml(pipeline.version_number)}</span>
                         </span>
-                    </span>
-                </label>
+                    </label>
+                    <details class="upload-pipeline-details">
+                        <summary>Pipeline details</summary>
+                        <div>
+                            <p>${escapeHtml(pipeline.template_key)} &middot; ${escapeHtml(pipeline.step_count)} steps</p>
+                            <p>Published ${escapeHtml(window.DocFlow.formatDateTime(pipeline.published_at) || "—")}</p>
+                            ${pipeline.document_type ? `<p>${escapeHtml(pipeline.document_type)}</p>` : ""}
+                            ${pipeline.description ? `<p>${escapeHtml(pipeline.description)}</p>` : ""}
+                            ${pipeline.operator_instructions ? `<p>${escapeHtml(pipeline.operator_instructions)}</p>` : ""}
+                        </div>
+                    </details>
+                </div>
             `;
         }).join("");
     }

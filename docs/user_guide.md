@@ -2599,3 +2599,23 @@ portable file.
 ---
 
 This guide documents operator workflows and administrator configuration for the current PDF processing application.
+
+
+### Compact upload steps
+
+On **Upload & Process**, follow **1. Select a pipeline**, then **2. Upload PDFs**,
+and select **3. Start processing** once your files are ready.
+Pipeline cards show the name and published version. Expand **Pipeline details**
+to read the description, operator instructions, publication date, and step count.
+Opening details does not select a pipeline. Select a pipeline explicitly before
+starting processing. Upload and recovery behavior is unchanged.
+
+### Finding failures from a batch
+
+The batch processing page shows a notice when its documents have recorded failures,
+including failed task runs. Select **View failure details** beside a document name
+to open that document in the existing Failures page and inspect the reason and
+available actions. Check the processing queue for each document's current status;
+a recorded task failure does not necessarily mean the document is still failed.
+The notice updates with the existing status refresh and is hidden if status cannot
+be loaded. Opening failure details does not retry, upload, or restart processing.

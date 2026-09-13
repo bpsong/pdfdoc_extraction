@@ -17,7 +17,7 @@ def test_upload_page_requires_explicit_pipeline_selection_contract(monkeypatch):
 
     assert response.status_code == 200
     assert 'id="pipeline-version-list"' in response.text
-    assert "No pipeline is selected automatically" in response.text
+    assert "Choose one pipeline for all PDFs in this batch" in response.text
     assert 'id="start-processing-button"' in response.text
     assert 'disabled' in response.text
     assert "operator_pipeline_view_models.js" in response.text
@@ -53,5 +53,5 @@ def test_processing_page_contains_exact_assignment_presentation(monkeypatch):
 
     assert response.status_code == 200
     assert 'id="pipeline-assignment-summary"' in response.text
-    assert "ui-retry-table-polish" in response.text
+    assert "failure-guidance" in response.text
     assert "schema content" not in response.text.lower()
