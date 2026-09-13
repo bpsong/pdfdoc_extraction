@@ -9,10 +9,38 @@
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
 | Last verified | 2026-09-13 |
-| Verified revision | Release `37366e5` after the configuration and migration boundary refactor |
+| Verified revision | Current release after the configuration and migration boundary refactor |
 
 This document describes the current implementation, not a target-state
 architecture.
+
+## Start here for a codebase takeover
+
+The normal execution path is a supervised local deployment:
+
+```text
+main.py
+ ├─ ConfigManager and startup checks
+ ├─ WatchFolderCoordinator (polling thread)
+ ├─ ProcessingWorker subprocess
+ └─ Uvicorn web subprocess
+      ├─ web/server.py
+      ├─ modules/api_router.py
+      └─ services and repositories
+```
+
+The parent process owns normal database migration and supervision. The web
+process accepts browser/API work, while the worker is the only process that
+executes queued root workflows. All three processes use the configured SQLite
+database and filesystem, but each process owns an independent deployment
+configuration instance. Start investigations by identifying the process, then
+the batch/document/review ID, then the relevant task run and artifact records.
+
+For a first orientation, read this document with [`main.py`](../main.py),
+[`web/server.py`](../web/server.py), [`modules/api_router.py`](../modules/api_router.py),
+[`modules/services/processing_worker.py`](../modules/services/processing_worker.py),
+[`modules/workflow_manager.py`](../modules/workflow_manager.py), and
+[`modules/workflow_loader.py`](../modules/workflow_loader.py) open beside it.
 
 ## Architecture at a glance
 
@@ -59,6 +87,19 @@ The essential model is:
    services handle use cases, and repositories handle table-specific storage.
 6. **Production and prototype UI are separate.** Production behavior belongs
    under `web/`; `pipeline_visual_editor_prototype/` is not loaded at runtime.
+
+### Invariants to preserve
+
+- Every accepted document is pinned to one immutable pipeline version.
+- A review item is pinned to the exact review-schema version used by its
+  pipeline version.
+- The worker is the only normal executor of queued root workflows.
+- The parent is the only normal migration owner.
+- SQLite owns workflow state; the filesystem owns artifact contents.
+- Published pipeline and review-schema versions are immutable.
+- Review completion can acquire downstream resume only once.
+- Upload idempotency applies only to the same key, user, pipeline, and content.
+- Legacy YAML pipeline/task definitions are import sources, not runtime state.
 
 ## Runtime topology
 
@@ -181,6 +222,69 @@ arbitrarily nested structures.
 `modules/api_router.py` remains a large integration point. The intended
 route/service/repository boundary is therefore both a design rule and current
 technical debt.
+
+### Service ownership map
+
+The `modules/services/` directory is intentionally split by use case. When
+changing behavior, put the cross-table invariant in the service that owns the
+use case rather than adding it to a route or repository.
+
+| Service | Primary responsibility |
+| --- | --- |
+| `upload_receiver.py` | Multipart parsing, staging, limits, and cancellation cleanup |
+| `upload_submission_service.py` | Idempotent upload receipts and batch creation |
+| `processing_job_service.py` | Queue state, leases, retries, and requeue behavior |
+| `processing_worker.py` | Poll jobs and invoke the assigned workflow |
+| `workflow_state_service.py` | Document/task state transitions and finalization |
+| `review_service.py` | Review claims, edits, locks, completion, and release |
+| `resume_manager.py` | Reconstruct context and resume downstream work |
+| `pipeline_definition_service.py` | Resolve and verify immutable executable versions |
+| `pipeline_config_service.py` | Pipeline drafts, validation, publication, and cloning |
+| `review_schema_version_service.py` | Review-schema draft/version lifecycle |
+| `artifact_service.py` | Register durable filesystem artifacts in SQLite |
+| `runtime_health_service.py` | Process readiness, heartbeats, and component health |
+| `task_registry_service.py` | Approved dynamic task imports and startup trust checks |
+| `schema_service.py` | Legacy/filesystem schema resolution and loading |
+| `startup_migration_service.py` | Structural migration and legacy configuration import |
+
+### Representative request traces
+
+Use these paths as navigation guides when debugging. Names may gain helper
+layers, but the ownership boundaries should remain stable.
+
+```text
+POST /api/batches/upload
+ → api_router.py
+ → UploadReceiver
+ → UploadSubmissionService
+ → repositories
+ → processing_jobs
+ → ProcessingWorker
+ → FileProcessor
+ → WorkflowManager
+ → WorkflowLoader
+ → configured BaseTask
+```
+
+```text
+Review completion
+ → review UI / api_router.py
+ → ReviewService
+ → review item and document transaction
+ → ResumeManager
+ → WorkflowManager
+ → next configured task
+ → cleanup and FanInService
+```
+
+```text
+Admin pipeline publication
+ → api_router.py
+ → PipelineConfigService
+ → PipelineValidationService
+ → PipelineDefinitionService dependencies
+ → immutable pipeline_versions row
+```
 
 ## Ingestion and workflow execution
 
@@ -381,6 +485,23 @@ stateDiagram-v2
 Task runs use `running`, `completed`, `paused`, and `failed`. Context values
 such as `pipeline_state: paused` and `pipeline_state: fan_out` are execution
 signals, not database entities.
+
+State transition ownership is split as follows:
+
+| Transition or state | Owner |
+| --- | --- |
+| Job `queued`/`processing`/lease expiry | `ProcessingJobService` and worker |
+| Document task progress and terminal state | `WorkflowStateService` |
+| `processing` → `review_required` | `ReviewGateTask` |
+| `review_required` → `in_review` | `ReviewService` claim transaction |
+| Review edits, release, and completion | `ReviewService` |
+| `review_completed` → `resuming` | `ResumeManager` acquisition transaction |
+| Resumed downstream execution | `WorkflowManager` and `WorkflowLoader` |
+| Root/batch aggregate state | `FanInService` |
+
+Do not infer workflow state from a status file, Prefect state, or a UI label.
+Those may be compatibility or presentation surfaces; SQLite state and the
+service transitions above are authoritative.
 
 For split processing:
 
@@ -583,6 +704,40 @@ loading, and config-check use shared resolution rules. Config-check defaults to
 the checked YAML directory; `--base-dir` overrides only filesystem validation,
 not the deployment-selected SQLite database. Validation of an in-memory mapping
 without an explicit base or source file defaults to the current directory.
+
+A minimal deployment configuration has this shape (the actual task composition
+is normally stored in published SQLite versions):
+
+```yaml
+database:
+  path: data/docflow.db
+web:
+  host: 127.0.0.1
+  port: 8000
+  upload_dir: web_upload
+watch_folder:
+  dir: watch_folder
+  processing_dir: processing
+logging:
+  log_file: logs/docflow.log
+  log_level: INFO
+authentication:
+  username: admin
+  password_hash: <bcrypt hash>
+```
+
+Use `--config-path` for an explicit file; otherwise `CONFIG_PATH` is used,
+then the repository-root `config.yaml`. Relative paths are resolved beside the
+selected YAML file, not beside the caller's current directory. Deployment YAML
+edits require a coordinated restart of parent, web, and worker processes.
+Publishing a pipeline or changing SQLite-backed operational settings does not
+change already-pinned batches and generally does not require a process restart.
+
+The parent sets these process-coordination variables for its children:
+`DOCFLOW_PROCESS_ROLE`, `DOCFLOW_STARTUP_MODE`, `DOCFLOW_RUN_ID`,
+`DOCFLOW_EXPECTED_COMPONENTS`, and `DOCFLOW_STDIO_CAPTURED`. `APP_ENV` (or
+`ENV`/`ENVIRONMENT`) controls production security defaults, while `USE_RELOAD`
+controls development reload behavior and is disabled in production.
 
 The standalone checker validates deployment YAML and, when `database.path` is
 configured, opens SQLite in read-only/query-only mode and validates the active
@@ -793,6 +948,31 @@ configuration but is not pinned in the project dependency files. Ruff is not a
 supported project check. Pytest, pytest-cov, and Playwright are pinned in
 `requirements-dev.txt`; production installs use `requirements.txt`.
 
+Useful focused checks from the repository root are:
+
+```powershell
+# Configuration and process startup
+.\.venv\Scripts\python.exe -m pytest -q test\core\test_configuration_boundaries.py
+
+# Database migration boundaries
+.\.venv\Scripts\python.exe -m pytest -q test\db\test_migration_boundaries.py
+
+# Upload, workflow, and review integration
+.\.venv\Scripts\python.exe -m pytest -q test\integration\test_batch_upload_api.py test\integration\test_review_ui_api.py
+
+# Browser smoke coverage
+.\.venv\Scripts\python.exe -m pytest -q test\visual\test_configuration_boundaries_visual.py
+
+# Full suite without opt-in live provider checks
+$env:RUN_LLAMACLOUD_SPLIT_SMOKE = '0'
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+Changes to templates, JavaScript, CSS, or browser behavior require a visual
+test decision; backend-only changes normally do not. Changes to startup,
+migrations, workflow execution, review resume, or artifact registration should
+include the corresponding focused integration tests before the full suite.
+
 ## Known architectural debt
 
 | Area | Current constraint |
@@ -811,6 +991,64 @@ supported project check. Pytest, pytest-cov, and Playwright are pinned in
 | Storage | Artifact availability assumes shared local filesystem access |
 
 These are current constraints, not an approved target-state plan.
+
+## Debugging checklist
+
+1. Identify whether the failure is in the parent, web process, worker, or
+   watch-folder thread.
+2. Confirm the active configuration file and resolved database path.
+3. Capture the batch, document, review-item, or processing-job ID.
+4. Inspect the pinned pipeline/review-schema version and task-run timeline.
+5. Check processing-job lease state and worker/runtime heartbeats.
+6. For review issues, inspect `review_items`, `review_locks`, and resume state.
+7. For output issues, inspect `document_files` and artifact registration logs.
+8. Check the role-specific log: `.supervisor`, `.web`, or `.worker`.
+
+Common first checks:
+
+| Symptom | First places to inspect |
+| --- | --- |
+| Upload accepted but not processing | `processing_jobs`, worker heartbeat, worker log |
+| Stuck at review | `review_items`, `review_locks`, paused task run |
+| Web/worker startup failure | Role log, `StartupReadinessError`, schema version |
+| Watch folder does nothing | Binding lifecycle, `watch_folder_health`, source path |
+| Extraction succeeded but storage did not | Task runs, `continued_failures`, artifact records |
+| Duplicate upload | `upload_submissions` and idempotency key |
+| Missing output file | `document_files` and artifact-service warnings |
+
+Do not repair state by editing SQLite rows or deleting runtime files while the
+application is running. Use the supported admin/recovery flow, stop the
+application before filesystem repair, and preserve the relevant logs and IDs.
+
+## Safe-change workflow
+
+- **New task:** inherit `BaseTask`, register the exact module/class pair, follow
+  the [standard task guidelines](../tasks/standard_task_creation_guidelines.md),
+  and add task plus workflow tests.
+- **Persistence:** update the schema/migration, repository, service, and
+  integration tests together.
+- **API:** keep request parsing and authorization in the router, put invariants
+  in a service, and add API/security tests.
+- **Production UI:** update the route, template, controller, and API contract
+  together; run the focused visual test when rendering or interaction changes.
+- **Pipeline behavior:** test the pinned-version path, review gate, resume, and
+  split/fan-in behavior as applicable.
+- **Configuration semantics:** test relative paths, malformed configuration,
+  process-entry failures, and config-check behavior.
+- **Startup or migration:** test idempotency, rollback/compensation, schema
+  verification, and a fresh application startup.
+
+## Migration development workflow
+
+The canonical structural schema is [`modules/db/schema.sql`](../modules/db/schema.sql).
+Structural upgrade logic belongs in [`modules/db/migrations.py`](../modules/db/migrations.py);
+startup orchestration and legacy YAML import belong in
+[`startup_migration_service.py`](../modules/services/startup_migration_service.py).
+The structural migration module must remain free of application-service imports.
+There is no general downgrade chain. For a migration change, use a temporary
+database, verify the exact supported version and required tables, run startup a
+second time to prove idempotency, and exercise legacy-import compensation when
+the change touches YAML cutover.
 
 ## Extension rules
 
