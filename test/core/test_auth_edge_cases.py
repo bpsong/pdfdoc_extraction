@@ -16,7 +16,7 @@ from modules.auth_utils import (
     validate_password,
 )
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import UserRepository
 from test.helpers_sqlite import TempConfig
 

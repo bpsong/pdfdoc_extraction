@@ -358,10 +358,9 @@ class RuntimeFileValidator:
     
     def _resolve_path(self, path_str: str) -> Path:
         """Resolve a path string relative to the base directory."""
-        path = Path(path_str)
-        if path.is_absolute():
-            return path
-        return self.base_dir / path
+        from modules.config_paths import resolve_config_path
+
+        return resolve_config_path(path_str, base_dir=self.base_dir)
 
 
 def validate_runtime_files(config: Dict[str, Any], base_dir: Optional[Path] = None) -> FileValidationResult:

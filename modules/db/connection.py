@@ -10,6 +10,7 @@ import sqlite3
 from typing import Any, Iterator
 
 from modules.config_protocol import ConfigProvider
+from modules.config_paths import resolve_config_path
 
 
 def utc_now() -> str:
@@ -40,12 +41,9 @@ def json_loads(value: str | None, default: Any = None) -> Any:
 def get_db_path(config_manager: ConfigProvider) -> Path:
     """Resolve the configured SQLite database path."""
     raw_path = config_manager.get("database.path", "data/app_state.sqlite3")
-    path = Path(str(raw_path))
-    if not path.is_absolute():
-        config_path = getattr(config_manager, "_config_path", None)
-        base_dir = Path(config_path).parent if config_path else Path.cwd()
-        path = base_dir / path
-    return path
+    return resolve_config_path(
+        str(raw_path), config_path=getattr(config_manager, "_config_path", None)
+    )
 
 
 def connect(config_manager: ConfigProvider) -> sqlite3.Connection:

@@ -11,7 +11,8 @@ import pytest
 import yaml
 
 from modules.db.connection import connect, json_loads, utc_now
-from modules.db.migrations import initialize_database, prepare_versioned_config_schema
+from modules.services.startup_migration_service import initialize_database
+from modules.db.migrations import prepare_versioned_config_schema
 from modules.db.repositories import ReviewRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
 from modules.services.legacy_versioned_config_migration import (
@@ -41,6 +42,9 @@ class MigrationConfig:
 
     def get_all(self):
         return self.config
+
+    def replace_config(self, values):
+        self.config = values
 
 
 def _schema(title: str = "Invoice") -> dict:

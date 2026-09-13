@@ -558,6 +558,7 @@ class TestCheckFilesFlagIntegration:
     ) -> None:
         """Test that --check-files flag enables file validation."""
         config_path = config_factory.write()
+        (config_path.parent / "processing").mkdir(exist_ok=True)
 
         exit_code = main(["validate", "--config", str(config_path), "--check-files"])
 

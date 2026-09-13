@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 import modules.api_router as api_router
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.file_processor import FileProcessor
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.ingestion_assignment_service import IngestionAssignmentService

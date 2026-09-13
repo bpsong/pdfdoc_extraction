@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from modules.auth_utils import PasswordPolicyError, validate_password  # noqa: E402
 from modules.config_manager import ConfigManager  # noqa: E402
 from modules.db.connection import connect  # noqa: E402
-from modules.db.migrations import initialize_database  # noqa: E402
+from modules.services.startup_migration_service import initialize_database  # noqa: E402
 from modules.db.repositories import UserRepository  # noqa: E402
 
 

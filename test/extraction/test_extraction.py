@@ -18,8 +18,6 @@ class TestExtractPdfTask:
     @pytest.fixture(autouse=True)
     def setup_and_teardown(self, monkeypatch):
         """Set up test fixtures and clean up after each test."""
-        # Reset ConfigManager singleton
-        ConfigManager._instance = None
 
         # Create sample config dict matching the expected structure in config.yaml
         sample_config = {

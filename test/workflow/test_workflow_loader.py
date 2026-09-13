@@ -9,8 +9,7 @@ import yaml
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
-    # Reset ConfigManager and WorkflowLoader singletons before each test
-    ConfigManager._instance = None
+    # Reset the legacy WorkflowLoader compatibility marker before each test.
     WorkflowLoader._instance = None
     yield
 
@@ -36,8 +35,6 @@ def initial_context():
 
 @pytest.fixture(autouse=True)
 def mock_all_dependencies(mocker, config_path, reset_singletons):
-    # Mock ConfigManager's critical exits
-    mocker.patch('modules.config_manager.sys.exit')
     mocker.patch('modules.config_manager.logging.Logger.critical')
 
     # Mock ShutdownManager's shutdown method

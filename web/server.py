@@ -34,7 +34,7 @@ from modules.api_router import (
     get_dependencies,
 )
 from modules.shutdown_manager import ShutdownManager
-from modules.config_manager import ConfigManager
+from modules.config_manager import ConfigManager, ConfigurationError
 from modules.auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from modules.logging_config import setup_bootstrap_logging, setup_logging
 from modules.services.startup_service import MigrationMode, run_startup_checks
@@ -118,7 +118,12 @@ def create_app() -> FastAPI:
     """
     process_role = os.getenv("DOCFLOW_PROCESS_ROLE", "web")
     setup_bootstrap_logging(process_role=process_role)
-    config, _, _, _, _ = get_dependencies()
+    try:
+        dependencies = get_dependencies()
+        config, _, _, _, _ = dependencies
+    except ConfigurationError as exc:
+        logging.getLogger(__name__).critical("Web configuration failed: %s", exc)
+        raise RuntimeError("Web startup blocked by invalid configuration.") from None
     setup_logging(
         config,
         process_role=process_role,
@@ -171,6 +176,10 @@ def create_app() -> FastAPI:
         TrustedHostMiddleware,
         allowed_hosts=_allowed_hosts(config, production),
     )
+    from modules.request_dependencies import ApplicationDependenciesMiddleware
+
+    app.state.dependencies = dependencies
+    app.add_middleware(ApplicationDependenciesMiddleware, dependencies=dependencies)
 
     @app.get("/health/live", include_in_schema=False)
     def health_live() -> dict[str, str]:

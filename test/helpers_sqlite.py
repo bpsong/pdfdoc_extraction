@@ -31,6 +31,9 @@ class TempConfig:
     def get_all(self) -> dict[str, Any]:
         return self._values
 
+    def replace_config(self, values: dict[str, Any]) -> None:
+        self._values = values
+
 
 def initialize_test_users(config: TempConfig) -> None:
     """Seed the fixed users for authenticated integration tests."""

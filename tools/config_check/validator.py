@@ -129,7 +129,11 @@ class ConfigValidator:
     def validate(self, config_path: Union[str, Path]) -> ValidationResult:
         """Validate a configuration file on disk."""
 
-        config_path = Path(config_path)
+        config_path = Path(config_path).resolve()
+        # Each file supplies its own default; never retain a previous file's base.
+        effective_base = self.base_dir or config_path.parent
+        self.path_validator = PathValidator(base_dir=effective_base)
+        self._runtime_base_dir = effective_base
         self.logger.debug("Starting validation for %s", config_path)
 
         if not config_path.exists():
@@ -352,7 +356,9 @@ class ConfigValidator:
         if not isinstance(config_data, dict):
             return ValidationResult()
 
-        file_result = validate_runtime_files(config_data, self.base_dir)
+        file_result = validate_runtime_files(
+            config_data, getattr(self, "_runtime_base_dir", self.base_dir)
+        )
 
         errors: List[ValidationMessage] = []
         for issue in file_result.errors:

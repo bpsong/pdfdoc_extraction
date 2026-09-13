@@ -3,7 +3,7 @@ from pathlib import Path
 from pypdf import PdfReader, PdfWriter
 
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import DocumentRepository
 from modules.services.batch_service import BatchService
 from modules.services.fan_in_service import FanInService

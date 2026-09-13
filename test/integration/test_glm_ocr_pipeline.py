@@ -11,7 +11,7 @@ import pytest
 
 from modules.base_task import BaseTask
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import (
     DocumentRepository,
     ExtractionRepository,

@@ -250,10 +250,12 @@ def convert_to_singapore_time(utc_time_str: Optional[str]) -> str:
         return utc_time_str
 
 def get_dependencies() -> tuple:
-    """Construct and return core application dependencies.
+    """Return this app's bound dependencies, or construct them during startup.
 
     This centralizes dependency creation to support test injection/mocking and
-    keeps route handlers concise. Database migrations are handled by process
+    keeps route handlers concise. The web app binds one dependency set to each
+    request; construction outside a request creates a fresh configuration.
+    Database migrations are handled by process
     startup and are intentionally not run during request dependency resolution.
 
     Returns:
@@ -266,6 +268,11 @@ def get_dependencies() -> tuple:
     Raises:
         None
     """
+    from modules.request_dependencies import active_dependencies
+
+    bound = active_dependencies.get()
+    if bound is not None:
+        return bound
     cfg_env = os.getenv("CONFIG_PATH")
     cfg_path = Path(cfg_env) if cfg_env else Path("config.yaml")
     config = ConfigManager(config_path=cfg_path.resolve())

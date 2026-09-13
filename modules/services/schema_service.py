@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from modules.config_paths import config_directory, resolve_config_path
 
 from modules.config_protocol import ConfigProvider as ConfigManager
 
@@ -47,14 +48,16 @@ class SchemaService:
         )
         raw_dirs = configured if isinstance(configured, list) else [configured]
         config_path = getattr(self.config_manager, "_config_path", None)
-        base_dir = Path(config_path).parent if config_path else Path.cwd()
+        try:
+            base_dir = config_directory(config_path)
+        except (OSError, RuntimeError):
+            return []
         directories: list[Path] = []
         seen: set[str] = set()
         for raw_dir in raw_dirs:
             path = Path(str(raw_dir))
-            directory = path if path.is_absolute() else base_dir / path
             try:
-                resolved = directory.expanduser().resolve()
+                resolved = resolve_config_path(path, base_dir=base_dir)
             except (OSError, RuntimeError):
                 continue
             key = str(resolved).casefold()
@@ -108,7 +111,7 @@ class SchemaService:
 
     def duplicate_schema(self, schema_name: str, new_schema_name: str) -> dict[str, Any]:
         """Create a copy of one schema under a new name."""
-        source_path = self._resolve_schema_path(schema_name)
+        source_path = self.resolve_schema_path(schema_name)
         if source_path is None or not source_path.exists():
             raise FileNotFoundError(f"Schema not found: {schema_name}")
         schema = self.load_schema(schema_name)
@@ -118,7 +121,7 @@ class SchemaService:
 
     def load_schema(self, schema_name: str) -> dict[str, Any] | None:
         """Load a YAML or JSON schema by configured-relative name."""
-        path = self._resolve_schema_path(schema_name)
+        path = self.resolve_schema_path(schema_name)
         if path is None or not path.exists():
             return None
         with path.open("r", encoding="utf-8") as schema_file:
@@ -135,7 +138,7 @@ class SchemaService:
 
     def schema_content(self, schema_name: str) -> str | None:
         """Return the raw schema file text for editor previews."""
-        path = self._resolve_schema_path(schema_name)
+        path = self.resolve_schema_path(schema_name)
         if path is None or not path.exists():
             return None
         return path.read_text(encoding="utf-8")
@@ -216,12 +219,13 @@ class SchemaService:
 
     def schema_hash(self, schema_name: str) -> str | None:
         """Return a SHA-256 hash of a schema file for review traceability."""
-        path = self._resolve_schema_path(schema_name)
+        path = self.resolve_schema_path(schema_name)
         if path is None or not path.exists():
             return None
         return hashlib.sha256(path.read_bytes()).hexdigest()
 
-    def _resolve_schema_path(self, schema_name: str) -> Path | None:
+    def resolve_schema_path(self, schema_name: str) -> Path | None:
+        """Resolve a supported schema filename only within configured roots."""
         raw_name = str(schema_name or "").strip()
         if not raw_name:
             return None
@@ -229,6 +233,8 @@ class SchemaService:
         if candidate.suffix.lower() not in SCHEMA_SUFFIXES:
             return None
         allowed_roots = self.schema_directories()
+        if not allowed_roots:
+            return None
         candidates: list[Path] = []
         if candidate.is_absolute():
             candidates.append(candidate)
@@ -236,7 +242,7 @@ class SchemaService:
             if any(part == ".." for part in candidate.parts):
                 return None
             config_path = getattr(self.config_manager, "_config_path", None)
-            base_dir = Path(config_path).parent if config_path else Path.cwd()
+            base_dir = config_directory(config_path)
             candidates.append(base_dir / candidate)
             candidates.extend(directory / candidate for directory in allowed_roots)
 

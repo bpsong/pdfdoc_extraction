@@ -62,7 +62,9 @@ Suggestion: Create the directory or update the path in config
 **Fixes**
 - Create the directory on disk before running jobs: `New-Item -ItemType Directory -Path C:/missing/uploads`
 - Or adjust the configuration value to point to an existing location.
-- When using relative paths, pass `--base-dir` so the validator resolves them correctly.
+- Relative paths default to the checked YAML file's directory. Use `--base-dir`
+  only to deliberately override filesystem validation; it never redirects the
+  SQLite database selected by `database.path` beside the YAML file.
 
 ## Watch Folder Not Prepared
 
@@ -480,7 +482,7 @@ confidence when GLM returns none.
   - Verify the CSV file path is correct: `reference_file: "reference_file/suppliers.csv"`
   - Ensure the file exists at the specified location
   - Use absolute paths for testing: `reference_file: "C:/full/path/to/suppliers.csv"`
-  - Check working directory with `--base-dir` flag if using relative paths
+  - Check paths relative to the YAML directory; `--base-dir` explicitly overrides filesystem validation only
 - **Cannot read CSV (`rules-csv-not-readable`)**:
   - Check file permissions: ensure the file is readable by the current user
   - Close the file in Excel or other applications that might have it locked

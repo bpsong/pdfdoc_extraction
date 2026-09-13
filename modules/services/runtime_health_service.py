@@ -10,7 +10,7 @@ from typing import Any, Iterable
 
 from modules.config_protocol import ConfigProvider
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import SCHEMA_VERSION
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.db.repositories import RuntimeComponentHealthRepository
 
 

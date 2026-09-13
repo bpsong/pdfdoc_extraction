@@ -144,7 +144,7 @@ def test_schema_hash_and_snapshot_helpers() -> None:
 def test_reference_schema_path_errors_and_runtime_config_application(tmp_path: Path) -> None:
     obj = _bare({"pipeline": ["review"], "tasks": {"review": {"class": "ReviewGateTask", "params": {"schema_file": "missing.yaml"}}}})
     obj.conn = SimpleNamespace(execute=lambda *_args: SimpleNamespace(fetchone=lambda: None))
-    obj.schema_service = SimpleNamespace(_resolve_schema_path=lambda _name: None)
+    obj.schema_service = SimpleNamespace(resolve_schema_path=lambda _name: None)
     with pytest.raises(LegacyVersionedConfigMigrationError, match="schema file"):
         obj._referenced_schema_paths(obj._legacy_definition())
 
@@ -165,16 +165,16 @@ def test_migration_reference_discovery_and_transform_defensive_paths(tmp_path: P
     obj.conn = Mock()
     obj.schema_service = Mock()
     assert obj._referenced_schema_paths(None) == set()
-    obj.schema_service._resolve_schema_path.side_effect = OSError("bad path")
+    obj.schema_service.resolve_schema_path.side_effect = OSError("bad path")
     definition = {"pipeline": ["review"], "tasks": {"review": {"class": "ReviewGateTask", "params": {"schema_file": "schema.yaml"}}}}
     with pytest.raises(LegacyVersionedConfigMigrationError, match="schema file"):
         obj._referenced_schema_paths(definition)
-    obj.schema_service._resolve_schema_path.side_effect = None
-    obj.schema_service._resolve_schema_path.return_value = None
+    obj.schema_service.resolve_schema_path.side_effect = None
+    obj.schema_service.resolve_schema_path.return_value = None
     with pytest.raises(LegacyVersionedConfigMigrationError, match="no legacy schema"):
         obj._referenced_schema_paths({"pipeline": ["review"], "tasks": {"review": {"class": "ReviewGateTask", "params": {}}}})
     assert obj._transform_definition(None) is None
-    obj.schema_service._resolve_schema_path.return_value = None
+    obj.schema_service.resolve_schema_path.return_value = None
     with pytest.raises(LegacyVersionedConfigMigrationError, match="dependency"):
         obj._transform_definition(definition)
 
@@ -330,18 +330,14 @@ def test_migration_invariants_and_backfill_guards() -> None:
 
 def test_migration_runtime_and_partial_state_guards(tmp_path: Path, monkeypatch) -> None:
     obj = _bare()
-    obj.config = SimpleNamespace(
-        config={},
-        _values={},
-    )
+    obj.config = SimpleNamespace(replace_config=Mock())
     obj.updated_config = {
         "pipeline": ["new"],
         "tasks": {"new": {}},
         "pipeline_secrets": {"key": "value"},
     }
     obj.apply_runtime_config()
-    assert obj.config.config["pipeline"] == ["new"]
-    assert obj.config._values["pipeline_secrets"] == {"key": "value"}
+    obj.config.replace_config.assert_called_once_with(obj.updated_config)
 
     monkeypatch.setattr(migration, "_write_atomic", Mock(side_effect=OSError("compensation")))
     obj.config_path = tmp_path / "config.yaml"

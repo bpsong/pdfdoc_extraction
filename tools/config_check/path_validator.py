@@ -38,10 +38,10 @@ Note:
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from modules.config_paths import resolve_config_path
 
 
 @dataclass(slots=True)
@@ -267,16 +267,7 @@ class PathValidator:
         if not candidate:
             return None, "path-value-empty", "Path value must not be empty"
 
-        expanded = os.path.expandvars(candidate)
-        path = Path(expanded).expanduser()
-
-        base = self.base_dir or Path.cwd()
-        if not path.is_absolute():
-            path = (base / path).resolve(strict=False)
-        else:
-            path = path.resolve(strict=False)
-
-        return path, None, None
+        return resolve_config_path(candidate, base_dir=self.base_dir), None, None
 
     @staticmethod
     def _get_nested_value(config: Dict[str, Any], key_path: str) -> Any:

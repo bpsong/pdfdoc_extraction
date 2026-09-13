@@ -10,7 +10,7 @@ import yaml
 
 import modules.services.pipeline_config_service as pipeline_module
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import AuditRepository, ConfigVersionRepository
 from modules.services.pipeline_config_service import PipelineConfigError, PipelineConfigService
 from test.helpers_sqlite import TempConfig

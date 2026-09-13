@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import ExtractionRepository, TaskRunRepository
 from modules.exceptions import TaskError
 from modules.services.batch_service import BatchService

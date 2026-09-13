@@ -1,5 +1,5 @@
 from modules.db.connection import connect, json_loads
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import ExtractionRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
 from standard_step.extraction.llama_cloud_v2 import extract_confidence_details, extract_numeric_confidence, _to_plain_dict

@@ -101,7 +101,7 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-from modules.config_manager import ConfigManager
+from modules.config_manager import ConfigManager, ConfigurationError
 from modules.config_protocol import ConfigProvider
 from modules.shutdown_manager import ShutdownManager
 from modules.file_processor import FileProcessor
@@ -392,8 +392,11 @@ def main():
 
     setup_bootstrap_logging(process_role="supervisor")
 
-    # Initialize ConfigManager singleton with the resolved path
-    config_manager = ConfigManager(config_path=resolved_config_path)
+    try:
+        config_manager = ConfigManager(config_path=resolved_config_path)
+    except ConfigurationError as exc:
+        logger.critical("Application configuration failed: %s", exc)
+        sys.exit(1)
     setup_logging(
         config_manager,
         process_role="supervisor",

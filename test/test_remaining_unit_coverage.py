@@ -91,17 +91,17 @@ def test_config_manager_missing_and_invalid_paths(monkeypatch: pytest.MonkeyPatc
     manager = object.__new__(config_module.ConfigManager)
     manager.logger = Mock()
     manager._config_path = tmp_path / "config.yaml"
-    manager.config = {"nested": "scalar"}
+    manager._config = {"nested": "scalar"}
     assert manager.get("nested.value", "fallback") == "fallback"
 
-    manager.config = {"web": {}}
-    with pytest.raises(SystemExit):
+    manager._config = {"web": {}}
+    with pytest.raises(config_module.ConfigurationError):
         manager._validate_static_paths()
-    manager.config = {"watch_folder": {}}
-    with pytest.raises(SystemExit):
+    manager._config = {"watch_folder": {}}
+    with pytest.raises(config_module.ConfigurationError):
         manager._validate_watch_folder()
-    manager.config = {"missing_dir": "does-not-exist"}
-    with pytest.raises(SystemExit):
+    manager._config = {"missing_dir": "does-not-exist"}
+    with pytest.raises(config_module.ConfigurationError):
         manager._validate_dynamic_paths()
 
 
@@ -218,7 +218,7 @@ def test_schema_service_defensive_and_value_validation_paths(
     with monkeypatch.context() as context:
         context.setattr(Path, "resolve", Mock(side_effect=OSError("resolve")))
         assert service.schema_directories() == []
-        assert service._resolve_schema_path("missing.yaml") is None
+        assert service.resolve_schema_path("missing.yaml") is None
 
     schema_path = tmp_path / "broken.yaml"
     schema_path.write_text("- not a mapping\n", encoding="utf-8")
@@ -229,12 +229,12 @@ def test_schema_service_defensive_and_value_validation_paths(
     service.save_schema = Mock(return_value={"name": "copy.yaml"})
     assert service.duplicate_schema("valid.yaml", "copy.yaml") == {"name": "copy.yaml"}
     with monkeypatch.context() as context:
-        context.setattr(service, "_resolve_schema_path", lambda _name: schema_path)
+        context.setattr(service, "resolve_schema_path", lambda _name: schema_path)
         context.setattr(service, "load_schema", lambda _name: None)
         with pytest.raises(ValueError, match="could not be loaded"):
             service.duplicate_schema("broken.yaml", "copy.yaml")
-    assert service._resolve_schema_path("") is None
-    assert service._resolve_schema_path("not-a-schema.txt") is None
+    assert service.resolve_schema_path("") is None
+    assert service.resolve_schema_path("not-a-schema.txt") is None
     assert service._validate_value("when", 3, {"type": "datetime"})
 
 

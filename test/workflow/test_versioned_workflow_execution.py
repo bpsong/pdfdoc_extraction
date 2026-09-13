@@ -7,7 +7,7 @@ import json
 import pytest
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import TaskRunRepository
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.pipeline_definition_service import (

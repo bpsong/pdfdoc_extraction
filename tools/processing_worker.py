@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 from pathlib import Path
 import signal
@@ -10,7 +11,7 @@ import sys
 from types import FrameType
 from typing import Protocol
 
-from modules.config_manager import ConfigManager
+from modules.config_manager import ConfigManager, ConfigurationError
 from modules.logging_config import setup_bootstrap_logging, setup_logging
 from modules.services.processing_worker import build_worker
 from modules.services.runtime_health_service import RuntimeHealthReporter
@@ -76,3 +77,6 @@ if __name__ == "__main__":
         main()
     except KeyboardInterrupt:
         sys.exit(0)
+    except ConfigurationError as exc:
+        logging.getLogger(__name__).critical("Worker configuration failed: %s", exc)
+        sys.exit(1)

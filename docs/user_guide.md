@@ -617,7 +617,12 @@ Notes and recommendations:
 ```
 mkdir watch_folder processing web_upload files data archive_folder
 ```
-- Use absolute paths in `config.yaml` to avoid ambiguity about the working directory, especially when running the system as a service.
+- Relative deployment paths resolve beside `config.yaml`, independent of the
+  service's working directory. Absolute paths are also supported.
+- Restart the supervisor, web, and worker together after editing deployment
+  YAML. Each process holds its own configuration snapshot; editing one process's
+  in-memory settings does not synchronize the others. Operational settings
+  managed through the UI remain stored in SQLite.
 - Ensure the user/service account running the application has Modify/Write permissions on directories that will be written to.
 
 ### 4.3. Configuration Management

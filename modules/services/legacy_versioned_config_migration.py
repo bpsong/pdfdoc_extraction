@@ -236,18 +236,9 @@ class LegacyVersionedConfigMigration:
 
     def apply_runtime_config(self) -> None:
         """Refresh the current provider only after DB and YAML commit succeed."""
-        if hasattr(self.config, "config") and isinstance(
-            getattr(self.config, "config"), dict
-        ):
-            runtime = getattr(self.config, "config")
-            for key in ("pipeline", "tasks", "pipeline_secrets"):
-                if key in self.updated_config:
-                    runtime[key] = deepcopy(self.updated_config[key])
-        values = getattr(self.config, "_values", None)
-        if isinstance(values, dict):
-            for key in ("pipeline", "tasks", "pipeline_secrets"):
-                if key in self.updated_config:
-                    values[key] = deepcopy(self.updated_config[key])
+        replace = getattr(self.config, "replace_config", None)
+        if callable(replace):
+            replace(deepcopy(self.updated_config))
 
     def _legacy_definition(self) -> dict[str, Any] | None:
         pipeline = self.original_config.get("pipeline")
@@ -310,7 +301,7 @@ class LegacyVersionedConfigMigration:
                     "An active review task has no legacy schema file."
                 )
             try:
-                path = self.schema_service._resolve_schema_path(schema_file)
+                path = self.schema_service.resolve_schema_path(schema_file)
             except (OSError, ValueError):
                 path = None
             if path is None or not path.is_file():
@@ -460,7 +451,7 @@ class LegacyVersionedConfigMigration:
                 params.get("schema_version_id"), str
             ):
                 continue
-            path = self.schema_service._resolve_schema_path(str(schema_file))
+            path = self.schema_service.resolve_schema_path(str(schema_file))
             if path is None:
                 raise _safe_failure("A review schema dependency is missing.")
             _, path_key = _canonical_path(path)
@@ -802,7 +793,7 @@ class LegacyVersionedConfigMigration:
                 candidates.add(dependencies[str(task_key)])
             schema_file = metadata.get("schema_file")
             if isinstance(schema_file, str):
-                path = self.schema_service._resolve_schema_path(schema_file)
+                path = self.schema_service.resolve_schema_path(schema_file)
                 if path is not None:
                     _, path_key = _canonical_path(path)
                     source = self.schema_sources.get(path_key)

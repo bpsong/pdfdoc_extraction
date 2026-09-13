@@ -9,8 +9,9 @@ import sqlite3
 from typing import Any, Iterator, Mapping
 
 import yaml
+from modules.config_paths import resolve_config_path
 
-from modules.db.migrations import SCHEMA_VERSION
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.services.portable_config_service import import_pipeline_bundle
 from modules.services.validation_facade import ValidationFacade
 from modules.services.versioned_config_contracts import (
@@ -59,8 +60,7 @@ def configured_database_path(
     raw = database.get("path") if isinstance(database, Mapping) else None
     if not isinstance(raw, str) or not raw.strip():
         return None
-    path = Path(raw)
-    return path if path.is_absolute() else config_path.parent / path
+    return resolve_config_path(raw, config_path=config_path)
 
 
 @contextmanager

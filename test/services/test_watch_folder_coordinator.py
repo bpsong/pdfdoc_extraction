@@ -8,7 +8,7 @@ import time
 from unittest.mock import Mock
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.services.ingress_binding_service import IngressBindingService
 from modules.services.watch_folder_coordinator import WatchFolderCoordinator
 import modules.services.watch_folder_coordinator as coordinator_module

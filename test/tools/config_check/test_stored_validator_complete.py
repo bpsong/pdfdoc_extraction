@@ -26,7 +26,7 @@ from tools.config_check.stored_validator import (
     validate_portable_file,
     ValidationResult,
 )
-from modules.db.migrations import SCHEMA_VERSION
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.services.versioned_config_contracts import content_hash
 from modules.services.versioned_config_contracts import ReviewSchemaCoordinate
 

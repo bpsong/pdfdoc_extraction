@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 import time
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.services.runtime_health_service import (
     RuntimeHealthReporter,
     RuntimeHealthService,

@@ -1,60 +1,15 @@
-"""Singleton configuration loader that parses YAML, validates required paths,
-and prepares directories for runtime.
+"""Load deployment configuration and report failures without exiting the process."""
 
-Responsibilities:
-- Load YAML configuration once (singleton semantics).
-- Validate static paths such as web.upload_dir and watch_folder.dir.
-- Pre-create directories for keys ending with *_dir across the config, excluding watch_folder.dir.
-- Recursively validate dynamic *_dir and *_file paths after pre-creation.
-- On validation or parsing failures, log at CRITICAL level and exit the process.
+from __future__ import annotations
 
-Notes:
-The watch folder directory (watch_folder.dir) must pre-exist; it is not auto-created.
-
-Example configuration:
-web:
-  host: "127.0.0.1"
-  port: 8000
-  secret_key: "your_secret_key"
-  upload_dir: "web_upload"
-
-watch_folder:
-  dir: "watch_folder"
-  validate_pdf_header: true
-  processing_dir: "processing"
-
-logging:
-  log_file: "app.log"
-  log_level: "INFO"
-  
-
-tasks:
-  extract_document_data:
-    module: standard_step.extraction.extract_pdf
-    class: ExtractPdfTask
-    params:
-      api_key: "your_llama_cloud_api_key"
-      configuration_id: "your_extract_v2_configuration_id"  # optional
-      tier: "agentic"
-      fields:
-        supplier_name:
-          alias: "Supplier name"
-          type: "str"
-        invoice_amount:
-          alias: "Invoice Amount"
-          type: "float"
-    on_error: stop
-
-pipeline:
-  - extract_document_data
-"""
-
-import yaml
-import sys
+from copy import deepcopy
 import logging
 from pathlib import Path
-from copy import deepcopy
-from typing import Any
+from typing import Any, Iterator, NoReturn
+
+import yaml
+
+from modules.config_paths import resolve_config_path
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -111,296 +66,126 @@ def _merge_defaults(
     return merged
 
 
+class ConfigurationError(ValueError):
+    """Invalid deployment configuration, safe to report without source values."""
+
+
 class ConfigManager:
-    """Singleton manager for application configuration.
+    """Load and validate deployment settings for the current process."""
 
-    The first instantiation loads and validates a YAML configuration file,
-    caches the parsed dictionary, and performs path validation and directory
-    pre-creation. Subsequent instantiations return the same instance without
-    re-initializing.
-
-    Initialization flow:
-    1) Parse YAML from the provided path.
-    2) Validate required static paths.
-    3) Ensure watch_folder.dir exists (no auto-creation).
-    4) Pre-create all directories referenced by *_dir keys, excluding watch_folder.dir.
-    5) Recursively validate all *_dir and *_file paths.
-
-    Features:
-    - Dot-notation lookups via get().
-    - Access to the entire configuration via get_all().
-    - Critical logging and process exit on invalid configuration states.
-
-    Example configuration:
-    web:
-      host: "127.0.0.1"
-      port: 8000
-      secret_key: "your_secret_key"
-      upload_dir: "web_upload"
-
-    watch_folder:
-      dir: "watch_folder"
-      validate_pdf_header: true
-      processing_dir: "processing"
-
-    logging:
-      log_file: "app.log"
-      log_level: "INFO"
-      
-
-    tasks:
-      extract_document_data:
-        module: standard_step.extraction.extract_pdf
-        class: ExtractPdfTask
-        params:
-          api_key: "your_llama_cloud_api_key"
-          configuration_id: "your_extract_v2_configuration_id"  # optional
-          tier: "agentic"
-          fields:
-            supplier_name:
-              alias: "Supplier name"
-              type: "str"
-            invoice_amount:
-              alias: "Invoice Amount"
-              type: "float"
-        on_error: stop
-
-    pipeline:
-      - extract_document_data
-    """
-    _instance: "ConfigManager | None" = None
-    config: dict[str, Any]
-
-    def __new__(cls, config_path: Path) -> "ConfigManager":
-        """Create or return the singleton instance.
-
-        Args:
-            config_path (Path): Filesystem path to the YAML configuration file.
-
-        Returns:
-            ConfigManager: The singleton instance.
-
-        Notes:
-            The first call constructs and initializes the instance. Subsequent
-            calls return the same instance without reinitialization.
-        """
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.__init__(config_path)
-        return cls._instance
-
-    def __init__(self, config_path: Path) -> None:
-        """Initialize the configuration manager on first construction only.
-
-        Args:
-            config_path (Path): Filesystem path to the YAML configuration file.
-
-        Notes:
-            Side effects:
-            - Loads YAML into memory.
-            - Validates static and dynamic paths.
-            - Creates required directories for *_dir keys (excluding watch_folder.dir).
-            Subsequent calls are no-ops due to the singleton guard.
-        """
-        # Initialize only once
-        if hasattr(self, "_initialized") and self._initialized:
-            return
-        self._config_path = config_path
+    def __init__(self, config_path: Path, *, prepare_directories: bool = True) -> None:
         self.logger = logging.getLogger("ConfigManager")
-        self._initialized = True
-        self._load_config()
-
-    def get(self, key: str, default: Any = None) -> Any:
-        """Retrieve a value using dot-notation path.
-
-        Args:
-            key_path (str): Dot-separated path to a nested key (e.g., "web.upload_dir").
-            default (Any, optional): Value to return if the key is missing or a non-dict
-                segment is encountered. Defaults to None.
-
-        Returns:
-            Any: The value at key_path if found; otherwise default.
-
-        Notes:
-            If an intermediate value is not a dict, the lookup stops and returns default.
-        """
-        keys = key.split('.')
-        value = self.config
-        for key in keys:
-            if isinstance(value, dict):
-                value = value.get(key, default)
-            else:
-                return default
-        return value
-
-    def get_all(self) -> dict[str, Any]:
-        """Return the entire configuration dictionary.
-
-        Returns:
-            dict: Parsed configuration data.
-        """
-        return self.config
-
-    def _load_config(self) -> None:
-        """Load configuration from YAML and perform validation.
-
-        Sequence:
-        1) Parse YAML from self._config_path.
-        2) Ensure root is a dictionary.
-        3) Validate static paths (e.g., web.upload_dir).
-        4) Validate watch_folder.dir exists (no auto-creation).
-        5) Pre-create directories for *_dir (excluding watch_folder.dir).
-        6) Recursively validate *_dir and *_file paths.
-
-        Notes:
-            On any parsing or validation failure, logs at CRITICAL level and
-            exits the process (sys.exit(1)).
-        """
         try:
-            with open(self._config_path, 'r', encoding='utf-8') as f:
-                self.config = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            self.logger.critical(f"Invalid YAML in configuration file: {e}")
-            sys.exit(1)
-        except Exception as e:
-            self.logger.critical(f"Error reading configuration file: {e}")
-            sys.exit(1)
-
-        if not isinstance(self.config, dict):
-            self.logger.critical("Configuration file root must be a dictionary")
-            sys.exit(1)
-
-        self.config = _merge_defaults(self.config, DEFAULT_CONFIG)
-
-        # Validate static core paths
+            self._config_path = Path(config_path).expanduser().resolve()
+        except (OSError, ValueError, RuntimeError):
+            self._fail("Configuration file path could not be resolved.")
+        self._load_config()
         self._validate_static_paths()
-
-        # Validate critical watch folder must pre-exist (no auto-creation)
         self._validate_watch_folder()
-
-        # Pre-create required directories before strict validation
-        # Note: watch_folder.dir is intentionally excluded from pre-creation
-        self._precreate_required_directories()
-
-        # Validate dynamic pipeline parameters ending with _dir or _file
+        if prepare_directories:
+            self.prepare_directories()
         self._validate_dynamic_paths()
 
-    def _validate_static_paths(self) -> None:
-        """Validate presence and existence of required static paths.
+    @property
+    def config(self) -> dict[str, Any]:
+        """Return a defensive snapshot for compatibility with read-only callers."""
+        return self.get_all()
 
-        Currently enforced:
-        - web.upload_dir must be present and must be an existing directory.
+    def get(self, key: str, default: Any = None) -> Any:
+        """Return a dot-delimited configuration value."""
+        value = self._config
+        for part in key.split("."):
+            if not isinstance(value, dict):
+                return deepcopy(default)
+            value = value.get(part, default)
+        return deepcopy(value)
 
-        Notes:
-            On failure, logs at CRITICAL level and exits the process.
+    def get_all(self) -> dict[str, Any]:
+        """Return the deployment configuration."""
+        return deepcopy(self._config)
+
+    def replace_config(self, values: dict[str, Any]) -> None:
+        """Validate and replace this process's snapshot without filesystem writes.
+
+        Startup migration is the owner of this operation. Other processes load
+        their snapshots after migration; live YAML changes require a restart.
         """
-        # Validate web.upload_dir
-        upload_dir = self.get('web.upload_dir')
-        if not upload_dir:
-            self.logger.critical("Missing required static path in config: 'web.upload_dir'")
-            sys.exit(1)
-        upload_dir_path = self._resolve_path(upload_dir)
-        if not upload_dir_path.exists() or not upload_dir_path.is_dir():
-            self.logger.critical(f"Static path invalid: 'web.upload_dir' -> {upload_dir_path}")
-            sys.exit(1)
+        candidate = object.__new__(ConfigManager)
+        candidate._config_path = self._config_path
+        candidate.logger = self.logger
+        candidate._config = _merge_defaults(deepcopy(values), DEFAULT_CONFIG)
+        candidate._validate_static_paths()
+        candidate._validate_watch_folder()
+        candidate._validate_dynamic_paths()
+        self._config = candidate._config
+
+    def _fail(self, message: str) -> NoReturn:
+        self.logger.critical(message)
+        raise ConfigurationError(message) from None
+
+    def _load_config(self) -> None:
+        try:
+            with self._config_path.open(encoding="utf-8") as handle:
+                values = yaml.safe_load(handle)
+        except yaml.YAMLError:
+            self._fail("Invalid YAML in configuration file.")
+        except (OSError, UnicodeError):
+            self._fail("Error reading configuration file.")
+        if not isinstance(values, dict):
+            self._fail("Configuration file root must be a dictionary")
+        self._config = _merge_defaults(values, DEFAULT_CONFIG)
+
+    def _validate_static_paths(self) -> None:
+        self._validate_required_directory("web.upload_dir")
 
     def _validate_watch_folder(self) -> None:
-        """Ensure watch_folder.dir exists and is a directory.
+        self._validate_required_directory("watch_folder.dir")
 
-        Notes:
-            The directory must pre-exist; it will not be auto-created.
-            On failure, logs at CRITICAL level and exits the process.
-        """
-        watch_dir = self.get('watch_folder.dir')
-        if not watch_dir:
-            self.logger.critical("Missing required static path in config: 'watch_folder.dir'")
-            sys.exit(1)
-        watch_dir_path = self._resolve_path(watch_dir)
-        if not watch_dir_path.exists() or not watch_dir_path.is_dir():
-            self.logger.critical(f"Static path invalid: 'watch_folder.dir' -> {watch_dir_path}")
-            sys.exit(1)
+    def _validate_required_directory(self, key: str) -> None:
+        value = self.get(key)
+        if not isinstance(value, str) or not value:
+            self._fail(f"Missing required static path in config: '{key}'")
+        try:
+            valid = self._resolve_path(value).is_dir()
+        except (OSError, ValueError, RuntimeError):
+            valid = False
+        if not valid:
+            self._fail(f"Static path invalid: '{key}'")
 
-    def _precreate_required_directories(self) -> None:
-        """Pre-create directories for any *_dir values across the configuration.
+    def _paths(self, value: Any, prefix: str = "root") -> Iterator[tuple[str, str, str]]:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if not isinstance(key, str):
+                    self._fail("Configuration keys must be strings.")
+                location = f"{prefix}.{key}"
+                if key.endswith(("_dir", "_file")) and isinstance(child, str):
+                    yield location, key, child
+                else:
+                    yield from self._paths(child, location)
+        elif isinstance(value, list):
+            for index, child in enumerate(value):
+                yield from self._paths(child, f"{prefix}[{index}]")
 
-        Behavior:
-        - Recursively collects keys ending with '_dir' whose values are strings.
-        - Excludes the specific key 'watch_folder.dir' from auto-creation.
-        - Creates missing directories with parents as needed.
-        - Logs created directories at INFO level.
-
-        Notes:
-            On failure to create any directory, logs at CRITICAL level and exits.
-        """
-        dirs_to_create = set()
-
-        def collect_dirs(obj, path_stack=None):
-            if path_stack is None:
-                path_stack = []
-            if isinstance(obj, dict):
-                for key, val in obj.items():
-                    current_stack = path_stack + [key]
-                    # Build dotted path to check exclusion
-                    dotted = ".".join(current_stack)
-                    if key.endswith('_dir') and isinstance(val, str):
-                        # Exclude the specific key 'watch_folder.dir' from auto-creation
-                        if dotted != "watch_folder.dir":
-                            dirs_to_create.add(self._resolve_path(val))
-                    else:
-                        collect_dirs(val, current_stack)
-            elif isinstance(obj, list):
-                for idx, item in enumerate(obj):
-                    collect_dirs(item, path_stack + [f"[{idx}]"])
-
-        collect_dirs(self.config)
-
-        for d in dirs_to_create:
-            try:
-                d.mkdir(parents=True, exist_ok=True)
-                self.logger.info(f"Pre-created directory: {d}")
-            except Exception as e:
-                self.logger.critical(f"Could not create directory {d}: {e}")
-                sys.exit(1)
+    def prepare_directories(self) -> None:
+        """Create configured *_dir paths; required upload/watch roots must exist."""
+        for _location, key, value in self._paths(self.config):
+            if key.endswith("_dir"):
+                try:
+                    self._resolve_path(value).mkdir(parents=True, exist_ok=True)
+                except (OSError, ValueError, RuntimeError):
+                    self._fail("Could not create directory configured by a *_dir key.")
 
     def _validate_dynamic_paths(self) -> None:
-        """Recursively validate *_dir and *_file paths throughout the configuration.
-
-        Rules:
-        - Keys ending with '_dir' must reference existing directories.
-        - Keys ending with '_file' must reference existing files.
-
-        Notes:
-            On any invalid path, logs at CRITICAL level and exits the process.
-        """
-        def recursive_validate(obj, path_trace='root'):
-            if isinstance(obj, dict):
-                for key, val in obj.items():
-                    current_trace = f"{path_trace}.{key}"
-                    if key.endswith('_dir') and isinstance(val, str):
-                        p = self._resolve_path(val)
-                        if not p.exists() or not p.is_dir():
-                            self.logger.critical(
-                                f"Configured directory '{current_trace}' ({val}) does not exist or isn’t a directory"
-                            )
-                            sys.exit(1)
-                    elif key.endswith('_file') and isinstance(val, str):
-                        p = self._resolve_path(val)
-                        if not p.exists() or not p.is_file():
-                            self.logger.critical(
-                                f"Configured file '{current_trace}' ({val}) does not exist or isn’t a file"
-                            )
-                            sys.exit(1)
-                    else:
-                        recursive_validate(val, current_trace)
-            elif isinstance(obj, list):
-                for idx, item in enumerate(obj):
-                    recursive_validate(item, f"{path_trace}[{idx}]")
-
-        recursive_validate(self.config)
+        for _location, key, value in self._paths(self.config):
+            directory = key.endswith("_dir")
+            try:
+                path = self._resolve_path(value)
+                valid = path.is_dir() if directory else path.is_file()
+            except (OSError, ValueError, RuntimeError):
+                valid = False
+            if not valid:
+                kind = "directory" if directory else "file"
+                self._fail(f"Configured path does not exist or isn’t a {kind}.")
 
     def _resolve_path(self, raw_path: str | Path) -> Path:
-        """Resolve relative deployment paths from the YAML file directory."""
-        path = Path(raw_path).expanduser()
-        if path.is_absolute():
-            return path
-        return Path(self._config_path).parent / path
+        return resolve_config_path(raw_path, config_path=self._config_path)

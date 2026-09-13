@@ -8,7 +8,8 @@ from typing import Literal
 
 from modules.config_protocol import ConfigProvider
 from modules.db.connection import get_db_path
-from modules.db.migrations import SCHEMA_VERSION, initialize_database
+from modules.services.startup_migration_service import initialize_database
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.services.task_registry_service import validate_startup_task_registry
 
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.services.ingress_binding_service import IngressBindingConflictError, IngressBindingService
 from test.services.test_watch_folder_coordinator import build_context
 from test.services.test_ingestion_assignment_service import publish_pipeline

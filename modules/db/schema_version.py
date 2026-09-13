@@ -1,0 +1,6 @@
+"""Supported schema markers without application-service imports."""
+
+LEGACY_SCHEMA_VERSION = 2
+PROCESSING_QUEUE_SCHEMA_VERSION = 4
+SCHEMA_VERSION = 7
+TARGET_VERSIONED_CONFIG_SCHEMA_VERSION = 3

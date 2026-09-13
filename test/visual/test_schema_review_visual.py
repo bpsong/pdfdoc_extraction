@@ -14,7 +14,7 @@ import bcrypt
 from pypdf import PdfWriter
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import (
     DocumentRepository,
     ExtractionRepository,

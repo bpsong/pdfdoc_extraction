@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import DocumentRepository
 from modules.services.ingestion_assignment_service import (
     IngestionAssignmentError,

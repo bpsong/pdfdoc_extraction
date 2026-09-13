@@ -19,7 +19,7 @@ from test.helpers_sqlite import TempConfig
 def test_end_to_end_workflow_execution(tmp_path, monkeypatch):
     """Run a pinned pipeline with synthetic extraction and real exports."""
     from modules.db.connection import connect
-    from modules.db.migrations import initialize_database
+    from modules.services.startup_migration_service import initialize_database
     from modules.services.batch_service import BatchService
     from modules.db.repositories import DocumentRepository, TaskRunRepository
     from test.helpers_sqlite import seed_pipeline, assign_pipeline

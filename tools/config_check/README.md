@@ -49,6 +49,11 @@ config-check schema --format json
 All commands are also available through
 `.\.venv\Scripts\python.exe -m tools.config_check ...`.
 
+Relative filesystem paths default to the checked YAML file's directory, even
+when the command runs elsewhere. `--base-dir` deliberately overrides filesystem
+validation only: `database.path` always resolves beside the deployment YAML.
+Runtime and checker paths share user-home and environment-variable expansion.
+
 ## Configuration Sources And Read-Only Behavior
 
 `config.yaml` remains authoritative for deployment concerns such as

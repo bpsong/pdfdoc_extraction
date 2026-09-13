@@ -16,7 +16,7 @@ from modules.auth_utils import (
     AuthError,
     LoginRateLimitError,
 )
-from modules.db.migrations import initialize_database
+from modules.services.startup_migration_service import initialize_database
 from modules.services.review_service import ReviewServiceError
 from modules.services.admin_settings_service import AdminSettingsError
 from modules.services.pipeline_config_service import PipelineConfigError

@@ -8,8 +8,8 @@
 | Audience | Senior engineers, architects, technical leads, and operational owners |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
-| Last verified | 2026-08-02 |
-| Verified revision | Current working tree after the versioned-pipeline documentation audit |
+| Last verified | 2026-09-13 |
+| Verified revision | Release `37366e5` after the configuration and migration boundary refactor |
 
 This document describes the current implementation, not a target-state
 architecture.
@@ -496,6 +496,14 @@ web and worker children verify the exact schema without modifying it. Request
 handling does not run schema migrations. Standalone web or worker processes
 must explicitly select migration mode when they own database initialization.
 
+`modules/services/startup_migration_service.initialize_database()` coordinates
+structural upgrades, legacy configuration import, YAML compensation on failure,
+and refresh of the migration owner's configuration snapshot. Structural upgrades
+in `modules/db/migrations.py` do not import application services. Supported schema
+markers live in `modules/db/schema_version.py`; read-only checks can import these
+without loading the legacy importer. The legacy importer uses the public
+`SchemaService.resolve_schema_path()` API, which enforces configured schema roots.
+
 SQLite stores artifact identity, role, path, and metadata. The filesystem
 stores contents. Canonical roles are:
 
@@ -553,6 +561,28 @@ startup, paths, authentication/web options, the SQLite location, task
 approval, and resolving secret aliases before execution. It is not the source
 of workflow composition or task behavior for a versioned document. The watch
 input directory is not auto-created.
+
+Configuration instances are explicitly owned by each process; they are not
+Python singletons. Each web app constructs its dependencies once at startup and
+binds that dependency set to request contexts, including synchronous handlers.
+`get()`, `get_all()`, and the compatibility `config` property return defensive
+copies. Startup migration can validate and replace its own snapshot explicitly
+after committing the cutover. Children load the resulting YAML after migration.
+Snapshots are not synchronized across processes: deployment YAML edits require
+a coordinated restart. Live operational settings remain authoritative in SQLite.
+
+Configuration loading raises `ConfigurationError` rather than exiting Python.
+Process entry points fail startup with safe diagnostics. The loader separates
+directory preparation from validation; `prepare_directories=False` validates
+existing paths without creating directories. The default startup behavior still
+prepares configured `*_dir` paths after required upload/watch roots are checked.
+
+Relative deployment paths resolve from the absolute YAML file directory, with
+user-home and environment-variable expansion. Runtime database access, schema
+loading, and config-check use shared resolution rules. Config-check defaults to
+the checked YAML directory; `--base-dir` overrides only filesystem validation,
+not the deployment-selected SQLite database. Validation of an in-memory mapping
+without an explicit base or source file defaults to the current directory.
 
 The standalone checker validates deployment YAML and, when `database.path` is
 configured, opens SQLite in read-only/query-only mode and validates the active

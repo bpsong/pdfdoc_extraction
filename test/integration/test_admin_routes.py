@@ -120,7 +120,7 @@ def test_admin_task_catalog_api_returns_catalog(monkeypatch, tmp_path) -> None:
     client = build_client(monkeypatch, username="admin", admin_users=["admin"])
     authenticate(client)
 
-    from modules.db.migrations import initialize_database
+    from modules.services.startup_migration_service import initialize_database
     from test.helpers_sqlite import TempConfig
     import modules.api_router as api_router
     dependencies = api_router.get_dependencies()

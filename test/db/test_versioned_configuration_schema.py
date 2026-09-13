@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 
 from modules.db.connection import connect
-from modules.db.migrations import initialize_database, prepare_versioned_config_schema
+from modules.services.startup_migration_service import initialize_database
+from modules.db.migrations import prepare_versioned_config_schema
 from modules.db.repositories import (
     PipelineDraftRepository,
     PipelineTemplateRepository,
