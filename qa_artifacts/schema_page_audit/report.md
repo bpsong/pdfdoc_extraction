@@ -24,12 +24,12 @@ Four gaps were found: three validation defects and one responsive-layout defect.
 
 ## Flow coverage
 
-1. **Open and authenticate — Healthy.** The admin account reached the Schema Editor without errors. Baseline: [01-schema-list-baseline.png](screenshots/01-schema-list-baseline.png).
+1. **Open and authenticate — Healthy.** The admin account reached the Schema Editor without errors.
 2. **Create schema metadata — Healthy.** Name, title, and description updated the draft and YAML preview.
 3. **Add primitive fields — Healthy with validation gaps.** Added `supplier_name`, `purchase_order_number`, `project_number`, and `invoice_amount`; string and float controls changed with the selected type.
 4. **Add nested array fields — Healthy.** Added `line_items` as an array of objects with `item_description`, `item_quantity`, `unit_price`, `discount`, and `total_amount`. Full draft: [05-complete-schema-valid.png](screenshots/05-complete-schema-valid.png).
 5. **Validate — Partially healthy.** Normal schema validation succeeds, but malformed regex and contradictory constraints are accepted; duplicate-key state also conflicts with the global result.
-6. **Save and reload — Healthy.** `fts_extraction_visual_qa.yaml` appeared in the list and all tested fields survived reload: [06-schema-saved-reloaded.png](screenshots/06-schema-saved-reloaded.png).
+6. **Save and reload — Healthy.** `fts_extraction_visual_qa.yaml` appeared in the list and all tested fields survived reload.
 7. **Edit and reload — Healthy.** `project_number` was relabeled to `Project reference`, saved, and persisted after reload: [07-schema-edited-before-save.png](screenshots/07-schema-edited-before-save.png).
 8. **Empty required metadata — Healthy with a UX caveat.** Save and Validate become disabled when Name and Title are blank, but no explanatory message is shown: [10-empty-metadata-validation.png](screenshots/10-empty-metadata-validation.png).
 9. **Responsive layout — Needs improvement.** At 390×844, the page overflows horizontally and editing requires two-axis scrolling: [11-mobile-390x844.png](screenshots/11-mobile-390x844.png).
@@ -98,7 +98,7 @@ Evidence: [08-duplicate-key-validation.png](screenshots/08-duplicate-key-validat
 
 **Actual:** The sidebar, schema list, editor, and preview remain on one wide canvas. The viewport shows clipped text and a horizontal scrollbar, making field editing and preview comparison difficult. Even at 1280 px, metadata and field values truncate because the three working columns are narrow.
 
-Evidence: [11-mobile-390x844.png](screenshots/11-mobile-390x844.png) and [06-schema-saved-reloaded.png](screenshots/06-schema-saved-reloaded.png).
+Evidence: [11-mobile-390x844.png](screenshots/11-mobile-390x844.png).
 
 **Recommendation:** Below a defined breakpoint, collapse the sidebar and present Schemas, Editor, and YAML Preview as tabs or stacked sections. At desktop widths, allow resizable panels or give the editor more minimum width. Provide tooltips or full-value display for truncated names.
 
