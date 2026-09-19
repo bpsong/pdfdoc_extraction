@@ -53,5 +53,5 @@ def test_processing_page_contains_exact_assignment_presentation(monkeypatch):
 
     assert response.status_code == 200
     assert 'id="pipeline-assignment-summary"' in response.text
-    assert "failure-guidance" in response.text
+    assert "/static/js/processing-overview/index.js?v=frontend-hardening-8" in response.text
     assert "schema content" not in response.text.lower()

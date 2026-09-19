@@ -1,0 +1,154 @@
+/** Rendering and presentation for failures. */
+export function createView(deps) {
+    const { tableBody, countBadge, detailTitle, detailSubtitle, detailBody, sourceLink, state, docFlow, pdfRuntime } = deps;
+    const pageState = state.pageState;
+    const escapeHtml = docFlow.escapeHtml;
+    const titleCase = docFlow.titleCase;
+
+    function formatDateTime(value) {
+        return docFlow.formatDateTime(value) || "n/a";
+    }
+
+    function shortText(value, maxLength) {
+        const text = String(value || "");
+        if (text.length <= maxLength) {
+            return text;
+        }
+        return `${text.slice(0, maxLength - 1)}...`;
+    }
+
+    function jsonBlock(value) {
+        return `<pre class="text-xs whitespace-pre-wrap bg-base-200 rounded p-3 overflow-auto max-h-80">${docFlow.escapeHtml(JSON.stringify(value || {}, null, 2))}</pre>`;
+    }
+
+    function renderRows() {
+        countBadge.textContent = String(pageState.total);
+        if (!state.failures.length) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-base-content/50 py-10">No failed documents</td></tr>';
+            return;
+        }
+        tableBody.innerHTML = state.failures.map((item) => {
+            const document = item.document || {};
+            const sourceDocument = item.source_document || document;
+            const failedTask = item.failed_task || {};
+            const failure = item.failure || {};
+            const group = item.group || {};
+            const groupCount = Number(group.count || 1);
+            return `
+                <tr>
+                    <td>
+                        <div class="font-medium">${escapeHtml(sourceDocument.filename || document.filename || document.id)}</div>
+                        <div class="text-xs text-base-content/50 font-mono">${escapeHtml(sourceDocument.id || document.id || "")}</div>
+                        ${groupCount > 1 ? `<div class="badge badge-error badge-xs mt-1">${groupCount} split documents affected</div>` : ""}
+                    </td>
+                    <td>
+                        <div class="text-sm">${escapeHtml(failedTask.task_key || "")}</div>
+                        <div class="text-xs text-base-content/50">${escapeHtml(failedTask.class_name || "")}</div>
+                    </td>
+                    <td class="max-w-sm text-error text-xs">${escapeHtml(shortText(failure.message || failedTask.error, 180))}</td>
+                    <td class="text-xs">${escapeHtml(formatDateTime(item.failure_at || failedTask.ended_at))}</td>
+                    <td><button class="btn btn-error btn-xs" type="button" data-failure-document="${escapeHtml(document.id)}">Open Failure</button></td>
+                </tr>
+            `;
+        }).join("");
+    }
+
+    function renderPagination() {
+        const start = pageState.total ? pageState.offset + 1 : 0;
+        const end = Math.min(pageState.offset + state.failures.length, pageState.total);
+        document.getElementById("failures-page-summary").textContent = `${start}-${end} of ${pageState.total}`;
+        document.getElementById("failures-prev").disabled = pageState.offset === 0;
+        document.getElementById("failures-next").disabled = pageState.offset + pageState.limit >= pageState.total;
+        document.querySelectorAll("[data-failure-sort]").forEach((button) => {
+            const active = button.dataset.failureSort === pageState.sortBy;
+            button.setAttribute("aria-sort", active ? (pageState.sortDir === "asc" ? "ascending" : "descending") : "none");
+            button.querySelector("span").textContent = active ? (pageState.sortDir === "asc" ? "↑" : "↓") : "";
+        });
+    }
+
+    function renderDetail(payload) {
+        const documentPayload = payload.document || {};
+        const sourceDocument = payload.source_document || documentPayload;
+        const splitSegment = payload.split_segment || {};
+        const failure = payload.failure || {};
+        const failedTask = payload.latest_failed_task || {};
+        const relatedFailures = Array.isArray(payload.related_failures) ? payload.related_failures : [];
+        detailTitle.textContent = sourceDocument.filename || documentPayload.filename || documentPayload.id || "Failure Detail";
+        detailSubtitle.textContent = `${failedTask.task_key || "failed task"} | ${titleCase(failure.failure_type || "task_failed")}`;
+        sourceLink.href = payload.source_preview_url || payload.preview_url || "#";
+        sourceLink.classList.toggle("hidden", !(payload.source_preview_url || payload.preview_url));
+        if (state.pdfViewer) {
+            state.pdfViewer.destroy();
+            state.pdfViewer = null;
+        }
+        detailBody.innerHTML = `
+            <div>
+                <div class="alert alert-error mb-4">
+                    <div>
+                        <div class="font-semibold">Manual source PDF examination required</div>
+                        <div class="text-sm">${escapeHtml(failure.operator_action || "Inspect/correct the source PDF or configuration outside this failed workflow, then re-ingest as a new document if appropriate.")}</div>
+                    </div>
+                </div>
+                <div class="grid gap-3 text-sm">
+                    <div>
+                        <div class="text-xs text-base-content/50">Error</div>
+                        <div class="text-error whitespace-pre-wrap">${escapeHtml(failure.message || failedTask.error || "Task failed")}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/50">Original Source PDF</div>
+                        <div>${escapeHtml(sourceDocument.filename || sourceDocument.id || "")}</div>
+                        <div class="text-xs font-mono text-base-content/50">${escapeHtml(sourceDocument.id || "")}</div>
+                    </div>
+                    ${splitSegment && splitSegment.document_id ? `
+                        <div>
+                            <div class="text-xs text-base-content/50">Failed Split Segment</div>
+                            <div>${escapeHtml(splitSegment.filename || documentPayload.filename || "")}</div>
+                            <div class="text-xs text-base-content/60">
+                                Pages ${escapeHtml((splitSegment.pages || []).join(", ") || `${splitSegment.page_start || "?"}-${splitSegment.page_end || "?"}`)}
+                                | ${escapeHtml(splitSegment.category || "unknown")}
+                                | ${escapeHtml(splitSegment.confidence || "unknown")} confidence
+                            </div>
+                        </div>
+                    ` : ""}
+                    ${relatedFailures.length > 1 ? `
+                        <div>
+                            <div class="text-xs text-base-content/50">Related Split Failures</div>
+                            <div class="text-sm">${relatedFailures.length} split documents failed with the same task error.</div>
+                        </div>
+                    ` : ""}
+                    <div>
+                        <div class="text-xs text-base-content/50">Source Path</div>
+                        <div class="text-xs font-mono break-all">${escapeHtml(sourceDocument.file_path || documentPayload.file_path || "")}</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-base-content/50">Provider Job</div>
+                        <div class="text-xs font-mono">${escapeHtml(failure.provider_job_id || "n/a")}</div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <div class="text-xs font-medium mb-1">Failure Metadata</div>
+                    ${jsonBlock({ policy: failure.policy, segments: failure.segments })}
+                </div>
+            </div>
+            <div>
+                ${payload.source_preview_url || payload.preview_url
+                    ? '<div id="failure-pdf-viewer" class="failure-pdf-viewer"></div>'
+                    : '<div class="empty-panel">Source PDF preview unavailable</div>'}
+                <div class="mt-4">
+                    <div class="text-xs font-medium mb-1">Failed Task Output</div>
+                    ${jsonBlock(failedTask.output || {})}
+                </div>
+            </div>
+        `;
+        const previewUrl = payload.source_preview_url || payload.preview_url;
+        const viewerContainer = document.getElementById("failure-pdf-viewer");
+        if (previewUrl && viewerContainer) {
+            state.pdfViewer = pdfRuntime.mount(
+                viewerContainer,
+                { url: previewUrl, title: `${sourceDocument.filename || "Document"} source PDF` },
+            );
+        }
+    }
+
+    return { formatDateTime, shortText, jsonBlock, renderRows, renderPagination, renderDetail };
+}

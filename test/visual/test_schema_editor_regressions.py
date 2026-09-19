@@ -7,24 +7,26 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_schema_editor_unifies_validation_and_unsaved_change_guards() -> None:
-    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
+    model = (ROOT / "web/static/js/schema-editor/model.js").read_text(encoding="utf-8")
+    view = (ROOT / "web/static/js/schema-editor/view.js").read_text(encoding="utf-8")
 
     assert "function collectClientFindings()" in source
-    assert "function renderValidationSummary()" in source
+    assert "function renderValidationSummary()" in view
     assert "function focusFinding(path)" in source
-    assert "function pathsMatch(controlPath, findingPath)" in source
+    assert "function pathsMatch(controlPath, findingPath)" in view
     assert "Invalid regular expression" not in source
-    assert "Min length cannot be greater than max length." in source
-    assert "Field key cannot be empty." in source
+    assert "Min length cannot be greater than max length." in model
+    assert "Field key cannot be empty." in model
     assert "function confirmDiscardChanges()" in source
     assert "button.dataset.schemaId !== currentId && confirmDiscardChanges()" in source
     assert 'if (!confirmDiscardChanges()) {' in source
-    assert "Object.keys(found.container).forEach" in source
+    assert "Object.keys(found.container).forEach" in model
     assert "dirty = true;" in source
 
 
 def test_schema_editor_creates_review_forms_with_an_accessible_modal() -> None:
-    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
 
     assert 'id="schema-create-modal"' in template
@@ -36,7 +38,7 @@ def test_schema_editor_creates_review_forms_with_an_accessible_modal() -> None:
     assert 'createModal.classList.add("flex");' in source
     assert "function closeCreateModal()" in source
     assert 'createForm.addEventListener("submit"' in source
-    assert 'window.DocFlow.apiPost("/api/admin/review-schemas"' in source
+    assert "api.createTemplate(schemaKey, name, emptySchema())" in source
     assert "window.prompt" not in source
 
 
@@ -148,16 +150,18 @@ def test_pipeline_publish_uses_an_accessible_in_page_modal() -> None:
 
 
 def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:
-    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
+    view = (ROOT / "web/static/js/schema-editor/view.js").read_text(encoding="utf-8")
+    api = (ROOT / "web/static/js/schema-editor/api.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
     styles = (ROOT / "web/static/css/app.css").read_text(encoding="utf-8")
 
-    assert "function patternTester(path, prop, value)" in source
-    assert 'window.DocFlow.apiPost("/api/schemas/pattern-test"' in source
-    assert 'data-test-pattern="${escapeHtml(key)}"' in source
+    assert "function patternTester(path, prop, value)" in view
+    assert 'docFlow.apiPost("/api/schemas/pattern-test"' in api
+    assert 'data-test-pattern="${escapeHtml(key)}"' in view
     assert "Example matches this pattern." in source
     assert "Example does not match this pattern." in source
-    assert "function displayFindingPath(path)" in source
+    assert "function displayFindingPath(path)" in view
     assert source.count("patternExamples.clear();") == 1
     assert source.count("patternResults.clear();") == 1
     assert template.index('id="schema-validation-results"') < template.index('id="schema-yaml-preview"')
@@ -167,24 +171,27 @@ def test_schema_editor_pattern_helper_and_visible_summary_are_wired() -> None:
 
 
 def test_schema_editor_has_safe_delete_and_sibling_reordering() -> None:
-    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
+    model = (ROOT / "web/static/js/schema-editor/model.js").read_text(encoding="utf-8")
+    view = (ROOT / "web/static/js/schema-editor/view.js").read_text(encoding="utf-8")
 
     assert "function moveField(pathText, direction)" in source
-    assert 'data-move-field="${escapeHtml(fullPath)}"' in source
-    assert 'data-move-direction="up"' in source
-    assert 'data-move-direction="down"' in source
-    assert "movement.canMoveUp" in source
-    assert "movement.canMoveDown" in source
-    assert 'class="btn btn-outline btn-error btn-xs schema-delete-field"' in source
+    assert 'data-move-field="${escapeHtml(fullPath)}"' in view
+    assert 'data-move-direction="up"' in view
+    assert 'data-move-direction="down"' in view
+    assert "movement.canMoveUp" in view
+    assert "movement.canMoveDown" in view
+    assert 'class="btn btn-outline btn-error btn-xs schema-delete-field"' in view
     assert 'Delete field "${fieldName}" from this schema draft?' in source
-    assert "if (!confirmed)" in source
+    assert "if (!window.confirm(" in source
     assert "focusFieldAction(pathText, direction)" in source
-    assert "announceFieldChange(`Moved ${fieldName} ${direction}.`)" in source
+    assert "announceFieldChange(`Moved ${result.fieldName} ${direction}.`)" in source
     assert "announceFieldChange(`Deleted ${fieldName} from the schema draft.`)" in source
+    assert "function removeField(pathText)" in model
 
 
 def test_extraction_editor_explains_its_single_table_limit() -> None:
-    source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/pipeline-config/task-editors.js").read_text(encoding="utf-8")
 
     assert "tableKeys.length >= 1" in source
     assert 'option.value === "List[Any]" && tableBlocked' in source
@@ -209,6 +216,12 @@ def test_pipeline_editor_distinguishes_live_and_draft_states() -> None:
         encoding="utf-8"
     )
     source = (ROOT / "web/static/js/pipeline_config.js").read_text(encoding="utf-8")
+    source += (ROOT / "web/static/js/pipeline-config/workspace-view.js").read_text(
+        encoding="utf-8"
+    )
+    source += (ROOT / "web/static/js/pipeline-config/task-editors.js").read_text(
+        encoding="utf-8"
+    )
 
     assert "Live pipeline" in template
     assert "Editing draft" in template
@@ -220,12 +233,13 @@ def test_pipeline_editor_distinguishes_live_and_draft_states() -> None:
 
 def test_review_form_editor_warns_without_renaming_mismatched_names() -> None:
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
-    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
+    view = (ROOT / "web/static/js/schema-editor/view.js").read_text(encoding="utf-8")
 
     assert 'id="schema-identity-warning"' in template
     assert 'id="schema-field-search"' in template
-    assert "They remain unchanged; confirm the intended form before publishing." in source
-    assert "schema-field-details" in source
+    assert "They remain unchanged; confirm the intended form before publishing." in view
+    assert "schema-field-details" in view
     assert "fieldSearchInput.addEventListener" in source
 
 
@@ -233,7 +247,10 @@ def test_pipeline_and_schema_editors_restore_focus_after_dom_replacement() -> No
     pipeline_source = (ROOT / "web/static/js/pipeline_config.js").read_text(
         encoding="utf-8"
     )
-    schema_source = (ROOT / "web/static/js/schema_editor.js").read_text(
+    schema_source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(
+        encoding="utf-8"
+    )
+    schema_view = (ROOT / "web/static/js/schema-editor/view.js").read_text(
         encoding="utf-8"
     )
 
@@ -242,9 +259,9 @@ def test_pipeline_and_schema_editors_restore_focus_after_dom_replacement() -> No
     assert "renderEditorWithFocusRestore();" in pipeline_source
     assert "field.dataset.fieldKey = newKey;" in pipeline_source
     assert "field.dataset.oldKey = newKey;" in pipeline_source
-    assert "function captureFieldTreeFocus()" in schema_source
-    assert "function renderFieldTreeWithFocusRestore()" in schema_source
+    assert "function captureFieldTreeFocus()" in schema_view
+    assert "function renderFieldTreeWithFocusRestore()" in schema_view
     assert "renderFieldTreeWithFocusRestore();" in schema_source
-    assert "active.dataset.fieldPath = renamedPath;" in schema_source
+    assert "active.dataset.fieldPath = result.renamedPath;" in schema_source
     assert "focus({ preventScroll: true })" in pipeline_source
-    assert "focus({ preventScroll: true })" in schema_source
+    assert "focus({ preventScroll: true })" in schema_view

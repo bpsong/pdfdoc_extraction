@@ -13,7 +13,6 @@ Release Date: 2026-09-08
 Author: [Your Organization/Name]
 
 ---
-
 ## Table of Contents
 
 - [History of Changes](#history-of-changes)
@@ -74,7 +73,6 @@ Author: [Your Organization/Name]
   - [Further Documentation](#further-documentation)
 
 ---
-
 ## History of Changes
 
 | Version | Date       | Author              | Description                                                                 |
@@ -104,6 +102,23 @@ Author: [Your Organization/Name]
 ## Quick Start Guide
 
 This quick start separates administrator setup from normal operator work.
+
+### Find the right section
+
+| If you need to... | Start here |
+|---|---|
+| Upload PDFs and monitor a batch | Section 3.2, **Using the Web Interface** |
+| Correct extracted values | Section 3.3, **Human Review** |
+| Use or troubleshoot a watch folder | Section 3.1 and section 4.5.5 |
+| Create or publish a pipeline | Section 4.5.5, **Create and publish a pipeline visually** |
+| Create or change a review form | Section 4.5.5 and [the review schema administrator guide](review_schema_admin_guide.md) |
+| Configure standard task parameters | Section 4.8, **Task System** |
+| Validate deployment or stored definitions | Section 4.12, **Config Check Validation Tool** |
+| Recover from failures or restore a deployment | Sections 4.6, 4.7, and 4.5.6 |
+
+Operators can normally start with section 3. Administrators should read the
+quick start, account setup, pipeline lifecycle, backup, and validation sections
+before processing production documents.
 
 **Administrator: first-time setup**
 
@@ -206,7 +221,7 @@ When document splitting is enabled, this guide uses two workflow terms:
       Steps -->|Optional Split| Split[Create Child PDFs - Fan-out]
       Split -->|One Record per Segment| Children[Child Documents]
       Children -->|Run Downstream Tasks| Steps
-      Steps -->|Extract| Extractor[LlamaCloud Extract v2 API]
+      Steps -->|Extract| Extractor[Configured extraction provider]
       Extractor -->|Fields & Confidence| ReviewGate[Review Gate]
       ReviewGate -->|Needs Review| ReviewQueue[Human Review Queue]
       ReviewQueue -->|Corrections Complete| Resume[Resume Downstream Workflow]
@@ -230,7 +245,9 @@ When document splitting is enabled, this guide uses two workflow terms:
 2. Assignment: An upload uses the operator-selected published version; a
    watched file uses the exact published version in its folder binding.
 3. State record: The system creates SQLite batch/document records and a task-run record for each configured step.
-4. Extraction: Information is extracted through LlamaCloud Extract v2 and field values/confidence are persisted.
+4. Extraction: The configured extraction task extracts information. Depending on
+   the pipeline, this may use LlamaCloud Extract v2 or the local GLM-OCR/Ollama
+   provider. Provider-specific confidence and citation behavior varies.
 5. Review gate: Optional rules decide whether the document needs human review.
 6. Rules: Optional business logic runs (e.g., update reference files).
 7. Storage: The PDF and extracted metadata are written to the exact pipeline
@@ -375,9 +392,53 @@ The application displays the original filename, current status, timestamps, and 
 - The **What happens next?** and **How to use confidence** disclosures provide
   lightweight contextual help without changing workflow state.
 
+**Saving and completing a review:** **Save Draft** stores corrections but does
+not resume processing. **Complete Review** persists the final decision and may
+resume downstream processing according to the review policy. A retry keeps the
+document's originally assigned immutable pipeline version; it does not switch
+the document to the newest publication.
+
+Confidence is provider-dependent. LlamaCloud may provide confidence and
+citations, while GLM-OCR does not provide field confidence or citations. Treat
+local-model results as requiring human confirmation when a review gate is
+configured.
+
+### Compact upload steps
+
+On **Upload & Process**, follow **1. Select a pipeline**, then **2. Upload
+PDFs**, and select **3. Start processing** once the files are ready. Pipeline
+cards show the name and published version. Expand **Pipeline details** for the
+description, operator instructions, publication date, and step count. Opening
+details does not select a pipeline; select one explicitly before starting.
+
+### Finding failures from a batch
+
+The batch processing page shows a notice when its documents have recorded
+failures, including failed task runs. Select **View failure details** beside a
+document name to open that document in **Failures** and inspect the reason and
+available actions. A recorded task failure does not necessarily mean the
+document is still failed, so check its current status before retrying. Opening
+failure details does not retry, upload, or restart processing.
+
 ### 3.3. Operator Workflows in the Unified App
 
 The left navigation menu provides the following work areas. If the menu is collapsed, point to an icon to display its name.
+
+**Common processing statuses:**
+
+| Status | Meaning | Operator action |
+|---|---|---|
+| Queued | Accepted and waiting for the worker | Wait or monitor the batch |
+| Processing | A task is currently running | Monitor the task details |
+| Waiting for review | A review gate paused the document | Claim, correct, and complete the review |
+| Completed | Configured processing finished successfully | Check registered artifacts and exports |
+| Failed | A task or provider operation could not complete | Inspect **Failures**, correct the cause, then retry or re-upload |
+| Paused | Intake or processing was deliberately paused | Contact the administrator if the pause is unexpected |
+
+For split documents, the source may remain active while child documents have
+different statuses. A failed task record is historical evidence; always check
+the document's current status before retrying. Retries preserve the original
+pipeline version and do not silently use the newest publication.
 
 | Menu item | Purpose |
 |-----------|---------|
@@ -549,6 +610,10 @@ If you only need the watch folder functionality and do not wish to run the web i
     .\.venv\Scripts\python.exe main.py --no-web
     ```
 
+This mode still starts the supervised processing worker and watch-folder
+coordinator, but browser upload, review, reports, and administration are
+unavailable. A web-only process cannot scan watch folders.
+
 **Stopping the service:**
 
 To stop the coordinator and web interface, press `Ctrl+C` in the terminal where
@@ -581,6 +646,9 @@ Must pre-exist (startup validates and will fail if missing):
 - Each directory entered in **Watch folders** — the
   binding service requires it to exist, be accessible, and not overlap another
   bound path.
+- Each bound watch-folder account needs permission to list the directory, read
+  incoming PDFs, move them into processing, and delete or replace files when
+  the configured lifecycle requires it.
 - Any deployment config key that ends with `_file` — the referenced file must
   already exist and be a regular file.
 - Any other explicitly-documented required directory in your `config.yaml`.
@@ -624,6 +692,10 @@ mkdir watch_folder processing web_upload files data archive_folder
   in-memory settings does not synchronize the others. Operational settings
   managed through the UI remain stored in SQLite.
 - Ensure the user/service account running the application has Modify/Write permissions on directories that will be written to.
+
+For a bound watch folder, **Test access** confirms that the directory exists
+and can be listed; it does not prove that the application can move or delete a
+file. Test with a representative PDF before enabling production intake.
 
 ### 4.3. Configuration Management
 
@@ -753,6 +825,11 @@ Pipeline lifecycle has an operational effect:
 - **Archived** is terminal. First set a template to inactive and ensure no
   enabled watch-folder binding refers to it. Archived templates cannot be
   restored or published again. Historical documents remain pinned and readable.
+
+Publishing creates an immutable version but does not by itself make the
+template eligible for new intake. Set the template to **Active** separately,
+then confirm that the intended version appears on **Upload & Process** or is
+selected by an enabled watch-folder binding.
 
 Task classes must be approved before the app imports them. Built-in `standard_step.*` tasks are approved by the application. Customer-specific tasks must be deployed under the `custom_step.` Python package and approved in deployment YAML under `custom_steps.registry`.
 
@@ -1064,6 +1141,22 @@ All these routes require administrator access; cookie mutations require CSRF.
   Review errors before warnings. For all SQLite templates, drafts, versions,
   review forms, and bindings, use section 4.12's `--all-stored` command.
 
+#### Upgrade and migration checklist
+
+Before upgrading an existing deployment:
+
+1. Stop the service and make a consistent backup of the SQLite database and
+   durable artifact folders.
+2. Preserve the current deployment YAML and any portable pipeline or review
+   form exports.
+3. Start the new version so the parent process can run supported migrations.
+4. Import legacy definitions as drafts when required; import does not publish
+   or replace an already pinned definition.
+5. Validate the deployment, stored definitions, and bindings with config-check.
+6. Publish and activate any replacement pipeline or review-form versions.
+7. Test a representative document and confirm artifacts, review behavior, and
+   watch-folder routing before resuming production intake.
+
 ##### Administrator Audit History
 
 The **Audit Log** page at `/app/admin/audit` shows the append-only subset of
@@ -1084,7 +1177,7 @@ The following administrator events are currently recorded:
 | `admin_split_connection_tested` | An administrator runs the split connection/status test. This records adapter status; the current test does not make a provider network request. |
 | `admin_pipeline_draft_saved` | A pipeline draft is saved. |
 | `admin_pipeline_validated` | A pipeline draft is validated. The result includes validity, a summary, and validation finding codes. |
-| `admin_pipeline_published` | A validated pipeline draft is published as the active configuration. |
+| `admin_pipeline_published` | A validated pipeline draft is published as a new immutable version. The template must be activated separately before new intake. |
 | `admin_schemas_validated` | Validation is run for all configured schemas. |
 | `admin_schema_validated` | An individual schema draft is validated without being saved. |
 | `admin_schema_created` | A schema is created. |
@@ -1135,6 +1228,12 @@ For a complete operational backup, include:
 - reference CSVs, deployment configuration, and any portable configuration
   exports retained by your organization
 
+Stop the application before copying the SQLite database, or use SQLite's
+online backup mechanism. Do not assume that copying only the main database
+file while the service is running captures the complete state; account for
+SQLite WAL/SHM files or use a consistent SQLite backup operation. Capture the
+database and durable artifacts from the same backup point.
+
 Restore the database and durable artifacts from the same backup point. If the
 database is restored without the files, the UI may show registered artifacts
 whose paths no longer exist. If files are restored without the database,
@@ -1145,6 +1244,12 @@ migration, but import never publishes and never replaces an already pinned
 definition.
 
 ### 4.6. Log Files and Troubleshooting
+
+The configured `logging.log_file` is used as the base for role-specific logs.
+Normal supervised startup produces separate supervisor, web, and worker log
+files. Check the supervisor log for startup, shutdown, and child-process
+failures; the web log for browser/API errors; and the worker log for task,
+provider, retry, and artifact failures.
 
 - `logging.log_file` supplies the base log path. The default `app.log` produces
   `app.supervisor.log`, `app.web.log`, and `app.worker.log` beside the active
@@ -2211,6 +2316,10 @@ The deployment file and the portable pipeline definition are separate. A
 minimal deployment excerpt can contain the shared runtime settings and a local
 secret alias:
 
+> **Important:** the task YAML later in this section is a portable pipeline
+> definition, not a complete runtime `config.yaml`. Do not paste the
+> `tasks:`/`pipeline:` block into a newly created deployment file.
+
 ```yaml
 # Top-level configuration keys (abbreviated for example)
 web:
@@ -2232,6 +2341,13 @@ logging:
 pipeline_secrets:
   llamacloud-primary: "SET-THIS-ONLY-IN-THE-LOCAL-IGNORED-CONFIG"
 ```
+
+Use a long, random, deployment-specific value for `web.secret_key`; do not
+reuse it across environments. Changing it invalidates existing browser tokens
+and requires users to sign in again. Setting `web.host` to `0.0.0.0` exposes
+the service on all network interfaces. Use that value only when remote access
+is intentional and firewall, TLS, reverse-proxy, and access-control measures
+are in place; use `127.0.0.1` for local-only operation.
 
 Never commit or export the resolved value under `pipeline_secrets`. The
 portable definition stores only its alias:
@@ -2342,6 +2458,10 @@ Notes:
   - `store_metadata_json` writes JSON to `data_dir` using `filename` template.
   - `store_file_to_localdrive` copies the processed PDF to `files_dir` using `filename`; housekeeping later removes the temporary processing copy.
 - Field placeholders in `filename` come from extracted data keys (e.g., `{supplier_name}`, `{invoice_amount}`, `{policy_number}`).
+- Keep filename templates short and Windows-safe. Avoid path separators and
+  invalid filename characters such as `\\ / : * ? " < > |`; also account for
+  missing fields, long extracted values, and duplicate output names. Test the
+  rendered filename with representative documents before production use.
 - Use `on_error: stop|continue` per task to control failure behavior.
 
 Example custom task approval block:
@@ -2602,25 +2722,3 @@ portable file.
 - LlamaCloud document splitting: [official LlamaIndex guide](https://developers.llamaindex.ai/llamaparse/split/getting_started)
 
 ---
-
-This guide documents operator workflows and administrator configuration for the current PDF processing application.
-
-
-### Compact upload steps
-
-On **Upload & Process**, follow **1. Select a pipeline**, then **2. Upload PDFs**,
-and select **3. Start processing** once your files are ready.
-Pipeline cards show the name and published version. Expand **Pipeline details**
-to read the description, operator instructions, publication date, and step count.
-Opening details does not select a pipeline. Select a pipeline explicitly before
-starting processing. Upload and recovery behavior is unchanged.
-
-### Finding failures from a batch
-
-The batch processing page shows a notice when its documents have recorded failures,
-including failed task runs. Select **View failure details** beside a document name
-to open that document in the existing Failures page and inspect the reason and
-available actions. Check the processing queue for each document's current status;
-a recorded task failure does not necessarily mean the document is still failed.
-The notice updates with the existing status refresh and is hidden if status cannot
-be loaded. Opening failure details does not retry, upload, or restart processing.

@@ -319,7 +319,13 @@
             canvas.height = Math.floor(viewport.height * pixelRatio);
             canvas.style.width = `${viewport.width}px`;
             canvas.style.height = `${viewport.height}px`;
-            await page.render({ canvasContext: canvas.getContext("2d"), viewport, transform: pixelRatio !== 1 ? [pixelRatio, 0, 0, pixelRatio, 0, 0] : null }).promise;
+            try {
+                await page.render({ canvasContext: canvas.getContext("2d"), viewport, transform: pixelRatio !== 1 ? [pixelRatio, 0, 0, pixelRatio, 0, 0] : null }).promise;
+            } catch (error) {
+                // Navigation or a newer render can cancel work that is no longer visible.
+                if (state.destroyed || token !== state.renderToken || error?.name === "RenderingCancelledException") return;
+                throw error;
+            }
             if (token !== state.renderToken || state.destroyed) return;
             pagesRoot.replaceChildren(pageElementNode);
             state.pages = [{ element: pageElementNode, highlightLayer, viewport }];
@@ -346,6 +352,7 @@
                 await renderPage(initialPage, { center: shouldCenter });
                 setStatus("PDF ready. Select a field to locate its source.");
             } catch (error) {
+                if (state.destroyed || error?.name === "RenderingCancelledException") return;
                 console.error(error);
                 setStatus("Unable to render the source PDF.");
             }

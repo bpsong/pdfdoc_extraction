@@ -7,14 +7,15 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE_PATH = ROOT / "web/static/js/pipeline_config.js"
+SOURCE_PATH = ROOT / "web/static/js/pipeline-config/task-editors.js"
+CONTROLLER_PATH = ROOT / "web/static/js/pipeline_config.js"
 LLAMA_RENDERER_SHA256 = (
     "ed79faeabc7f874093ebcfcc5233a08c638c4f1b1dbf4ceb52fb6c0a4cedead0"
 )
 
 
 def _source() -> str:
-    return SOURCE_PATH.read_text(encoding="utf-8")
+    return SOURCE_PATH.read_text(encoding="utf-8") + CONTROLLER_PATH.read_text(encoding="utf-8")
 
 
 def _between(source: str, start: str, end: str) -> str:

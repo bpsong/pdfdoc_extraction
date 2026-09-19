@@ -51,4 +51,4 @@ def test_human_review_invalidates_the_pdf_viewer_cache_after_navigation_change()
 
     template = (ROOT / "web/templates/human_review.html").read_text(encoding="utf-8")
 
-    assert "pdf_viewer.js?v=pdf-pager-input-2" in template
+    assert "pdf_viewer.js?v=pdf-render-cancel-3" in template

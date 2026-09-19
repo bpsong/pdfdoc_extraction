@@ -11,7 +11,7 @@ def test_failure_notifications_are_cached_between_page_navigations() -> None:
 
     app_source = (ROOT / "web/static/js/app.js").read_text(encoding="utf-8")
     processing_source = (
-        ROOT / "web/static/js/processing_overview.js"
+        ROOT / "web/static/js/processing-overview/controller.js"
     ).read_text(encoding="utf-8")
     base_template = (ROOT / "web/templates/app_base.html").read_text(encoding="utf-8")
 
@@ -26,7 +26,7 @@ def test_failure_notifications_are_cached_between_page_navigations() -> None:
 def test_admin_dashboard_renders_independent_requests_as_they_complete() -> None:
     """Keep the faster admin panel from waiting for the slower summary."""
 
-    source = (ROOT / "web/static/js/admin.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/admin-dashboard/controller.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/admin_dashboard.html").read_text(
         encoding="utf-8"
     )
@@ -36,25 +36,25 @@ def test_admin_dashboard_renders_independent_requests_as_they_complete() -> None
     assert "Promise.allSettled([" in source
     assert "loadSummary()," in source
     assert "loadSettings()," in source
-    assert "admin.js?v=ui-performance-independent-panels" in template
+    assert "admin-dashboard/index.js?v=controller-modularization-7a" in template
 
 
 def test_named_schema_route_resolves_to_versioned_template_identity() -> None:
     """Resolve a stable route key before loading the template-scoped draft."""
 
-    source = (ROOT / "web/static/js/schema_editor.js").read_text(encoding="utf-8")
+    source = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
     template = (ROOT / "web/templates/schema_editor.html").read_text(
         encoding="utf-8"
     )
 
-    assert 'window.DocFlow.apiGet("/api/admin/review-schemas?include_archived=true")' in source
+    assert "api.listTemplates()" in source
     assert "schemas.find((schema) => schema.schema_key === currentName)" in source
     assert "await loadSchema(selected.id)" in source
     assert "rememberSchemaName(currentName)" in source
     assert "function initialSchemaName()" in source
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
-    assert "/api/admin/review-schemas/${encodeURIComponent(templateId)}" in source
-    assert "schema_editor.js?v=ui-clarity-1" in template
+    assert "api.getTemplate(templateId)" in source
+    assert "schema-editor/index.js?v=controller-modularization-5d" in template
 
 
 def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:
@@ -71,15 +71,18 @@ def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:
         encoding="utf-8"
     )
     processing_source = (
-        ROOT / "web/static/js/processing_overview.js"
+        ROOT / "web/static/js/processing-overview/controller.js"
     ).read_text(encoding="utf-8")
-    review_source = (ROOT / "web/static/js/review_queue.js").read_text(encoding="utf-8")
-    upload_source = (ROOT / "web/static/js/upload_process.js").read_text(encoding="utf-8")
+    review_source = (ROOT / "web/static/js/review-queue/controller.js").read_text(encoding="utf-8")
+    review_view = (ROOT / "web/static/js/review-queue/view.js").read_text(encoding="utf-8")
+    upload_source = (ROOT / "web/static/js/upload-process/controller.js").read_text(encoding="utf-8")
+    upload_api = (ROOT / "web/static/js/upload-process/api.js").read_text(encoding="utf-8")
+    upload_model = (ROOT / "web/static/js/upload-process/model.js").read_text(encoding="utf-8")
     extraction_source = (
-        ROOT / "web/static/js/extraction_results.js"
+        ROOT / "web/static/js/extraction-results/view.js"
     ).read_text(encoding="utf-8")
     human_review_source = (
-        ROOT / "web/static/js/human_review.js"
+        ROOT / "web/static/js/human-review/field-view.js"
     ).read_text(encoding="utf-8")
 
     assert 'id="app-announcement-region"' in base_template
@@ -90,14 +93,14 @@ def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:
     assert "announceProcessingChanges(states)" in processing_source
     assert 'id="review-queue-region"' in review_template
     assert "announceReviewChanges(state.items, nextItems)" in review_source
-    assert "confidence ·" in review_source
+    assert "confidence ·" in review_view
     assert "confidence ·" in extraction_source
     assert "confidence ·" in human_review_source
     assert 'id="upload-progress-bar"' in upload_template
     assert 'role="status"' in upload_template
-    assert 'xhr.open("POST", "/api/batches/upload")' in upload_source
-    assert "xhr.upload.addEventListener(\"progress\"" in upload_source
-    assert "function validateBatch(entries)" in upload_source
+    assert 'xhr.open("POST", "/api/batches/upload")' in upload_api
+    assert "xhr.upload.addEventListener(\"progress\"" in upload_api
+    assert "function validateBatch(entries)" in upload_model
     assert "error.status === 429" in upload_source
 
 
@@ -105,10 +108,11 @@ def test_operator_help_retry_keyboard_and_table_polish_are_present() -> None:
     """Protect the low-risk operator affordances and scoped layout treatment."""
 
     app_source = (ROOT / "web/static/js/app.js").read_text(encoding="utf-8")
-    upload_source = (ROOT / "web/static/js/upload_process.js").read_text(encoding="utf-8")
-    review_source = (ROOT / "web/static/js/review_queue.js").read_text(encoding="utf-8")
+    upload_source = (ROOT / "web/static/js/upload-process/controller.js").read_text(encoding="utf-8")
+    upload_api = (ROOT / "web/static/js/upload-process/api.js").read_text(encoding="utf-8")
+    review_source = (ROOT / "web/static/js/review-queue/controller.js").read_text(encoding="utf-8")
     processing_source = (
-        ROOT / "web/static/js/processing_overview.js"
+        ROOT / "web/static/js/processing-overview/controller.js"
     ).read_text(encoding="utf-8")
     upload_template = (ROOT / "web/templates/upload_process.html").read_text(encoding="utf-8")
     review_template = (ROOT / "web/templates/review_queue.html").read_text(encoding="utf-8")
@@ -125,7 +129,7 @@ def test_operator_help_retry_keyboard_and_table_polish_are_present() -> None:
     assert 'role="button"' in upload_template
     assert 'id="cancel-upload-button"' in upload_template
     assert 'dropZone.addEventListener("keydown"' in upload_source
-    assert 'error.name = "AbortError"' in upload_source
+    assert 'error.name = "AbortError"' in upload_api
     assert "data-review-retry" in review_source
     assert "data-processing-retry" in processing_source
     assert "app-filter-bar" in review_template

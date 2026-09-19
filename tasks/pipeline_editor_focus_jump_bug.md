@@ -1,5 +1,9 @@
 # Bug Report: Pipeline Editor — Focus Jumps When Editing Field Properties
 
+> Status: **Resolved** in the production pipeline and schema editors. This
+> document is retained as the implementation record for the original bug and
+> its regression coverage.
+
 ## Summary
 
 When editing any field property in the production pipeline editor (adding a new task,
@@ -11,14 +15,16 @@ the user was typing in is destroyed and recreated from scratch, causing:
 - Scroll position to reset
 - Partial edits in adjacent fields to be discarded
 
-This affects **all task types** in the production editor (`web/static/js/pipeline_config.js`),
+This affected **all task types** in the production editor
+(`web/static/js/pipeline_config.js`),
 not just GLM-OCR. GLM-OCR is more noticeable because it has more interactive fields per entry.
 
 ---
 
 ## Root Cause
 
-**File:** `web/static/js/pipeline_config.js`
+**Original file:** `web/static/js/pipeline_config.js` (the remaining
+orchestration entry point)
 
 Every user interaction that changes a parameter calls `markDirty()`, which
 unconditionally calls `render()`, which calls `renderEditor()`, which sets:
@@ -43,7 +49,7 @@ User edits an input
   → focus returns to <body>
 ```
 
-The same problem exists in **`schema_editor.js`** for the schema field editor, where
+The same problem existed in **`schema-editor/view.js`** for the schema field editor, where
 `markDirty()` → `render()` → `fieldTree.innerHTML = renderFieldRows(...)`.
 
 ---
@@ -171,7 +177,7 @@ rename that suffers the same total-DOM-replacement problem as the extract field 
 **Focus jump severity: LOW** — mostly selects, which do not suffer as badly since the
 browser selects commit on change anyway. The "Write value" text input loses focus on change.
 
-### Schema Editor — `schema_editor.js`
+### Schema Editor — `schema-editor/view.js`
 
 A separate but identical bug:
 
@@ -243,7 +249,8 @@ function renderEditorWithFocusRestore() {
 
 Then in `render()`, replace the `renderEditor()` call with `renderEditorWithFocusRestore()`.
 
-Apply the same pattern to `schema_editor.js` for `fieldTree.innerHTML = renderFieldRows(...)`.
+Apply the same pattern to `schema-editor/view.js` for
+`fieldTree.innerHTML = renderFieldRows(...)`.
 
 ### Why This Approach
 
@@ -270,9 +277,9 @@ const nextInput = editorBody.querySelector(
 if (nextInput) nextInput.focus();
 ```
 
-### Same fix for `schema_editor.js`
+### Same fix for `schema-editor/view.js`
 
-In `schema_editor.js`, `render()` sets `fieldTree.innerHTML = renderFieldRows(...)`.
+In `schema-editor/view.js`, `render()` sets `fieldTree.innerHTML = renderFieldRows(...)`.
 The same `preserveFocus` pattern applies: capture the focused element's
 `data-field-path` + `data-field-prop` before `fieldTree.innerHTML = ...`, then
 re-query and refocus after.
@@ -283,10 +290,11 @@ re-query and refocus after.
 
 | File | Change |
 |------|--------|
-| `web/static/js/pipeline_config.js` | Add `renderEditorWithFocusRestore()` helper; call it from `render()` instead of `renderEditor()` |
-| `web/static/js/schema_editor.js` | Add focus-save/restore around the `fieldTree.innerHTML = renderFieldRows(...)` line inside `render()` |
+| `web/static/js/pipeline_config.js` | Retained pipeline orchestration and focus-save/restore helper |
+| `web/static/js/schema-editor/view.js` | Focus-save/restore around the field-row rendering path |
+| `web/static/js/schema-editor/controller.js` | Schema-editor event orchestration and focus-related update flow |
 
-No other files need to change. No backend changes. No new dependencies.
+No backend changes or new dependencies were required.
 
 ---
 
@@ -311,5 +319,7 @@ After the fix, verify manually:
 8. **Step label / key**: Edit label or key at the top of Properties, press Enter →
    focus returns to the same input.
 
-Automated test coverage (existing tests in `test/visual/`) should be re-run after
-the change to confirm no regressions.
+Automated coverage is implemented in
+`test/visual/test_schema_review_visual.py` and the schema-editor module tests.
+The authenticated visual workflow verifies focus and caret restoration for
+pipeline and review-form fields after edits.

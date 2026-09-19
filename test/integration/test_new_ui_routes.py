@@ -418,13 +418,13 @@ def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -
 
     assert upload.status_code == 200
     assert 'id="upload-drop-zone"' in upload.text
-    assert "/static/js/upload_process.js" in upload.text
+    assert "/static/js/upload-process/index.js?v=controller-modularization-7a" in upload.text
     assert processing.status_code == 200
     assert 'id="processing-workspace"' in processing.text
-    assert "/static/js/processing_overview.js" in processing.text
+    assert "/static/js/processing-overview/index.js?v=frontend-hardening-8" in processing.text
     assert split_results.status_code == 200
     assert 'id="split-results-workspace"' in split_results.text
-    assert "/static/js/split_results.js" in split_results.text
+    assert "/static/js/split-results/index.js?v=controller-modularization-7a" in split_results.text
 
 
 def test_failures_page_includes_operator_assets(monkeypatch) -> None:
@@ -435,7 +435,7 @@ def test_failures_page_includes_operator_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="failures-workspace"' in response.text
-    assert "/static/js/failures.js" in response.text
+    assert "/static/js/failures/index.js?v=controller-modularization-7a" in response.text
 
 
 def test_extraction_results_page_includes_task_18_assets(monkeypatch) -> None:
@@ -446,7 +446,7 @@ def test_extraction_results_page_includes_task_18_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="extraction-results-workspace"' in response.text
-    assert "/static/js/extraction_results.js" in response.text
+    assert "/static/js/extraction-results/index.js?v=controller-modularization-7a" in response.text
 
 
 def test_review_pages_include_task_19_assets(monkeypatch) -> None:
@@ -458,11 +458,11 @@ def test_review_pages_include_task_19_assets(monkeypatch) -> None:
 
     assert queue.status_code == 200
     assert 'id="review-queue-workspace"' in queue.text
-    assert "/static/js/review_queue.js" in queue.text
+    assert "/static/js/review-queue/index.js?v=controller-modularization-7a" in queue.text
     assert review.status_code == 200
     assert 'id="human-review-workspace"' in review.text
     assert "/static/js/pdf_viewer.js" in review.text
-    assert "/static/js/human_review.js" in review.text
+    assert "/static/js/human-review/index.js?v=controller-modularization-6a" in review.text
 
 
 def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
@@ -473,7 +473,7 @@ def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="schema-editor-workspace"' in response.text
-    assert "/static/js/schema_editor.js" in response.text
+    assert "/static/js/schema-editor/index.js?v=controller-modularization-5d" in response.text
 
 
 def test_config_validation_page_includes_task_23_assets(monkeypatch) -> None:
@@ -484,7 +484,7 @@ def test_config_validation_page_includes_task_23_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="config-validation-workspace"' in response.text
-    assert "/static/js/config_validation.js" in response.text
+    assert "/static/js/config-validation/index.js?v=controller-modularization-7a" in response.text
     assert "Check config.yaml" in response.text
     assert "Check pipeline draft" in response.text
     assert "Check review forms" in response.text
@@ -498,7 +498,7 @@ def test_task_catalog_page_includes_task_20_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="task-catalog-workspace"' in response.text
-    assert "/static/js/task_catalog.js" in response.text
+    assert "/static/js/task-catalog/index.js?v=controller-modularization-7a" in response.text
 
 
 def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
@@ -514,7 +514,8 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert 'id="pipeline-publish-dialog-confirm"' in response.text
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 6
-    assert "/static/js/pipeline_config.js?v=watch-folders-management-2" in response.text
+    assert 'type="module"' in response.text
+    assert "/static/js/pipeline-config/index.js?v=controller-modularization-4" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:
@@ -539,7 +540,7 @@ def test_reports_page_includes_task_25_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="reports-workspace"' in response.text
     assert 'id="batch-detail-modal"' in response.text
-    assert "/static/js/reports.js" in response.text
+    assert "/static/js/reports/index.js?v=controller-modularization-7a" in response.text
 
 
 def test_settings_page_includes_task_25_assets(monkeypatch) -> None:
@@ -550,7 +551,7 @@ def test_settings_page_includes_task_25_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="settings-workspace"' in response.text
-    assert "/static/js/settings.js" in response.text
+    assert "/static/js/settings/index.js?v=controller-modularization-7a" in response.text
 
 
 def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> None:
@@ -563,7 +564,7 @@ def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> No
 
     assert dashboard.status_code == 200
     assert 'id="admin-dashboard-workspace"' in dashboard.text
-    assert "/static/js/admin.js" in dashboard.text
+    assert "/static/js/admin-dashboard/index.js?v=controller-modularization-7a" in dashboard.text
     assert audit.status_code == 200
     assert 'id="admin-audit-workspace"' in audit.text
     assert users.status_code == 200
@@ -571,6 +572,6 @@ def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> No
     assert "Current admin password" in users.text
     assert "Current Operator password" in users.text
     assert "/static/js/admin_users.js" in users.text
-    assert "/static/js/admin_audit.js" in audit.text
+    assert "/static/js/admin-audit/index.js?v=controller-modularization-7a" in audit.text
     assert 'id="admin-audit-pagination"' in audit.text
     assert 'data-audit-sort="created_at"' in audit.text

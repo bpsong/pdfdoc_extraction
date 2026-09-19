@@ -582,6 +582,8 @@ fields:
         runs.mark_failed(failed_run["id"], "Synthetic phase 14 provider failure")
 
     return {
+        "db_path": str(tmp_path / "app_state.sqlite3"),
+        "synthetic_pdf_path": str(pdf_path),
         "review_id": str(review["id"]),
         "completed_review_id": str(completed_review["id"]),
         "completed_document_id": str(completed_document_id),
@@ -661,6 +663,50 @@ def page(visual_app: dict[str, str]):
 def _assert_nonblank_screenshot(page: Page) -> None:
     screenshot = page.screenshot(full_page=True)
     assert len(screenshot) > 10_000
+
+
+def _create_disposable_review_item(visual_app: dict[str, str]) -> str:
+    """Create an isolated synthetic review for completion-flow verification."""
+    config = TempConfig(Path(visual_app["db_path"]))
+    pdf_path = Path(visual_app["synthetic_pdf_path"])
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="visual", file_path=str(pdf_path),
+            original_filename="phase6-disposable-review.pdf",
+        )
+        document_id = created["document"]["id"]
+        DocumentRepository(conn).add_file(
+            document_id=document_id, file_type="original_pdf",
+            file_path=str(pdf_path),
+        )
+        extraction = ExtractionRepository(conn).save_result(
+            document_id=document_id, provider="visual", data={},
+        )
+        ExtractionRepository(conn).save_fields(
+            document_id=document_id, extraction_result_id=extraction["id"],
+            fields=[
+                {"field_key": "supplier", "extracted_value": "Acme"},
+                {"field_key": "invoice_amount", "extracted_value": 70},
+                {"field_key": "approved", "extracted_value": None},
+                {"field_key": "reviewed_at", "extracted_value": "2026-06-12T09:30:00Z"},
+                {"field_key": "address", "extracted_value": {"city": "Singapore"}},
+                {"field_key": "tags", "extracted_value": ["urgent"]},
+                {"field_key": "line_items", "extracted_value": [
+                    {"sku": "ABC", "quantity": 2, "unit_price": 4.5},
+                ]},
+            ],
+        )
+        review = ReviewRepository(conn).create_review_item(
+            batch_id=created["batch"]["id"], document_id=document_id,
+            queue_name="phase6_visual_qa", reason="synthetic_visual_test",
+            scope="low_confidence_fields",
+            metadata={
+                "schema_file": "invoice.yaml",
+                "editable_fields": ["supplier", "invoice_amount", "approved",
+                                    "reviewed_at", "address", "tags", "line_items"],
+            },
+        )
+    return str(review["id"])
 
 
 def _assert_no_horizontal_overflow(page: Page) -> None:
@@ -751,6 +797,54 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     page.set_viewport_size({"width": 390, "height": 900})
     page.locator("#review-fields-container").wait_for()
     _assert_nonblank_screenshot(page)
+
+
+def test_modular_review_editor_saves_reclaims_and_completes_synthetic_item(
+    page: Page, visual_app: dict[str, str],
+) -> None:
+    """Exercise every review field family and the disposable lock lifecycle."""
+    review_id = _create_disposable_review_item(visual_app)
+    page.goto(f"{visual_app['base_url']}/app/review/{review_id}")
+    page.locator('input[data-field-path="invoice_amount"]').wait_for()
+    page.locator("#review-claim-button").click()
+    page.locator("#review-release-button").wait_for(state="visible")
+
+    page.locator('input[data-field-path="supplier"]').fill("Acme Revised")
+    page.locator('input[data-field-path="invoice_amount"]').fill("72.00")
+    page.locator('select[data-field-path="approved"]').select_option("true")
+    page.locator('input[data-field-path="reviewed_at"]').fill("2026-06-13T10:15")
+    assert page.locator('input[data-field-path="address.city"]').is_disabled()
+
+    tags = page.locator(".review-nested-group").filter(has_text="Tags").first
+    tags.get_by_role("button", name="Add", exact=True).click()
+    page.locator('select[data-field-path="tags.1"]').select_option('"standard"')
+    line_items = page.locator(".review-nested-group").filter(has_text="Line items").first
+    line_items.get_by_role("button", name="Add Row").click()
+    line_items.get_by_role("button", name="Remove").last.click()
+    page.locator('input[data-field-path="line_items.0.quantity"]').fill("3")
+    assert page.locator('input[data-field-path="line_items.0.sku"]').is_disabled()
+
+    page.locator("#review-diff-button").click()
+    page.locator("#review-diff-panel").wait_for(state="visible")
+    assert "Invoice Amount" in page.locator("#review-diff-body").inner_text()
+    page.locator("#review-diff-close-button").click()
+    page.locator("#review-save-button").click()
+    page.get_by_text("Draft saved", exact=True).wait_for()
+    assert page.locator('input[data-field-path="invoice_amount"]').input_value() == "72.00"
+
+    page.locator("#review-release-button").click()
+    page.locator("#review-claim-button").wait_for(state="visible")
+    assert page.locator('input[data-field-path="invoice_amount"]').is_disabled()
+    page.locator("#review-claim-button").click()
+    page.locator("#review-release-button").wait_for(state="visible")
+    assert page.locator('input[data-field-path="invoice_amount"]').input_value() == "72.00"
+    _assert_nonblank_screenshot(page)
+
+    page.locator("#review-complete-button").click()
+    page.wait_for_url("**/app/review")
+    response = page.request.get(f"{visual_app['base_url']}/api/review/items/{review_id}")
+    assert response.ok
+    assert response.json()["review_item"]["status"] == "completed"
 
 
 def test_extraction_results_visual_uses_shared_pdfjs_viewer(page: Page, visual_app: dict[str, str]) -> None:

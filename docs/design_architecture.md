@@ -219,6 +219,27 @@ arbitrarily nested structures.
 | [`web/templates/`](../web/templates/) | Server-rendered structure | No authorization enforcement |
 | [`web/static/js/`](../web/static/js/) | Browser interaction and API consumption | No authoritative business state |
 
+### Frontend module boundaries
+
+The production UI remains a server-rendered, multi-page application using
+native browser JavaScript. The large page-controller migration is complete for
+the production operator and administrative pages; the remaining top-level
+controllers are compatibility/orchestration entry points. Feature directories
+contain a thin entry point, a transport adapter, browser-independent model
+operations, preview/formatting logic, and DOM views. The page controller
+coordinates those pieces and continues to rely on the backend APIs as the
+authoritative state boundary.
+
+Feature-specific property editors receive selected model state and findings
+through explicit contracts, while file and directory browsing is isolated
+behind injected API and rendering callbacks. This keeps task-family HTML and
+resource-loading behavior out of page-level event orchestration.
+
+Native module entry points and every import in their dependency graph must carry
+the same release asset version until content-hashed assets replace query-based
+versioning. This prevents a newly deployed entry point from executing with a
+cached model or view from an earlier release.
+
 `modules/api_router.py` remains a large integration point. The intended
 route/service/repository boundary is therefore both a design rule and current
 technical debt.
@@ -798,7 +819,8 @@ three seconds.
 | Shared shell | [`app_base.html`](../web/templates/app_base.html) | Navigation, header, slots, shared script |
 | Feature templates | [`web/templates/`](../web/templates/) | Semantic structure and server identifiers |
 | Shared browser utilities | [`app.js`](../web/static/js/app.js) | API wrappers, CSRF, auth redirect, toasts, navigation |
-| Feature controllers | [`web/static/js/`](../web/static/js/) | Fetch, DOM rendering, interactions |
+| Feature entries and controllers | [`web/static/js/*/index.js`](../web/static/js/) and feature-local `controller.js` | Module startup, event-to-action orchestration, page-scoped transient state |
+| Feature API/model/view modules | [`web/static/js/*/api.js`](../web/static/js/), `model.js`, `view.js` | Endpoint contracts, browser-independent state operations, DOM rendering and presentation |
 | Vendored PDF.js | [`web/static/vendor/pdfjs/`](../web/static/vendor/pdfjs/) | Same-origin PDF rendering for source inspection |
 | Styling | Tailwind, DaisyUI, [`app.css`](../web/static/css/app.css) | Design utilities and application styles |
 
@@ -807,6 +829,14 @@ together. Authoritative state remains on the server. `localStorage` holds
 presentation preferences and short-lived caches; `sessionStorage` holds
 limited navigation convenience; neither may represent workflow or permission
 state.
+
+The versioned review-form editor uses a native ES-module entry in
+`web/static/js/schema-editor/`. Its controller maps browser events to actions;
+the model owns DOM-independent nested-field changes and client validation;
+the API owns review-schema requests and CSRF-aware imports; and the view owns
+field rendering, outline/search, focus restoration, validation, and lifecycle
+metadata. The editor entry and its imports use one release asset version so a
+deployment cannot combine cached modules from different releases.
 
 Operator pages cover upload, processing, split and extraction inspection,
 review, failures, reports, and settings. Admin pages cover the overview, fixed
@@ -826,6 +856,30 @@ adapts the split to available width, including sidebar changes, without saving
 temporary constraints as the preference. Workspaces narrower than 780 pixels
 stack the panels in a scrollable workspace. Completed-review presentation
 preserves the distinct `corrected` field status.
+
+The human-review page uses a versioned native ES-module entry in
+`web/static/js/human-review/`. Its controller owns event-to-action orchestration;
+the model owns browser-independent schema/value normalization, nested paths,
+corrections, and edit policy; the API owns review-item requests; the field view
+renders scalar, object, and array controls; and the workspace view owns lock,
+diff, source PDF, and pane presentation. The shared PDF viewer treats expected
+render cancellations during page changes or teardown as non-errors.
+
+Operator and administrative pages now use versioned feature entries under
+`web/static/js/`, including upload, processing overview, failures, reports,
+review queue, extraction and split results, watch folders, settings, validation,
+audit, task catalog, and admin overview. Each entry imports a page controller;
+request adapters and DOM presentation live in feature-local API and view
+modules. Upload validation and cancellation state also live in a feature-local
+model. The existing `window.DocFlow` shell remains the shared authenticated
+request, CSRF, and notification boundary; feature controllers own their own
+polling and transient state rather than sharing a mutable application store.
+The processing page uses the shared visibility-aware polling module, which
+allows only one request at a time, removes its interval while the document is
+hidden, refreshes once on resume, and disposes the listener on page teardown.
+Feature release graphs are validated and independently versioned with
+`tools.frontend_release_check`; deployment and rollback procedures are in
+`docs/frontend_deployment.md`.
 
 Extraction field flags remain immutable evidence of why review was requested.
 The extraction API also exposes the latest review item's status so presentation
@@ -856,7 +910,8 @@ npm run build:css
 
 ### Frontend constraints
 
-- Complex pages use large vanilla-JavaScript controllers.
+- Major editors and operator pages now use feature-local ES modules; some
+  smaller legacy controllers still combine presentation and orchestration.
 - API and DOM contracts are not typed or generated.
 - Shared forms, tables, modals, loading, and errors are only partly
   centralized.

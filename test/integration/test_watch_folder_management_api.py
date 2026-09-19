@@ -12,7 +12,7 @@ def test_management_routes_require_admin(monkeypatch):
         assert response.status_code == status
         if status == 200:
             assert 'id="watch-dialog"' in response.text
-            assert '/static/js/watch_folders.js' in response.text
+            assert '/static/js/watch-folders/index.js?v=controller-modularization-7a' in response.text
 
 
 def test_api_lifecycle_revisions_diagnostics_and_history(tmp_path, monkeypatch):

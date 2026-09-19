@@ -400,7 +400,8 @@ pdfdoc_extraction/
 ├── 📁 docs/                    # Documentation
 │   ├── design_architecture.md  # System architecture
 │   ├── user_guide.md           # User manual
-│   └── review_schema_admin_guide.md
+│   ├── review_schema_admin_guide.md
+│   └── frontend_deployment.md  # Frontend release and rollback playbook
 └── 📁 tasks/                   # Engineering guidance and future designs
     ├── standard_task_creation_guidelines.md
     ├── future-lightweight-pipeline-visualization.md
@@ -506,8 +507,10 @@ file. `logging.log_level` applies to all three processes.
 
 1. Check the [User Guide](docs/user_guide.md) for detailed instructions
 2. Review [Design Architecture](docs/design_architecture.md) for technical details
-3. Examine application logs for error details
-4. Check the repository's issue tracker for known problems
+3. Review the [Frontend Deployment and Rollback Guide](docs/frontend_deployment.md)
+   when releasing or reverting browser modules
+4. Examine application logs for error details
+5. Check the repository's issue tracker for known problems
 
 ## Contributing
 

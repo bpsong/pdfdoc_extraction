@@ -42,12 +42,12 @@ until verification passes.
 - `modules/services/startup_service.py`: required health-table readiness check.
 - `modules/api_router.py`: admin management, diagnostics, and activity endpoints.
 - `web/server.py`, `web/templates/app_base.html`: authenticated page and navigation.
-- `web/templates/watch_folders.html`, `web/static/js/watch_folders.js`,
+- `web/templates/watch_folders.html`, `web/static/js/watch-folders/`,
   `web/static/js/watch_folder_view_models.js`, `web/static/css/watch_folders.css`:
   management table, drawer, lifecycle, filters, and activity UI.
 - `web/templates/pipeline_config.html`, `web/static/js/pipeline_config.js`:
   replace embedded management with a dedicated-page summary link.
-- `web/templates/reports.html`, `web/static/js/reports.js`: binding-scoped batch view.
+- `web/templates/reports.html`, `web/static/js/reports/`: binding-scoped batch view.
 - `web/static/css/vendor.css`: rebuilt production Tailwind/DaisyUI output.
 - `test/services/test_watch_folder_management.py`: migration/lifecycle/claim/
   health tests and Node-executed frontend helper tests.

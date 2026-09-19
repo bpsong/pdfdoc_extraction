@@ -25,7 +25,8 @@ def test_admin_pages_render_versioned_workspace_contracts(monkeypatch):
     assert 'id="pipeline-publish-dialog"' in pipelines.text
     assert 'id="pipeline-publish-dialog-confirm"' in pipelines.text
     assert 'versioned_admin_view_models.js' in pipelines.text
-    assert 'pipeline_config.js?v=watch-folders-management-2' in pipelines.text
+    assert 'type="module"' in pipelines.text
+    assert 'pipeline-config/index.js?v=controller-modularization-4' in pipelines.text
 
 
 def test_operator_is_redirected_from_versioned_admin_pages(monkeypatch):
@@ -38,13 +39,21 @@ def test_operator_is_redirected_from_versioned_admin_pages(monkeypatch):
 
 def test_versioned_javascript_uses_exact_endpoints_not_legacy_mutations():
     schema_source = open(
-        "web/static/js/schema_editor.js", encoding="utf-8"
+        "web/static/js/schema-editor/controller.js", encoding="utf-8"
+    ).read() + open(
+        "web/static/js/schema-editor/api.js", encoding="utf-8"
     ).read()
     pipeline_source = open(
         "web/static/js/pipeline_config.js", encoding="utf-8"
+    ).read() + open(
+        "web/static/js/pipeline-config/api.js", encoding="utf-8"
+    ).read() + open(
+        "web/static/js/pipeline-config/task-editors.js", encoding="utf-8"
     ).read()
     review_source = open(
-        "web/static/js/human_review.js", encoding="utf-8"
+        "web/static/js/human-review/model.js", encoding="utf-8"
+    ).read() + open(
+        "web/static/js/human-review/field-view.js", encoding="utf-8"
     ).read()
 
     assert "/api/admin/review-schemas" in schema_source

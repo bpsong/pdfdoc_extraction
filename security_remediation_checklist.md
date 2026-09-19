@@ -218,11 +218,12 @@ These are the easiest from a code/effort perspective and should be low-risk to r
   - Primary locations:
     - `web/server.py`
     - `web/templates/reports.html`
-    - `web/static/js/reports.js`
+    - `web/static/js/reports/controller.js`
+    - `web/static/js/reports/view.js`
   - Fix summary: Removed the superseded HTML rendering path and added a Reports batch-detail modal that escapes persisted task-run data before display.
   - Verification:
     - `.\.venv\Scripts\python.exe -m pytest -v`
-    - `node --check web\static\js\reports.js`
+    - `node --check web\static\js\reports\controller.js`
     - Browser visual check on `/app/reports` confirmed a readable Recent Batches task-run detail modal.
 
 - [x] H-02: Config-Driven `eval()` in Legacy PDF Extraction
@@ -234,8 +235,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `test/extraction/test_extraction.py`
   - Fix summary: Replaced `eval()` with an allowlisted parser for supported field type strings and added a regression test proving malicious type strings are rejected without execution.
   - Verification:
-    - `C:\Python313\python.exe -m pytest -v test\extraction\test_extraction.py`
-    - `C:\Python313\python.exe -m py_compile standard_step\extraction\extract_pdf.py tools\llamacloud_extract_smoke.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v test\extraction\test_extraction.py`
+    - `.\.venv\Scripts\python.exe -m py_compile standard_step\extraction\extract_pdf.py tools\llamacloud_extract_smoke.py`
     - `rg -n "eval\(" . --glob "!security_best_practices_report.md"`
 
 - [x] H-03: Upload and Request Body Memory Exhaustion
@@ -250,8 +251,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `web.max_upload_files`: 20 files
     - `web.max_upload_request_mb`: 125% of per-file limit times max file count, unless explicitly configured
   - Verification:
-    - `C:\Python313\python.exe -m py_compile modules\api_router.py`
-    - `C:\Python313\python.exe -m pytest -v test\integration\test_batch_upload_api.py test\integration\test_input_processing.py`
+    - `.\.venv\Scripts\python.exe -m py_compile modules\api_router.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v test\integration\test_batch_upload_api.py test\integration\test_input_processing.py`
 
 - [ ] H-04: Secrets in Local YAML and Weak Default JWT Secret
   - Status: Open
@@ -268,8 +269,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `standard_step/extraction/extract_pdf_v2.py`
   - Fix summary: Removed password-hash logging and replaced raw extraction-result logging with non-sensitive job/field-count summaries.
   - Verification:
-    - `C:\Python313\python.exe -m pytest -v test\security\test_security_logging.py test\test_main_reload.py test\extraction\test_extraction.py test\extraction\test_extraction_v2.py`
-    - `C:\Python313\python.exe -m pytest -v`
+    - `.\.venv\Scripts\python.exe -m pytest -v test\security\test_security_logging.py test\test_main_reload.py test\extraction\test_extraction.py test\extraction\test_extraction_v2.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v`
     - Static search for removed sensitive patterns.
 
 ## Medium Severity
@@ -281,7 +282,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `web/server.py`
     - `modules/api_router.py`
     - `web/static/js/app.js`
-    - `web/static/js/upload_process.js`
+    - `web/static/js/upload-process/controller.js`
+    - `web/static/js/upload-process/api.js`
   - Fix summary: Added double-submit CSRF protection for browser cookie authentication. Mutating requests using the `access_token` cookie must include a matching `X-CSRF-Token` header from the `csrf_token` cookie; Authorization-header bearer clients are exempt.
   - User experience: Normal browser users should not see a change. Login sets the CSRF cookie, and authenticated app pages mint it for older sessions if missing.
   - Verification:
@@ -295,8 +297,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
   - Fix summary: Removed wildcard credentialed CORS as the default. CORS middleware is now installed only when `web.cors_allowed_origins` is explicitly configured.
   - User experience: No visible change for normal users accessing the webapp directly in the browser from the same origin.
   - Verification:
-    - `C:\Python313\python.exe -m py_compile web\server.py`
-    - `C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
+    - `.\.venv\Scripts\python.exe -m py_compile web\server.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
 
 - [x] M-03: Missing Trusted Host, Security Headers, and Production Docs Controls
   - Status: Fixed and verified
@@ -307,7 +309,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
     - `tools/config_check/schema.py`
   - Fix summary: Added `TrustedHostMiddleware` with explicit production host validation, disabled OpenAPI documentation by default in production, added baseline security headers and a strict Content Security Policy, and replaced Tailwind/DaisyUI CDN dependencies with a locally compiled stylesheet.
   - Verification:
-    - `C:\Python313\python.exe -m pytest -q test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py test\tools\config_check\test_schema_validation.py test\tools\config_check\test_integration.py`
+    - `.\.venv\Scripts\python.exe -m pytest -q test\integration\test_api_endpoints.py test\integration\test_new_ui_routes.py test\tools\config_check\test_schema_validation.py test\tools\config_check\test_integration.py`
     - Result: 76 passed, 37 warnings
 
 - [x] M-04: FileResponse Serves Paths From Document Metadata Without a Base-Directory Check
@@ -389,7 +391,7 @@ These are the easiest from a code/effort perspective and should be low-risk to r
   - Primary location: Removed obsolete client-side authentication helper.
   - Fix summary: Removed the obsolete helper and its localStorage token access.
   - Verification:
-    - `C:\Python313\python.exe -m pytest -v`
+    - `.\.venv\Scripts\python.exe -m pytest -v`
     - Browser smoke test on `http://127.0.0.1:8765/login` and protected route redirect.
 
 - [x] L-02: Development Reload Can Be Enabled by Environment
@@ -398,8 +400,8 @@ These are the easiest from a code/effort perspective and should be low-risk to r
   - Primary location: `main.py`
   - Fix summary: Added `_should_use_reload()` and disabled reload when production environment markers are present.
   - Verification:
-    - `C:\Python313\python.exe -m pytest -v test\test_main_reload.py`
-    - `C:\Python313\python.exe -m pytest -v`
+    - `.\.venv\Scripts\python.exe -m pytest -v test\test_main_reload.py`
+    - `.\.venv\Scripts\python.exe -m pytest -v`
 
 - [x] L-03: Dependency Hygiene Needs a Dedicated Project Environment
   - Status: Fixed and verified
@@ -424,7 +426,7 @@ If optimizing for risk reduction:
 ## Latest Verification
 
 - Date: 2026-06-06
-- Full suite: `C:\Python313\python.exe -m pytest -v`
+- Full suite: `.\.venv\Scripts\python.exe -m pytest -v`
 - Result: 496 passed, 4 skipped, 41 warnings
 - Note: A Prefect temporary-server logging cleanup message appeared after pytest completed, but the pytest run exited successfully.
 - Visual smoke test:
@@ -436,28 +438,28 @@ If optimizing for risk reduction:
 ## Latest H-03 Verification
 
 - Date: 2026-06-09
-- Targeted upload tests: `C:\Python313\python.exe -m pytest -v test\integration\test_batch_upload_api.py test\integration\test_input_processing.py`
+- Targeted upload tests: `.\.venv\Scripts\python.exe -m pytest -v test\integration\test_batch_upload_api.py test\integration\test_input_processing.py`
 - Result: 13 passed, 2 warnings
-- Full suite attempt: `C:\Python313\python.exe -m pytest -v`
+- Full suite attempt: `.\.venv\Scripts\python.exe -m pytest -v`
 - Result: 511 passed, 4 skipped, 1 failed, 41 warnings
 - Full-suite failure note: The failing test was `test/third_party/llamacloud_connection_test.py::test_llamacloud_connection`, caused by a live LlamaCloud configuration lookup returning 404. The failure is unrelated to the H-03 upload-limit changes.
 
 ## Latest M-02 Verification
 
 - Date: 2026-06-09
-- Targeted CORS/UI tests: `C:\Python313\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
+- Targeted CORS/UI tests: `.\.venv\Scripts\python.exe -m pytest -v test\integration\test_new_ui_routes.py test\integration\test_api_endpoints.py`
 - Result: 26 passed, 29 warnings
 - Config/docs follow-up: Added `web.cors_allowed_origins: []` to all YAML config files with a `web:` section, documented the setting under the admin guide, and added config-check schema validation for explicit origins and wildcard rejection.
-- Config/docs focused tests: `C:\Python313\python.exe -m pytest -v test\tools\config_check\test_schema_validation.py test\integration\test_new_ui_routes.py test\tools\config_check\test_integration.py`
+- Config/docs focused tests: `.\.venv\Scripts\python.exe -m pytest -v test\tools\config_check\test_schema_validation.py test\integration\test_new_ui_routes.py test\tools\config_check\test_integration.py`
 - Result: 58 passed, 28 warnings
-- Full suite attempt: `C:\Python313\python.exe -m pytest -v`
+- Full suite attempt: `.\.venv\Scripts\python.exe -m pytest -v`
 - Result: 517 passed, 4 skipped, 1 failed, 41 warnings
 - Full-suite failure note: The failing test was `test/third_party/llamacloud_connection_test.py::test_llamacloud_connection`, caused by a live LlamaCloud configuration lookup returning 404. The failure is unrelated to the M-02 CORS changes.
 
 ## Latest L-03 Verification
 
 - Date: 2026-06-10
-- Environment setup: `C:\Python313\python.exe -m venv .venv`
+- Environment setup: `py -3.13 -m venv .venv`
 - Dependency install: `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
 - Full suite: `.\.venv\Scripts\python.exe -m pytest -v`
 - Result: 518 passed, 4 skipped, 40 warnings

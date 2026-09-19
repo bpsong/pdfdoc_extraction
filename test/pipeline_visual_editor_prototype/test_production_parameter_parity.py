@@ -5,7 +5,14 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PRODUCTION_SOURCE = PROJECT_ROOT / "web" / "static" / "js" / "pipeline_config.js"
+PIPELINE_MODULE_ROOT = PROJECT_ROOT / "web" / "static" / "js" / "pipeline-config"
 PRODUCTION_CSS = PROJECT_ROOT / "web" / "static" / "css" / "app.css"
+
+
+def _production_module_graph_source() -> str:
+    """Return the controller and extracted feature modules as one test corpus."""
+    sources = [PRODUCTION_SOURCE, *sorted(PIPELINE_MODULE_ROOT.glob("*.js"))]
+    return "\n".join(path.read_text(encoding="utf-8") for path in sources)
 
 
 TASK_PARAMETERS: dict[str, set[str]] = {
@@ -23,7 +30,7 @@ TASK_PARAMETERS: dict[str, set[str]] = {
 
 
 def test_production_editor_covers_every_user_configurable_task_parameter() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
 
     for class_name, parameters in TASK_PARAMETERS.items():
         assert class_name in source, class_name
@@ -32,14 +39,14 @@ def test_production_editor_covers_every_user_configurable_task_parameter() -> No
 
 
 def test_production_editor_hides_runtime_housekeeping_controls() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
 
     assert 'kind === "housekeeping"' not in source
     assert 'directoryControl("Processing directory"' not in source
 
 
 def test_production_editor_has_prototype_interaction_builders() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
 
     for marker in (
         "insert-filename-token",
@@ -54,7 +61,7 @@ def test_production_editor_has_prototype_interaction_builders() -> None:
 
 
 def test_production_editor_uses_runtime_defaults_and_supported_provider_values() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
 
     assert 'allow_uncategorized: "include"' in source
     assert 'LlamaCloudSplitTask: { enabled: true, api_key: "", configuration_id:' not in source
@@ -67,7 +74,7 @@ def test_production_editor_uses_runtime_defaults_and_supported_provider_values()
 
 
 def test_production_extract_field_types_are_complete_and_ordered() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
     expected_options = [
         '{ value: "str", label: "Text" }',
         '{ value: "int", label: "Integer" }',
@@ -89,7 +96,7 @@ def test_production_extract_field_types_are_complete_and_ordered() -> None:
 
 
 def test_production_editor_separates_provider_modes_and_hides_operational_controls() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
 
     assert source.count('data-param-action="provider-mode"') == 2
     assert source.count('detailsSection("Advanced provider settings"') == 2
@@ -100,7 +107,7 @@ def test_production_editor_separates_provider_modes_and_hides_operational_contro
 
 
 def test_production_editor_keeps_publish_validation_and_yaml_preview_safe() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
     validate_body = source.split("async function validateDraftPipeline()", 1)[1].split(
         "async function renderPipelineDiff()", 1
     )[0]
@@ -114,7 +121,7 @@ def test_production_editor_keeps_publish_validation_and_yaml_preview_safe() -> N
 
 
 def test_production_editor_has_unique_accessible_names_and_compact_breakpoint() -> None:
-    source = PRODUCTION_SOURCE.read_text(encoding="utf-8")
+    source = _production_module_graph_source()
     css = PRODUCTION_CSS.read_text(encoding="utf-8")
 
     for marker in (
