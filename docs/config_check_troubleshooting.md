@@ -1,12 +1,72 @@
 # Config Check Troubleshooting Guide
 
-This guide summarizes the most common validation failures and provides corrective actions. Each section includes the typical error signature printed by the CLI and concrete steps to resolve the issue.
+| Item | Value |
+| --- | --- |
+| Purpose | Operator troubleshooting for the `tools.config_check` CLI |
+| Verified against | `config-check` 0.1.0 |
+| Last verified | 2026-09-27 |
+| Maintainer | Config-check maintainers; refresh when CLI options or finding behavior changes |
+
+This guide helps identify the validation mode, interpret findings, and choose a
+repair path. Command examples use the repository virtual environment from the
+repository root. Symptom blocks are representative excerpts; exact messages
+vary by validation path. For automation, use the returned JSON fields rather
+than matching prose.
+
+## Contents
+
+- [Stored configuration and database findings](#stored-configuration-and-database-findings)
+- [Portable definitions](#portable-definition-findings)
+- [Fast symptom lookup](#fast-symptom-lookup)
+- [Common validation problems](#missing-directories-or-files)
+- [Task configuration problems](#missing-extraction-credentials)
+- [Rules task validation](#rules-task-validation-errors)
+- [Optional analyses](#performance-analysis-issues)
+- [Still stuck](#still-stuck)
+
+### Choose the right validation world
+
+- **Deployment YAML:** `validate` checks runtime settings and, when configured,
+  opens SQLite read-only to inspect active stored pipelines and watch bindings.
+- **Stored draft/version:** `validate --pipeline KEY --draft` or
+  `validate --review-schema KEY --version N` selects one stored object. These
+  commands need a configured database and never publish or mutate it.
+- **Portable file:** `validate-file` checks a standalone runtime or review
+  schema file. The current CLI accepts `--kind pipeline`, but its pipeline
+  validator expects a `pipeline-bundle` wrapper and returns an error. Do not
+  rely on that path for pipeline bundles; validate through the admin draft
+  validation flow or select the stored draft after import.
+
+The exhaustive finding catalog is maintained in
+[`ERROR_CODES.md`](../tools/config_check/examples/ERROR_CODES.md). In JSON,
+`code`, `severity`, `path`, and `message` are authoritative; this guide lists
+common codes for navigation rather than duplicating the catalog.
+
+## Fast symptom lookup
+
+| Symptom | Finding code | See |
+| --- | --- | --- |
+| SQLite cannot be opened or its schema is old/incomplete | `database-unavailable`, `database-schema-outdated`, `database-schema-incomplete` | [Stored configuration](#stored-configuration-and-database-findings) |
+| Selected stored key/version is absent | `stored-pipeline-not-found`, `stored-review-schema-not-found`, `stored-selector-invalid` | [Stored configuration](#stored-configuration-and-database-findings) |
+| Configured directory is missing | `path-missing-dir` | [Missing directories](#missing-directories-or-files) |
+| Required watch-folder path is missing | `watch-folder-missing-dir` | [Watch folder](#watch-folder-not-prepared) |
+| Module or class cannot be imported | `task-import-module-not-found`, `task-import-class-not-found` | [Import failures](#import-failures) |
+| Rules task has invalid clauses or context paths | `rules-duplicate-clause`, `rules-context-path-invalid`, `rules-field-not-found` | [Rules validation](#rules-task-validation-errors) |
+| Stored/portable pipeline task order or dependencies fail | `pipeline-multiple-split-tasks`, `pipeline-split-after-extract` | [Pipeline validation](../tools/config_check/README.md#pipeline-shape-and-ordering) |
+
+Some runtime YAML path findings currently have no stable finding code. Use the
+reported `path` and `message` fields to identify those; do not infer a code from
+the wording.
 
 ## Stored Configuration And Database Findings
 
 The default `validate` command reads `database.path` in read-only mode and
 checks active published pipeline versions plus watch-folder bindings. It never
 runs migrations or repairs data.
+
+The shared checker validates portable/stored definitions. Additional pipeline
+business rules are applied by the admin draft validation and publish flow;
+runtime YAML validation does not run that same full pipeline-rule pass.
 
 - `database-unavailable`: confirm the configured SQLite path exists and the
   account can read it.
@@ -17,7 +77,13 @@ runs migrations or repairs data.
 - `stored-active-pipeline-missing`: publish and activate at least one valid
   pipeline and bind every enabled ingress path.
 - `stored-pipeline-not-found` or `stored-review-schema-not-found`: check the
-  stable key and `--draft`/`--version` selector.
+  stable key and selector. Use exactly one source selector:
+  `--pipeline invoices --draft`, `--pipeline invoices --version 3`,
+  `--review-schema invoice --draft`, or
+  `--review-schema invoice --version 2`. `--draft` and `--version` require a
+  selected key; they cannot be combined, and `--pipeline` and
+  `--review-schema` are mutually exclusive. `--all-stored` cannot be combined
+  with an individual selector.
 - A stored content-hash mismatch indicates corruption or unsupported direct
   database modification. Restore a verified backup; do not edit an immutable
   row.
@@ -28,6 +94,9 @@ runs migrations or repairs data.
 Use `--all-stored --format json` to collect the full set. JSON output and
 redacted diffs must not contain resolved secrets. Exit code `0` is clean, `1`
 has errors, `2` is warning-only, and `64` indicates bad command usage.
+When a run contains both errors and warnings, the exit code is `1`; error status
+takes precedence, so automation must inspect JSON findings if it also needs to
+detect warnings.
 
 Top-level deployment YAML `pipeline` and `tasks` sections are optional after
 their definitions have been published into SQLite. If they remain, the checker
@@ -46,17 +115,20 @@ resolved value.
 
 ## Portable Definition Findings
 
-Use `validate-file --file PATH --kind pipeline` or `--kind review-schema`
-before import. A portable file is not active configuration: import updates a
-draft only, and an explicit publish is still required. Stable keys and version
-metadata are portable; database UUIDs and resolved secret values are not.
+Portable files are not active configuration: import updates a draft only, and
+an explicit publish is still required. The current `validate-file --kind
+pipeline` path fails because the command passes `pipeline` to a validator that
+requires `pipeline-bundle`, while the CLI does not accept `pipeline-bundle` for
+`validate-file`. For now, validate a pipeline in its admin draft before
+publishing. `validate-file --kind review-schema` remains available. Stable keys
+and version metadata are portable; database UUIDs and resolved secret values
+are not.
 
 ## Missing Directories Or Files
 
 **Symptom**
 ```
-[ERROR] web.upload_dir: Directory "C:/missing/uploads" does not exist
-Suggestion: Create the directory or update the path in config
+[ERROR] web.upload_dir: Directory does not exist: C:\missing\uploads
 ```
 
 **Fixes**
@@ -70,7 +142,7 @@ Suggestion: Create the directory or update the path in config
 
 **Symptom**
 ```
-[ERROR] watch_folder.dir: Watch directory does not exist
+[ERROR] watch_folder.dir: watch_folder.dir directory does not exist
 ```
 
 **Fixes**
@@ -89,7 +161,7 @@ Suggestion: Create the directory or update the path in config
 ```
 
 **Fixes**
-- Run `config-check validate --config config.yaml --format json` to get precise line/column hints.
+- Run `.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --format json` to get precise line/column hints.
 - Verify indentation is two spaces and that all quoted strings are terminated.
 - For large files, validate subsets by commenting blocks with `#` until the offending section is isolated.
 
@@ -103,7 +175,9 @@ Suggestion: Create the directory or update the path in config
 **Fixes**
 - Remove the unexpected key or move it under the nearest `params` mapping if it belongs to a task.
 - Omit `--strict` when validating a legacy file that intentionally carries
-  extra metadata. Add `--strict` only when unknown keys should be blocking.
+  extra metadata. Without `--strict`, unknown keys are warnings rather than
+  blockers; review them instead of assuming the configuration was fully
+  recognized. Add `--strict` when unknown keys should fail validation.
 
 ## Import Failures
 
@@ -113,7 +187,7 @@ Suggestion: Create the directory or update the path in config
 ```
 
 **Fixes**
-- Confirm the package is installed in the active Python environment (`python -m pip show package-name`).
+- Confirm the package is installed in the repository environment (`.\.venv\Scripts\python.exe -m pip show package-name`).
 - Add the project root to `PYTHONPATH` or install the module in editable mode.
 - Verify the class name matches the exported symbol inside the module.
 
@@ -137,7 +211,12 @@ custom_steps:
       class: CustomerValidationTask
 ```
 
-## Pipeline Cardinality Or Ordering Errors
+## Pipeline Cardinality Or Ordering Errors (Stored/Portable Definitions)
+
+These pipeline business-rule findings come from pipeline draft/version
+validation. They are not produced by basic deployment YAML validation. Use the
+admin draft validator, or validate a selected stored draft/version, to check
+these ordering and cardinality rules.
 
 **Symptoms**
 ```
@@ -160,6 +239,9 @@ custom_steps:
   ```
 - Put review gate after extraction so extracted fields, confidence values, and schema checks are available.
 - Ensure at least one extraction task appears before downstream storage or rules tasks.
+
+Multiple extraction tasks violate the one-extraction cardinality rule and are
+a blocking pipeline validation error, not just a performance warning.
 
 ## Duplicate Pipeline Task Type Warnings
 
@@ -297,7 +379,7 @@ confidence when GLM returns none.
 - Define overrides as a mapping, e.g. `storage: { data_dir: ./alt-output, filename: {id}.json }`.
 - If overrides are unnecessary, drop the `storage` block entirely and keep the legacy top-level `data_dir` and `filename` parameters.
 
-## Rules Task Configuration Errors
+## Rules Task Required Configuration
 
 **Symptom**
 ```
@@ -312,11 +394,9 @@ confidence when GLM returns none.
 - Provide required strings:
   - `reference_file`: path to the CSV file being updated.
   - `update_field`: the column that will be rewritten.
-- Ensure `csv_match` is a mapping with:
-  - `type: column_equals_all`.
-  - `clauses`: list containing 1-5 clause mappings.
-    - Each clause must define `column` (CSV column) and `from_context` (context key); optional `number` must be `true` or `false`.
-- When the validator flags a specific clause index (e.g., `clauses[2].column`), edit that entry directly in the YAML to supply the missing value or correct the type.
+- Ensure `csv_match` is a mapping with `type: column_equals_all` and a
+  `clauses` list containing 1-5 mappings. Detailed clause, column, context,
+  and CSV findings are in [Rules task validation](#rules-task-validation-errors).
 - Optional parameters must have correct types when provided:
   - `write_value`: string value to write to matched rows (optional, defaults to "Updated").
   - `backup`: boolean flag to create .backup files (optional, defaults to true).
@@ -358,7 +438,6 @@ confidence when GLM returns none.
 [ERROR] tasks.split_documents.params.split_dir: Parameter 'split_dir' is required and must be a non-empty string
 [ERROR] tasks.split_documents.params.categories: Enabled LlamaCloudSplitTask requires categories or configuration_id.
 [ERROR] tasks.split_documents.params.allow_uncategorized: allow_uncategorized must be one of include, forbid, or omit.
-[WARNING] pipeline: Split task is the final pipeline step; fan-out children will have no downstream work.
 ```
 
 **Fixes**
@@ -379,7 +458,9 @@ confidence when GLM returns none.
 - Set `allow_uncategorized` to exactly one of `include`, `forbid`, or `omit`.
 - Use only `high`, `medium`, and `low` in `fail_on_confidence_levels`.
 - Set `fail_on_unknown_category` to a real boolean (`true` or `false`), not a quoted string.
-- If the split task is last in the pipeline, add downstream extraction/review/storage tasks or remove split if no fan-out processing is required.
+- Admin pipeline validation may also report `split-final-pipeline-step` when a
+  split task has no downstream child work. Add downstream tasks or remove the
+  split if fan-out is not needed.
 
 ## Review Gate Configuration Errors
 
@@ -517,10 +598,13 @@ confidence when GLM returns none.
 ```
 [ERROR] tasks.update_reference.params.csv_match.clauses[1]: Duplicate clause: column='supplier_name', from_context='supplier_name'
 [WARNING] tasks.update_reference.params.csv_match.clauses: Multiple clauses reference column 'supplier_name' (indices: [0, 2]). This may create impossible AND conditions.
-[INFO] tasks.update_reference.params.csv_match.clauses: Multiple clauses use context 'supplier_name' (indices: [0, 3]). This might be intentional but worth noting.
+[WARNING] tasks.update_reference.params.csv_match.clauses: Multiple clauses use context 'supplier_name' (indices: [0, 3]). This might be intentional but worth noting.
 ```
 
 **Fixes**
+- The CLI currently renders low-priority rule diagnostics as `[WARNING]`, even
+  when the finding code's internal diagnostic metadata says `info`. The summary
+  therefore reports `0 info messages`; treat these as advisory where appropriate.
 - **Duplicate clauses (`rules-duplicate-clause`)**:
   - Remove exact duplicate clauses with identical column and from_context values
   - Make clauses unique by using different columns or contexts
@@ -531,7 +615,7 @@ confidence when GLM returns none.
   - Use different columns for different conditions
   - Consider if OR logic is needed (may require separate rules tasks)
 - **Context reuse (`rules-context-reuse`)**:
-  - This is informational - multiple clauses using same context may be intentional
+  - This is a low-priority diagnostic; multiple clauses using the same context may be intentional
   - Review if this matches your business requirements
   - Consider using different context values if clauses should be independent
 
@@ -564,7 +648,7 @@ confidence when GLM returns none.
 **Symptoms**
 ```
 [WARNING] tasks.update_reference.params.csv_match.clauses[0]: Column 'amount' appears to be numeric but clause forces string comparison. Consider removing 'number: false' or verify the column type.
-[INFO] tasks.update_reference.params.csv_match.clauses[1]: Field reference 'unlikely_field_name' doesn't match common extraction patterns. Verify this field exists in your extraction configuration.
+[WARNING] tasks.update_reference.params.csv_match.clauses[1]: Field reference 'unlikely_field_name' doesn't match common extraction patterns. Verify this field exists in your extraction configuration.
 ```
 
 **Fixes**
@@ -574,7 +658,7 @@ confidence when GLM returns none.
   - Verify CSV column actually contains the expected data type
   - Example: For amount columns, use `number: true` for numeric comparison
 - **Unrealistic field reference (`rules-unrealistic-field-reference`)**:
-  - This is informational - verify the field name exists in extraction configuration
+  - This is a low-priority diagnostic - verify the field name exists in extraction configuration
   - Check field names follow your extraction naming conventions
   - May be intentional for custom fields, but worth double-checking
 
@@ -644,7 +728,7 @@ confidence when GLM returns none.
 **Fixes**
 - **Reduce field count**: Remove unnecessary extraction fields
 - **Simplify the schema**: Move optional or unused provider fields out of the
-  definition; a published pipeline permits only one extraction task
+  definition
 - **Prioritize fields**: Keep only essential fields for core functionality
 - **Use selective extraction**: Extract only fields needed for immediate processing
 
@@ -652,7 +736,7 @@ confidence when GLM returns none.
 
 **Symptoms**
 ```
-[INFO] tasks.update_reference.params.csv_match.clauses: Rules task has 2 clauses with deeply nested context paths (4+ levels). Consider simplifying context path structure.
+[WARNING] tasks.update_reference.params.csv_match.clauses: Rules task has 2 clauses with deeply nested context paths (4+ levels). Consider simplifying context path structure.
 ```
 
 **Fixes**
@@ -674,8 +758,6 @@ confidence when GLM returns none.
 - **Parallel processing**: Consider if some tasks can be parallelized (requires code changes)
 - **Remove redundancy**: Eliminate duplicate or unnecessary processing steps
 
-Multiple extraction tasks are not merely a performance-warning case: they violate the pipeline cardinality rule and produce a blocking validation error, even if performance analysis also emits a supplementary warning.
-
 ## Security Analysis Issues
 
 ### Path Traversal Vulnerabilities
@@ -687,11 +769,12 @@ Multiple extraction tasks are not merely a performance-warning case: they violat
 ```
 
 **Fixes**
-- **Use absolute paths**: Replace relative paths with absolute paths within application boundaries
-  - Change: `../../../etc/uploads` → `C:\app\uploads` or `./uploads`
+- **Choose an application-owned path**: Replace unintended traversal with a
+  path under the deployment's intended data root, such as `C:\app\uploads`.
 - **Remove traversal patterns**: Eliminate `../`, `..\\`, and `..` from paths
-- **Validate boundaries**: Ensure paths stay within expected application directories
-- **Use application-relative paths**: Prefer paths relative to the application root
+- Confirm the resolved path is the intended location and that the service
+  account has only the access it needs. The security analysis is heuristic; a
+  finding alone does not establish exploitability.
 
 ### Suspicious System Paths
 
@@ -717,10 +800,9 @@ Multiple extraction tasks are not merely a performance-warning case: they violat
 ```
 
 **Fixes**
-- **Remove command separators**: Eliminate `;`, `|`, `&`, `` ` ``, `$(`, `${` from paths
-- **Sanitize input**: Clean path values of potentially dangerous characters
-- **Use simple paths**: Stick to alphanumeric characters, hyphens, underscores, and path separators
-- **Validate input**: Implement input validation to reject dangerous patterns
+- Treat this as a heuristic path warning, not evidence that the path is passed
+  to a shell. Confirm the resolved path is intended and prefer a path without
+  suspicious separators if they are not required by the deployment.
 
 ### Environment Variable Risks
 
@@ -730,11 +812,10 @@ Multiple extraction tasks are not merely a performance-warning case: they violat
 ```
 
 **Fixes**
-- **Avoid environment variables**: Don't use `$VAR`, `${VAR}`, or `%VAR%` in configuration paths
-- **Use explicit paths**: Replace environment variable references with explicit paths
-  - Change: `$HOME/uploads` → `/home/app/uploads` or `C:\app\uploads`
-- **Configure at deployment**: Set explicit paths during deployment rather than using variables
-- **Document paths**: Clearly document expected path values for different environments
+- Environment-variable expansion is supported by configuration path handling.
+  This analyzer flags `$`/`%` patterns heuristically; confirm the resolved path
+  is intended, and use an explicit path if the warning is not useful in your
+  deployment.
 
 ### Unsafe Directory Locations
 
@@ -755,27 +836,27 @@ Multiple extraction tasks are not merely a performance-warning case: they violat
 
 Run the validator in verbose mode to see detailed logging:
 ```
-config-check validate --config .\config.yaml --verbose
+.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml
 ```
 
 For comprehensive validation including import checks:
 ```
-config-check validate --config .\config.yaml --import-checks --verbose
+.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --import-checks
 ```
 
 For full validation including file system checks:
 ```
-config-check validate --config .\config.yaml --check-files --verbose
+.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --check-files
 ```
 
 For performance and security analysis:
 ```
-config-check validate --config .\config.yaml --performance-analysis --security-analysis --verbose
+.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --performance-analysis --security-analysis
 ```
 
 For a combined deployment analysis and full stored-object audit:
 ```
-.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --all-stored --import-checks --check-files --performance-analysis --security-analysis --verbose
+.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --all-stored --import-checks --check-files --performance-analysis --security-analysis
 ```
 
 This combines optional analysis of runtime/legacy YAML with the read-only
@@ -786,8 +867,8 @@ checks.
 
 Get machine-readable output for automated troubleshooting:
 ```
-config-check validate --config .\config.yaml --format json
-config-check validate --config .\config.yaml --check-files --performance-analysis --security-analysis --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --check-files --performance-analysis --security-analysis --format json
 ```
 
 If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include which validation flags you used (`--import-checks`, `--check-files`, `--performance-analysis`, `--security-analysis`) as these affect which validation errors are reported.

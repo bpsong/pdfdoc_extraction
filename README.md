@@ -1,4 +1,4 @@
-﻿# PDF Document Processing System
+# PDF Document Processing System
 
 [![Python](https://img.shields.io/badge/Python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.139.2-green.svg)](https://fastapi.tiangolo.com/)
@@ -28,6 +28,8 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### Configurable Pipeline Architecture
 - **Modular Design**: Pluggable processing steps (extraction, storage, archiving, rules)
 - **Prefect Workflow Orchestration**: Reliable task execution and error handling
+- **Supervised Local Runtime**: The parent process runs migrations and supervises the web and worker subprocesses; a single durable worker executes queued root workflows
+- **Persisted Review Resume**: Human review pauses document work in SQLite; completion starts a new flow at the next task
 - **Versioned Configuration**: Named SQLite pipeline templates with editable
   drafts, immutable published versions, and exact review-form dependencies
 - **Explicit Routing**: Uploads select one exact published version and each
@@ -62,6 +64,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - [Usage](#usage)
 - [API Reference](#api-reference)
 - [Project Structure](#project-structure)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 - [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
@@ -308,8 +311,10 @@ After a successful import, remove the legacy `authentication` block. Passwords m
 ## API Reference
 
 ### Authentication
-- `POST /login`: User authentication
-- `POST /logout`: Session termination
+- `POST /api/login`: API user authentication
+- `POST /api/session/refresh`: Refresh the authenticated session
+- `POST /login`: Browser login form
+- `GET /logout`: Browser session termination
 - `GET /api/admin/users`: List fixed accounts (admin only)
 - `PUT /api/admin/users/{username}/password`: Change an account password (admin only)
 
@@ -367,47 +372,55 @@ The `admin` account has full access. The `operator` account cannot access admini
 ```
 pdfdoc_extraction/
 ├── 📄 main.py                    # Application entry point
-├── 📄 config.yaml               # Main configuration file
+├── 📄 config.yaml               # Ignored local deployment configuration (not committed)
 ├── 📄 requirements.txt          # Pinned runtime Python dependencies
 ├── 📄 requirements-dev.txt      # Runtime plus test/browser tooling
+├── 📄 package.json              # Production frontend asset tooling
 ├── 📁 modules/                  # Core application modules
-│   ├── api_router.py           # API endpoint management
-│   ├── config_manager.py       # Configuration management
-│   ├── file_processor.py       # File processing logic
-│   ├── db/                     # SQLite connection, migrations, repositories
-│   ├── services/               # Batch, review, reports, audit, settings, artifact services
-│   ├── services/watch_folder_coordinator.py # Multi-binding watch-folder routing
-│   └── workflow_manager.py     # Workflow orchestration
+│   ├── api_router.py            # API composition and request handling
+│   ├── config_manager.py        # Deployment configuration
+│   ├── db/                      # SQLite schema, migrations, and repositories
+│   ├── services/                # Workflow, review, upload, queue, admin, and artifact use cases
+│   ├── workflow_loader.py       # Approved configured-task execution
+│   └── workflow_manager.py      # Root, split-child, and resumed flows
 ├── 📁 standard_step/           # Processing pipeline steps
 │   ├── extraction/             # Data extraction tasks
-│   │   └── extract_pdf.py      # Scalar, typed-object, and array-of-objects extraction
+│   │   ├── extract_pdf.py       # Generic PDF extraction
+│   │   ├── llama_cloud_v2.py    # LlamaCloud Extract v2
+│   │   └── glm_ocr_extract.py   # Local Ollama-backed GLM-OCR
 │   ├── storage/                # Data storage tasks
-│   │   ├── store_metadata_as_csv.py
-│   │   └── store_metadata_as_json.py
-│   ├── rules/                  # Business rule tasks
-│   ├── archiver/               # File archiving tasks
-│   ├── context/                # Context management tasks
-│   └── housekeeping/           # Cleanup and maintenance tasks
+│   ├── split/                   # PDF split and fan-out tasks
+│   ├── review/                  # Human-review gate
+│   ├── rules/                   # Business rule tasks
+│   ├── archiver/                # File archiving tasks
+│   ├── context/                 # Context management tasks
+│   └── housekeeping/            # Cleanup and maintenance tasks
+├── 📁 tools/                    # Administrative tools and config checker
+│   └── config_check/            # CLI: python -m tools.config_check
 ├── 📁 web/                     # Web interface
 │   ├── server.py               # FastAPI application
 │   ├── templates/              # HTML templates
 │   └── static/                 # CSS, JavaScript, assets
-├── 📁 test/                    # Test suites
-│   ├── core/                   # Core component tests
-│   ├── integration/            # Integration tests
-│   ├── storage/                # Storage task tests
-│   └── workflow/               # Workflow tests
-├── 📁 docs/                    # Documentation
-│   ├── design_architecture.md  # System architecture
-│   ├── user_guide.md           # User manual
-│   ├── review_schema_admin_guide.md
-│   └── frontend_deployment.md  # Frontend release and rollback playbook
-└── 📁 tasks/                   # Engineering guidance and future designs
-    ├── standard_task_creation_guidelines.md
-    ├── future-lightweight-pipeline-visualization.md
-    ├── future-multi-document-routing.md
-    └── archive/                # Historical PRDs, completed task lists, and audits
+├── 📁 test/                    # Unit, service, workflow, integration, security, and visual tests
+├── 📁 docs/                    # Architecture, operations, administration, and user guides
+├── 📁 tasks/                   # Task creation guidance, plans, and archived work
+└── 📁 pipeline_visual_editor_prototype/ # Separate React/Vite prototype, not production UI
 ```
+
+Runtime directories such as `data/`, `files/`, `processing*/`, `output/`,
+`web_upload/`, and `watch_folder/` hold local state or generated/customer
+artifacts; they are not source folders to commit.
+
+## Documentation
+
+- [User guide](docs/user_guide.md): setup, operator workflows, and deployment configuration
+- [Architecture reference](docs/design_architecture.md): process boundaries, state, persistence, and safe-change guidance
+- [Config-check troubleshooting](docs/config_check_troubleshooting.md): CLI modes, findings, and recovery guidance
+- [Config-check CLI reference](tools/config_check/README.md) and [finding codes](tools/config_check/examples/ERROR_CODES.md)
+- [Watch-folder administration](docs/watch_folder_admin_reference.md): binding lifecycle, revisions, and health checks
+- [Review-form administration](docs/review_schema_admin_guide.md): schema authoring and versioning
+- [Frontend deployment](docs/frontend_deployment.md): asset release and rollback
+- [Standard task creation](tasks/standard_task_creation_guidelines.md): task contract and implementation rules
 
 ## Development
 
@@ -507,10 +520,14 @@ file. `logging.log_level` applies to all three processes.
 
 1. Check the [User Guide](docs/user_guide.md) for detailed instructions
 2. Review [Design Architecture](docs/design_architecture.md) for technical details
-3. Review the [Frontend Deployment and Rollback Guide](docs/frontend_deployment.md)
+3. Use the [Configuration Checker Troubleshooting Guide](docs/config_check_troubleshooting.md)
+   for config-check findings and stored pipeline validation
+4. Review the [Review Form Administrator Guide](docs/review_schema_admin_guide.md)
+   for review-form authoring and versioning
+5. Review the [Frontend Deployment and Rollback Guide](docs/frontend_deployment.md)
    when releasing or reverting browser modules
-4. Examine application logs for error details
-5. Check the repository's issue tracker for known problems
+6. Examine application logs for error details
+7. Check the repository's issue tracker for known problems
 
 ## Contributing
 

@@ -8,11 +8,36 @@
 | Audience | Senior engineers, architects, technical leads, and operational owners |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
-| Last verified | 2026-09-13 |
+| Last verified | 2026-09-27 |
 | Verified revision | Current release after the configuration and migration boundary refactor |
+| Owner | Application maintainers; update with architecture-affecting changes |
+| Review cadence | Review when process ownership, workflow state, persistence, or trust boundaries change |
 
 This document describes the current implementation, not a target-state
 architecture.
+
+## Contents and reading paths
+
+- [Start here](#start-here-for-a-codebase-takeover)
+- [Architecture and invariants](#architecture-at-a-glance)
+- [Runtime topology](#runtime-topology)
+- [Component boundaries and request traces](#component-boundaries)
+- [Ingestion and workflow execution](#ingestion-and-workflow-execution)
+- [State model and human review](#state-model)
+- [Split fan-out and fan-in](#split-fan-out-and-fan-in)
+- [Persistence and artifacts](#persistence-and-artifacts)
+- [Configuration architecture](#configuration-architecture)
+- [Frontend and UI architecture](#frontend-and-ui-architecture)
+- [API and trust boundaries](#api-authentication-and-trust-boundaries)
+- [Recovery and debugging](#errors-recovery-and-observability)
+- [Testing, debt, and change workflow](#testing-and-verification)
+
+**Reading paths:** Backend changes: component boundaries, ingestion, state,
+persistence, and API sections. Frontend changes: [frontend architecture](#frontend-and-ui-architecture)
+and [browser security](#browser-security). Operations/debugging: [runtime topology](#runtime-topology),
+[configuration](#configuration-architecture), and [debugging checklist](#debugging-checklist).
+New tasks: [task and context contract](#task-and-context-contract) and the
+[standard task guidelines](../tasks/standard_task_creation_guidelines.md).
 
 ## Start here for a codebase takeover
 
@@ -23,10 +48,9 @@ main.py
  ├─ ConfigManager and startup checks
  ├─ WatchFolderCoordinator (polling thread)
  ├─ ProcessingWorker subprocess
+ │    └─ FileProcessor → WorkflowManager → WorkflowLoader → tasks
  └─ Uvicorn web subprocess
-      ├─ web/server.py
-      ├─ modules/api_router.py
-      └─ services and repositories
+      └─ web/server.py → modules/api_router.py → services/repositories
 ```
 
 The parent process owns normal database migration and supervision. The web
@@ -103,13 +127,22 @@ The essential model is:
 
 ## Runtime topology
 
+**TL;DR:** The parent migrates the database, supervises child processes, and
+polls watch-folder bindings. The web process handles browser/API requests; the
+worker subprocess alone runs queued root workflows. All processes share SQLite
+and configured filesystem paths.
+
 ```mermaid
 flowchart LR
     subgraph Parent["Main process"]
         Main["main.py<br/>startup and supervision"]
         Watch["WatchFolderCoordinator"]
-        Runner["FileProcessor<br/>WorkflowManager<br/>WorkflowLoader"]
-        Main --> Watch --> Runner
+        Main --> Watch
+    end
+
+    subgraph Worker["Processing worker subprocess"]
+        JobWorker["ProcessingWorker"] --> Runner["FileProcessor<br/>WorkflowManager<br/>WorkflowLoader"]
+        Runner --> Tasks["Configured tasks"]
     end
 
     subgraph Web["Uvicorn subprocess"]
@@ -123,12 +156,15 @@ flowchart LR
     end
 
     Main -->|starts and supervises| App
+    Main -->|starts and supervises| JobWorker
+    Watch --> DB[(SQLite)]
+    JobWorker --> DB
     Runner --> DB[(SQLite)]
     APIs --> Services["Services"] --> DB
     Runner --> Files[(Filesystem)]
     Services --> Files
-    Runner --> CloudProvider["LlamaCloud APIs"]
-    Runner --> LocalProvider["Local Ollama / GLM-OCR"]
+    Tasks --> CloudProvider["LlamaCloud APIs"]
+    Tasks --> LocalProvider["Local Ollama / GLM-OCR"]
     Pages --> Browser["Browser"]
     Assets --> Browser
     Browser --> APIs
@@ -177,29 +213,11 @@ one local worker, not a distributed queue, worker pool, or multi-host
 coordination layer.
 
 Extraction providers are independent implementations behind the same workflow
-boundary. LlamaCloud owns its cloud API, saved-configuration, citation, and
-confidence behavior. `GlmOcrExtractTask` calls an administrator-configured
-Ollama HTTP endpoint, renders PDF pages locally in memory, and normalizes its
-result to the same top-level `context["data"]` field contract. In document
-resolution mode, GLM-OCR produces page-level candidates and a separately
-configured local model resolves scalar and object fields independently against
-bounded copies of all ordered page images. Tables are reconciled from bounded
-chunks of structured GLM-OCR row evidence plus bounded copies of only the source
-pages represented by each chunk. If a table resolver reaches its output-token
-limit, the task splits that evidence chunk before trying again. Legacy page-merge
-mode remains available for published pipelines that do not opt in. The task does
-not start or supervise Ollama. It uses the native Ollama API only; PP-DocLayout
-and the full GLM-OCR SDK are not runtime components.
-
-The GLM-OCR implementation has no invoice-specific output contract. Versioned
-pipeline configuration supplies document instructions and dynamic scalar, flat
-object, and table fields, so the same task boundary can serve invoices,
-insurance documents, bills of lading, and other PDF classes. The pipeline
-schema remains document-specific and its review-form keys must match. The
-current structured boundary permits at most 100 top-level fields, flat objects,
-and one logical array-of-objects table per extraction task; it is not a generic
-representation for documents requiring several independent repeated tables or
-arbitrarily nested structures.
+boundary: tasks normalize results into the shared top-level `context["data"]`
+contract and persist provider-neutral results. Provider-specific configuration,
+chunking, retries, and supported field shapes belong with provider task
+documentation and implementation, not this architecture boundary reference; see
+the [GLM-OCR task design](../tasks/design-and-implementation-glm-ocr-extract-task.md).
 
 ## Component boundaries
 
@@ -307,7 +325,36 @@ Admin pipeline publication
  → immutable pipeline_versions row
 ```
 
+For a representative upload, the same identifiers connect each persistence
+layer: `batch_id` groups the accepted submission, `document_id` identifies an
+ingested PDF, `processing_jobs.document_id` queues its execution, and each
+`task_runs.id` records a task attempt. A review gate creates a `review_items.id`
+for that document and links it to the creating task run. Start from the
+document ID when tracing one file; then inspect its task runs, review item, job,
+and `document_files` rows. For canonical columns and foreign keys, see
+[`modules/db/schema.sql`](../modules/db/schema.sql).
+
+Useful read-only queries (bind IDs rather than copying customer data):
+
+```sql
+SELECT id, status, pipeline_version_id FROM batches WHERE id = ?;
+SELECT id, status, parent_document_id, current_task_key
+FROM documents WHERE id = ?;
+SELECT id, status, task_key, task_index, started_at, ended_at
+FROM task_runs WHERE document_id = ? ORDER BY started_at, task_index;
+SELECT id, status, reason, created_by_task_run_id
+FROM review_items WHERE document_id = ? ORDER BY created_at DESC;
+SELECT id, status, attempt_count, lease_expires_at
+FROM processing_jobs WHERE document_id = ?;
+SELECT id, file_type, file_path FROM document_files WHERE document_id = ?;
+```
+
 ## Ingestion and workflow execution
+
+**TL;DR:** Ingestion validates a PDF, pins it to an immutable pipeline version,
+creates batch/document/artifact records, then enqueues a durable job. A leased
+worker executes tasks and writes state to SQLite; filesystem artifacts are
+registered separately.
 
 ```mermaid
 sequenceDiagram
@@ -347,25 +394,13 @@ sequenceDiagram
   published `pipeline_version_id`. The whole batch shares that exact version;
   invalid or stale selections create no rows or orphan files. Each accepted
   document receives its durable processing job in the same transaction. The
-  multipart receiver spools file parts to disk, enforces request and concurrency
-  limits while reading, and never buffers the complete request body. Each part
-  permits at most 16 headers with 16 KiB of combined header-name/value data,
-  checked before buffering. A closing multipart boundary is required before
-  accepting any files; malformed or incomplete requests create no batch or jobs. Startup
-  reconciliation removes upload-owned staging and finalized files that have no
-  SQLite reference after an interrupted submission. Upload requests hold a
-  shared OS file lock through staging, finalization, database commit, and error
-  cleanup. Reconciliation holds the exclusive lock from its reference query
-  through deletion, preventing stale-snapshot races with active submissions.
-  A separate lifetime lock permits only one web process per processing directory;
-  a second process fails startup before reconciliation. Locks release on process
-  exit, including crashes. The `.upload-storage.lock` and `.web-process.lock`
-  files remain on disk and must not be manually deleted while the app is running.
-  Request cancellation uses shielded staging cleanup before propagating the
-  cancellation, so an interrupted disk copy does not leave an upload fragment.
-  Receiving and staging have a 600-second overall deadline and a 30-second
-  receive-idle deadline, configured with `web.upload_timeout_seconds` and
-  `web.upload_idle_timeout_seconds`. Expiry returns HTTP 408 and releases capacity.
+  multipart receiver streams file parts to disk and enforces request and
+  concurrency limits without buffering the full body. It requires a complete
+  multipart boundary before creating work, reconciles upload-owned orphan files
+  after interrupted submissions, and serializes submissions/reconciliation
+  with OS locks. Cancellation cleans staging files. Exact parser limits,
+  deadlines, lock-file names, and receipt semantics are implementation details
+  owned by `upload_receiver.py` and `upload_submission_service.py`.
   Browser submissions carry a UUID `Idempotency-Key`; SQLite `upload_submissions`
   receipts commit atomically with the batch and jobs. Repeating the same key,
   user, pipeline, and file contents returns the original batch; changed content
@@ -377,6 +412,11 @@ sequenceDiagram
 
 ### Watch-folder administration
 
+**TL;DR:** A binding selects an exact eligible pipeline version for future
+claims. Its lifecycle controls whether claims can occur; it does not delete
+source directories or PDFs. The coordinator serializes claims against binding
+changes.
+
 `/app/admin/watch-folders` independently manages binding configuration. A binding
 is enabled, paused (assignment retained), unbound (assignment cleared), or retired
 (disabled and immutable). Paused/unbound paths remain reserved. Retired paths
@@ -384,29 +424,11 @@ are reusable through a new binding identity; historical batch references remain
 intact. Only unreferenced settings may be permanently deleted. No lifecycle
 action deletes source directories or PDFs.
 
-Schema version 7 rebuilds binding constraints to allow nullable assignments and
-adds retirement timestamps and optimistic revisions. The migration preserves
-binding IDs and checks foreign keys before committing. Configuration changes
-advance revisions; monitoring observations do not. Pause/unbind/retire do not
-require a healthy filesystem or executable assignment.
-
-Before each file claim, the coordinator re-reads the binding under SQLite's
-write lock, verifies the source directory and exact-version eligibility, and
-serializes the claim against administrative mutations. A started claim may
-finish before an update; subsequent claims use the current configuration.
-New batch metadata retains the source folder and binding revision. Earlier
-records are not backfilled with guessed source snapshots.
-
-`watch_folder_health` stores scan/success/ingestion timestamps, scan issues, and
-ignored-file counts. The UI distinguishes configuration state from scan health;
-missing/old observations are stale after the larger of 30 seconds or three poll
-intervals. Test access/Check now run non-ingesting directory-existence/listing
-checks in the web process. They do not test destructive filesystem permissions,
-enqueue work, start a watcher, or replace coordinator scan timestamps.
-
-The page presents exact-version upgrades, lifecycle confirmations, filters,
-bounded activity history, and binding-scoped Reports links. Audit Log includes
-the existing `admin_` family plus `watch_binding.*` configuration events.
+Detailed lifecycle operations, revision semantics, health freshness, and admin
+page behavior are in the [watch-folder administration reference](watch_folder_admin_reference.md).
+The architecture invariant is that each claim re-reads its binding while serialized against
+administrative changes; an in-flight claim may finish, and later claims use the
+current assignment.
 
 ### Pipeline construction
 
@@ -455,6 +477,10 @@ child flows run cleanup when their configured work finishes.
 
 ### Task and context contract
 
+**TL;DR:** Tasks share a mutable context dictionary and preserve identity,
+position, outputs, and failure/review signals. State needed after a process
+restart or for operator/audit use must also be persisted in SQLite.
+
 Standard tasks inherit from `BaseTask` and implement `on_start`, `run`, and
 `validate_required_fields`. Expected failures use `TaskError` and
 `register_error`. New tasks must not write workflow status through
@@ -481,7 +507,25 @@ rules are in the
 `pipeline_template_id` and `pipeline_version_id` are cached execution identity
 in context; tasks must preserve them, while SQLite remains authoritative.
 
+### Glossary
+
+| Term | Meaning |
+| --- | --- |
+| Batch | Ingestion-level group of documents. |
+| Document | One root PDF or a split child; each has its own workflow state. |
+| Task run | Persisted execution attempt of one configured task for one document. |
+| Review item | Persisted operator work created by a review gate. |
+| Root / parent | Original document at the top of a split tree; a parent may itself be a child of a higher root. |
+| Leaf | Document with no children; leaf outcomes drive aggregate root and batch status. |
+| Fan-out / fan-in | Creating child workflows from a split, then aggregating their leaf outcomes. |
+| Pinned version | Immutable pipeline or review-schema version recorded for assigned work; later publication does not change it. |
+| `continued_failures` | Context history of failures allowed by `on_error: continue`; finalization restores them so the document does not hide them. |
+
 ## State model
+
+**TL;DR:** SQLite stores job, document, task-run, review, and aggregate states.
+Review is a persisted pause followed by a new downstream flow. Split roots and
+batches aggregate outcomes from leaf documents.
 
 - A **batch** groups documents from one ingestion.
 - A **document** represents a root PDF or split child.
@@ -495,23 +539,50 @@ stateDiagram-v2
     processing --> completed
     processing --> failed
     processing --> review_required
+    processing --> split_completed: child workflows created
     review_required --> in_review
     in_review --> review_required: release
     in_review --> review_completed
     review_completed --> resuming
     resuming --> completed
     resuming --> failed
+    resuming --> review_required: downstream review gate
 ```
 
 Task runs use `running`, `completed`, `paused`, and `failed`. Context values
 such as `pipeline_state: paused` and `pipeline_state: fan_out` are execution
 signals, not database entities.
 
+Processing jobs have a separate lifecycle and are not document states:
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued
+    queued --> running: worker claims lease
+    running --> queued: lease expires / retry available
+    running --> completed: workflow finished
+    running --> failed: attempts exhausted or terminal job failure
+```
+
+Root and batch status is an aggregate of leaf document outcomes:
+
+```mermaid
+stateDiagram-v2
+    [*] --> processing
+    processing --> review_required: at least one leaf paused for review
+    processing --> completed: all leaves succeeded
+    processing --> completed_with_errors: mixed success and failure
+    processing --> failed: all leaves failed
+    review_required --> completed: review resolved; all leaves succeeded
+    review_required --> completed_with_errors: mixed terminal outcomes
+    review_required --> failed: all leaves failed
+```
+
 State transition ownership is split as follows:
 
 | Transition or state | Owner |
 | --- | --- |
-| Job `queued`/`processing`/lease expiry | `ProcessingJobService` and worker |
+| Job `queued`/`running`/lease expiry | `ProcessingJobService` and worker |
 | Document task progress and terminal state | `WorkflowStateService` |
 | `processing` → `review_required` | `ReviewGateTask` |
 | `review_required` → `in_review` | `ReviewService` claim transaction |
@@ -612,6 +683,10 @@ review; mixed terminal outcomes produce `completed_with_errors`.
 
 ## Persistence and artifacts
 
+**TL;DR:** SQLite stores operational records and artifact references; the local
+filesystem stores PDF and export contents. Repositories own table operations,
+and services coordinate cross-table invariants.
+
 | Domain | SQLite tables |
 | --- | --- |
 | Identity | `users` |
@@ -625,6 +700,23 @@ review; mixed terminal outcomes produce `completed_with_errors`.
 | Ingress configuration | `watch_folder_bindings` |
 | Runtime health | `runtime_component_health`, `watch_folder_health` |
 | Schema management | `schema_migrations` |
+
+The main execution relationship is `batches → documents → task_runs`; a review
+gate adds `review_items`, artifacts are recorded in `document_files`, and
+ingestion queues each document in `processing_jobs`. Split documents point to
+their parent through `documents.parent_document_id`.
+
+```mermaid
+erDiagram
+    BATCHES ||--o{ DOCUMENTS : groups
+    DOCUMENTS ||--o{ TASK_RUNS : executes
+    DOCUMENTS ||--o{ REVIEW_ITEMS : reviews
+    DOCUMENTS ||--o{ DOCUMENT_FILES : references
+    DOCUMENTS ||--o| PROCESSING_JOBS : queues
+    DOCUMENTS ||--o{ DOCUMENTS : splits_into
+    TASK_RUNS o|--o{ REVIEW_ITEMS : creates
+    BATCHES ||--o{ TASK_RUNS : groups
+```
 
 [`modules/db/connection.py`](../modules/db/connection.py) resolves the database
 relative to the active configuration, enables row access and foreign keys,
@@ -681,6 +773,10 @@ SQLite and local filesystem coupling suit a local or modest-volume
 installation. They do not provide a horizontally scaled worker architecture.
 
 ## Configuration architecture
+
+**TL;DR:** Deployment YAML configures process infrastructure and secret aliases.
+SQLite stores operational settings and immutable pipeline/review versions.
+Each process has its own config snapshot, so YAML edits require restart.
 
 Runtime YAML is resolved in this order:
 
@@ -747,10 +843,9 @@ authentication:
   password_hash: <bcrypt hash>
 ```
 
-Use `--config-path` for an explicit file; otherwise `CONFIG_PATH` is used,
-then the repository-root `config.yaml`. Relative paths are resolved beside the
-selected YAML file, not beside the caller's current directory. Deployment YAML
-edits require a coordinated restart of parent, web, and worker processes.
+The configuration precedence and relative-path rules above apply to all
+processes. Deployment YAML edits require a coordinated restart of parent, web,
+and worker processes.
 Publishing a pipeline or changing SQLite-backed operational settings does not
 change already-pinned batches and generally does not require a process restart.
 
@@ -778,13 +873,18 @@ YAML/JSON file without importing it. Warning-only results use exit code `2`;
 usage errors use `64`. The checker does not migrate or modify SQLite.
 
 Admin services support template lifecycle, optimistic draft revision checks,
-validation, redacted diff/export, clone, and immutable publication. Existing
-batches/documents, split children, task runs, and review items remain pinned
+validation, redacted diff/export, import into drafts, and immutable publication.
+Create a separate form by creating a new template and importing a definition.
+Existing batches/documents, split children, task runs, and review items remain pinned
 to their recorded versions across later publication or lifecycle changes.
 Provider secrets must never enter API responses, audits, summaries, logs,
 screenshots, tests, commits, or documentation.
 
 ## Frontend and UI architecture
+
+**TL;DR:** Production pages are server-rendered with Jinja and page-specific
+JavaScript modules. Browser code calls same-origin APIs; SQLite and services
+remain authoritative, while authenticated routes protect pages and PDF previews.
 
 ### Rendering and data flow
 
@@ -843,19 +943,11 @@ review, failures, reports, and settings. Admin pages cover the overview, fixed
 user accounts, watch folders, versioned pipelines and review forms, the task catalog, legacy
 schema validation, and the filtered administrative audit log.
 
-Extraction and human-review pages mount the local PDF.js module and worker to
-render source PDFs in a canvas-based viewer. Selecting an extracted field can
-navigate to its provider-supplied source location: LlamaCloud citation boxes
-are highlighted when available, while GLM-OCR page-only evidence navigates to
-the cited page without inventing a bounding box. The source PDF remains served
-through the authenticated, same-origin preview endpoint. At desktop widths,
-the human-review route constrains the PDF and editor panels to the viewport;
-each panel owns its scroll position and a keyboard-accessible separator stores
-the operator's preferred split in `localStorage`. A workspace resize observer
-adapts the split to available width, including sidebar changes, without saving
-temporary constraints as the preference. Workspaces narrower than 780 pixels
-stack the panels in a scrollable workspace. Completed-review presentation
-preserves the distinct `corrected` field status.
+Extraction and human-review pages use local PDF.js modules to render source PDFs
+and may navigate to provider-supplied evidence. Source files are served through
+the authenticated, same-origin preview endpoint. Detailed pane sizing,
+preferences, responsive breakpoints, and PDF rendering behavior are UI
+implementation details.
 
 The human-review page uses a versioned native ES-module entry in
 `web/static/js/human-review/`. Its controller owns event-to-action orchestration;
@@ -874,9 +966,6 @@ modules. Upload validation and cancellation state also live in a feature-local
 model. The existing `window.DocFlow` shell remains the shared authenticated
 request, CSRF, and notification boundary; feature controllers own their own
 polling and transient state rather than sharing a mutable application store.
-The processing page uses the shared visibility-aware polling module, which
-allows only one request at a time, removes its interval while the document is
-hidden, refreshes once on resume, and disposes the listener on page teardown.
 Feature release graphs are validated and independently versioned with
 `tools.frontend_release_check`; deployment and rollback procedures are in
 `docs/frontend_deployment.md`.
@@ -887,12 +976,8 @@ layers can distinguish an outstanding `required` field from one accepted by a
 completed human review. This changes display vocabulary only: SQLite review
 items and extracted-field records remain the authoritative state and history.
 
-Tailwind scans production templates and JavaScript. Rebuild committed CSS
-after utility-class or frontend dependency changes:
-
-```powershell
-npm run build:css
-```
+Tailwind-generated CSS is committed. Build and release procedures are maintained
+in [frontend deployment](frontend_deployment.md).
 
 ### Browser security
 
@@ -952,6 +1037,26 @@ JWT validation compares subject, role, and token version with the current user
 row, so password changes can revoke sessions. Login throttling is in-memory
 and therefore process-local.
 
+The route surface uses two roles. `operator` can use processing, upload, and
+review workflows; `admin` can additionally manage users, settings, pipelines,
+review schemas, watch folders, and audit data. Cookie-authenticated mutations
+require CSRF validation; GET requests do not. Bearer-token callers are exempt
+from the cookie-specific CSRF check. Representative route groups:
+
+| Route group | Operator | Admin | CSRF for cookie auth |
+| --- | --- | --- | --- |
+| `/api/batches/*`, `/api/documents/*`, `/api/processing-state` | Yes, subject to document authorization | Yes | Mutations only |
+| `/api/review/*` | Yes, subject to item/lock rules | Yes, subject to item/lock rules | Mutations only |
+| `/api/batches/upload`, `/api/upload-submissions/*` | Yes, owner-scoped receipt | Yes, owner-scoped receipt | Upload mutation |
+| `/api/admin/*`, `/api/schemas/*` | No | Yes | Mutations only |
+| `/api/config/validation`, `/api/pipeline/validate` | Authenticated | Authenticated | Mutations only |
+| `/api/login`, `/api/session/refresh` | Public/session flow | Public/session flow | Endpoint-specific session protections |
+| Legacy `/api/files`, `/api/status/*` | Authenticated compatibility surface | Authenticated compatibility surface | Mutations not supported |
+
+This is a route-family guide, not a substitute for endpoint dependencies and
+document-level checks. Confirm exact behavior in `modules/api_router.py` when
+changing a route; preserve its authorization and CSRF dependencies.
+
 Principal trust boundaries are:
 
 - Uploaded PDFs are untrusted and receive only minimal signature validation.
@@ -992,10 +1097,10 @@ Recovery paths include the following:
 
 ## Testing and verification
 
-Tests are layered across `test/core/`, `test/db/`, `test/services/`,
-`test/workflow/`, `test/standard_step/`, `test/integration/`,
-`test/security/`, `test/visual/`, and `test/tools/config_check/`.
-Prototype tests are separate under `test/pipeline_visual_editor_prototype/`.
+Tests live under `test/` and are organized by the layer or behavior they cover;
+the test tree is the authoritative inventory. Prototype tests are isolated under
+`test/pipeline_visual_editor_prototype/`. Use the focused checks below, then
+select neighboring tests from the relevant area when changing a boundary.
 
 Live LlamaCloud checks are opt-in because they require credentials and external
 resources. Browser tests may require Playwright Chromium. Pyright has
@@ -1039,6 +1144,7 @@ include the corresponding focused integration tests before the full suite.
 | Throughput | Sequential watch-folder and split-child processing |
 | Persistence | SQLite write-concurrency ceiling and coarse migrations |
 | I/O | Blocking file and provider operations in local processes |
+| Capacity | No measured or supported documents-per-day capacity target |
 | Review | New-flow resume rather than durable engine suspension |
 | Compatibility | Legacy SQLite response shapes remain; filesystem status is removed |
 | Frontend | Large controllers and implicit DOM/API contracts |
@@ -1046,6 +1152,11 @@ include the corresponding focused integration tests before the full suite.
 | Storage | Artifact availability assumes shared local filesystem access |
 
 These are current constraints, not an approved target-state plan.
+
+Task cleanup handles workflow-owned temporary files, and upload reconciliation
+removes upload-owned orphans after interrupted submissions. This document does
+not define a general retention period, orphan scan for all artifact roles, or
+log rotation policy; operators should not infer one from workflow cleanup.
 
 ## Debugging checklist
 
@@ -1077,6 +1188,12 @@ application before filesystem repair, and preserve the relevant logs and IDs.
 
 ## Safe-change workflow
 
+Update this architecture reference when a change alters process ownership,
+state transitions, persistence boundaries, or trust contracts. For a new task,
+also update the [task creation guidelines](../tasks/standard_task_creation_guidelines.md)
+when the shared task standard changes. Keep detailed operator procedures in a
+focused guide and link it here rather than duplicating them.
+
 - **New task:** inherit `BaseTask`, register the exact module/class pair, follow
   the [standard task guidelines](../tasks/standard_task_creation_guidelines.md),
   and add task plus workflow tests.
@@ -1105,20 +1222,8 @@ database, verify the exact supported version and required tables, run startup a
 second time to prove idempotency, and exercise legacy-import compensation when
 the change touches YAML cutover.
 
-## Extension rules
-
-- **Pipeline task:** inherit `BaseTask`, preserve context/error behavior,
-  register the exact module/class pair, register durable artifacts, and add
-  task plus workflow tests.
-- **Persistence:** add table-specific operations to repositories and
-  cross-table behavior to services; update schema/migrations and tests.
-- **API:** keep HTTP concerns in the route and business invariants in services;
-  preserve role, CSRF, and document-file protections.
-- **Production UI:** add an authenticated `/app/*` route, Jinja template, and
-  page controller using shared `window.DocFlow` helpers; rebuild CSS when
-  needed.
-- **Prototype:** do not implement production behavior only in
-  `pipeline_visual_editor_prototype/`.
+The [safe-change workflow](#safe-change-workflow) is the canonical checklist
+for extensions too. For tasks, also follow the [standard task guidelines](../tasks/standard_task_creation_guidelines.md).
 
 ## Related documentation
 
