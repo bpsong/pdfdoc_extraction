@@ -1,16 +1,16 @@
-﻿<!--
+<!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.7
-Release Date: 2026-09-08
-Author: [Your Organization/Name]
+Version: 3.8
+Release Date: 2026-09-27
+Author: PDF Processing System team
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 3.7
-Release Date: 2026-09-08
-Author: [Your Organization/Name]
+Version: 3.8
+Release Date: 2026-09-27
+Author: PDF Processing System team
 
 ---
 ## Table of Contents
@@ -77,25 +77,26 @@ Author: [Your Organization/Name]
 
 | Version | Date       | Author              | Description                                                                 |
 |---------|------------|---------------------|-----------------------------------------------------------------------------|
-| 1.0     | 2025-04-13 | [Your Organization] | Initial user guide for fixed pipeline system                                |
-| 2.0     | 2025-08-01 | [Your Organization] | Redesigned to configurable task-based workflows via `config.yaml`; web TBD    |
-| 2.1     | 2025-08-01 | [Your Organization] | Added Quick Start guide, simplified explanations, expanded glossary, and improved configuration editing instructions for non-developers |
-| 2.2     | 2025-08-01 | [Your Organization] | Added YAML configuration examples to all 4.7.x subsections for clarity      |
-| 2.3     | 2025-08-11 | [Your Organization] | Implemented and documented web interface for PDF upload and status monitoring|
-| 2.4     | 2025-08-20 | [Your Organization] | Added config-check administrator overview and cross-references to validation docs |
-| 2.5     | 2026-06-03 | [Your Organization] | Updated for the unified operator and administrator interface, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
-| 2.6     | 2026-06-20 | [Your Organization] | Updated role guidance, UI-led operator procedures, account recovery, failure handling, split policy explanations, v2 task examples, upload limits, and recovery guidance |
-| 2.7     | 2026-06-21 | [Your Organization] | Consolidated extraction and metadata storage under canonical module and class names while retaining Extract v2 array-of-objects behavior |
-| 2.8     | 2026-06-28 | [Your Organization] | Added typed scalar-list options and flat structured-object extraction with Pipeline editor, validation, review-schema mapping, and operator documentation |
-| 2.9     | 2026-07-26 | [Your Organization] | Documented SQLite-backed, immutable pipeline and review-schema versions, explicit upload selection, watch-folder bindings, exact-version execution, migration, recovery, and stored-definition validation |
-| 3.0     | 2026-08-02 | [Your Organization] | Completed the operator and administrator procedures for multi-pipeline routing, review forms, watch-folder bindings, outputs, validation, settings, audit visibility, and portable definitions; corrected remaining single-pipeline and task-behavior guidance |
-| 3.1     | 2026-08-09 | [Your Organization] | Documented GLM-OCR sensitivity to JSON Schema property order and prompt construction, with controlled-testing and review guidance |
-| 3.2     | 2026-08-12 | [Your Organization] | Documented generic multi-page GLM-OCR document resolution, resolver configuration, schema boundaries, and document-specific pipeline guidance |
-| 3.3     | 2026-08-15 | [Your Organization] | Added visual-editor guidance for multiline extraction values, labelled-block boundaries, adjacent-field exclusions, and focused regression testing |
-| 3.4     | 2026-09-03 | [Your Organization] | Documented the local PDF.js source viewer, provider-specific source-location behavior, and the GLM-OCR resolver context default of 18000 |
-| 3.5     | 2026-09-03 | [Your Organization] | Added upload transfer progress, text confidence bands, and concise screen-reader announcements for dynamic operator updates |
-| 3.6     | 2026-09-04 | [Your Organization] | Added keyboard-friendly upload activation, cancellable uploads, queue retry actions, consistent DaisyUI table styling, and lightweight contextual help |
-| 3.7 | 2026-09-08 | [Your Organization] | Added independent Watch folders management, lifecycle, explicit upgrades, diagnostics, and activity history. |
+| 1.0     | 2025-04-13 | PDF Processing System team | Initial user guide for fixed pipeline system                                |
+| 2.0     | 2025-08-01 | PDF Processing System team | Redesigned to configurable task-based workflows via `config.yaml`; web TBD    |
+| 2.1     | 2025-08-01 | PDF Processing System team | Added Quick Start guide, simplified explanations, expanded glossary, and improved configuration editing instructions for non-developers |
+| 2.2     | 2025-08-01 | PDF Processing System team | Added YAML configuration examples to all 4.7.x subsections for clarity      |
+| 2.3     | 2025-08-11 | PDF Processing System team | Implemented and documented web interface for PDF upload and status monitoring|
+| 2.4     | 2025-08-20 | PDF Processing System team | Added config-check administrator overview and cross-references to validation docs |
+| 2.5     | 2026-06-03 | PDF Processing System team | Updated for the unified operator and administrator interface, SQLite-backed workflow state, review, split, reports, settings, artifact registration, and legacy status endpoint compatibility |
+| 2.6     | 2026-06-20 | PDF Processing System team | Updated role guidance, UI-led operator procedures, account recovery, failure handling, split policy explanations, v2 task examples, upload limits, and recovery guidance |
+| 2.7     | 2026-06-21 | PDF Processing System team | Consolidated extraction and metadata storage under canonical module and class names while retaining Extract v2 array-of-objects behavior |
+| 2.8     | 2026-06-28 | PDF Processing System team | Added typed scalar-list options and flat structured-object extraction with Pipeline editor, validation, review-schema mapping, and operator documentation |
+| 2.9     | 2026-07-26 | PDF Processing System team | Documented SQLite-backed, immutable pipeline and review-schema versions, explicit upload selection, watch-folder bindings, exact-version execution, migration, recovery, and stored-definition validation |
+| 3.0     | 2026-08-02 | PDF Processing System team | Completed the operator and administrator procedures for multi-pipeline routing, review forms, watch-folder bindings, outputs, validation, settings, audit visibility, and portable definitions; corrected remaining single-pipeline and task-behavior guidance |
+| 3.1     | 2026-08-09 | PDF Processing System team | Documented GLM-OCR sensitivity to JSON Schema property order and prompt construction, with controlled-testing and review guidance |
+| 3.2     | 2026-08-12 | PDF Processing System team | Documented generic multi-page GLM-OCR document resolution, resolver configuration, schema boundaries, and document-specific pipeline guidance |
+| 3.3     | 2026-08-15 | PDF Processing System team | Added visual-editor guidance for multiline extraction values, labelled-block boundaries, adjacent-field exclusions, and focused regression testing |
+| 3.4     | 2026-09-03 | PDF Processing System team | Documented the local PDF.js source viewer, provider-specific source-location behavior, and the GLM-OCR resolver context default of 18000 |
+| 3.5     | 2026-09-03 | PDF Processing System team | Added upload transfer progress, text confidence bands, and concise screen-reader announcements for dynamic operator updates |
+| 3.6     | 2026-09-04 | PDF Processing System team | Added keyboard-friendly upload activation, cancellable uploads, queue retry actions, consistent DaisyUI table styling, and lightweight contextual help |
+| 3.7 | 2026-09-08 | PDF Processing System team | Added independent Watch folders management, lifecycle, explicit upgrades, diagnostics, and activity history. |
+| 3.8 | 2026-09-27 | PDF Processing System team | Refreshed setup guidance, UI labels, logging, configuration references, and review-form administration instructions. |
 
 ---
 
@@ -151,7 +152,7 @@ before processing production documents.
 1. Open the web address provided by your administrator and sign in with the operator account.
 2. Select **Upload & Process** from the left navigation menu.
 3. Select the PDF files, choose an eligible published pipeline version, and
-   choose **Start Processing**. One selection applies to the entire batch.
+   choose **Start processing**. One selection applies to the entire batch.
 4. Follow the batch progress shown after upload.
 5. Use **Review Queue** for documents requiring correction and **Failures** for documents that could not be processed.
 6. Ask an administrator for help when a failure requires configuration or provider changes.
@@ -319,7 +320,7 @@ Use an operator account for normal daily work. Use the administrator account onl
   version's task parameters; they are not necessarily `files/` and `data/`.
 - If the document is waiting for review, use **Review Queue**. If it failed or
   expected artifacts do not appear, use **Failures** and ask an administrator
-  to check `app.log` and the selected pipeline version.
+  to check the application logs and the selected pipeline version.
 
 ### 3.2. Using the Web Interface
 
@@ -334,11 +335,11 @@ Ask your administrator for the system's web address and your account password.
 **Upload PDF files:**
 
 1. Select **Upload & Process** from the left navigation menu.
-2. Under **Choose a processing pipeline**, select the exact published version
+2. Under **1. Select a pipeline**, select the exact published version
    appropriate for every file in this batch. No version is selected silently.
 3. Select or drag the PDF documents into the upload area.
 4. Review the selected-file list and remove any unintended file.
-5. Select **Start Processing** to submit the documents.
+5. Select **Start processing** to submit the documents.
 6. The application opens the batch details so you can follow progress.
 
 While the batch is being submitted, **Upload & Process** shows aggregate transfer
@@ -430,7 +431,7 @@ The left navigation menu provides the following work areas. If the menu is colla
 |---|---|---|
 | Queued | Accepted and waiting for the worker | Wait or monitor the batch |
 | Processing | A task is currently running | Monitor the task details |
-| Waiting for review | A review gate paused the document | Claim, correct, and complete the review |
+| Review Required | A review gate paused the document | Claim, correct, and complete the review |
 | Completed | Configured processing finished successfully | Check registered artifacts and exports |
 | Failed | A task or provider operation could not complete | Inspect **Failures**, correct the cause, then retry or re-upload |
 | Paused | Intake or processing was deliberately paused | Contact the administrator if the pause is unexpected |
@@ -448,7 +449,7 @@ pipeline version and do not silently use the newest publication.
 | **Reports** | View processing and review activity summaries. |
 | **Settings** | View non-secret runtime settings and configured paths. |
 
-Administrators also see **Overview**, **Users**, **Pipeline**, **Review Forms**, **Task Catalog**, **Validation**, and **Audit Log**. These administrative areas are not available to operators.
+Administrators also see **Overview**, **Users**, **Pipeline**, **Watch folders**, **Review Forms**, **Task Catalog**, **Validation**, and **Audit Log**. These administrative areas are not available to operators.
 
 **How to use the remaining operator pages:**
 
@@ -739,8 +740,9 @@ review:
 - **watch_folder:** Defines coordinator timing/header behavior, the shared
   processing directory, and the required startup-compatibility path. Exact
   incoming-folder routing is stored in SQLite bindings.
-- **web:** Defines web upload directory and web server settings (host, port, secret key, optional CORS allowed origins).
+- **web:** Defines upload directory, server settings (host, port, secret key, optional CORS allowed origins), file and request limits, concurrent uploads, and idle/overall upload timeouts.
 - **database:** Defines the SQLite workflow-state path and migration behavior.
+- **processing_queue:** Defines worker polling interval, lease duration, maximum attempts, and retry delay.
 - **review:** Defines review queue behavior, queue name, and review lock duration.
 - **ui:** Defines the application name, default page size, and whether
   administrator pages are enabled.
@@ -756,7 +758,7 @@ review:
   resolved values.
 - **custom_steps:** Deployment approval for exact `custom_step.*` module/class
   pairs. Enabling or approving a class does not add it to any pipeline.
-- **schema_config** and filesystem schema paths are migration/validation inputs;
+- **schema.directories** and filesystem schema paths are migration/validation inputs;
   published SQLite review-form versions are authoritative for current review
   gates.
 - Task output directories are owned by the exact pipeline version's parameters,
@@ -1180,9 +1182,10 @@ The following administrator events are currently recorded:
 | `admin_pipeline_published` | A validated pipeline draft is published as a new immutable version. The template must be activated separately before new intake. |
 | `admin_schemas_validated` | Validation is run for all configured schemas. |
 | `admin_schema_validated` | An individual schema draft is validated without being saved. |
-| `admin_schema_created` | A schema is created. |
-| `admin_schema_updated` | An existing schema is changed. |
-| `admin_schema_duplicated` | An existing schema is copied to a new schema name. |
+The removed file-backed schema event names (`admin_schema_created`,
+`admin_schema_updated`, and `admin_schema_duplicated`) are no longer emitted;
+their legacy endpoints return HTTP 410. Current review-form changes use the
+`review_schema.*` event family.
 
 The versioned services also record events such as `pipeline.template.created`,
 `pipeline.version.published`, and `review_schema.version.published`.
@@ -1245,7 +1248,9 @@ definition.
 
 ### 4.6. Log Files and Troubleshooting
 
-The configured `logging.log_file` is used as the base for role-specific logs.
+The configured `logging.log_file` is used as the base for role-specific logs. The
+default base name `app.log` produces `app.supervisor.log`, `app.web.log`, and
+`app.worker.log`.
 Normal supervised startup produces separate supervisor, web, and worker log
 files. Check the supervisor log for startup, shutdown, and child-process
 failures; the web log for browser/API errors; and the worker log for task,
@@ -2519,7 +2524,7 @@ them, and validates portable pipeline or review-schema files before import.
 **When to escalate**
 
 - Review `tools/config_check/README.md` for CLI flag details and examples.
-- Cross-reference `docs/config_check_troubleshooting.md` to resolve the common findings surfaced by tasks 13-19 (credential gaps, storage overrides, token mismatches, and similar issues).
+- Cross-reference `docs/config_check_troubleshooting.md` to resolve the common findings (credential gaps, storage overrides, token mismatches, and similar issues).
 - If operators report workflow failures, run the validator before restarting production work; many configuration problems can be found without rerunning documents.
 
 Operators do not need to run this tool. Administrators should share only the part of a validation report needed to request missing information or explain an action.
@@ -2594,19 +2599,19 @@ A: For a normal change, sign in as the administrator and select **Users** from t
 A: Ensure `web.secret_key` and `database.path` are correct, initialize both users with the setup CLI, and test both fixed accounts. Runtime YAML must not contain usernames or password hashes.
 
 **Q: Why is processing slow for large PDF files?**
-A: Larger files require more disk, memory, network, split, and extraction work. Process very large files individually or during quieter periods, keep enough free disk space for working files and exports, and monitor **Processing Overview** and `app.log`. The web interface rejects files above its configured upload limit before processing starts.
+A: Larger files require more disk, memory, network, split, and extraction work. Process very large files individually or during quieter periods, keep enough free disk space for working files and exports, and monitor **Processing Overview** and the application logs. The web interface rejects files above its configured upload limit before processing starts.
 
 **Q: What should I do if the system appears stuck processing a file?**
-A: Open **Processing Overview** and inspect the batch and document steps. Then check **Failures** and `app.log` for provider errors, timeouts, validation problems, or folder-permission errors. Use Windows Task Manager to check CPU, memory, and disk usage. If shutdown is necessary, follow section 4.7 and inspect the document before re-uploading it.
+A: Open **Processing Overview** and inspect the batch and document steps. Then check **Failures** and the application logs for provider errors, timeouts, validation problems, or folder-permission errors. Use Windows Task Manager to check CPU, memory, and disk usage. If shutdown is necessary, follow section 4.7 and inspect the document before re-uploading it.
 
 **Q: How do I handle API rate limiting from extraction providers?**
-A: The system retries temporary extraction failures, but a persistent provider limit can still cause the document to fail. Check **Failures**, `app.log`, and the provider quota dashboard. Wait for the limit to clear before re-uploading, and reduce batch volume if the problem repeats.
+A: The system retries temporary extraction failures, but a persistent provider limit can still cause the document to fail. Check **Failures**, the application logs, and the provider quota dashboard. Wait for the limit to clear before re-uploading, and reduce batch volume if the problem repeats.
 
 **Q: What should I do if archiving fails due to directory permissions?**
 A: Inspect the failed document's exact pipeline version and ensure its archive
 task `archive_dir` exists or can be created and grants Modify permission to the
 account running the application. Check **Processing Overview**, **Failures**,
-and `app.log`. A successful archive is registered with the document's files.
+and the application logs. A successful archive is registered with the document's files.
 
 **Q: What happens when reference file matching fails in the update_reference task?**
 A: When field values required for matching are not found in the pipeline context, the task logs a warning and continues without matching any rows. The task will not append new rows. It updates matched rows only, creating the configured `update_field` column at runtime if needed. Check your extraction field configuration and ensure the required fields (like `purchase_order_number` or `invoice_amount`) are being extracted correctly.
@@ -2631,7 +2636,7 @@ keys under deployment `pipeline_secrets`; the editor stores only their aliases.
 A: Confirm that the pipeline step's `$secret` alias exists under deployment
 `pipeline_secrets`, without copying the key into the draft or logs. If you use
 a saved Extract v2 configuration, ensure `configuration_id` exists in the
-correct LlamaCloud project. Check `app.log` for the redacted provider error and
+correct LlamaCloud project. Check the application logs for the redacted provider error and
 run config-check against the stored version.
 
 ---

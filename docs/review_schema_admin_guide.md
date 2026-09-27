@@ -3,10 +3,8 @@
 This guide explains how an application administrator creates and maintains the
 form that operators use to check extracted document data in the **Review
 Queue**. SQLite stores the editable draft and immutable published versions.
-You can use either:
-
-- the **Review Form Editor** at `http://localhost:8000/app/schemas`; or
-- a YAML or JSON file as a portable import/export or legacy migration format.
+Use the **Review Form Editor** at `/app/schemas` for routine authoring. YAML or
+JSON is for import, export, and legacy migration.
 
 Use the Review Form Editor for routine changes. It shows the available settings,
 checks the schema before saving, and reduces the risk of formatting errors.
@@ -15,12 +13,20 @@ a draft; an administrator must validate and publish it, then select that exact
 published schema version in a pipeline draft and publish a new pipeline
 version.
 
+> **Critical:** A published review form has no effect until a pipeline draft
+> selects its exact `schema_version_id` and that pipeline is published. Existing
+> pipeline versions keep their existing review-form version.
+
 ## Contents
+
+**Terminology:** This guide primarily uses **review form** for the
+administrator-managed template and its published versions. “Review schema”
+names the portable data format or an API/configuration term.
 
 - [What a Review Schema Controls](#what-a-review-schema-controls)
 - [Before You Begin](#before-you-begin)
-- [Method 1: Use the Review Form Editor](#method-1-use-the-review-form-editor)
-- [Method 2: Import or Export a Schema File](#method-2-import-or-export-a-schema-file)
+- [Authoring: Use the Review Form Editor](#authoring-use-the-review-form-editor)
+- [Import, Export, and Legacy Migration](#import-export-and-legacy-migration)
 - [Schema File Reference](#schema-file-reference)
 - [Complete Example: Invoice Review Form](#complete-example-invoice-review-form)
 - [Connect the Schema to the Review Gate](#connect-the-schema-to-the-review-gate)
@@ -73,57 +79,67 @@ Avoid changing a production schema while operators are actively reviewing
 documents that use it. Complete the change, validate it, and test the form
 before asking operators to continue.
 
-## Method 1: Use the Review Form Editor
+## Authoring: Use the Review Form Editor
 
 ### Open the editor
 
 1. Start the application and sign in as an administrator.
-2. Open `http://localhost:8000/app/schemas`, or select **Review Forms** from the
+2. Open `/app/schemas`, or select **Review Forms** from the
    administrator navigation.
 3. Select an existing schema template from the list, or select **New Review
    Form**.
 
 The page contains three areas:
 
-- **Review Forms** lists schema templates and lifecycle/version information.
-- The center panel contains the editable draft metadata and fields.
-- The right panel contains validation findings, immutable-version history,
-  published-pipeline dependencies, and a read-only **YAML Preview** of the
-  current draft. Use the center-panel controls to make changes.
+- **Review Forms** lists forms and lifecycle/version information.
+- The center panel contains draft metadata and fields.
+- **Version history & dependencies** shows validation findings, published
+  versions, and pipeline dependencies. Expand **Canonical draft preview** to
+  inspect a YAML-like rendering. It is generated for display and may not quote
+  every special character as valid YAML; export the draft when you need a
+  portable file.
 
 ### Create a schema
 
 1. Select **New Review Form**.
-2. Enter a unique stable key and a clear display name.
+2. In the creation dialog, enter a unique stable key and a review form name.
+   Keys use lowercase hyphen-separated words, start with a letter, and may
+   contain numbers (for example, `invoice-review`). The dialog starts with
+   `new-review-form`; change it when that key is already in use.
 3. Enter a clear **Title**, such as `Invoice Review`.
 4. Enter a short **Description** explaining when the form is used.
 5. Add and configure the fields as described below.
 6. Select **Validate**.
 7. Correct every reported error. Selecting an error moves to the affected
    control.
-8. Select **Save Draft**. Saving does not make the schema available to a
+8. Select **Save draft**. Saving does not make the schema available to a
    pipeline.
 9. Select **Publish** after validation. Publication creates immutable version
    1; later publications increment that template's version number.
 
-The application will not overwrite another template with the same key.
+The application will not overwrite another template with the same key. The
+editor also offers **Find a field** and a clickable field outline to navigate
+large forms. The form URL can be bookmarked as `/app/schemas/{schema_name}`.
 
 ### Edit an existing schema
 
 1. Select the schema from the left panel. Use **Search schemas** if the list is
-   long.
+   long. The form identity includes its stable key, **Review form name**, title,
+   and the **Lifecycle** control. The editor also shows **Draft revision** and
+   **Latest version** so you can confirm which revision you are changing.
 2. Confirm the stable key, display name, and title before changing anything.
 3. Change the metadata or fields. An asterisk beside the schema title indicates
    that the draft has unsaved changes.
 4. Select **Validate** and resolve all findings.
-5. Select **Save Draft**, validate, and publish a new immutable version.
+5. Select **Save draft**, validate, and publish a new immutable version.
 6. Select that exact schema version in the relevant pipeline draft, validate
    and publish a new pipeline version.
 7. Test the resulting form with a representative document.
 
 Published content is immutable. Editing always changes the draft, not an
 existing version. To create a separate template, select **New Review Form** and
-import an exported definition into its draft.
+import an exported definition into its new draft; no Duplicate action is
+available.
 
 ### Add and configure a field
 
@@ -149,9 +165,12 @@ The add-field toolbar contains the most common types. To use `integer`,
 `float`, `date`, or `datetime`, add a field first and then select the required
 value from its **Type** list.
 
-Use simple keys made from lowercase letters, numbers, and underscores, for
-example `policy_number` or `invoice_date`. Do not use the label as the key
-unless it is also the exact key returned by extraction.
+Use field keys that match the extraction result exactly. Lowercase letters,
+numbers, and underscores are a convention, not a server-enforced format. The
+server does not validate field-key syntax or duplicate nested keys; duplicate
+YAML keys can silently overwrite earlier values when parsed. Check spelling,
+case, and nesting carefully. The template stable key has a stricter enforced
+lowercase-hyphen format, which is separate from field keys.
 
 Review schemas can contain multiple arrays of objects. This differs from an
 extraction task's field configuration, which supports at most one
@@ -212,21 +231,29 @@ For example, a `serial_numbers` array contains repeated text values, while a
 
 ### Validate, save, publish, import, export, and change lifecycle
 
-- **Validate** checks the current draft without saving it.
-- **Save Draft** persists editable content in SQLite.
+- **Validate** saves unsaved draft changes first, then validates that saved
+  revision.
+- **Save draft** persists editable content in SQLite.
 - **Publish** repeats validation and creates the next immutable version.
 - **Import** accepts a portable YAML/JSON definition into a draft; it never
   publishes automatically.
-- **Export** emits a portable, redacted definition with stable key, version
-  metadata, and content hash rather than database UUIDs.
-- **Status** follows `inactive` -> `active` -> `inactive` -> `archived`.
-  A template must have a published version before activation; archived
-  templates cannot be edited or published.
+- **Export** downloads the current draft as a portable, redacted definition.
+  It includes a draft `revision`, not a published version number or database UUID.
+- **Lifecycle** offers **Inactive**, **Active**, and **Archived**. A form needs
+  a published version before activation. Only an inactive form can be archived;
+  archived is terminal and cannot be restored or published. Draft saves may
+  still be accepted, but do not make an archived form usable.
 
-Save remains unavailable while the editor detects a blocking error. Common
-errors include a missing title, an empty or duplicate key, an invalid text
-pattern, or minimum and maximum values that
-contradict each other.
+The editor disables Save for its client-side blocking findings: a missing
+stable key or title, empty or duplicate field keys detected in the editor, or
+minimum values greater than maximum values. These client checks are not all
+server validation rules. A malformed pattern does not itself disable Save; use
+**Test pattern** or run server-side **Validate** to surface pattern problems.
+
+The server does not require a schema `title`, and field keys are not covered by
+a strict allowlist. Unknown field settings may pass through without a useful
+validation error, so review spelling carefully. Field `title` can act as a
+label alias; prefer `label` for clarity.
 
 The editor warns before discarding unsaved changes when you select another
 schema, create a schema, follow another link, refresh, or close the page.
@@ -235,7 +262,7 @@ Before deactivating or archiving a template, inspect its dependencies. Published
 pipeline versions and in-progress reviews retain access to the exact immutable
 schema version they already reference.
 
-## Method 2: Import or Export a Schema File
+## Import, Export, and Legacy Migration
 
 YAML and JSON files are portable interchange and legacy migration formats; they
 are not the authoritative runtime store. Import a file into a schema draft,
@@ -255,10 +282,10 @@ tasks:
       schema_file: "schemas/invoice.yaml"
 ```
 
-Treat this as migration input only. Import `schemas\invoice.yaml` into a schema
-draft, publish it, replace the review-gate parameter in the pipeline draft with
-the selected exact `schema_version_id`, then publish the pipeline. Do not assume
-that a file or schema draft is currently used by a workflow.
+This is legacy migration input only. Current pipeline validation rejects
+`schema_file`; do not configure it for a new pipeline. Import the file into a
+review-form draft, publish it, select its exact `schema_version_id` in the
+pipeline editor, then validate and publish a new pipeline version.
 
 Folders used to locate legacy filesystem schemas can be configured explicitly:
 
@@ -281,7 +308,9 @@ changing the legacy schema search roots.
 4. Make the required changes. Use spaces, not tabs, for indentation.
 5. Save the file as UTF-8 text and keep its existing `.yaml`, `.yml`, or
    `.json` extension.
-6. Open `/app/schemas`, choose **Import**, and target an editable draft.
+6. Open the configured application address and go to `/app/schemas`; choose
+   **Import** and target an editable draft. Import files must be no larger than
+   1 MiB. If `format_version` is present, it must be `1`.
 7. Validate and correct every blocking finding.
 8. Publish the schema version, select it in the pipeline draft, and publish the
    pipeline version.
@@ -335,13 +364,12 @@ fields:
 
 | Setting | Required | Purpose |
 | --- | --- | --- |
-| `title` | Yes | Friendly name of the schema |
+| `title` | Recommended by the editor | Friendly name of the schema; browser checks require it, but the server validator does not enforce it |
 | `description` | Recommended | Short explanation of when the form is used |
 | `version` | Optional in portable files | Descriptive source label; SQLite assigns the authoritative immutable version number |
 | `fields` | Yes | Collection of fields displayed on the review form |
 
-The Review Form Editor displays authoritative version history. A version label
-inside imported content does not select or overwrite an SQLite version.
+The Review Form Editor displays authoritative version history. An exported draft includes its revision, not a published version number. A version label inside imported content does not select or overwrite an SQLite version. Field keys and settings are not comprehensively allowlisted by server validation; unknown or misspelled settings may be carried through without being applied.
 
 ### Field settings
 
@@ -369,6 +397,8 @@ Do not add a restrictive pattern, length, or numeric range unless values that
 fall outside it should genuinely prevent an operator from completing review.
 
 ### Date values
+
+Field `title` is also accepted as an alias for the displayed label in compatible schema data, but use `label` in new definitions. The server does not reject every unknown setting, so unsupported or misspelled keys may be ignored by the form.
 
 A `date` field requires a value in this order:
 
@@ -507,14 +537,14 @@ fields:
           decimal_places: 2
 ```
 
-The extraction result must use the same structure: for example,
-`supplier.name`, `line_items[].quantity`, and `line_items[].unit_price` must
-correspond to the schema's child keys.
+Check the example against extraction output: `supplier.name`,
+`line_items[].quantity`, and `line_items[].unit_price` must match exactly in
+key and nesting. For each line item, verify that `quantity` is the numeric
+quantity value and that `unit_price` is the matching per-item amount.
 
 ## Connect the Schema to the Review Gate
 
-Creating or publishing a schema does not automatically assign it to a workflow.
-In the pipeline draft, select the exact published schema version for the review
+Creating or publishing a schema does not automatically assign it to a workflow. This is the required activation step for a review form. In the pipeline draft, select the exact published schema version for the review
 gate. The persisted dependency and runtime parameter use `schema_version_id`.
 
 ```yaml
@@ -537,6 +567,15 @@ Select only a published version belonging to an active schema template, then
 validate and publish the pipeline draft. Existing pipeline versions and review
 resumes keep their prior schema version when a newer schema is published.
 
+Other supported review-gate parameters include `per_document_type_thresholds`,
+`field_threshold_overrides`, `split_confidence_levels_requiring_review`,
+`always_review`, `allow_operator_to_edit_high_confidence_fields`, and
+`require_review_when_missing_confidence`. `resume_policy` currently accepts only
+`next_task`; it is not exposed as an editor choice. `schema_file` is legacy
+migration input and is rejected for a current pipeline definition. See the
+[user guide, section 4.8](user_guide.md#48-task-system-standard-steps-and-parameters)
+for the full parameter descriptions.
+
 ## Test the Operator's Form
 
 Validation proves that the schema is structurally acceptable; it does not
@@ -556,7 +595,11 @@ prove that the form matches real documents. After every material change:
 
 If possible, ask an operator who did not design the schema to perform this
 test. Confusing wording and missing instructions are easier to detect during a
-real review than in the Review Form Editor.
+real review than in the Review Form Editor. The application documents no fixed
+field-count, nesting-depth, or label-length cap; the 1 MiB import limit is the
+practical boundary for portable files. When validation findings contain a field
+key including `api_key`, `password`, `secret`, `token`, or `credential`, that
+key may be replaced with `[REDACTED]` in the response.
 
 ## Safely Change an Existing Schema
 
@@ -591,8 +634,12 @@ draft, and publish a new pipeline version.
 | A document enters review unexpectedly | Check required fields and the review gate's confidence and business rules. Optional fields can still appear without being required. |
 | A new schema is not used | Confirm that it was published, that the exact version is selected in the pipeline draft, and that a new pipeline version was published. |
 | An imported schema is missing | Confirm the import succeeded into the intended draft and that the template is not archived. |
+| Import is rejected | Keep the file at or below 1 MiB and use `format_version: 1` when specifying a format version. |
 | Validation reports a path such as `line_items[].unit_price` | Open that nested field. `[]` means the problem applies to an item in a repeating array. |
 | Direct editing caused the schema to stop loading | Restore the backup, then check YAML indentation, tabs, repeated keys, and unquoted special characters. |
+| Another administrator saved while I was editing | Drafts use revision checks. A stale save or publish is rejected; reload the current draft before continuing, and coordinate edits to avoid losing unsaved browser work. |
+| My export contains `revision`, not a version number | Export downloads the current draft. Publish it to create an immutable version, then use version history to confirm its number. |
+| I cannot publish an archived form | Archived forms are terminal and cannot be restored. Create a new form and import the archived form’s exported definition. |
 
 ## Advanced Behavior
 
@@ -670,6 +717,8 @@ both configurations when their shared structure changes.
 
 ## Advanced Validation
 
+For common config-check findings, see [Config Check Troubleshooting](config_check_troubleshooting.md). The complete review-gate parameter list is in [the user guide, section 4.8](user_guide.md#48-task-system-standard-steps-and-parameters).
+
 The Review Form Editor is the primary validation method for administrators. A
 terminal user can validate a stored draft/version without changing SQLite:
 
@@ -679,11 +728,17 @@ terminal user can validate a stored draft/version without changing SQLite:
 .\.venv\Scripts\python.exe -m tools.config_check validate-file --file .\schemas\invoice.yaml --kind review-schema
 ```
 
-Exit code `2` means that validation completed with warnings only. Review the
-warnings and decide whether they apply before using the workflow.
+Exit codes are `0` for a clean result, `1` for errors, `2` for warning-only
+results, and `64` for command usage or configuration requirements. Stored
+`--review-schema` checks require `database.path` in the selected config. A
+`validate-file --kind review-schema` run reports schema findings as errors, so
+exit code `2` does not describe those findings.
 
-The following automated tests are intended for application maintainers, not
-for routine schema administration:
+### Maintainer-only test commands
+
+The following automated tests are for application maintainers, not routine
+schema administration. Stored selectors require `database.path` in
+`config.yaml`; see [Config Check Troubleshooting](config_check_troubleshooting.md).
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v test\services\test_schema_service.py test\standard_step\review\test_review_gate.py
