@@ -468,6 +468,11 @@ the document still finishes as failed rather than hiding the earlier error.
 
 Configured tasks and cleanup currently receive one Prefect retry. Individual
 provider tasks can add their own retries, so retry policy is not centralized.
+The processing queue retries transient workflow startup failures and input I/O
+errors raised by the file processor, up to its configured attempt limit. A workflow returning failure
+or an unclassified exception is terminal at the queue level; replaying a flow
+that may already have performed durable work requires an explicit recovery
+decision. Configured task retries remain separate from queue retries.
 After configured execution exhausts the pipeline or stops on an ordinary
 failure, cleanup runs as an internally managed task with the reserved key
 `cleanup_task` and index immediately after the configured pipeline. It has its
@@ -722,6 +727,9 @@ erDiagram
 relative to the active configuration, enables row access and foreign keys,
 and provides transaction helpers. Repositories own table-specific operations;
 services coordinate cross-table behavior.
+Use `managed_connect(config)` for a scoped transaction so the connection is
+closed after commit or rollback. Use `connect(config)` only when a service owns
+the connection beyond one block, and close it explicitly when finished.
 
 Migrations currently apply an idempotent schema and record a coarse version.
 This is not a complete ordered migration chain with per-change upgrade and

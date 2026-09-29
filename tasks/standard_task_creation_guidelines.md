@@ -48,6 +48,10 @@ Each task is a self-contained Python module that implements a specific step in t
   `TaskSetupError` failures. They always stop the affected document regardless
   of `on_error`, but must not terminate the application process. Task code
   should not raise `SystemExit` or call `ShutdownManager`.
+- Queue-level retries apply to transient failures detected before a document
+  flow starts and to file-processor input I/O errors. Once a configured task runs,
+  its own Prefect retry policy applies. Returning a failed workflow does not
+  replay the entire document pipeline.
 - For `on_error: continue`, the workflow loader preserves the failure in its
   internal `continued_failures` history and clears transient error fields before
   invoking the next task. Tasks must not use or overwrite

@@ -240,7 +240,7 @@ def test_schema_endpoint_error_translation(monkeypatch, tmp_path):
 def test_read_endpoints_translate_missing_records(monkeypatch):
     config = Config()
     connection = Mock()
-    monkeypatch.setattr(api, "connect", lambda config: nullcontext(connection))
+    monkeypatch.setattr(api, "managed_connect", lambda config: nullcontext(connection))
     monkeypatch.setattr(
         api,
         "get_dependencies",
@@ -281,7 +281,7 @@ def test_document_field_and_resume_endpoints(monkeypatch):
     ]
     repository = Mock()
     repository.get_fields.return_value = fields
-    monkeypatch.setattr(api, "connect", lambda config: nullcontext(connection))
+    monkeypatch.setattr(api, "managed_connect", lambda config: nullcontext(connection))
     monkeypatch.setattr(api, "ExtractionRepository", lambda conn: repository)
     monkeypatch.setattr(
         api,
@@ -307,7 +307,7 @@ def test_review_mutation_errors_are_conflicts(monkeypatch):
     service.release.side_effect = ReviewServiceError("conflict")
     service.save_draft.side_effect = ReviewServiceError("conflict")
     service.complete.side_effect = ReviewServiceError("conflict")
-    monkeypatch.setattr(api, "connect", lambda config: nullcontext(connection))
+    monkeypatch.setattr(api, "managed_connect", lambda config: nullcontext(connection))
     monkeypatch.setattr(api, "ReviewService", lambda conn, config: service)
     monkeypatch.setattr(
         api,
@@ -330,7 +330,7 @@ def test_review_mutation_errors_are_conflicts(monkeypatch):
 def test_admin_endpoint_success_and_error_translation(monkeypatch):
     config = Config()
     connection = Mock()
-    monkeypatch.setattr(api, "connect", lambda config: nullcontext(connection))
+    monkeypatch.setattr(api, "managed_connect", lambda config: nullcontext(connection))
     monkeypatch.setattr(api, "require_admin_user", Mock())
     monkeypatch.setattr(
         api,
@@ -370,7 +370,7 @@ def test_admin_pipeline_model_and_service_errors(monkeypatch):
     config = Config()
     connection = Mock()
     service = Mock()
-    monkeypatch.setattr(api, "connect", lambda config: nullcontext(connection))
+    monkeypatch.setattr(api, "managed_connect", lambda config: nullcontext(connection))
     monkeypatch.setattr(api, "require_admin_user", Mock())
     monkeypatch.setattr(api, "PipelineConfigService", lambda config, conn: service)
     monkeypatch.setattr(
@@ -439,7 +439,7 @@ def test_remaining_admin_and_document_route_error_branches(monkeypatch) -> None:
     config = Config({})
     connection = Mock()
     monkeypatch.setattr(api, "get_dependencies", lambda: (config, None, None, None, None))
-    monkeypatch.setattr(api, "connect", lambda _config: nullcontext(connection))
+    monkeypatch.setattr(api, "managed_connect", lambda _config: nullcontext(connection))
     monkeypatch.setattr(api, "require_admin_user", Mock())
 
     with pytest.raises(HTTPException, match="Unsupported pipeline"):

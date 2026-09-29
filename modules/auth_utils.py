@@ -20,7 +20,7 @@ import bcrypt
 from jose import JWTError, jwt
 
 from .config_protocol import ConfigProvider as ConfigManager
-from .db.connection import connect
+from .db.connection import managed_connect
 from .db.repositories import UserRepository
 
 
@@ -337,10 +337,10 @@ class AuthUtils:
         self.logger.info(f"Login attempt for username: {username}")
         rate_limit_key = self._ensure_login_not_rate_limited(username, client_id)
         
-        with connect(self.config) as conn:
+        with managed_connect(self.config) as conn:
             user = UserRepository(conn).get(username)
         if user is None:
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 initialized = bool(UserRepository(conn).list())
             if not initialized:
                 raise AuthenticationSetupRequired("User accounts require setup")
@@ -391,7 +391,7 @@ class AuthUtils:
                 self.logger.warning("Token missing 'sub' claim")
                 raise AuthError("Invalid token: missing subject")
                 
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 user = UserRepository(conn).get(str(username))
             if user is None:
                 self.logger.warning(f"Token has invalid subject: {username}")
@@ -430,7 +430,7 @@ class AuthUtils:
 
     def get_user(self, username: str) -> dict[str, Any] | None:
         """Return a user record for authorization checks."""
-        with connect(self.config) as conn:
+        with managed_connect(self.config) as conn:
             return UserRepository(conn).get(username)
 
     def is_admin(self, username: str) -> bool:

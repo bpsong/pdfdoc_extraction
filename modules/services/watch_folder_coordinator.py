@@ -11,7 +11,7 @@ import uuid
 from typing import Any
 
 from modules.config_protocol import ConfigProvider
-from modules.db.connection import connect, immediate_transaction
+from modules.db.connection import managed_connect, immediate_transaction
 from modules.db.repositories import WatchFolderBindingRepository
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.ingress_binding_service import IngressBindingService
@@ -60,7 +60,7 @@ class WatchFolderCoordinator:
         processed = 0
         self._scan_issue_count = 0
         with self._lock:
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 bindings = IngressBindingService(conn, self.config).list()
             for binding in bindings:
                 if not binding["enabled"]:
@@ -69,7 +69,7 @@ class WatchFolderCoordinator:
                     before = self._scan_issue_count
                     count = self._scan_binding(binding)
                     processed += count
-                    with connect(self.config) as health_conn:
+                    with managed_connect(self.config) as health_conn:
                         repo = WatchFolderBindingRepository(health_conn)
                         if repo.get(binding["id"]):
                             repo.record_health(binding["id"], issue="Folder scan or file claim failed." if self._scan_issue_count > before else None,
@@ -133,7 +133,7 @@ class WatchFolderCoordinator:
         self, source_path: Path, binding: dict[str, Any]
     ) -> bool:
         """Serialize a claim with binding mutations across application processes."""
-        with connect(self.config) as conn:
+        with managed_connect(self.config) as conn:
             with immediate_transaction(conn):
                 current = WatchFolderBindingRepository(conn).get(binding["id"])
                 if not current or not current["enabled"] or current.get("retired_at"):

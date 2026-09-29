@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect
+from modules.db.connection import managed_connect
 from modules.db.repositories import DocumentRepository
 
 
@@ -34,7 +34,7 @@ def register_document_artifact(
 
     resolved_path = str(Path(str(file_path)).resolve())
     try:
-        with connect(config_manager) as conn:
+        with managed_connect(config_manager) as conn:
             documents = DocumentRepository(conn)
             if documents.get(str(document_id)) is None:
                 return None

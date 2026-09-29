@@ -57,6 +57,17 @@ def connect(config_manager: ConfigProvider) -> sqlite3.Connection:
 
 
 @contextmanager
+def managed_connect(config_manager: ConfigProvider) -> Iterator[sqlite3.Connection]:
+    """Commit or roll back a transaction and always close the connection."""
+    conn = connect(config_manager)
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
+@contextmanager
 def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     """Run operations in a commit/rollback transaction."""
     nested = conn.in_transaction

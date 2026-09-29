@@ -50,6 +50,16 @@ def test_review_gate_no_document_and_validation_edges(tmp_path):
         task.validate_required_fields({})
 
 
+@pytest.mark.parametrize("value", [None, "invalid", {"nested": 0.5}])
+def test_review_gate_invalid_threshold_override_raises_task_error(tmp_path, value):
+    config = TempConfig(tmp_path / "app.sqlite3", {})
+
+    with pytest.raises(
+        TaskError, match="Confidence threshold for invoice must be a number"
+    ):
+        ReviewGateTask(config, per_document_type_thresholds={"invoice": value})
+
+
 def test_review_gate_reason_metadata_and_nested_confidence_edges(tmp_path):
     schema_dir = tmp_path / "schemas"
     schema_dir.mkdir()
@@ -357,7 +367,7 @@ def test_split_task_document_policy_and_adapter_branches(tmp_path, monkeypatch):
         config, enabled=True, split_dir=str(tmp_path), adapter=Mock(), categories=["invoice"]
     )
     docs = Mock()
-    monkeypatch.setattr(split_module, "connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(split_module, "managed_connect", lambda _config: nullcontext(object()))
     monkeypatch.setattr(split_module, "DocumentRepository", lambda _conn: docs)
     context = {"batch_id": "b", "document_id": "d", "file_path": str(source), "data": {}}
 

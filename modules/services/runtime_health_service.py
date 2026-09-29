@@ -9,7 +9,7 @@ from threading import Event, RLock, Thread
 from typing import Any, Iterable
 
 from modules.config_protocol import ConfigProvider
-from modules.db.connection import connect, json_loads
+from modules.db.connection import managed_connect, json_loads
 from modules.db.schema_version import SCHEMA_VERSION
 from modules.db.repositories import RuntimeComponentHealthRepository
 
@@ -76,7 +76,7 @@ class RuntimeHealthService:
         """Create or refresh one component record for this run."""
         if status not in VALID_STATUSES:
             raise ValueError(f"Unsupported runtime health status: {status}")
-        with connect(self.config) as conn:
+        with managed_connect(self.config) as conn:
             return RuntimeComponentHealthRepository(conn).upsert(
                 run_id=self.run_id,
                 component=component,
@@ -91,7 +91,7 @@ class RuntimeHealthService:
         database: dict[str, Any]
         rows: list[dict[str, Any]] = []
         try:
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 version_row = conn.execute(
                     "SELECT MAX(version) FROM schema_migrations"
                 ).fetchone()

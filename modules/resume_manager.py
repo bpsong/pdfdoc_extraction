@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect, json_loads
+from modules.db.connection import managed_connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.services.pipeline_definition_service import PipelineDefinitionService
@@ -20,7 +20,7 @@ class ResumeManager:
 
     def resume_document(self, document_id: str, user: str | None = None) -> bool:
         """Resume a document after review without duplicating downstream work."""
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             documents = DocumentRepository(conn)
             extractions = ExtractionRepository(conn)
             task_runs = TaskRunRepository(conn)

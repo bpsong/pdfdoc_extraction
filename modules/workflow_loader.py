@@ -21,7 +21,7 @@ from modules.config_protocol import (
 )
 from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
-from modules.db.connection import connect
+from modules.db.connection import connect, managed_connect
 from modules.exceptions import TaskError, TaskSetupError
 from modules.services.failure_service import _redact, _redact_text
 from modules.services.fan_in_service import FanInService
@@ -579,7 +579,7 @@ class WorkflowLoader:
         if not context.get("document_id") and not context.get("id"):
             return
         try:
-            with connect(self.config_manager) as conn:
+            with managed_connect(self.config_manager) as conn:
                 FanInService(conn).finalize_leaf(context)
         except Exception:
             self.logger.exception("Fan-in finalization failed for %s", context.get("document_id") or context.get("id"))

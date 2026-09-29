@@ -10,7 +10,7 @@ from pypdf import PdfReader, PdfWriter
 
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect, json_loads
+from modules.db.connection import managed_connect, json_loads
 from modules.db.connection import transaction
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError
@@ -123,7 +123,7 @@ class LlamaCloudSplitTask(BaseTask):
                 context.setdefault("data", {})["split_result"] = {"status": "skipped"}
                 return context
 
-            with connect(self.config_manager) as conn:
+            with managed_connect(self.config_manager) as conn:
                 documents = DocumentRepository(conn)
                 document = documents.get(str(context["document_id"]))
                 if document is None:

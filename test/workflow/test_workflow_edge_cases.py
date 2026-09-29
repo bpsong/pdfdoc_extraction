@@ -284,7 +284,7 @@ def test_workflow_records_task_exceptions(
 def test_finalize_leaf_skip_and_failure_paths(tmp_path, monkeypatch):
     loader = _loader(tmp_path, {})
     connect_mock = Mock(side_effect=OSError("database unavailable"))
-    monkeypatch.setattr("modules.workflow_loader.connect", connect_mock)
+    monkeypatch.setattr("modules.workflow_loader.managed_connect", connect_mock)
 
     loader._finalize_leaf({"pipeline_state": "fan_out", "document_id": "doc"})
     loader._finalize_leaf({})
@@ -319,7 +319,7 @@ def test_workflow_manager_load_trigger_and_child_edge_paths(tmp_path, monkeypatc
     manager._trigger_child_workflows({})
 
     monkeypatch.setattr(
-        "modules.workflow_manager.connect",
+        "modules.workflow_manager.managed_connect",
         Mock(side_effect=OSError("database unavailable")),
     )
     WorkflowManager._mark_document_failed(manager, None, "reason")
@@ -407,7 +407,7 @@ def test_workflow_manager_skips_missing_children_and_missing_failure_roots(
         None,
     ]
     monkeypatch.setattr(
-        "modules.workflow_manager.connect",
+        "modules.workflow_manager.managed_connect",
         lambda config: nullcontext(object()),
     )
     monkeypatch.setattr(

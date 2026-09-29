@@ -113,7 +113,7 @@ def test_connection_json_invalid_text_and_batch_empty_progress() -> None:
 
 
 def test_document_artifact_user_and_portable_defensive_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(artifact_service, "connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(artifact_service, "managed_connect", lambda _config: nullcontext(object()))
     monkeypatch.setattr(artifact_service.DocumentRepository, "get", lambda _self, _id: None)
     assert artifact_service.register_document_artifact(_Config(), {"document_id": "missing"}, file_type="x", file_path=tmp_path / "x") is None
 
@@ -327,7 +327,7 @@ def test_migration_helpers_cover_incomplete_sql_and_foreign_key_failure(
 
 
 def test_file_processor_pdf_and_move_cleanup_branches(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     processor = object.__new__(file_processor_module.FileProcessor)
     monkeypatch.setattr(file_processor_module, "is_pdf_header", Mock(return_value=True))
@@ -350,6 +350,7 @@ def test_file_processor_pdf_and_move_cleanup_branches(
     with pytest.raises(ValueError, match="Invalid PDF header"):
         processor.process_web_upload(b"not pdf")
     remove.assert_called_once()
+    assert "Failed to remove invalid PDF upload" in caplog.text
 
     monkeypatch.setattr(file_processor_module, "is_pdf_header", Mock(return_value=True))
     monkeypatch.setattr(file_processor_module.os, "replace", Mock(side_effect=OSError("move failed")))
@@ -358,6 +359,7 @@ def test_file_processor_pdf_and_move_cleanup_branches(
     with pytest.raises(OSError, match="move failed"):
         processor.process_web_upload(b"%PDF-")
     remove.assert_called_once()
+    assert "Failed to remove upload after move failure" in caplog.text
 
 
 def test_resume_manager_defensive_resume_and_failure_context_paths(
@@ -367,7 +369,7 @@ def test_resume_manager_defensive_resume_and_failure_context_paths(
     documents = Mock()
     extractions = Mock()
     task_runs = Mock()
-    monkeypatch.setattr(resume_module, "connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(resume_module, "managed_connect", lambda _config: nullcontext(object()))
     monkeypatch.setattr(resume_module, "DocumentRepository", lambda _conn: documents)
     monkeypatch.setattr(resume_module, "ExtractionRepository", lambda _conn: extractions)
     monkeypatch.setattr(resume_module, "TaskRunRepository", lambda _conn: task_runs)
@@ -449,7 +451,7 @@ def test_workflow_loader_and_manager_defensive_child_paths(monkeypatch) -> None:
     manager._load_document_pipeline = Mock(return_value=None)
     manager._fail_children_when_extract_preflight_fails = Mock(return_value=False)
     manager_documents = Mock()
-    monkeypatch.setattr(workflow_manager_module, "connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(workflow_manager_module, "managed_connect", lambda _config: nullcontext(object()))
     monkeypatch.setattr(workflow_manager_module, "DocumentRepository", lambda _conn: manager_documents)
     monkeypatch.setattr(workflow_manager_module, "WorkflowLoader", Mock)
     manager_documents.get.side_effect = [None]

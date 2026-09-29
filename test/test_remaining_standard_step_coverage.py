@@ -82,6 +82,6 @@ def test_cleanup_paths_and_registered_artifact_probe_errors(tmp_path: Path, monk
     task._is_registered_document_artifact = Mock(return_value=True)
     task.run({"file_path": str(artifact), "document_id": "doc"})
     assert artifact.exists()
-    monkeypatch.setattr(cleanup_module, "connect", Mock(side_effect=OSError("db unavailable")))
+    monkeypatch.setattr(cleanup_module, "managed_connect", Mock(side_effect=OSError("db unavailable")))
     task._is_registered_document_artifact = CleanupTask._is_registered_document_artifact.__get__(task)
     assert task._is_registered_document_artifact(artifact, {"document_id": "doc"}) is False

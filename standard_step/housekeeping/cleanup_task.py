@@ -16,7 +16,7 @@ from pathlib import Path
 
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect
+from modules.db.connection import managed_connect
 from modules.db.repositories import DocumentRepository
 from modules.exceptions import TaskError
 
@@ -139,7 +139,7 @@ class CleanupTask(BaseTask):
             return False
         try:
             target = file_path.resolve()
-            with connect(self.config_manager) as conn:
+            with managed_connect(self.config_manager) as conn:
                 documents = DocumentRepository(conn)
                 for record in documents.list_files(str(document_id)):
                     if Path(str(record["file_path"])).resolve() == target:

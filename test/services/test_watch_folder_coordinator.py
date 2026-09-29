@@ -369,7 +369,7 @@ def test_scan_once_contains_unexpected_binding_failures(tmp_path, monkeypatch):
     binding = {"id": "binding-1", "enabled": True}
     binding_service = Mock()
     binding_service.list.return_value = [binding]
-    monkeypatch.setattr(coordinator_module, "connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(coordinator_module, "managed_connect", lambda _config: nullcontext(object()))
     monkeypatch.setattr(coordinator_module, "IngressBindingService", lambda *_args: binding_service)
     coordinator._scan_binding = Mock(side_effect=RuntimeError("unexpected scan"))
     assert coordinator.scan_once() == 0

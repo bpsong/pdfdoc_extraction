@@ -86,7 +86,7 @@ class _NonClosingUTF8Wrapper(io.TextIOWrapper):
     def close(self) -> None:  # pragma: no cover - defensive flush only
         try:
             self.flush()
-        except Exception:
+        except (OSError, ValueError):
             pass
 
 

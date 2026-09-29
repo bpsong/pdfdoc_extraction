@@ -129,8 +129,10 @@ class StoreMetadataAsCsv(BaseTask):
                     # Retain optional override support for older configs while preferring the field key.
                     table_key = cfg.get("normalized_name") or cfg.get("name") or field_key
                     return table_key
-            except Exception:
-                continue
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "Ignoring invalid table field config: %s", type(exc).__name__
+                )
         # Fallback: inspect context data for list-of-dicts fields
         data = context.get("data", {})
         if isinstance(data, dict):

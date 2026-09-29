@@ -22,7 +22,7 @@ from starlette.requests import Request as StarletteRequest
 from starlette.types import Message, Receive
 
 from ..config_protocol import ConfigProvider
-from ..db.connection import connect
+from ..db.connection import managed_connect
 from .upload_storage_lock import upload_storage_access
 
 MIB = 1024 * 1024
@@ -406,7 +406,7 @@ def _reconcile_locked_upload_files(
 
     # Resolve durable references before deleting anything. If SQLite cannot be
     # checked, reconciliation fails closed and leaves every file untouched.
-    with connect(config) as conn:
+    with managed_connect(config) as conn:
         rows = conn.execute(
             """
             SELECT file_path FROM documents

@@ -10,6 +10,7 @@ from modules.services.startup_migration_service import initialize_database
 from modules.db.repositories import ProcessingJobRepository
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
 from modules.services.processing_worker import ProcessingWorker
+from modules.workflow_manager import RetryableWorkflowStartError
 from test.helpers_sqlite import TempConfig
 from test.services.test_ingestion_assignment_service import publish_pipeline
 
@@ -85,6 +86,71 @@ def test_worker_marks_workflow_failure_as_terminal(tmp_path):
         ).fetchone()
     assert job["status"] == "failed"
     assert document["status"] == "failed"
+
+
+def test_worker_retries_transient_start_failure_then_completes(tmp_path):
+    class TransientProcessor(FakeProcessor):
+        def process_file(self, **kwargs: object) -> bool:
+            self.calls.append(kwargs)
+            if len(self.calls) == 1:
+                raise RetryableWorkflowStartError("Temporary startup failure")
+            return True
+
+    processor = TransientProcessor()
+    config, _, _ = build_job(tmp_path, processor=processor)
+    worker = ProcessingWorker(config, file_processor=processor, worker_id="test-worker")
+
+    assert worker.run_once() is True
+    with connect(config) as conn:
+        job = conn.execute("SELECT * FROM processing_jobs").fetchone()
+        assert job["status"] == "queued"
+        assert job["attempt_count"] == 1
+        assert conn.execute("SELECT status FROM documents").fetchone()[0] == "processing"
+        conn.execute("UPDATE processing_jobs SET available_at = '2000-01-01T00:00:00+00:00'")
+
+    assert worker.run_once() is True
+    with connect(config) as conn:
+        job = conn.execute("SELECT * FROM processing_jobs").fetchone()
+    assert job["status"] == "completed"
+    assert job["attempt_count"] == 2
+    assert len(processor.calls) == 2
+
+
+def test_worker_does_not_retry_unclassified_exception(tmp_path):
+    class BrokenProcessor(FakeProcessor):
+        def process_file(self, **kwargs: object) -> bool:
+            raise ValueError("Permanent setup failure")
+
+    config, _, _ = build_job(tmp_path)
+    worker = ProcessingWorker(config, file_processor=BrokenProcessor(), worker_id="test-worker")
+
+    assert worker.run_once() is True
+    with connect(config) as conn:
+        job = conn.execute("SELECT * FROM processing_jobs").fetchone()
+        document = conn.execute("SELECT status FROM documents").fetchone()
+    assert job["status"] == "failed"
+    assert job["attempt_count"] == 1
+    assert document["status"] == "failed"
+
+
+def test_worker_exhausts_transient_start_retries(tmp_path):
+    class TransientProcessor(FakeProcessor):
+        def process_file(self, **kwargs: object) -> bool:
+            raise RetryableWorkflowStartError("Temporary startup failure")
+
+    config, _, _ = build_job(tmp_path)
+    worker = ProcessingWorker(config, file_processor=TransientProcessor(), worker_id="test-worker")
+    for attempt in range(1, 4):
+        assert worker.run_once() is True
+        with connect(config) as conn:
+            job = conn.execute("SELECT * FROM processing_jobs").fetchone()
+            assert job["attempt_count"] == attempt
+            if attempt < 3:
+                assert job["status"] == "queued"
+                conn.execute("UPDATE processing_jobs SET available_at = '2000-01-01T00:00:00+00:00'")
+            else:
+                assert job["status"] == "failed"
+                assert conn.execute("SELECT status FROM documents").fetchone()[0] == "failed"
 
 
 def test_expired_lease_is_requeued_before_claim(tmp_path):

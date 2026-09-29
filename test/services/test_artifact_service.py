@@ -10,7 +10,7 @@ def test_registration_logs_non_sensitive_warning_on_database_failure(
     caplog,
 ):
     connect = Mock(side_effect=OSError("SECRET database location"))
-    monkeypatch.setattr(artifact_service, "connect", connect)
+    monkeypatch.setattr(artifact_service, "managed_connect", connect)
     caplog.set_level(logging.WARNING, logger=artifact_service.__name__)
 
     result = artifact_service.register_document_artifact(

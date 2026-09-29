@@ -6,15 +6,51 @@ import time
 import csv
 import json
 import logging
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
 from unittest.mock import patch, mock_open, Mock
 
 from modules.config_manager import ConfigManager
-from modules.workflow_manager import WorkflowManager
+from modules.workflow_manager import RetryableWorkflowStartError, WorkflowManager
 from modules.utils import sanitize_filename
 from test.helpers_sqlite import TempConfig
+
+
+def test_transient_workflow_load_error_is_retryable_before_flow_starts(tmp_path, monkeypatch):
+    manager = WorkflowManager(TempConfig(tmp_path / "state.sqlite3"))
+    manager._load_document_pipeline = Mock(side_effect=sqlite3.OperationalError("database is locked"))
+    manager._mark_document_failed = Mock()
+
+    with pytest.raises(RetryableWorkflowStartError):
+        manager.trigger_workflow_for_file("input.pdf", "doc", "input.pdf", "web", document_id="doc")
+
+    manager._mark_document_failed.assert_not_called()
+
+
+def test_transient_error_after_flow_starts_is_terminal(tmp_path, monkeypatch):
+    manager = WorkflowManager(TempConfig(tmp_path / "state.sqlite3"))
+    manager._load_document_pipeline = Mock(return_value=SimpleNamespace(
+        definition={"pipeline": [], "tasks": {}}, version_id="v1", template_id="t1"
+    ))
+    manager._mark_document_failed = Mock()
+    monkeypatch.setattr(
+        "modules.workflow_manager.WorkflowLoader.load_workflow",
+        lambda self: lambda context: (_ for _ in ()).throw(OSError("flow failed")),
+    )
+
+    assert manager.trigger_workflow_for_file("input.pdf", "doc", "input.pdf", "web", document_id="doc") is False
+    manager._mark_document_failed.assert_called_once()
+
+
+def test_permanent_workflow_load_error_does_not_retry(tmp_path):
+    manager = WorkflowManager(TempConfig(tmp_path / "state.sqlite3"))
+    manager._load_document_pipeline = Mock(side_effect=FileNotFoundError("definition missing"))
+    manager._mark_document_failed = Mock()
+
+    assert manager.trigger_workflow_for_file("input.pdf", "doc", "input.pdf", "web", document_id="doc") is False
+    manager._mark_document_failed.assert_called_once()
 
 def test_end_to_end_workflow_execution(tmp_path, monkeypatch):
     """Run a pinned pipeline with synthetic extraction and real exports."""

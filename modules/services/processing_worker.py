@@ -9,13 +9,13 @@ from typing import Any
 import uuid
 
 from modules.config_protocol import ConfigProvider
-from modules.db.connection import connect
+from modules.db.connection import managed_connect
 from modules.db.repositories import BatchRepository, DocumentRepository, ProcessingJobRepository
 from modules.file_processor import FileProcessor
 from modules.services.processing_job_service import ProcessingJobService
 from modules.services.runtime_health_service import RuntimeHealthReporter
 from modules.services.workflow_state_service import WorkflowStateService
-from modules.workflow_manager import WorkflowManager
+from modules.workflow_manager import RetryableWorkflowStartError, WorkflowManager
 
 
 logger = logging.getLogger(__name__)
@@ -51,7 +51,7 @@ class ProcessingWorker:
 
     def run_once(self) -> bool:
         """Claim and process one job, returning whether work was claimed."""
-        with connect(self.config) as conn:
+        with managed_connect(self.config) as conn:
             jobs = ProcessingJobRepository(conn)
             jobs.requeue_expired()
             lease_expires_at = (
@@ -70,7 +70,7 @@ class ProcessingWorker:
         if self.health_reporter is not None:
             self.health_reporter.set_status("busy", {"job_id": job_id})
         try:
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 document = DocumentRepository(conn).get(document_id)
                 batch = BatchRepository(conn).get(str(job["batch_id"]))
                 if document is None or batch is None:
@@ -91,7 +91,7 @@ class ProcessingWorker:
                 create_sqlite_state=False,
             )
             if result is False:
-                with connect(self.config) as conn:
+                with managed_connect(self.config) as conn:
                     WorkflowStateService(conn).transition_document(
                         document_id,
                         "failed",
@@ -104,7 +104,7 @@ class ProcessingWorker:
                     )
                 return True
 
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 ProcessingJobRepository(conn).mark_completed(
                     job_id, worker_id=self.worker_id
                 )
@@ -112,12 +112,16 @@ class ProcessingWorker:
         except Exception as exc:
             error = str(exc)[:2000]
             logger.exception("Processing job failed: job_id=%s", job_id)
-            with connect(self.config) as conn:
+            with managed_connect(self.config) as conn:
                 updated = ProcessingJobRepository(conn).mark_failed(
                     job_id,
                     worker_id=self.worker_id,
                     error=error,
-                    retry_at=ProcessingJobService.retry_at(self.retry_delay),
+                    retry_at=(
+                        ProcessingJobService.retry_at(self.retry_delay)
+                        if isinstance(exc, (RetryableWorkflowStartError, OSError))
+                        else None
+                    ),
                 )
                 if updated and updated.get("status") == "failed" and document is not None:
                     WorkflowStateService(conn).transition_document(

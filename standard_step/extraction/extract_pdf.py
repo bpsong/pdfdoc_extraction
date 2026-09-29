@@ -33,7 +33,7 @@ except ImportError:
         return logging.getLogger(name)
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect
+from modules.db.connection import managed_connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact_text
@@ -402,7 +402,7 @@ class ExtractPdfTask(BaseTask):
             return
 
         fields = self._build_persisted_fields(processed_data, metadata)
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             repository = ExtractionRepository(conn)
             result = repository.save_result(
                 document_id=str(document_id),

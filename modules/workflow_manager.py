@@ -9,12 +9,14 @@ Architecture Reference:
     For detailed system architecture, component interactions, and workflow orchestration
     patterns, refer to docs/design_architecture.md.
 """
+import errno
 import logging
+import sqlite3
 from typing import Dict, Any, Mapping
 
 from modules.workflow_loader import WorkflowLoader
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect, json_loads
+from modules.db.connection import managed_connect, json_loads
 from modules.db.repositories import BatchRepository, DocumentRepository, TaskRunRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact, _redact_text
@@ -25,6 +27,22 @@ from modules.services.pipeline_definition_service import (
 )
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.extraction.llama_cloud_v2 import preflight_extract_v2_access
+
+
+class RetryableWorkflowStartError(RuntimeError):
+    """A transient failure occurred before the document flow began."""
+
+
+def _is_transient_start_error(exc: OSError | sqlite3.OperationalError) -> bool:
+    """Limit full-flow retries to recognizable temporary startup failures."""
+    if isinstance(exc, sqlite3.OperationalError):
+        return "locked" in str(exc).lower() or "busy" in str(exc).lower()
+    return isinstance(exc, (TimeoutError, ConnectionError)) or exc.errno in {
+        errno.EAGAIN,
+        errno.EBUSY,
+        errno.EINTR,
+    }
+
 
 class WorkflowManager:
     """Orchestrates workflow triggering for file processing.
@@ -64,8 +82,9 @@ class WorkflowManager:
         """Trigger a new Prefect flow instance for the given file.
 
         Loads the workflow, assembles the initial context, and starts the flow.
-        On workflow load failure or any exception during trigger, marks the
-        SQLite document failed when document context exists and returns False.
+        Permanent load or execution failures mark the SQLite document failed
+        and return False. Recognizable transient failures before execution
+        raise RetryableWorkflowStartError for the processing queue.
 
         Args:
             file_path: Absolute or project-relative path to the input file.
@@ -85,6 +104,7 @@ class WorkflowManager:
             For detailed system architecture, component interactions, and workflow
             orchestration patterns, refer to docs/design_architecture.md.
         """
+        flow_started = False
         try:
             executable = self._load_document_pipeline(document_id)
             loader = WorkflowLoader(
@@ -118,6 +138,7 @@ class WorkflowManager:
             self.logger.info(
                 f"Workflow triggered for file: {original_filename} (ID: {unique_id}) from source: {source}"
             )
+            flow_started = True
             final_context = flow_func(initial_context)
             if isinstance(final_context, dict) and final_context.get("pipeline_state") == "fan_out":
                 self._trigger_child_workflows(final_context)
@@ -126,6 +147,14 @@ class WorkflowManager:
             )
             return True
             
+        except (sqlite3.OperationalError, OSError, TimeoutError, ConnectionError) as e:
+            if not flow_started and _is_transient_start_error(e):
+                raise RetryableWorkflowStartError(
+                    f"Transient workflow startup failure: {type(e).__name__}"
+                ) from e
+            self.logger.error("Failed to trigger workflow for %s: %s", original_filename, e)
+            self._mark_document_failed(document_id, f"Workflow Trigger Failed: {e}")
+            return False
         except Exception as e:
             self.logger.error(f"Failed to trigger workflow for {original_filename}: {e}")
             self._mark_document_failed(document_id, f"Workflow Trigger Failed: {e}")
@@ -139,7 +168,7 @@ class WorkflowManager:
             raise PipelineDefinitionError(
                 "A document ID is required for versioned workflow execution."
             )
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             document = DocumentRepository(conn).get(document_id)
             if document is None:
                 raise PipelineDefinitionError("Document does not exist.")
@@ -156,7 +185,7 @@ class WorkflowManager:
         if not document_id:
             return
         try:
-            with connect(self.config_manager) as conn:
+            with managed_connect(self.config_manager) as conn:
                 if DocumentRepository(conn).get(str(document_id)):
                     WorkflowStateService(conn).transition_document(
                         str(document_id), "failed", reason=reason
@@ -171,7 +200,7 @@ class WorkflowManager:
             return
 
         start_task_index = int(parent_context.get("fan_out_start_task_index") or 0)
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             documents = DocumentRepository(conn)
             child_documents = [documents.get(child_id) for child_id in child_ids]
 
@@ -295,7 +324,7 @@ class WorkflowManager:
             "batch_id": batch_id,
             "affected_child_documents": [child.get("id") for child in child_documents],
         }
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             documents = DocumentRepository(conn)
             task_runs = TaskRunRepository(conn)
             root = documents.get(root_document_id)

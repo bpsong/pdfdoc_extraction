@@ -6,7 +6,7 @@ from typing import Any
 
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect, json_loads
+from modules.db.connection import managed_connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository
 from modules.exceptions import TaskError
 from modules.services.review_service import ReviewService
@@ -48,7 +48,7 @@ class ReviewGateTask(BaseTask):
             context["review_gate_status"] = "passed"
             return context
 
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             extraction_repository = ExtractionRepository(conn)
             document_repository = DocumentRepository(conn)
             review_service = ReviewService(conn, self.config_manager)
@@ -321,7 +321,18 @@ class ReviewGateTask(BaseTask):
         """Normalize a threshold override mapping."""
         if not isinstance(value, dict):
             return {}
-        return {str(key): float(item) for key, item in value.items() if str(key)}
+        thresholds: dict[str, float] = {}
+        for key, item in value.items():
+            label = str(key)
+            if not label:
+                continue
+            try:
+                thresholds[label] = float(item)
+            except (TypeError, ValueError) as exc:
+                raise TaskError(
+                    f"Confidence threshold for {label} must be a number"
+                ) from exc
+        return thresholds
 
     def _schema(self) -> dict[str, Any] | None:
         """Return injected immutable schema content or the explicit legacy file."""

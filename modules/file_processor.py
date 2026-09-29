@@ -185,8 +185,8 @@ class FileProcessor:
             if not is_pdf_header(temp_path, read_size=5, attempts=3, delay=0.2, logger=logger):
                 try:
                     os.remove(temp_path)
-                except Exception:
-                    pass
+                except OSError as exc:
+                    logger.warning("Failed to remove invalid PDF upload: %s", type(exc).__name__)
                 raise ValueError("Invalid PDF header")
 
         # Generate UUID and rename to UUID.pdf
@@ -203,8 +203,8 @@ class FileProcessor:
             try:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.warning("Failed to remove upload after move failure: %s", type(exc).__name__)
             raise
 
         # Delegate to process_file for status + workflow trigger

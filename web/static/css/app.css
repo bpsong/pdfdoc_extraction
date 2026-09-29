@@ -342,6 +342,165 @@ main .badge:not(#failure-notification-badge) {
     background: oklch(var(--b2) / 0.7);
 }
 
+.processing-queue-table {
+    width: 100%;
+    min-width: 68rem;
+    table-layout: fixed;
+}
+
+.processing-queue-table :where(th, td) {
+    overflow-wrap: normal;
+}
+
+.processing-queue-table th:nth-child(1),
+.processing-queue-table td:nth-child(1) { width: 30%; }
+.processing-queue-table th:nth-child(2),
+.processing-queue-table td:nth-child(2) { width: 12%; }
+.processing-queue-table th:nth-child(3),
+.processing-queue-table td:nth-child(3),
+.processing-queue-table th:nth-child(4),
+.processing-queue-table td:nth-child(4) { width: 17%; }
+.processing-queue-table th:nth-child(5),
+.processing-queue-table td:nth-child(5) { width: 14%; }
+.processing-queue-table th:nth-child(6),
+.processing-queue-table td:nth-child(6) { width: 10%; }
+
+.processing-queue-filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.processing-queue-status,
+.processing-queue-status .badge {
+    white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+    .processing-queue-table {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        table-layout: auto;
+    }
+
+    .processing-queue-table tbody,
+    .processing-queue-table tbody tr {
+        width: 100%;
+    }
+
+    #processing-table-body > tr > td {
+        width: auto;
+    }
+
+    .processing-queue-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    .processing-queue-table tbody {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.75rem;
+    }
+
+    .processing-queue-table tbody tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.75rem 1rem;
+        padding: 1rem;
+        border: 1px solid oklch(var(--b3));
+        border-radius: 0.75rem;
+        background: oklch(var(--b1));
+    }
+
+    .processing-queue-table tbody tr:hover {
+        background: oklch(var(--b1));
+    }
+
+    .processing-queue-table tbody td {
+        display: grid;
+        min-width: 0;
+        gap: 0.25rem;
+        padding: 0;
+        border: 0;
+    }
+
+    .processing-queue-table tbody td::before {
+        content: attr(data-label);
+        color: oklch(var(--bc) / 0.55);
+        font-size: 0.7rem;
+        font-weight: 600;
+        line-height: 1rem;
+    }
+
+    .processing-queue-table tbody td:first-child,
+    .processing-queue-table tbody td:last-child {
+        grid-column: 1 / -1;
+    }
+
+    .processing-queue-table tbody td:first-child::before {
+        content: none;
+    }
+
+    .processing-queue-table tbody td:first-child .processing-queue-filename {
+        max-width: 100%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+
+    .processing-queue-table .min-w-36,
+    .processing-queue-table .min-w-28 {
+        min-width: 0;
+    }
+
+    .processing-queue-table td[data-label="Progress"] > div {
+        min-width: 0;
+        flex-wrap: wrap;
+    }
+
+    .processing-queue-table td[data-label="Progress"] progress {
+        flex: 1 1 3rem;
+        min-width: 3rem;
+    }
+
+    .processing-queue-table .processing-queue-status .badge {
+        display: inline-flex;
+        width: max-content;
+        max-width: 100%;
+        flex-wrap: nowrap;
+        white-space: nowrap;
+    }
+
+    .processing-queue-table tbody td[colspan] {
+        grid-column: 1 / -1;
+        display: block;
+        text-align: center;
+    }
+
+    .processing-queue-table tbody td[colspan]::before {
+        content: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .processing-queue-table tbody tr {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .processing-queue-table tbody td:first-child,
+    .processing-queue-table tbody td:last-child {
+        grid-column: auto;
+    }
+}
+
 .upload-dropzone {
     border: 1px solid transparent;
     transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;

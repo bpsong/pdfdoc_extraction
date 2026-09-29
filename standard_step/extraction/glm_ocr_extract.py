@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import connect
+from modules.db.connection import managed_connect
 from modules.db.repositories import ExtractionRepository
 from modules.exceptions import TaskError
 from standard_step.extraction.glm_ocr_adapter import (
@@ -342,7 +342,7 @@ class GlmOcrExtractTask(BaseTask):
                     "source": self._field_source(key, result),
                 }
             )
-        with connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn:
             repository = ExtractionRepository(conn)
             saved = repository.save_result(
                 document_id=str(document_id),

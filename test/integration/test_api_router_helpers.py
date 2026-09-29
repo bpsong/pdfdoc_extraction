@@ -235,7 +235,7 @@ def test_router_remaining_nested_helpers(monkeypatch: pytest.MonkeyPatch, tmp_pa
         {"id": "open", "status": "pending", "metadata_json": '{"schema_file":"schema.yaml"}'},
         {"id": "other", "status": "in_review", "metadata_json": '{"schema_file":"other.yaml"}'},
     ]
-    monkeypatch.setattr(router, "connect", lambda config: __import__("contextlib").nullcontext(object()))
+    monkeypatch.setattr(router, "managed_connect", lambda config: __import__("contextlib").nullcontext(object()))
     monkeypatch.setattr(router, "ReviewRepository", lambda conn: reviews)
     warning = helpers["_schema_active_review_warning"]("schema.yaml", ConfigStub({}))
     assert warning["active_review_count"] == 1

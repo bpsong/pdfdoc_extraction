@@ -292,21 +292,21 @@ export function createView(deps) {
                 const pipeline = state.pipeline || batch.pipeline || {};
                 rows.push(`
                     <tr>
-                        <td>
-                            <div class="text-sm font-medium truncate max-w-xs">${escapeHtml(filename)}</div>
+                        <td data-label="File name">
+                            <div class="processing-queue-filename text-sm font-medium" title="${escapeHtml(filename)}">${escapeHtml(filename)}</div>
                             <div class="text-xs text-base-content/40">${escapeHtml(batch.id || document.batch_id || "")}</div>
                             <div class="text-xs text-base-content/40">${escapeHtml(pipeline.template_key || "historical")} ${pipeline.version_number ? `· v${escapeHtml(pipeline.version_number)}` : "· migrated"}</div>
                         </td>
-                        <td>${statusBadge(document.status)}</td>
-                        <td>${stepName(document.current_step)}</td>
-                        <td>${stepName(document.last_completed_step)}</td>
-                        <td>
+                        <td data-label="Status"><span class="processing-queue-status">${statusBadge(document.status)}</span></td>
+                        <td data-label="Current step">${stepName(document.current_step)}</td>
+                        <td data-label="Last completed">${stepName(document.last_completed_step)}</td>
+                        <td data-label="Progress">
                             <div class="flex items-center gap-2 min-w-28">
                                 <progress class="progress progress-primary w-20" value="${progress}" max="100"></progress>
                                 <span class="text-xs">${progress}%</span>
                             </div>
                         </td>
-                        <td>${rowAction(batch, document)}</td>
+                        <td data-label="Action">${rowAction(batch, document)}</td>
                     </tr>
                 `);
             });

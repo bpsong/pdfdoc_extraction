@@ -46,7 +46,7 @@ from .config_manager import ConfigManager
 from .workflow_manager import WorkflowManager
 from .file_processor import FileProcessor
 from . import utils as utils_mod
-from .db.connection import connect
+from .db.connection import managed_connect
 from .db.connection import json_loads
 from .db.repositories import (
     DocumentRepository,
@@ -327,7 +327,7 @@ def is_admin_user(username: str, config: Any) -> bool:
     """Return whether a user can access admin APIs."""
     if not bool(config.get("ui.admin_enabled", True)):
         return False
-    with connect(config) as conn:
+    with managed_connect(config) as conn:
         record = UserRepository(conn).get(username)
     return bool(record and record["role"] == "admin")
 
@@ -652,7 +652,7 @@ def build_router() -> APIRouter:
 
     def _schema_active_review_warning(schema_name: str, config: ConfigManager) -> dict[str, Any] | None:
         """Return a warning when open review items reference a schema."""
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             reviews = ReviewRepository(conn).list_queue()
         open_items = []
         for item in reviews:
@@ -689,7 +689,7 @@ def build_router() -> APIRouter:
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Append an admin audit event without changing endpoint response shape."""
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             AuditService(conn).append_event(
                 event_type=event_type,
                 user=user,
@@ -809,7 +809,7 @@ def build_router() -> APIRouter:
                 detail="Unsupported pipeline selection source",
             )
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             record = UserRepository(conn).get(user)
             role = str(record["role"]) if record else "operator"
             return {
@@ -824,7 +824,7 @@ def build_router() -> APIRouter:
         """List SQLite-backed watch-folder bindings for administrators."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return {"bindings": IngressBindingService(conn, config).management_list()}
 
     @router.post("/api/admin/watch-folder-check")
@@ -833,7 +833,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         payload = await _json_body(request)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return IngressBindingService(conn, config).check_access(str(payload.get("folder_path") or ""))
 
     @router.get("/api/admin/watch-folder-bindings/{binding_id}/activity")
@@ -841,7 +841,7 @@ def build_router() -> APIRouter:
         """Read a bounded page of binding history."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             service = IngressBindingService(conn, config)
             if service.bindings.get(binding_id) is None:
                 raise HTTPException(status_code=404, detail="Unknown binding")
@@ -859,7 +859,7 @@ def build_router() -> APIRouter:
         if "enabled" in payload and type(payload["enabled"]) is not bool:
             raise HTTPException(status_code=422, detail="enabled must be a boolean")
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 binding = IngressBindingService(conn, config).create(
                     folder_path=str(payload.get("folder_path") or ""),
                     pipeline_version_id=str(
@@ -890,7 +890,7 @@ def build_router() -> APIRouter:
             if payload.get(field) is not None and not isinstance(payload[field], str):
                 raise HTTPException(status_code=422, detail=f"{field} must be a string")
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return IngressBindingService(conn, config).update(
                     binding_id,
                     action=payload.get("action"),
@@ -918,7 +918,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 IngressBindingService(conn, config).delete(binding_id, user=user)
             return {"deleted": True, "binding_id": binding_id}
         except KeyError as exc:
@@ -929,7 +929,7 @@ def build_router() -> APIRouter:
     @router.get("/api/upload-submissions/{submission_id}")
     async def get_upload_submission(submission_id: str, user: str = Depends(get_current_user)):
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return submission_status(conn, user, submission_id)
 
     @router.post("/api/batches/upload")
@@ -962,7 +962,7 @@ def build_router() -> APIRouter:
         finalized_paths: list[Path] = []
         try:
             fingerprint = submission_fingerprint(received) if submission_id else None
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 user_record = UserRepository(conn).get(user)
                 role = str(user_record["role"]) if user_record else "operator"
                 try:
@@ -1012,7 +1012,7 @@ def build_router() -> APIRouter:
                     }
                 )
 
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 try:
                     created = IngestionAssignmentService(conn, config).create_batch(
                         pipeline_version_id=pipeline_version_id,
@@ -1077,7 +1077,7 @@ def build_router() -> APIRouter:
             entries sorted by update time descending.
         """
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             documents = DocumentRepository(conn).list_all(limit=500)
         return [_file_status_from_document(document) for document in documents]
 
@@ -1111,14 +1111,14 @@ def build_router() -> APIRouter:
     def get_reports_summary(user: str = Depends(get_current_user)):
         """Return SQLite-backed processing report summary metrics."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return ReportsService(conn).summary()
 
     @router.get("/api/settings")
     def get_runtime_settings(user: str = Depends(get_current_user)):
         """Return read-only non-secret runtime settings."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return RuntimeSettingsService(config, conn).settings()
 
     @router.get("/api/admin/task-catalog")
@@ -1126,7 +1126,7 @@ def build_router() -> APIRouter:
         """Return available workflow task classes for admin pipeline editing."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return TaskCatalogService(config, conn=conn).catalog()
 
     @router.get("/api/admin/users")
@@ -1134,7 +1134,7 @@ def build_router() -> APIRouter:
         """Return the two fixed users without credential material."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return {"users": UserService(conn).list_users()}
 
     @router.put("/api/admin/users/{target}/password")
@@ -1148,7 +1148,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 changed = UserService(conn).change_password(
                     actor=user,
                     target=target,
@@ -1165,7 +1165,7 @@ def build_router() -> APIRouter:
         """Return admin dashboard summary data."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return AdminSummaryService(config, conn).summary()
 
     @router.get("/api/admin/runtime-health")
@@ -1193,7 +1193,7 @@ def build_router() -> APIRouter:
         """Return editable non-secret admin settings."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return AdminSettingsService(config, conn).get_admin_settings()
 
     @router.put("/api/admin/settings")
@@ -1203,7 +1203,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return AdminSettingsService(config, conn).update_admin_settings(payload, user=user)
         except AdminSettingsError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -1223,7 +1223,7 @@ def build_router() -> APIRouter:
         """Return filtered admin audit events."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return AdminAuditService(conn).list_events(
                 event_type=event_type,
                 user=audit_user,
@@ -1353,7 +1353,7 @@ def build_router() -> APIRouter:
     ):
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             templates = _versioned_admin_service(
                 config, conn
             ).list_schema_templates(include_archived=include_archived)
@@ -1367,7 +1367,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return ReviewSchemaVersionService(conn).create_template(
                     schema_key=str(payload.get("schema_key") or ""),
                     name=str(payload.get("name") or ""),
@@ -1385,7 +1385,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return _versioned_admin_service(
                     config, conn
                 ).get_schema_template(template_id)
@@ -1403,7 +1403,7 @@ def build_router() -> APIRouter:
         payload = await _json_body(request)
         allowed = {"schema_key", "name", "description", "status"}
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 service = ReviewSchemaVersionService(conn)
                 return {
                     "template": service.update_template(
@@ -1422,7 +1422,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 service = ReviewSchemaVersionService(conn)
                 service._require_template(template_id)
                 return {
@@ -1449,7 +1449,7 @@ def build_router() -> APIRouter:
                 detail="schema must be an object",
             )
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 draft = ReviewSchemaVersionService(conn).save_draft(
                     template_id,
                     expected_revision=_required_revision(payload),
@@ -1470,7 +1470,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return redact_sensitive(
                     ReviewSchemaVersionService(conn).validate_draft(
                         template_id, user=user
@@ -1490,7 +1490,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         text = await _versioned_import_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 draft = ReviewSchemaVersionService(conn).import_draft(
                     template_id,
                     expected_revision=expected_revision,
@@ -1510,7 +1510,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 content = ReviewSchemaVersionService(conn).export_draft(
                     template_id, format=format, user=user
                 )
@@ -1529,7 +1529,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return ReviewSchemaVersionService(conn).publish(
                     template_id,
                     expected_revision=_required_revision(payload),
@@ -1545,7 +1545,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 versions = _versioned_admin_service(
                     config, conn
                 ).list_schema_versions(template_id)
@@ -1564,7 +1564,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return {
                     "version": _versioned_admin_service(
                         config, conn
@@ -1585,7 +1585,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 admin = _versioned_admin_service(config, conn)
                 admin.get_schema_version(template_id, version_id)
                 content = admin.schemas.export_version(
@@ -1603,7 +1603,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return _versioned_admin_service(
                     config, conn
                 ).schema_usage(template_id)
@@ -1619,7 +1619,7 @@ def build_router() -> APIRouter:
     ):
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             templates = _versioned_admin_service(
                 config, conn
             ).list_pipeline_templates(include_archived=include_archived)
@@ -1633,7 +1633,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 service = PipelineTemplateService(
                     conn, configured_secret_aliases=_secret_aliases(config)
                 )
@@ -1660,7 +1660,7 @@ def build_router() -> APIRouter:
     ):
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             versions = _versioned_admin_service(
                 config, conn
             ).schema_selector_options()
@@ -1673,7 +1673,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return _versioned_admin_service(
                     config, conn
                 ).get_pipeline_template(template_id)
@@ -1699,7 +1699,7 @@ def build_router() -> APIRouter:
             "status",
         }
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 service = PipelineTemplateService(
                     conn, configured_secret_aliases=_secret_aliases(config)
                 )
@@ -1722,7 +1722,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return PipelineTemplateService(
                     conn, configured_secret_aliases=_secret_aliases(config)
                 ).clone(
@@ -1741,7 +1741,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 admin = _versioned_admin_service(config, conn)
                 workspace = admin.get_pipeline_template(template_id)
             return {
@@ -1767,7 +1767,7 @@ def build_router() -> APIRouter:
                 detail="definition must be an object",
             )
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 draft = PipelineTemplateService(
                     conn, configured_secret_aliases=_secret_aliases(config)
                 ).save_draft(
@@ -1790,7 +1790,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 result = PipelineTemplateService(
                     conn, configured_secret_aliases=_secret_aliases(config)
                 ).validate_draft(template_id, user=user)
@@ -1812,7 +1812,7 @@ def build_router() -> APIRouter:
             document = yaml.safe_load(text)
             if not isinstance(document, dict):
                 raise ValueError("Pipeline import must contain an object.")
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 admin = _versioned_admin_service(config, conn)
                 definition = admin.import_pipeline_document(document)
                 draft = admin.pipelines.import_draft(
@@ -1834,7 +1834,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 content = _versioned_admin_service(
                     config, conn
                 ).export_pipeline_draft(template_id, format=format)
@@ -1852,7 +1852,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return PipelineTemplateService(
                     conn, configured_secret_aliases=_secret_aliases(config)
                 ).diff(template_id, version_id=version_id)
@@ -1869,7 +1869,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return redact_sensitive(
                     PipelineTemplateService(
                         conn,
@@ -1890,7 +1890,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 versions = _versioned_admin_service(
                     config, conn
                 ).list_pipeline_versions(template_id)
@@ -1909,7 +1909,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 version = _versioned_admin_service(
                     config, conn
                 ).get_pipeline_version(template_id, version_id)
@@ -1929,7 +1929,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 content = _versioned_admin_service(
                     config, conn
                 ).export_pipeline_version(
@@ -1945,7 +1945,7 @@ def build_router() -> APIRouter:
         """Return active and draft pipeline configuration for admin editing."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             service = PipelineConfigService(config, conn)
             payload = service.get_pipeline()
             payload["catalog"] = _pipeline_editor_catalog(config, conn)
@@ -2015,7 +2015,7 @@ def build_router() -> APIRouter:
         payload = await _json_body(request)
         model = _pipeline_model_payload(payload)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return PipelineConfigService(config, conn).diff(model)
         except PipelineConfigError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -2028,7 +2028,7 @@ def build_router() -> APIRouter:
         payload = await _json_body(request)
         model = _pipeline_model_payload(payload)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return PipelineConfigService(config, conn).validate_draft(model, user=user, audit=True)
         except PipelineConfigError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -2052,7 +2052,7 @@ def build_router() -> APIRouter:
         """Return admin-editable review gate rules."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return AdminSettingsService(config, conn).get_review_gate_rules()
 
     @router.put("/api/admin/review-gate-rules")
@@ -2062,7 +2062,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return AdminSettingsService(config, conn).update_review_gate_rules(payload, user=user)
         except AdminSettingsError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -2072,7 +2072,7 @@ def build_router() -> APIRouter:
         """Return admin-editable non-secret LlamaCloud Split settings."""
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return AdminSettingsService(config, conn).get_split_settings()
 
     @router.put("/api/admin/split-settings")
@@ -2082,7 +2082,7 @@ def build_router() -> APIRouter:
         require_admin_user(user, config)
         payload = await _json_body(request)
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return AdminSettingsService(config, conn).update_split_settings(payload, user=user)
         except AdminSettingsError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
@@ -2093,7 +2093,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         await _json_body(request)
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return AdminSettingsService(config, conn).test_split_connection(user=user)
 
     @router.get("/api/admin/schemas/validation")
@@ -2248,7 +2248,7 @@ def build_router() -> APIRouter:
             includes document metadata, task runs, and registered artifacts.
         """
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             documents = DocumentRepository(conn)
             task_runs = TaskRunRepository(conn)
             state = WorkflowStateService(conn)
@@ -2259,6 +2259,7 @@ def build_router() -> APIRouter:
                 raise HTTPException(status_code=404, detail="File not found")
             runs = task_runs.list_by_document(str(document["id"]))
             files = [_parsed_file_payload(file_record) for file_record in documents.list_files(str(document["id"]))]
+            status_history = state.status_history(str(document["id"]))
 
         failed_runs = [run for run in runs if run.get("status") == "failed"]
         latest_error = failed_runs[-1].get("error") if failed_runs else None
@@ -2268,7 +2269,7 @@ def build_router() -> APIRouter:
             "document": document,
             "task_runs": runs,
             "files": files,
-            "status_history": state.status_history(str(document["id"])),
+            "status_history": status_history,
             "error": latest_error,
         }
         return _file_status_from_document(document, details=details)
@@ -2284,7 +2285,7 @@ def build_router() -> APIRouter:
     ):
         """List SQLite-backed ingestion batches."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             service = BatchService(conn)
             if paginated:
                 return service.list_batches_page(
@@ -2304,7 +2305,7 @@ def build_router() -> APIRouter:
     def get_batch(batch_id: str, user: str = Depends(get_current_user)):
         """Return one SQLite-backed ingestion batch."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             batch = BatchService(conn).get_batch(batch_id)
         if batch is None:
             raise HTTPException(status_code=404, detail="Batch not found")
@@ -2314,7 +2315,7 @@ def build_router() -> APIRouter:
     def list_batch_documents(batch_id: str, user: str = Depends(get_current_user)):
         """List documents belonging to a SQLite-backed ingestion batch."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             service = BatchService(conn)
             if service.get_batch(batch_id) is None:
                 raise HTTPException(status_code=404, detail="Batch not found")
@@ -2327,14 +2328,14 @@ def build_router() -> APIRouter:
     ):
         """Return recent batch processing state for the dynamic pipeline UI."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return ProcessingStateService(config, conn).list_active_state(limit=limit)
 
     @router.get("/api/batches/{batch_id}/processing-state")
     def get_batch_processing_state(batch_id: str, user: str = Depends(get_current_user)):
         """Return dynamic pipeline processing state for one batch."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             payload = ProcessingStateService(config, conn).get_batch_state(batch_id)
         if payload is None:
             raise HTTPException(status_code=404, detail="Batch not found")
@@ -2344,7 +2345,7 @@ def build_router() -> APIRouter:
     def get_split_results(batch_id: str, user: str = Depends(get_current_user)):
         """Return split parent/child results for one batch."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             batch_service = BatchService(conn)
             batch = batch_service.get_batch(batch_id)
             if batch is None:
@@ -2410,14 +2411,14 @@ def build_router() -> APIRouter:
     def get_failure_notifications(user: str = Depends(get_current_user)):
         """Return global fatal-failure notification status."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return FailureService(conn).notification_status()
 
     @router.post("/api/failures/notifications/clear")
     def clear_failure_notifications(user: str = Depends(get_current_user)):
         """Globally clear current fatal-failure notification count."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return FailureService(conn).clear_notifications(user=user)
 
     @router.get("/api/failures")
@@ -2430,7 +2431,7 @@ def build_router() -> APIRouter:
     ):
         """List documents with failed task runs for operator examination."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return FailureService(conn).list_failures(
                 limit=limit,
                 offset=offset,
@@ -2442,7 +2443,7 @@ def build_router() -> APIRouter:
     def get_failure_detail(document_id: str, user: str = Depends(get_current_user)):
         """Return failure details for one failed document."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             payload = FailureService(conn).get_failure(document_id)
         if payload is None:
             raise HTTPException(status_code=404, detail="Failure not found")
@@ -2452,14 +2453,14 @@ def build_router() -> APIRouter:
     def list_document_task_runs(document_id: str, user: str = Depends(get_current_user)):
         """List task runs for one document."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return TaskRunRepository(conn).list_by_document(document_id)
 
     @router.get("/api/documents/{document_id}/extraction")
     def get_document_extraction(document_id: str, user: str = Depends(get_current_user)):
         """Return persisted extraction details for one document."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             documents = DocumentRepository(conn)
             extractions = ExtractionRepository(conn)
             reviews = ReviewRepository(conn)
@@ -2526,7 +2527,7 @@ def build_router() -> APIRouter:
     def get_document_pdf_file(document_id: str, user: str = Depends(get_current_user)):
         """Serve the current document PDF for preview from registered SQLite state."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             documents = DocumentRepository(conn)
             document = documents.get(document_id)
             if document is None:
@@ -2564,7 +2565,7 @@ def build_router() -> APIRouter:
     def list_document_fields(document_id: str, user: str = Depends(get_current_user)):
         """List persisted extracted fields for one document."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             fields = ExtractionRepository(conn).get_fields(document_id)
         for field in fields:
             for key in ("extracted_value_json", "corrected_value_json", "final_value_json", "source_json"):
@@ -2593,7 +2594,7 @@ def build_router() -> APIRouter:
     ):
         """List review items with optional status and queue filters."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             service = ReviewService(conn, config)
             if paginated:
                 return service.list_items_page(
@@ -2613,7 +2614,7 @@ def build_router() -> APIRouter:
     def get_review_item(review_item_id: str, user: str = Depends(get_current_user)):
         """Return review item detail."""
         config, _, _, _, _ = get_dependencies()
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             detail = ReviewService(conn, config).get_detail(review_item_id)
         if detail is None:
             raise HTTPException(status_code=404, detail="Review item not found")
@@ -2626,7 +2627,7 @@ def build_router() -> APIRouter:
         await _json_body(request)
         operator = user
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return ReviewService(conn, config).claim(review_item_id, operator)
         except ReviewServiceError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
@@ -2638,7 +2639,7 @@ def build_router() -> APIRouter:
         await _json_body(request)
         operator = user
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 ReviewService(conn, config).release(review_item_id, operator)
         except ReviewServiceError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
@@ -2652,7 +2653,7 @@ def build_router() -> APIRouter:
         operator = user
         corrections = cast(dict[str, Any], payload.get("corrections") or {})
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return ReviewService(conn, config).save_draft(review_item_id, operator, corrections)
         except ReviewServiceError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
@@ -2663,7 +2664,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         payload = await _json_body(request)
         corrections = cast(dict[str, Any], payload.get("corrections") or {})
-        with connect(config) as conn:
+        with managed_connect(config) as conn:
             return ReviewService(conn, config).diff_preview(review_item_id, corrections)
 
     @router.post("/api/review/items/{review_item_id}/complete")
@@ -2674,7 +2675,7 @@ def build_router() -> APIRouter:
         operator = user
         corrections = cast(dict[str, Any], payload.get("corrections") or {})
         try:
-            with connect(config) as conn:
+            with managed_connect(config) as conn:
                 return ReviewService(conn, config).complete(review_item_id, operator, corrections)
         except ReviewServiceError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
