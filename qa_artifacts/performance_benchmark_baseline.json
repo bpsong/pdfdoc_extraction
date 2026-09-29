@@ -1,0 +1,88 @@
+{
+  "database": {
+    "processing_overview": {
+      "50": {
+        "selects": 102,
+        "median_ms": 29.37,
+        "max_ms": 58.94
+      },
+      "250": {
+        "selects": 502,
+        "median_ms": 160.97,
+        "max_ms": 190.51
+      },
+      "1000": {
+        "selects": 2002,
+        "median_ms": 917.88,
+        "max_ms": 1226.45
+      }
+    },
+    "failure_detail": {
+      "25": {
+        "selects": 31,
+        "median_ms": 2.5,
+        "max_ms": 10.25
+      },
+      "100": {
+        "selects": 106,
+        "median_ms": 15.34,
+        "max_ms": 26.15
+      },
+      "500": {
+        "selects": 506,
+        "median_ms": 90.63,
+        "max_ms": 132.47
+      }
+    },
+    "config_version_counts": {
+      "versions": 1000,
+      "content_kib_per_version": 64,
+      "current_full_rows": {
+        "median_ms": 1268.6,
+        "max_ms": 1575.84
+      },
+      "status_aggregate": {
+        "median_ms": 0.37,
+        "max_ms": 0.51
+      },
+      "full_text_mib": 62.5
+    },
+    "parent_document_index": {
+      "table_rows": 50000,
+      "matches": 1,
+      "without_index": {
+        "plan": [
+          "SCAN documents"
+        ],
+        "median_ms": 22.03,
+        "max_ms": 25.87
+      },
+      "with_index": {
+        "plan": [
+          "SEARCH documents USING INDEX benchmark_parent_document_id (parent_document_id=?)"
+        ],
+        "median_ms": 0.13,
+        "max_ms": 0.27
+      }
+    }
+  },
+  "bcrypt_checkpw": {
+    "median_ms": 400.3,
+    "max_ms": 414.94
+  },
+  "pdf": {
+    "fixture_mib": 49.0,
+    "upload_receiver": {
+      "elapsed_ms": 678.27,
+      "peak_rss_mib": 121.12,
+      "received_bytes": 51379049,
+      "rss_delta_mib": 1.47
+    },
+    "render_pdf": {
+      "elapsed_ms": 8214.77,
+      "pages": 30,
+      "png_bytes_mib": 3.46,
+      "rss_increase_mib": 133.24
+    }
+  }
+}

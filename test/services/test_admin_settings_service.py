@@ -13,6 +13,7 @@ from modules.services.admin_settings_service import (
     AdminAuditService,
     AdminSettingsError,
     AdminSettingsService,
+    AdminSummaryService,
 )
 from test.helpers_sqlite import TempConfig
 
@@ -140,3 +141,33 @@ def test_admin_audit_service_paginates_and_sorts(tmp_path: Path) -> None:
     assert result["events"][0]["event_type"] == "admin_zeta"
     assert result["sort_by"] == "event_type"
     assert result["sort_dir"] == "asc"
+
+
+def test_admin_summary_counts_versions_without_loading_bodies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path)
+    with connect(config) as conn:
+        for version_id, status in (
+            ("version-draft", "draft"),
+            ("version-published", "published"),
+            ("version-archived", "archived"),
+        ):
+            conn.execute(
+                """INSERT INTO config_versions(
+                    id, config_type, name, status, content_text, content_hash, created_at
+                ) VALUES (?, 'pipeline', 'synthetic', ?, ?, 'synthetic', '2026-01-01')""",
+                (version_id, status, "S" * 65536),
+            )
+
+        def fail_full_list(*args: Any, **kwargs: Any) -> None:
+            raise AssertionError("Admin summary must not load version bodies")
+
+        monkeypatch.setattr(ConfigVersionRepository, "list_versions", fail_full_list)
+        result = AdminSummaryService(config, conn).summary()
+
+    assert result["config_versions"] == {
+        "total": 3,
+        "drafts": 1,
+        "published": 1,
+    }

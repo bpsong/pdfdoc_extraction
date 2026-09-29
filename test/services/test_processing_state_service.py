@@ -2,7 +2,7 @@ from pathlib import Path
 
 from modules.db.connection import connect
 from modules.services.startup_migration_service import initialize_database
-from modules.db.repositories import DocumentRepository, TaskRunRepository
+from modules.db.repositories import AuditRepository, DocumentRepository, TaskRunRepository
 from modules.services.batch_service import BatchService
 from modules.services.processing_state_service import (
     build_pipeline_snapshot,
@@ -373,3 +373,81 @@ def test_processing_state_treats_review_gate_as_done_after_resume_completes_down
     assert review_step["state"] == "completed"
     assert review_step["counts"]["completed"] == 1
     assert "detail" not in review_step
+
+
+def test_processing_state_bulk_reads_preserve_runs_and_status_history(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    initialize_database(config)
+    snapshot = build_pipeline_snapshot(config)
+
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch_with_documents(
+            source="web",
+            files=[
+                {"file_path": str(tmp_path / "a.pdf"), "document_id": "doc-a"},
+                {"file_path": str(tmp_path / "b.pdf"), "document_id": "doc-b"},
+            ],
+            metadata={"pipeline_snapshot": snapshot},
+        )
+        batch_id = created["batch"]["id"]
+        runs = TaskRunRepository(conn)
+        audits = AuditRepository(conn)
+        for document_id in ("doc-a", "doc-b"):
+            runs.create_started(
+                batch_id=batch_id,
+                document_id=document_id,
+                task_key="extract_invoice",
+                task_index=2,
+                module_name="standard_step.extraction.extract_pdf",
+                class_name="ExtractPdfTask",
+            )
+            runs.create_started(
+                batch_id=batch_id,
+                document_id=document_id,
+                task_key="assign_nanoid",
+                task_index=0,
+                module_name="standard_step.context.assign_nanoid",
+                class_name="AssignNanoidTask",
+            )
+            audits.append(
+                event_type="document.status_changed",
+                event={"status": "running"},
+                document_id=document_id,
+            )
+            audits.append(
+                event_type="document.metadata_changed",
+                event={},
+                document_id=document_id,
+            )
+        expected_runs = {
+            document_id: runs.list_by_document(document_id)
+            for document_id in ("doc-a", "doc-b")
+        }
+        expected_history = {
+            document_id: [
+                event for event in audits.list_for_document(document_id)
+                if event["event_type"] == "document.status_changed"
+            ]
+            for document_id in ("doc-a", "doc-b")
+        }
+        selects = 0
+
+        def trace(statement: str) -> None:
+            nonlocal selects
+            if statement.lstrip().upper().startswith("SELECT"):
+                selects += 1
+
+        conn.set_trace_callback(trace)
+        try:
+            payload = ProcessingStateService(config, conn).get_batch_state(batch_id)
+        finally:
+            conn.set_trace_callback(None)
+
+    assert payload is not None
+    assert selects == 4
+    assert payload["task_runs_by_document"] == expected_runs
+    for document in payload["documents"]:
+        assert document["task_runs"] == expected_runs[document["id"]]
+        assert document["status_history"] == expected_history[document["id"]]

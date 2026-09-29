@@ -141,13 +141,20 @@ class ProcessingStateService:
         """Build one batch state payload."""
         snapshot, identity = self._pinned_snapshot(batch)
         documents = self.documents.list_by_batch(str(batch["id"]))
-        runs_by_document = {
-            str(document["id"]): self.task_runs.list_by_document(str(document["id"])) for document in documents
-        }
+        document_ids = [str(document["id"]) for document in documents]
+        runs_by_document = self.task_runs.list_by_documents(document_ids)
+        status_history_by_document = self.audit.list_status_changes_by_documents(document_ids)
         children_by_parent = _children_by_parent(documents)
         split_position = _first_split_position(snapshot)
         document_payloads = [
-            self._document_payload(document, snapshot, runs_by_document[str(document["id"])], children_by_parent, split_position)
+            self._document_payload(
+                document,
+                snapshot,
+                runs_by_document[str(document["id"])],
+                status_history_by_document[str(document["id"])],
+                children_by_parent,
+                split_position,
+            )
             for document in documents
         ]
         aggregate_steps = self._aggregate_steps(snapshot, document_payloads)
@@ -224,6 +231,7 @@ class ProcessingStateService:
         document: dict[str, Any],
         snapshot: dict[str, Any],
         task_runs: list[dict[str, Any]],
+        status_history: list[dict[str, Any]],
         children_by_parent: dict[str, list[dict[str, Any]]],
         split_position: int | None,
     ) -> dict[str, Any]:
@@ -242,11 +250,7 @@ class ProcessingStateService:
             "metadata": json_loads(document.get("metadata_json"), {}),
             "task_states": step_states,
             "task_runs": task_runs,
-            "status_history": [
-                event
-                for event in self.audit.list_for_document(str(document["id"]))
-                if event.get("event_type") == "document.status_changed"
-            ],
+            "status_history": status_history,
             "current_step": current_step,
             "last_completed_step": last_completed,
             "progress_percent": progress,

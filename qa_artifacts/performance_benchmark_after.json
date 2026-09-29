@@ -1,0 +1,93 @@
+{
+  "database": {
+    "processing_overview": {
+      "50": {
+        "selects": 4,
+        "median_ms": 2.32,
+        "max_ms": 3.08
+      },
+      "250": {
+        "selects": 4,
+        "median_ms": 12.68,
+        "max_ms": 14.25
+      },
+      "1000": {
+        "selects": 6,
+        "median_ms": 47.11,
+        "max_ms": 86.47,
+        "per_document_reference": {
+          "selects": 2002,
+          "median_ms": 269.49,
+          "max_ms": 301.9
+        }
+      }
+    },
+    "failure_detail": {
+      "25": {
+        "selects": 31,
+        "median_ms": 1.42,
+        "max_ms": 1.79
+      },
+      "100": {
+        "selects": 106,
+        "median_ms": 5.9,
+        "max_ms": 6.77
+      },
+      "500": {
+        "selects": 506,
+        "median_ms": 25.47,
+        "max_ms": 29.04
+      }
+    },
+    "config_version_counts": {
+      "versions": 1000,
+      "content_kib_per_version": 64,
+      "full_rows_reference": {
+        "median_ms": 441.48,
+        "max_ms": 493.15
+      },
+      "summary_status_counts": {
+        "median_ms": 0.23,
+        "max_ms": 0.23
+      },
+      "full_text_mib": 62.5
+    },
+    "parent_document_index": {
+      "table_rows": 50000,
+      "matches": 1,
+      "without_index": {
+        "plan": [
+          "SCAN documents"
+        ],
+        "median_ms": 7.42,
+        "max_ms": 8.03
+      },
+      "with_index": {
+        "plan": [
+          "SEARCH documents USING INDEX benchmark_parent_document_id (parent_document_id=?)"
+        ],
+        "median_ms": 0.07,
+        "max_ms": 0.08
+      }
+    }
+  },
+  "bcrypt_checkpw": {
+    "median_ms": 217.37,
+    "max_ms": 220.68
+  },
+  "pdf": {
+    "fixture_mib": 49.0,
+    "upload_receiver": {
+      "elapsed_ms": 147.57,
+      "peak_rss_mib": 121.97,
+      "received_bytes": 51379049,
+      "rss_delta_mib": 2.71
+    },
+    "render_pdf": {
+      "elapsed_ms": 3930.01,
+      "pages": 30,
+      "png_bytes_mib": 3.46,
+      "rss_increase_mib": 132.01
+    }
+  }
+}

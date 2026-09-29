@@ -640,7 +640,7 @@ class AdminSummaryService:
         review_gate = self.settings.get_review_gate_rules()
         split = self.settings.get_split_settings()
         recent_audit = self.audit.list_events(limit=5)
-        versions = ConfigVersionRepository(self.conn).list_versions()
+        version_counts = ConfigVersionRepository(self.conn).status_counts()
 
         return {
             "config_health": {
@@ -672,11 +672,7 @@ class AdminSummaryService:
                 "total_admin_events": recent_audit["total"],
                 "recent_events": recent_audit["events"],
             },
-            "config_versions": {
-                "total": len(versions),
-                "drafts": sum(1 for version in versions if version.get("status") == "draft"),
-                "published": sum(1 for version in versions if version.get("status") == "published"),
-            },
+            "config_versions": version_counts,
         }
 
     def _safe_active_config_validation(self) -> dict[str, Any]:

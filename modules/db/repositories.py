@@ -760,6 +760,21 @@ class TaskRunRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_by_documents(self, document_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        """Load task runs for a batch of documents in bounded SQL queries."""
+        grouped: dict[str, list[dict[str, Any]]] = {document_id: [] for document_id in document_ids}
+        for start in range(0, len(document_ids), 500):
+            chunk = document_ids[start:start + 500]
+            placeholders = ", ".join("?" for _ in chunk)
+            rows = self.conn.execute(
+                f"SELECT * FROM task_runs WHERE document_id IN ({placeholders}) "
+                "ORDER BY document_id, task_index, started_at, rowid",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                grouped[str(row["document_id"])].append(dict(row))
+        return grouped
+
     def has_completed_at_or_after(
         self,
         document_id: str,
@@ -1315,6 +1330,24 @@ class AuditRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_status_changes_by_documents(
+        self, document_ids: list[str]
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Load status history for multiple documents in bounded SQL queries."""
+        grouped: dict[str, list[dict[str, Any]]] = {document_id: [] for document_id in document_ids}
+        for start in range(0, len(document_ids), 500):
+            chunk = document_ids[start:start + 500]
+            placeholders = ", ".join("?" for _ in chunk)
+            rows = self.conn.execute(
+                f"SELECT * FROM audit_events WHERE document_id IN ({placeholders}) "
+                "AND event_type = 'document.status_changed' "
+                "ORDER BY document_id, created_at, rowid",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                grouped[str(row["document_id"])].append(dict(row))
+        return grouped
+
     def list_admin_events(
         self,
         *,
@@ -1515,6 +1548,22 @@ class ConfigVersionRepository:
             params.append(name)
         sql += " ORDER BY created_at DESC"
         return [dict(row) for row in self.conn.execute(sql, params).fetchall()]
+
+    def status_counts(self) -> dict[str, int]:
+        """Count version states without loading stored configuration bodies."""
+        row = self.conn.execute(
+            """
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS drafts,
+                   SUM(CASE WHEN status = 'published' THEN 1 ELSE 0 END) AS published
+            FROM config_versions
+            """
+        ).fetchone()
+        return {
+            "total": int(row["total"] or 0),
+            "drafts": int(row["drafts"] or 0),
+            "published": int(row["published"] or 0),
+        }
 
 
 class _VersionedDefinitionRepository:
