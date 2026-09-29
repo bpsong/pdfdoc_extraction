@@ -37,6 +37,7 @@ from modules.shutdown_manager import ShutdownManager
 from modules.config_manager import ConfigManager, ConfigurationError
 from modules.auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
 from modules.logging_config import setup_bootstrap_logging, setup_logging
+from modules.security_config import is_production, validate_production_signing_key
 from modules.services.startup_service import MigrationMode, run_startup_checks
 from modules.services.upload_receiver import reconcile_upload_files
 from modules.services.upload_storage_lock import web_process_ownership
@@ -64,14 +65,7 @@ def _cors_allowed_origins(config: ConfigManager) -> list[str]:
 
 def _is_production() -> bool:
     """Return whether the process is running in a production environment."""
-
-    environment = (
-        os.getenv("APP_ENV")
-        or os.getenv("ENV")
-        or os.getenv("ENVIRONMENT")
-        or "development"
-    )
-    return environment.strip().lower() in {"prod", "production"}
+    return is_production()
 
 
 def _allowed_hosts(config: ConfigManager, production: bool) -> list[str]:
@@ -136,6 +130,7 @@ def create_app() -> FastAPI:
         raise RuntimeError(f"Unsupported startup mode: {startup_mode}")
     run_startup_checks(config, migration_mode=cast(MigrationMode, startup_mode))
     production = _is_production()
+    validate_production_signing_key(config.get("web.secret_key"))
     docs_enabled = not production or bool(config.get("web.production_docs_enabled", False))
     shutdown_manager = ShutdownManager()
     run_id = os.getenv("DOCFLOW_RUN_ID", "").strip()
@@ -247,6 +242,7 @@ def create_app() -> FastAPI:
             value=token,
             httponly=False,
             samesite="lax",
+            secure=production,
             path="/",
         )
 
@@ -491,6 +487,7 @@ def create_app() -> FastAPI:
                 value=token,
                 httponly=True,
                 samesite="lax",
+                secure=production,
                 path="/",
                 max_age=int(expires_delta.total_seconds()),
                 expires=expires_at.strftime("%a, %d %b %Y %H:%M:%S GMT")

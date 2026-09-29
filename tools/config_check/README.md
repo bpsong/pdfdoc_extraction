@@ -87,12 +87,15 @@ The unified web app wraps the same validation logic for operator/admin views:
 
 - `/app/settings/validation` shows the current deployment/legacy global
   validation summary. It does not enumerate every SQLite draft and version.
-- `GET /api/config/validation` returns validation status for the current runtime configuration.
-- `POST /api/config/validation` runs validation with request-provided options.
+- `GET /api/config/validation` returns validation status for the current runtime configuration to administrators.
+- `POST /api/config/validation` runs administrator-submitted validation with request-provided options.
+- Both API responses redact secret values from normalized data and findings;
+  the CLI continues to use full values internally.
 - Admin Pipeline and Review Form pages validate their selected SQLite draft
   before publishing an immutable version.
 
-Use the CLI for pre-deployment checks and automation. Use the UI when an operator or administrator needs to inspect the active runtime configuration from the running application.
+Use the CLI for pre-deployment checks and automation. Use the admin Validation
+Center to inspect active runtime configuration status in the running application.
 
 ## Output Formats
 

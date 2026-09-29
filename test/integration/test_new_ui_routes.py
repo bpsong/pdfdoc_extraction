@@ -28,10 +28,12 @@ class FakeConfig:
         cors_allowed_origins: list[str] | None = None,
         allowed_hosts: list[str] | None = None,
         production_docs_enabled: bool = False,
+        secret_key: str = "synthetic-production-signing-key-long-enough",
     ) -> None:
         self.values: dict[str, Any] = {
             "database": {"run_migrations_on_startup": False},
             "web": {
+                "secret_key": secret_key,
                 "cors_allowed_origins": cors_allowed_origins or [],
                 "allowed_hosts": allowed_hosts or [],
                 "production_docs_enabled": production_docs_enabled,
@@ -69,6 +71,9 @@ class FakeAuth:
             return self.username
         raise AuthError("Invalid token")
 
+    def login(self, username: str, password: str, client_id: str | None = None) -> str:
+        return TOKEN
+
     def refresh_access_token(self, token: str) -> str:
         """Return a renewed token after applying the normal validation stub."""
 
@@ -88,6 +93,7 @@ def build_client(
     cors_allowed_origins: list[str] | None = None,
     allowed_hosts: list[str] | None = None,
     production_docs_enabled: bool = False,
+    secret_key: str = "synthetic-production-signing-key-long-enough",
     startup_checks: Mock | None = None,
 ) -> TestClient:
     config = FakeConfig(
@@ -95,6 +101,7 @@ def build_client(
         cors_allowed_origins=cors_allowed_origins,
         allowed_hosts=allowed_hosts,
         production_docs_enabled=production_docs_enabled,
+        secret_key=secret_key,
     )
     auth = FakeAuth(username)
 
@@ -286,6 +293,27 @@ def test_production_requires_explicit_allowed_hosts(monkeypatch) -> None:
         assert "web.allowed_hosts" in str(exc)
     else:
         raise AssertionError("Production app accepted an empty host allowlist")
+
+
+def test_production_app_rejects_placeholder_signing_key(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+
+    with pytest.raises(RuntimeError, match="web.secret_key"):
+        build_client(monkeypatch, allowed_hosts=["testserver"], secret_key="your_secret_key")
+
+
+def test_production_cookies_are_secure_and_refresh_stays_usable(monkeypatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    app = build_client(monkeypatch, username="admin", allowed_hosts=["testserver"]).app
+    client = TestClient(app, base_url="https://testserver")
+
+    login = client.post("/login", data={"username": "admin", "password": "synthetic"}, follow_redirects=False)
+    assert login.status_code == 303
+    assert all("secure" in header.lower() for header in login.headers.get_list("set-cookie"))
+    csrf = client.cookies.get("csrf_token")
+    refresh = client.post("/api/session/refresh", headers={"X-CSRF-Token": csrf})
+    assert refresh.status_code == 200
+    assert "secure" in refresh.headers["set-cookie"].lower()
 
 
 def test_app_routes_require_authentication(monkeypatch) -> None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import regex
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -203,19 +204,26 @@ class SchemaService:
                 "matches": False,
                 "error": "Example value must be a string.",
             }
+        if len(pattern) > 512 or len(example) > 4096:
+            return {
+                "valid": False,
+                "matches": False,
+                "error": "Pattern or example is too long.",
+            }
         try:
-            compiled = re.compile(pattern)
-        except re.error as exc:
+            re.compile(pattern)
+            compiled = regex.compile(pattern)
+        except (re.error, regex.error) as exc:
             return {
                 "valid": False,
                 "matches": False,
                 "error": f"Invalid regular expression: {exc}.",
             }
-        return {
-            "valid": True,
-            "matches": compiled.match(example) is not None,
-            "error": None,
-        }
+        try:
+            matches = compiled.match(example, timeout=0.05) is not None
+        except TimeoutError:
+            return {"valid": False, "matches": False, "error": "Pattern test timed out."}
+        return {"valid": True, "matches": matches, "error": None}
 
     def schema_hash(self, schema_name: str) -> str | None:
         """Return a SHA-256 hash of a schema file for review traceability."""

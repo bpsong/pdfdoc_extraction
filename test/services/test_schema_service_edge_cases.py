@@ -166,6 +166,24 @@ def test_pattern_helper_uses_review_matching_semantics(tmp_path):
     assert service.test_pattern("", "AB123")["error"] == "Pattern is required."
 
 
+def test_pattern_helper_limits_expensive_inputs(tmp_path, monkeypatch):
+    service = _service(tmp_path)
+
+    assert service.test_pattern("a" * 513, "a")["error"] == "Pattern or example is too long."
+    assert service.test_pattern("a", "a" * 4097)["error"] == "Pattern or example is too long."
+    class TimedOutPattern:
+        def match(self, example: str, *, timeout: float) -> None:
+            assert timeout == 0.05
+            raise TimeoutError
+
+    monkeypatch.setattr("modules.services.schema_service.regex.compile", lambda _: TimedOutPattern())
+    assert service.test_pattern(r"(a+)+$", "a" * 1000 + "!") == {
+        "valid": False,
+        "matches": False,
+        "error": "Pattern test timed out.",
+    }
+
+
 def test_payload_validation_covers_all_value_types(tmp_path):
     service = _service(tmp_path)
     schema = {

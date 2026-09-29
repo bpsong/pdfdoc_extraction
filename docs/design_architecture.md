@@ -990,10 +990,14 @@ in [frontend deployment](frontend_deployment.md).
 ### Browser security
 
 - JWT access tokens use an HTTP-only cookie.
+- Login and CSRF cookies use `Secure` in production; development HTTP remains
+  available without the production environment flag.
 - Cookie-authenticated mutations require a CSRF cookie and matching
   `X-CSRF-Token` header.
 - Page routes and APIs enforce roles server-side; hidden navigation is not an
   authorization control.
+- Config validation APIs require an administrator and redact deployment
+  secrets before serializing results; the CLI retains full validation data.
 - API requests are same-origin by default; CORS requires explicit trusted
   origins.
 - Trusted-host, CSP, content-type, referrer, permissions, and frame headers

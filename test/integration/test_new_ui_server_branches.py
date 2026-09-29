@@ -104,6 +104,7 @@ def test_server_login_form_and_json_error_variants(monkeypatch) -> None:
     success = client.post("/login", data={"username": "admin", "password": "pw"}, follow_redirects=False)
     assert success.status_code == 303
     assert "access_token" in success.cookies
+    assert all("secure" not in header.lower() for header in success.headers.get_list("set-cookie"))
 
     csrf_token = success.cookies.get("csrf_token")
     refreshed = client.post(

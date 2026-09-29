@@ -6,6 +6,7 @@ from typing import Any
 import yaml
 
 from modules.services.config_validation_service import ConfigValidationService
+from tools.config_check.validator import ConfigValidator, ValidationMessage
 from test.helpers_sqlite import TempConfig
 
 
@@ -83,6 +84,32 @@ def test_validate_payload_accepts_valid_config(tmp_path: Path) -> None:
     assert result["valid"] is True
     assert result["summary"]["errors"] == 0
     assert result["normalized"]["pipeline"] == ["extract"]
+
+
+def test_validation_redacts_secret_values_in_data_and_findings(tmp_path: Path) -> None:
+    service = _service(tmp_path)
+    config = _base_config(tmp_path)
+    config["pipeline_secrets"] = {"provider": "synthetic-provider-secret"}
+    config["web"]["secret_key"] = "synthetic-signing-secret"
+
+    result = service._response(
+        source="payload",
+        data=config,
+        errors=[ValidationMessage(path="web.secret_key", message="Bad synthetic-signing-secret")],
+        warnings=[ValidationMessage(path="pipeline_secrets", message="Bad synthetic-provider-secret")],
+        extra_findings=[],
+    )
+
+    assert result["normalized"]["web"]["secret_key"] == "[REDACTED]"
+    assert result["normalized"]["pipeline_secrets"] == "[REDACTED]"
+    serialized = yaml.safe_dump(result)
+    assert "synthetic-signing-secret" not in serialized
+    assert "synthetic-provider-secret" not in serialized
+    assert "Bad [REDACTED]" in serialized
+    assert config["web"]["secret_key"] == "synthetic-signing-secret"
+
+    cli_result = ConfigValidator(base_dir=tmp_path, import_checks=False, check_files=False).validate_config_data(config)
+    assert cli_result.data["web"]["secret_key"] == "synthetic-signing-secret"
 
 
 def test_validate_payload_reports_review_gate_param_errors(tmp_path: Path) -> None:

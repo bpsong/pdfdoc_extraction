@@ -929,6 +929,12 @@ by a trusted reverse proxy. OpenAPI endpoints (`/docs`, `/redoc`, and
 `/openapi.json`) are disabled in production unless
 `production_docs_enabled` is explicitly enabled. The application also sends
 baseline anti-framing, MIME-sniffing, referrer, and browser-permission headers.
+Production startup also requires `web.secret_key` to be at least 32 characters
+and rejects common placeholders. Generate a unique random key and keep it out
+of version control. Changing it invalidates existing login sessions.
+Production login and CSRF cookies use the `Secure` attribute, so serve the
+browser-facing app over HTTPS (directly or through a trusted TLS proxy).
+Local development without a production environment flag can still use HTTP.
 Tailwind and DaisyUI are bundled locally; run `npm install` and
 `npm run build:css` after changing frontend utility classes or package versions.
 - Do not commit password hashes or secret-bearing config files to version control.

@@ -59,7 +59,7 @@ def _base_config(tmp_path: Path) -> dict[str, Any]:
     }
 
 
-def _client(monkeypatch, config: TempConfig, *, username: str = "operator") -> TestClient:
+def _client(monkeypatch, config: TempConfig, *, username: str = "admin") -> TestClient:
     initialize_database(config)
     initialize_test_users(config)
     app = FastAPI()
@@ -79,6 +79,7 @@ def _codes(payload: dict[str, Any]) -> set[str]:
 
 def test_get_config_validation_validates_active_config_file(tmp_path: Path, monkeypatch) -> None:
     values = _base_config(tmp_path)
+    values["pipeline_secrets"] = {"provider": "synthetic-provider-secret"}
     config = TempConfig(tmp_path / "app.sqlite3", values)
     config._config_path.write_text(yaml.safe_dump(values), encoding="utf-8")
     client = _client(monkeypatch, config)
@@ -89,10 +90,15 @@ def test_get_config_validation_validates_active_config_file(tmp_path: Path, monk
     payload = response.json()
     assert payload["valid"] is True
     assert payload["source"] == str(config._config_path)
+    assert payload["normalized"]["web"]["secret_key"] == "[REDACTED]"
+    assert payload["normalized"]["pipeline_secrets"] == "[REDACTED]"
+    assert "synthetic-provider-secret" not in response.text
+    assert "test-secret" not in response.text
 
 
 def test_post_config_validation_validates_submitted_payload(tmp_path: Path, monkeypatch) -> None:
     values = _base_config(tmp_path)
+    values["pipeline_secrets"] = {"provider": "synthetic-provider-secret"}
     values["tasks"]["review"] = {
         "module": "standard_step.review.review_gate",
         "class": "ReviewGateTask",
@@ -109,6 +115,18 @@ def test_post_config_validation_validates_submitted_payload(tmp_path: Path, monk
     payload = response.json()
     assert payload["valid"] is False
     assert "review-gate-invalid-confidence-threshold" in _codes(payload)
+    assert "synthetic-provider-secret" not in response.text
+    assert "test-secret" not in response.text
+
+
+def test_config_validation_requires_admin_for_get_and_post(tmp_path: Path, monkeypatch) -> None:
+    values = _base_config(tmp_path)
+    config = TempConfig(tmp_path / "app.sqlite3", values)
+    config._config_path.write_text(yaml.safe_dump(values), encoding="utf-8")
+    client = _client(monkeypatch, config, username="operator")
+
+    assert client.get("/api/config/validation").status_code == 403
+    assert client.post("/api/config/validation", json={"config": values}).status_code == 403
 
 
 def test_post_pipeline_validate_reports_split_findings(tmp_path: Path, monkeypatch) -> None:

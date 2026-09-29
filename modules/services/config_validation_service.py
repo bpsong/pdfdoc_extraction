@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
+from modules.services.versioned_config_contracts import is_secret_key
 from modules.services.pipeline_validation_service import (
     PipelineValidationService,
     validate_all_schemas,
@@ -115,7 +116,7 @@ class ConfigValidationService:
         )
         findings.extend(extra_findings)
         findings = self._dedupe_findings(findings)
-        return {
+        response = {
             "source": source,
             "valid": not any(finding["severity"] == "error" for finding in findings),
             "summary": {
@@ -125,6 +126,61 @@ class ConfigValidationService:
             "findings": findings,
             "normalized": data,
         }
+        # The CLI needs full validation data, but API and dashboard callers
+        # must never receive deployment secrets or diagnostics containing them.
+        secrets = self._secret_values(data)
+        redacted = self._redact_secret_keys(response)
+        redacted["findings"] = self._scrub_secret_text(redacted["findings"], secrets)
+        return redacted
+
+    @staticmethod
+    def _redact_secret_keys(value: Any) -> Any:
+        """Mask secret-bearing fields while preserving response structure."""
+        if isinstance(value, dict):
+            return {
+                key: (
+                    "[REDACTED]"
+                    if is_secret_key(str(key))
+                    else ConfigValidationService._redact_secret_keys(item)
+                )
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [ConfigValidationService._redact_secret_keys(item) for item in value]
+        return value
+
+    @staticmethod
+    def _secret_values(data: dict[str, Any] | None) -> set[str]:
+        """Collect configured secret values for redacting diagnostic text."""
+        found: set[str] = set()
+
+        def visit(value: Any, *, secret: bool = False) -> None:
+            if isinstance(value, dict):
+                for key, item in value.items():
+                    visit(item, secret=secret or is_secret_key(str(key)))
+            elif isinstance(value, list):
+                for item in value:
+                    visit(item, secret=secret)
+            elif secret and isinstance(value, str) and value:
+                found.add(value)
+
+        visit(data)
+        return found
+
+    @staticmethod
+    def _scrub_secret_text(value: Any, secrets: set[str]) -> Any:
+        """Remove secret values embedded in free-form validation messages."""
+        if isinstance(value, dict):
+            return {
+                key: ConfigValidationService._scrub_secret_text(item, secrets)
+                for key, item in value.items()
+            }
+        if isinstance(value, list):
+            return [ConfigValidationService._scrub_secret_text(item, secrets) for item in value]
+        if isinstance(value, str):
+            for secret in sorted(secrets, key=len, reverse=True):
+                value = value.replace(secret, "[REDACTED]")
+        return value
 
     @staticmethod
     def _dedupe_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:

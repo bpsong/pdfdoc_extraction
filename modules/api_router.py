@@ -42,6 +42,7 @@ from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 
 from .auth_utils import AuthUtils, AuthError, AuthenticationSetupRequired, LoginRateLimitError
+from .security_config import is_production
 from .config_manager import ConfigManager
 from .workflow_manager import WorkflowManager
 from .file_processor import FileProcessor
@@ -781,6 +782,7 @@ def build_router() -> APIRouter:
             value=refreshed_token,
             httponly=True,
             samesite="lax",
+            secure=is_production(),
             path="/",
             max_age=int(expires_delta.total_seconds()),
             expires=expires_at.strftime("%a, %d %b %Y %H:%M:%S GMT"),
@@ -1085,12 +1087,14 @@ def build_router() -> APIRouter:
     def validate_active_config(user: str = Depends(get_current_user)):
         """Validate the active configuration file for admin/UI diagnostics."""
         config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
         return ConfigValidationService(config).validate_active_config()
 
     @router.post("/api/config/validation")
     async def validate_config_payload(request: Request, user: str = Depends(get_current_user)):
         """Validate a submitted config payload or YAML document."""
         config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
         payload = await _json_body(request)
         try:
             return ConfigValidationService(config).validate_payload(payload)
