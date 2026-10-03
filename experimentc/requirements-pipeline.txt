@@ -1,0 +1,4 @@
+# Optional standalone experiment dependencies, not application dependencies.
+# Install a compatible CPU OR GPU PaddlePaddle wheel separately; see README.
+paddleocr[doc-parser]==3.7.0
+paddlex==3.7.2

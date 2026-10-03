@@ -146,6 +146,13 @@ authoritative store for durable workflow state.
 - A task that intentionally pauses review sets `pipeline_state` to `paused`.
   A split task that creates child workflows sets it to `fan_out`. These are
   workflow-runner signals: downstream tasks in the current flow do not execute.
+- A validated single segment covering all source pages exactly once in source
+  order continues on the original document. Preserve workflow identity and do
+  not set fan-out keys or `split_completed` without children. Save the
+  `single_document` outcome, classification, and page list in SQLite and expose
+  `split_category`, `split_confidence`, and `split_pages` in context. Apply split
+  failure policy before continuation. Partial or reordered segments still need
+  generated child PDFs.
 - Do not overwrite workflow-owned identity or position keys with unrelated
   task data.
 
@@ -313,6 +320,12 @@ Dynamic task imports are allow-listed by exact module/class pair.
   reserve generated output paths atomically (for example with
   `reserve_unique_filepath`) rather than relying on a separate existence check.
   Remove a reservation when the subsequent write fails.
+- **Single-document split reuse:** Attribute cached decisions to the configured
+  task key, pinned pipeline version, and source content digest. Recheck policy
+  before reuse, persist classification/decision/audit atomically, and avoid
+  duplicate audit events. Restore classification on review resume without
+  replacing corrected extraction fields. Keep existing split-child reuse for
+  historical documents; do not flatten their records.
 - **Compensation:** When a task creates multiple related files or database rows,
   compensate already-created state if a later item fails. If compensation
   cannot remove partial workflow records, mark those records terminal so fan-in

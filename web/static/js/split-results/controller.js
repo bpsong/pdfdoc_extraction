@@ -1,5 +1,5 @@
-import { createView } from './view.js?v=controller-modularization-7a';
-import { createApi } from './api.js?v=controller-modularization-7a';
+import { createView } from './view.js?v=controller-modularization-7a-single-document-split-1';
+import { createApi } from './api.js?v=controller-modularization-7a-single-document-split-1';
 (function () {
     "use strict";
 
@@ -12,6 +12,7 @@ import { createApi } from './api.js?v=controller-modularization-7a';
     const tableBody = document.getElementById("split-results-table-body");
     const totalFiles = document.getElementById("split-total-files");
     const documentsCreated = document.getElementById("split-documents-created");
+    const documentsContinuing = document.getElementById("split-documents-continuing");
     const successful = document.getElementById("split-successful");
     const failed = document.getElementById("split-failed");
 
@@ -24,7 +25,7 @@ import { createApi } from './api.js?v=controller-modularization-7a';
 
 
     const api = createApi(window.DocFlow);
-    const { escapeHtml, titleCase, statusBadge, pageLabel, renderSummary, childRows, renderSources } = createView({ tableBody, totalFiles, documentsCreated, successful, failed, docFlow: window.DocFlow });
+    const { escapeHtml, titleCase, statusBadge, pageLabel, renderSummary, childRows, renderSources } = createView({ tableBody, totalFiles, documentsCreated, documentsContinuing, successful, failed, docFlow: window.DocFlow });
     async function loadSplitResults() {
         if (!batchId) {
             tableBody.innerHTML = '<tr><td colspan="4" class="text-center text-base-content/50 py-10">No batch selected</td></tr>';

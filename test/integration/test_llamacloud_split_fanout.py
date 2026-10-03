@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
@@ -313,3 +315,129 @@ def test_split_results_api_returns_parent_child_payload(tmp_path, monkeypatch):
     assert payload["sources"][0]["status"] == "success"
     assert payload["sources"][0]["children"][0]["category"] == "invoice"
     assert payload["sources"][0]["children"][0]["pages"] == [1]
+
+
+@pytest.mark.parametrize("downstream_failure", [False, True])
+def test_single_document_split_continues_original_workflow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, downstream_failure: bool) -> None:
+    source = tmp_path / "bundle.pdf"
+    _write_pdf(source, 2)
+    processing_dir = tmp_path / "processing"
+    processing_dir.mkdir()
+    config = TempConfig(
+        tmp_path / "app.sqlite3",
+        {
+            "watch_folder": {"processing_dir": str(processing_dir)},
+            "pipeline": ["split", "update_reference"],
+            "tasks": {
+                "split": {
+                    "module": "standard_step.split.llamacloud_split",
+                    "class": "LlamaCloudSplitTask",
+                    "params": {
+                        "enabled": True,
+                        "categories": [{"name": "invoice"}, {"name": "receipt"}],
+                        "split_dir": str(tmp_path / "split"),
+                    },
+                    "on_error": "stop",
+                },
+                "update_reference": {
+                    "module": "tests",
+                    "class": "FakeUpdateReferenceTask",
+                    "params": {},
+                    "on_error": "stop",
+                },
+            },
+        },
+    )
+    initialize_database(config)
+    version = seed_pipeline(config)
+    with connect(config) as conn:
+        created = BatchService(conn).create_ingestion_batch(
+            source="web",
+            file_path=str(source),
+            original_filename="bundle.pdf",
+        )
+        conn.commit()
+        assign_pipeline(config, created["document"]["id"], version)
+
+    class SingleAdapter(FakeSplitAdapter):
+        def split_pdf(self, file_path, categories):
+            result = super().split_pdf(file_path, categories)
+            return SplitResult(result.provider_job_id, result.status,
+                               [SplitSegment("invoice", "high", [1, 2], 1, 2, {})], {})
+
+    update_contexts = []
+
+    class FakeUpdateReferenceTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            update_contexts.append(dict(context))
+            if downstream_failure:
+                raise TaskError("Synthetic downstream failure")
+            context.setdefault("data", {})["reference_updated"] = True
+            return context
+
+    class CleanupTask:
+        def __init__(self, config_manager, **params):
+            pass
+
+        def on_start(self, context):
+            pass
+
+        def run(self, context):
+            return context
+
+    _patch_prefect(monkeypatch)
+    WorkflowLoader._instance = None
+    from standard_step.housekeeping.cleanup_task import CleanupTask as RealCleanupTask
+    monkeypatch.setattr("modules.workflow_loader.CleanupTask", RealCleanupTask)
+    monkeypatch.setattr(
+        WorkflowLoader,
+        "_import_task_class",
+        lambda self, module_name, class_name: {
+            "LlamaCloudSplitTask": lambda config_manager, **params: LlamaCloudSplitTask(
+                config_manager, adapter=SingleAdapter(), **params
+            ),
+            "FakeUpdateReferenceTask": FakeUpdateReferenceTask,
+        }[class_name],
+    )
+
+    manager = WorkflowManager(config)
+    monkeypatch.setattr(manager, "_trigger_child_workflows", lambda context: pytest.fail("Unexpected child dispatch"))
+    ok = manager.trigger_workflow_for_file(
+        file_path=str(source),
+        unique_id=created["document"]["id"],
+        original_filename="bundle.pdf",
+        source="web",
+        batch_id=created["batch"]["id"],
+        document_id=created["document"]["id"],
+    )
+
+    with connect(config) as conn:
+        documents = DocumentRepository(conn)
+        children = documents.list_children(created["document"]["id"])
+        parent_runs = TaskRunRepository(conn).list_by_document(created["document"]["id"])
+        child_runs = [TaskRunRepository(conn).list_by_document(child["id"]) for child in children]
+
+    assert ok is True
+    assert children == []
+    assert [run["task_key"] for run in parent_runs] == ["split", "update_reference", "cleanup_task"]
+    assert len(update_contexts) == 1
+    assert update_contexts[0]["document_id"] == created["document"]["id"]
+    assert update_contexts[0]["file_path"] == str(source)
+    assert update_contexts[0]["split_pages"] == [1, 2]
+    assert update_contexts[0]["split_category"] == "invoice"
+    with connect(config) as conn:
+        root = DocumentRepository(conn).get(created["document"]["id"])
+        batch = BatchService(conn).get_batch(created["batch"]["id"])
+    expected = "failed" if downstream_failure else "completed"
+    assert root["status"] == expected
+    assert batch["status"] == expected
+    assert source.is_file()
+    assert parent_runs[0]["status"] == "completed"
+    assert parent_runs[1]["status"] == expected
+    assert parent_runs[2]["status"] == "completed"

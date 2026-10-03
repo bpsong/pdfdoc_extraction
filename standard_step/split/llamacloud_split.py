@@ -1,7 +1,8 @@
-"""Split bundled PDFs into child documents using LlamaCloud decisions."""
+"""Classify whole PDFs or split bundles using LlamaCloud decisions."""
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,9 @@ from modules.db.connection import transaction
 from modules.db.repositories import AuditRepository, BatchRepository, DocumentRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact_text
+from modules.services.split_result_service import (
+    apply_single_document_context, save_single_document_decision,
+)
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.utils import release_reserved_filepath, reserve_unique_filepath, sanitize_filename
 from standard_step.split.llamacloud_split_adapter import (
@@ -59,7 +63,7 @@ def create_split_pdf(source_pdf_path: str, output_pdf_path: str, pages_1_indexed
 
 
 class LlamaCloudSplitTask(BaseTask):
-    """Pipeline task that fans out a source PDF into child documents."""
+    """Continue a whole document or fan out selected segments into child flows."""
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
         """Initialize the split task."""
@@ -115,7 +119,7 @@ class LlamaCloudSplitTask(BaseTask):
             raise TaskError("LlamaCloudSplitTask requires categories or configuration_id.")
 
     def run(self, context: dict[str, Any]) -> dict[str, Any]:
-        """Run split fan-out for a root/source document."""
+        """Classify a root PDF and fan out only when new segment PDFs are needed."""
         self.initialize_context(context)
         try:
             self.validate_required_fields(context)
@@ -166,6 +170,30 @@ class LlamaCloudSplitTask(BaseTask):
                     }
                     return context
 
+                with Path(str(context["file_path"])).open("rb") as source_file:
+                    source_sha256 = hashlib.file_digest(source_file, "sha256").hexdigest()
+                task_key = self.task_key(context)
+                saved = json_loads(document.get("metadata_json"), {}).get(
+                    "single_document_splits", {}
+                ).get(task_key, {})
+                if (
+                    not existing_children
+                    and saved.get("outcome") == "single_document"
+                    and saved.get("source_sha256") == source_sha256
+                    and saved.get("pipeline_version_id") == document.get("pipeline_version_id")
+                ):
+                    segment = SplitSegment(
+                        saved["category"], saved["confidence"], saved["pages"],
+                        saved["pages"][0], saved["pages"][-1], {},
+                    )
+                    self._validate_split_policy(
+                        context, SplitResult(saved["provider_job_id"], "completed", [segment], {})
+                    )
+                    self._ensure_source_artifact(documents, document, context)
+                    save_single_document_decision(conn, document, saved)
+                    apply_single_document_context(context, saved, reused=True)
+                    return context
+
                 split_result = self._get_adapter().split_pdf(str(context["file_path"]), self.categories)
                 if not split_result.segments:
                     context.setdefault("data", {})["split_result"] = {
@@ -177,6 +205,26 @@ class LlamaCloudSplitTask(BaseTask):
                 self._validate_split_policy(context, split_result)
                 self._validate_all_segment_pages(str(context["file_path"]), split_result.segments)
                 source_artifact = self._ensure_source_artifact(documents, document, context)
+                if (
+                    not existing_children
+                    and len(split_result.segments) == 1
+                    and split_result.segments[0].pages == list(
+                        range(1, len(PdfReader(str(context["file_path"])).pages) + 1)
+                    )
+                ):
+                    segment = split_result.segments[0]
+                    decision = {
+                        "outcome": "single_document", "task_key": task_key,
+                        "pipeline_version_id": document.get("pipeline_version_id"),
+                        "source_sha256": source_sha256,
+                        "provider_job_id": split_result.provider_job_id,
+                        "category": segment.category, "confidence": segment.confidence,
+                        "pages": segment.pages,
+                    }
+                    save_single_document_decision(conn, document, decision)
+                    apply_single_document_context(context, decision)
+                    return context
+
                 parent_metadata = json_loads(document.get("metadata_json"), {})
                 parent_metadata["split_result"] = {
                     "provider": "llamacloud_split",

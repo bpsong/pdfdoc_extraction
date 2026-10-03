@@ -673,6 +673,20 @@ class DocumentRepository:
                 (task_index, task_key, utc_now(), document_id),
             )
 
+    def update_split_classification(
+        self, document_id: str, *, category: str | None, confidence: str | None,
+        page_start: int, page_end: int,
+    ) -> None:
+        """Apply a validated split classification to an existing document."""
+        with transaction(self.conn):
+            self.conn.execute(
+                """UPDATE documents SET document_type = ?, split_category = ?,
+                   split_confidence = ?, page_start = ?, page_end = ?, updated_at = ?
+                   WHERE id = ?""",
+                (category, category, confidence, page_start, page_end,
+                 utc_now(), document_id),
+            )
+
     def update_metadata(self, document_id: str, metadata: dict[str, Any]) -> None:
         """Replace a document's metadata JSON."""
         with transaction(self.conn):

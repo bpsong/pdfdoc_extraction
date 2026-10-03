@@ -46,6 +46,10 @@ def test_resume_manager_resumes_next_task_and_guards_duplicate_resume(tmp_path, 
         )
         DocumentRepository(conn).update_current_task(created["document"]["id"], 0, "review_gate")
         DocumentRepository(conn).update_status(created["document"]["id"], "review_completed")
+        DocumentRepository(conn).update_metadata(created["document"]["id"], {
+            "split_result": {"outcome": "single_document", "category": "invoice",
+                             "confidence": "high", "pages": [1], "provider_job_id": "saved-job"}
+        })
 
     seen_contexts = []
 
@@ -79,6 +83,10 @@ def test_resume_manager_resumes_next_task_and_guards_duplicate_resume(tmp_path, 
     assert first is True
     assert second is False
     assert seen_contexts[0]["data"]["supplier"] == "Corrected"
+    assert seen_contexts[0]["split_category"] == "invoice"
+    assert seen_contexts[0]["split_pages"] == [1]
+    assert seen_contexts[0]["document_id"] == created["document"]["id"]
+    assert seen_contexts[0]["data"]["split_result"]["status"] == "single_document"
     assert [run["task_key"] for run in task_runs] == ["store", "cleanup_task"]
     assert [run["status"] for run in task_runs] == ["completed", "completed"]
 

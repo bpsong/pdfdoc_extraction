@@ -125,7 +125,7 @@ def test_operator_entries_share_one_release_version() -> None:
         ("admin_audit", "admin-audit", "controller-modularization-7a"),
         ("config_validation", "config-validation", "controller-modularization-7a"),
         ("settings", "settings", "controller-modularization-7a"),
-        ("split_results", "split-results", "controller-modularization-7a"),
+        ("split_results", "split-results", "controller-modularization-7a-single-document-split-1"),
         ("watch_folders", "watch-folders", "controller-modularization-7a"),
     ):
         template = (ROOT / "web/templates" / f"{template_name}.html").read_text(encoding="utf-8")
@@ -136,3 +136,29 @@ def test_operator_entries_share_one_release_version() -> None:
         assert controller.count(version) in {2, 3}
         assert "window.DocFlow.apiGet(" not in controller
         assert "window.DocFlow.apiPost(" not in controller
+
+
+
+def test_split_results_links_original_and_escapes_classification() -> None:
+    result = _run_module("split-results/view.js", """
+        const tableBody = {};
+        const continuing = {};
+        const view = module.createView({tableBody, totalFiles: {}, documentsCreated: {},
+            documentsContinuing: continuing, successful: {}, failed: {},
+            docFlow: {statusBadgeClass: () => 'badge-success', statusLabel: s => s}});
+        view.renderSummary({documents_continuing: 1});
+        view.renderSources([{document_id: 'original', source_file: 'invoice.pdf',
+            split_outcome: 'single_document', extraction_document_id: 'original',
+            category: '<script>unsafe</script>', split_confidence: 'high', pages: [1, 2],
+            status: 'completed', children: []}]);
+        const single = tableBody.innerHTML;
+        view.renderSources([{document_id: 'pending', children: []}]);
+        return {single, pending: tableBody.innerHTML, continuing: continuing.textContent};
+    """)
+    assert 'No split needed' in result['single']
+    assert '/app/documents/original/extraction' in result['single']
+    assert '&lt;script&gt;' in result['single']
+    assert '<script>' not in result['single']
+    assert 'No extraction' not in result['single']
+    assert 'No split needed' not in result['pending']
+    assert result['continuing'] == '1 original continued'

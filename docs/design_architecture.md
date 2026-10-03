@@ -8,7 +8,7 @@
 | Audience | Senior engineers, architects, technical leads, and operational owners |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
-| Last verified | 2026-09-27 |
+| Last verified | 2026-10-03 |
 | Verified revision | Current release after the configuration and migration boundary refactor |
 | Owner | Application maintainers; update with architecture-affecting changes |
 | Review cadence | Review when process ownership, workflow state, persistence, or trust boundaries change |
@@ -86,7 +86,8 @@ The essential model is:
   workflow-state store.
 - Human review is an application-level pause. Resume reconstructs context from
   SQLite and starts a new flow at the next task.
-- Split processing creates child documents with independent downstream
+- Split processing continues a single whole-document segment on the original
+  workflow; other segment results create children with independent downstream
   workflows and leaf-derived fan-in.
 - The production frontend is a server-rendered FastAPI/Jinja multi-page
   application enhanced by page-specific vanilla JavaScript.
@@ -660,6 +661,7 @@ active lock cannot be overwritten by a competing claim.
 ```mermaid
 flowchart TD
     Root["Root document"] --> Split["Split task"]
+    Split -->|One full segment in source order| Original["Original downstream flow"]
     Split --> A["Child A"]
     Split --> B["Child B"]
     Split --> N["Child N"]
@@ -670,9 +672,24 @@ flowchart TD
     FB --> FanIn
     FN --> FanIn
     FanIn --> Aggregate["Root and batch state"]
+    Original --> FanIn
 ```
 
-The split task creates child PDFs and document rows, records parent/root
+When one validated segment contains every source page exactly once in original
+order, the split task keeps the original document ID, file path, and pinned
+pipeline version. It persists category, confidence, pages, and the
+`single_document` outcome without setting `fan_out` or `split_completed`.
+Downstream tasks, review, cleanup, and leaf finalization run on the original.
+
+`split_result_service` coordinates classification, metadata, and a redacted
+`split_not_needed` audit event in one transaction. Saved decisions are scoped
+to the configured task key, pipeline version, and source PDF SHA-256; retries
+reuse a matching decision after rechecking policy. Review resume restores the
+classification from SQLite. Empty results and disabled splitting retain their
+existing continuation behavior without implying a classified single document.
+
+For multiple segments, or one partial/reordered segment, the split task creates
+child PDFs and document rows, records parent/root
 relationships and split metadata, registers `split_pdf` artifacts, and sets
 `pipeline_state` to `fan_out`. `WorkflowManager` starts each child after the
 split step. It can run extraction preflight validation and record one
@@ -685,6 +702,12 @@ records are marked failed so the source and batch do not remain non-terminal.
 `FanInService` calculates root and batch status from leaf documents. Parent
 containers are not double-counted. Paused children keep the aggregate in
 review; mixed terminal outcomes produce `completed_with_errors`.
+
+The split-results API preserves child-count meanings and adds
+`documents_continuing`, `split_outcome`, original classification, and an
+`extraction_document_id`. The production page links a single-document outcome
+to the original extraction and displays its downstream status separately from
+the split decision. Existing historical children remain unchanged.
 
 ## Persistence and artifacts
 
@@ -1119,6 +1142,19 @@ resources. Browser tests may require Playwright Chromium. Pyright has
 configuration but is not pinned in the project dependency files. Ruff is not a
 supported project check. Pytest, pytest-cov, and Playwright are pinned in
 `requirements-dev.txt`; production installs use `requirements.txt`.
+
+The shared visual-app fixture uses `test/helpers_visual.py` to launch an
+isolated server with a 60-second readiness deadline. Startup stdout/stderr go
+to `visual-server.log` in the temporary fixture directory, so a large diagnostic
+cannot fill an unread pipe and block startup. Failure messages identify the
+log instead of copying child output into pytest errors. The helper terminates
+and reaps the server on startup failure, test failure, and normal teardown.
+
+Run browser suites sequentially when host memory is constrained. Transient
+browser launch or database file errors should be reproduced with adequate
+headroom before changing application behavior. Use `--tb=short` for diagnostic
+runs to avoid displaying credentials or other sensitive local values from
+third-party traceback frames.
 
 Useful focused checks from the repository root are:
 

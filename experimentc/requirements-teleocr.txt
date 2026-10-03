@@ -1,0 +1,6 @@
+# Install CUDA torch/torchvision from the PyTorch index as documented in README.
+torch==2.8.0
+torchvision==0.23.0
+transformers==4.57.1
+accelerate==1.14.0
+PyMuPDF==1.28.0

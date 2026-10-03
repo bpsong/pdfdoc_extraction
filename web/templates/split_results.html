@@ -8,15 +8,16 @@
             <div id="split-total-files" class="stat-value text-2xl">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Documents</div>
+            <div class="stat-title">Documents Created</div>
             <div id="split-documents-created" class="stat-value text-2xl">0</div>
+            <div id="split-documents-continuing" class="stat-desc">0 originals continued</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Successful</div>
+            <div class="stat-title">Successful Children</div>
             <div id="split-successful" class="stat-value text-2xl text-success">0</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Failed</div>
+            <div class="stat-title">Failed Children</div>
             <div id="split-failed" class="stat-value text-2xl text-error">0</div>
         </div>
     </div>
@@ -56,5 +57,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/js/split-results/index.js?v=controller-modularization-7a"></script>
+<script type="module" src="/static/js/split-results/index.js?v=controller-modularization-7a-single-document-split-1"></script>
 {% endblock %}

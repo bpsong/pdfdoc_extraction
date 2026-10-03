@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import os
 import socket
-import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +25,7 @@ from modules.services.ingress_binding_service import IngressBindingService
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from test.helpers_sqlite import TempConfig
+from test.helpers_visual import running_visual_server
 
 
 pytest.importorskip("playwright.sync_api")
@@ -609,36 +608,13 @@ def visual_app(tmp_path_factory: pytest.TempPathFactory):
     env["CONFIG_PATH"] = str(config_path)
     env["PREFECT_LOGGING_TO_API_ENABLED"] = "false"
     env["DOCFLOW_STDIO_CAPTURED"] = "1"
-    process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "web.server:app", "--host", "127.0.0.1", "--port", str(port), "--log-level", "warning"],
-        cwd=Path(__file__).resolve().parents[2],
-        env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    base_url = f"http://127.0.0.1:{port}"
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=1):
-                break
-        except OSError:
-            if process.poll() is not None:
-                stderr = process.stderr.read() if process.stderr else ""
-                raise RuntimeError(f"Visual test server exited early: {stderr}")
-            time.sleep(0.25)
-    else:
-        process.terminate()
-        raise RuntimeError("Visual test server did not start")
-
-    yield {"base_url": base_url, **state}
-
-    process.terminate()
-    try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        process.kill()
+    with running_visual_server(
+        [sys.executable, "-m", "uvicorn", "web.server:app", "--host",
+         "127.0.0.1", "--port", str(port), "--log-level", "warning"],
+        cwd=Path(__file__).resolve().parents[2], env=env,
+        host="127.0.0.1", port=port, log_path=tmp_path / "visual-server.log",
+    ):
+        yield {"base_url": f"http://127.0.0.1:{port}", **state}
 
 
 @pytest.fixture()

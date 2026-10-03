@@ -559,6 +559,18 @@ Administrators should use the unified Review Form Editor to maintain review sche
 
 When split processing is enabled, one uploaded PDF may create several child documents. The system processes each child separately after the split. One child may finish while another is still processing or waiting in **Review Queue**. Finishing the split does not mean that all child documents have finished; the original PDF is complete only after every child has reached a final status.
 
+If the split provider identifies one document containing every page in its
+original order, the original PDF continues through the pipeline without creating
+a child PDF or another workflow. Split Results shows **No split needed**, the
+category and confidence, and **View Extraction** for the original document.
+Its status still reflects downstream processing, review, or failure.
+
+**Documents Created**, **Successful Children**, and **Failed Children** describe
+generated children. The separate **originals continued** count identifies
+documents that kept their original workflow. Zero created children alone does
+not mean a successful single-document classification; splitting may have been
+skipped or returned no segments.
+
 To check progress, select **Reports**, open the batch's **Open processing dashboard** view, and
 select **View Split Results**. This page shows:
 
@@ -566,7 +578,7 @@ select **View Split Results**. This page shows:
 - child document IDs
 - split category and confidence
 - page ranges
-- links to extraction results for child documents
+- links to extraction results for child documents or the original when no split is needed
 
 #### Failures
 
@@ -1726,16 +1738,25 @@ contain only one extraction task.
   - `fail_on_unknown_category`: boolean. When `true`, blank, `other`, `uncategorized`, and disallowed category results fail the whole split task. Default is `true`.
   - `allowed_categories`: optional list of accepted category names. If omitted, inline `categories` are used as the allowed list.
   - `split_dir`: string, required. Destination for generated child PDFs. The
-    task creates it when execution begins if the application account has the
-    required filesystem permission.
+    task creates it when child PDFs are needed if the application account has
+    the required filesystem permission. Whole-document continuation creates no
+    split PDF.
   - `project_id` / `organization_id`: optional provider scoping values.
   - `poll_interval_seconds`: optional polling interval. Default is `1.0`.
   - `timeout_seconds`: optional timeout. Default is `7200.0`.
 - **Behavior:**
   - Runs only for root/source documents; split child documents skip the split task.
-  - Creates one child document record and one split PDF for each provider segment.
+  - Applies category/confidence policy and page validation before continuation or child creation.
+  - When exactly one segment covers every source page once in source order,
+    saves classification on the original document and continues at the next
+    pipeline task, preserving its ID and PDF. Retries reuse a matching saved
+    decision; review resume restores its classification.
+  - Otherwise creates one child document record and one split PDF for each
+    provider segment, including a single segment containing only some pages or
+    changing page order.
   - Records split category, confidence, page range, and source metadata in SQLite.
-  - Sets the parent/source document to `split_completed`, then child documents continue from the next pipeline task.
+  - When children are created, sets the parent/source document to
+    `split_completed`, then child documents continue from the next pipeline task.
   - Fan-in recomputes the parent and batch status after child documents complete, fail, or enter review.
 - **Ordering rules:**
   - Configure split before extraction, so child PDFs are extracted independently.

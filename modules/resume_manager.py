@@ -9,6 +9,7 @@ from modules.db.connection import managed_connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.services.pipeline_definition_service import PipelineDefinitionService
+from modules.services.split_result_service import restore_single_document_context
 from modules.workflow_loader import WorkflowLoader
 
 
@@ -97,6 +98,7 @@ class ResumeManager:
                 "latest_extraction_metadata": json_loads(latest_extraction.get("metadata_json"), {}),
             },
         }
+        restore_single_document_context(context, document)
         continued_failures = []
         for task_run in task_runs.list_by_document(document_id):
             if task_run.get("status") != "failed":

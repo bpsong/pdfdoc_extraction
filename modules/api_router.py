@@ -2357,59 +2357,9 @@ def build_router() -> APIRouter:
             documents = DocumentRepository(conn)
             batch_documents = documents.list_by_batch(batch_id)
 
-        roots = [doc for doc in batch_documents if not doc.get("parent_document_id")]
-        children_by_parent: Dict[str, list[dict[str, Any]]] = {}
-        for document in batch_documents:
-            parent_id = document.get("parent_document_id")
-            if parent_id:
-                children_by_parent.setdefault(str(parent_id), []).append(document)
+        from modules.services.split_result_service import build_split_results
 
-        sources = []
-        total_children = 0
-        failed_children = 0
-        for root in roots:
-            children = children_by_parent.get(str(root["id"]), [])
-            child_payloads = []
-            for child in children:
-                total_children += 1
-                if child.get("status") == "failed":
-                    failed_children += 1
-                child_metadata = json_loads(child.get("metadata_json"), {})
-                child_payloads.append(
-                    {
-                        "document_id": child["id"],
-                        "filename": child.get("original_filename"),
-                        "file_path": child.get("file_path"),
-                        "category": child.get("split_category"),
-                        "page_start": child.get("page_start"),
-                        "page_end": child.get("page_end"),
-                        "pages": child_metadata.get("split_pages") or [],
-                        "split_confidence": child.get("split_confidence"),
-                        "status": child.get("status"),
-                        "parent_document_id": child.get("parent_document_id"),
-                    }
-                )
-            source_status = "success" if root.get("status") == "split_completed" else root.get("status")
-            sources.append(
-                {
-                    "document_id": root["id"],
-                    "source_file": root.get("original_filename"),
-                    "file_path": root.get("file_path"),
-                    "documents_created": len(children),
-                    "status": source_status,
-                    "children": child_payloads,
-                }
-            )
-
-        return {
-            "summary": {
-                "total_files": len(roots),
-                "documents_created": total_children,
-                "successful": total_children - failed_children,
-                "failed": failed_children,
-            },
-            "sources": sources,
-        }
+        return build_split_results(batch_documents)
 
     @router.get("/api/failures/notifications")
     def get_failure_notifications(user: str = Depends(get_current_user)):

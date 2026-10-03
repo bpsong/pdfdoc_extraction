@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from pypdf import PdfReader, PdfWriter
 
 from modules.db.connection import connect, json_loads
@@ -390,3 +392,91 @@ def test_cleanup_preserves_registered_split_pdf(tmp_path):
     cleanup.run({"document_id": child["id"], "file_path": str(split_pdf), "id": child["id"]})
 
     assert split_pdf.exists()
+
+
+@pytest.mark.parametrize("pages,child_count", [([1], 0), ([1, 2, 3], 0), ([1, 3], 1), ([3, 2, 1], 1), ([1, 2, 2, 3], 1)])
+def test_single_document_continuation_requires_exact_source_pages(tmp_path: Path, pages: list[int], child_count: int) -> None:
+    count = 1 if pages == [1] else 3
+    source = tmp_path / "invoice.pdf"
+    _write_pdf(source, count)
+    config = TempConfig(tmp_path / "app.sqlite3")
+    initialize_database(config)
+    with connect(config) as conn:
+        template, version = publish_pipeline(conn, key="single-test")
+        created = BatchService(conn).create_ingestion_batch(
+            source="web", file_path=str(source), original_filename=source.name,
+            pipeline_template_id=template["id"], pipeline_version_id=version["id"],
+            pipeline_assignment_source="upload",
+        )
+
+    class Adapter:
+        calls = 0
+
+        def split_pdf(self, file_path: str, categories: list[dict[str, object]]) -> SplitResult:
+            self.calls += 1
+            return SplitResult("single-job", "completed", [
+                SplitSegment("invoice", "high", pages, min(pages), max(pages), {})
+            ], {})
+
+    adapter = Adapter()
+    task = LlamaCloudSplitTask(config, enabled=True, adapter=adapter,
+                              categories=[{"name": "invoice"}], split_dir=str(tmp_path / "split"))
+    context = {"id": created["document"]["id"], "document_id": created["document"]["id"],
+               "batch_id": created["batch"]["id"], "file_path": str(source),
+               "original_filename": source.name, "current_task_key": "split", "current_task_index": 0,
+               "metadata": {"inherited_context": {"region": "test"}}, "continued_failures": []}
+    result = task.run(context.copy())
+    assert "error" not in result or not result["error"]
+    with connect(config) as conn:
+        documents = DocumentRepository(conn)
+        root = documents.get(context["document_id"])
+        children = documents.list_children(context["document_id"])
+        files = documents.list_files(context["document_id"])
+    assert len(children) == child_count
+    if child_count:
+        assert result["pipeline_state"] == "fan_out"
+        assert len(PdfReader(children[0]["file_path"]).pages) == len(pages)
+        return
+    assert result.get("pipeline_state") != "fan_out"
+    assert "split_children" not in result
+    assert "fan_out_start_task_index" not in result
+    assert result["document_id"] == context["document_id"]
+    assert result["file_path"] == str(source)
+    assert result["split_category"] == root["document_type"] == "invoice"
+    assert result["split_confidence"] == root["split_confidence"] == "high"
+    assert result["split_pages"] == pages
+    assert root["status"] != "split_completed"
+    assert root["pipeline_version_id"] == version["id"]
+    assert result["metadata"]["inherited_context"] == {"region": "test"}
+    assert result["continued_failures"] == []
+    assert [record["file_type"] for record in files] == ["source_original"]
+    assert not list((tmp_path / "split").glob("*.pdf"))
+    retried = task.run(context.copy())
+    assert retried["data"]["split_result"]["reused"] is True
+    assert adapter.calls == 1
+    with connect(config) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM audit_events WHERE event_type = 'split_not_needed'").fetchone()[0] == 1
+    other_context = context.copy()
+    other_context["current_task_key"] = "second_split"
+    task.run(other_context)
+    assert adapter.calls == 2
+    assert task.run(context.copy())["data"]["split_result"]["reused"] is True
+    assert adapter.calls == 2
+    from standard_step.archiver.archive_pdf import ArchivePdfTask
+
+    archive_dir = tmp_path / "archive"
+    archive_dir.mkdir()
+    archive_context = {**result, "current_task_key": "archive"}
+    archived = ArchivePdfTask(config, archive_dir=str(archive_dir)).run(archive_context)
+    assert not archived.get("error")
+    CleanupTask(config, processing_dir=str(tmp_path)).run(archived)
+    assert source.is_file()
+    with connect(config) as conn:
+        registered = DocumentRepository(conn).list_files(context["document_id"])
+    archived_files = [record for record in registered if record["file_type"] == "source_archive"]
+    assert len(archived_files) == 1
+    assert len(PdfReader(archived_files[0]["file_path"]).pages) == count
+    # Changing source bytes invalidates the saved provider decision.
+    _write_pdf(source, count + 1)
+    task.run(context.copy())
+    assert adapter.calls == 3

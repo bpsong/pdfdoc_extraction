@@ -452,7 +452,7 @@ def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -
     assert "/static/js/processing-overview/index.js?v=frontend-hardening-8" in processing.text
     assert split_results.status_code == 200
     assert 'id="split-results-workspace"' in split_results.text
-    assert "/static/js/split-results/index.js?v=controller-modularization-7a" in split_results.text
+    assert "/static/js/split-results/index.js?v=controller-modularization-7a-single-document-split-1" in split_results.text
 
 
 def test_failures_page_includes_operator_assets(monkeypatch) -> None:
