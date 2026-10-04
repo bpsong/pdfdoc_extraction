@@ -1,0 +1,27 @@
+{
+  "reference_method": "Replace this synthetic example with a manually transcribed local manifest; keep customer references in samples.local.json.",
+  "samples": [
+    {
+      "id": "synthetic_invoice",
+      "group": "example",
+      "pdf": "experimentd/output/synthetic.pdf",
+      "pages": "1",
+      "fields": {
+        "customer_name": {"value": "Example Buyer", "regions": [{"page": 1, "bbox_normalized": [0.1, 0.1, 0.4, 0.2]}]},
+        "supplier_name": {"value": "Example Seller", "regions": [{"page": 1, "bbox_normalized": [0.1, 0.01, 0.4, 0.08]}]},
+        "invoice_date": {"value": "2026-01-02", "regions": [{"page": 1, "bbox_normalized": [0.6, 0.1, 0.9, 0.2]}]},
+        "invoice_number": {"value": "INV-1", "regions": [{"page": 1, "bbox_normalized": [0.6, 0.01, 0.9, 0.08]}]},
+        "invoice_total": {"value": "10.00", "regions": [{"page": 1, "bbox_normalized": [0.6, 0.6, 0.9, 0.7]}]}
+      },
+      "line_items": [
+        {
+          "description": {"value": "Example item", "regions": [{"page": 1, "bbox_normalized": [0.1, 0.3, 0.4, 0.4]}]},
+          "unit_of_measure": {"value": null, "regions": []},
+          "quantity": {"value": "2", "regions": [{"page": 1, "bbox_normalized": [0.4, 0.3, 0.5, 0.4]}]},
+          "unit_price": {"value": "5.00", "regions": [{"page": 1, "bbox_normalized": [0.5, 0.3, 0.6, 0.4]}]},
+          "line_total": {"value": "10.00", "regions": [{"page": 1, "bbox_normalized": [0.6, 0.3, 0.9, 0.4]}]}
+        }
+      ]
+    }
+  ]
+}

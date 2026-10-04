@@ -382,8 +382,21 @@ def _validate_extraction_params(
         return
 
     is_glm_ocr = (module_name, class_name) == _GLM_OCR_TASK
+    is_liteparse = (module_name, class_name) == (
+        "standard_step.extraction.liteparse_extract", "LiteParseExtractTask",
+    )
     if is_glm_ocr:
         _validate_glm_ocr_runtime_options(params, params_path, errors)
+    elif is_liteparse:
+        from standard_step.extraction.liteparse_adapter import validate_liteparse_options
+
+        try:
+            validate_liteparse_options(params)
+        except (ValueError, TypeError) as error:
+            errors.append(ParameterIssue(
+                path=params_path, message=f"LiteParse runtime options are invalid: {error}",
+                code="param-liteparse-invalid-options", details={"config_key": params_path},
+            ))
     elif _requires_extraction_credentials(module_name) or 'fields' in params:
         _validate_extraction_credential(
             params,
@@ -433,15 +446,27 @@ def _validate_extraction_params(
 
         field_path = f"{params_path}.fields.{field_name}"
         _validate_field_spec(spec, field_path, errors, field_name)
-        if is_glm_ocr:
+        if is_glm_ocr or is_liteparse:
             _validate_glm_field_constraints(spec, field_path, errors)
 
-    if is_glm_ocr:
+    if is_glm_ocr or is_liteparse:
         _validate_glm_schema_orders(
             fields,
             f"{params_path}.fields",
             errors,
         )
+    if is_liteparse:
+        from standard_step.extraction.liteparse_adapter import build_citation_schema
+
+        try:
+            if len(fields) > 100:
+                raise ValueError("Too many fields")
+            build_citation_schema(fields)
+        except (ValueError, TypeError) as error:
+            errors.append(ParameterIssue(
+                path=f"{params_path}.fields", message="LiteParse field definitions are unsupported or invalid.",
+                code="param-liteparse-invalid-fields", details={"config_key": f"{params_path}.fields"},
+            ))
 
     if len(table_fields) > 1:
         errors.append(

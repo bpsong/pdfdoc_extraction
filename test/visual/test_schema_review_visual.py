@@ -748,6 +748,9 @@ def test_review_visual_schema_driven_fields_desktop_and_mobile(page: Page, visua
     reviewed_at = page.locator('input[data-field-path="reviewed_at"]')
     reviewed_at.focus()
     page.wait_for_function("() => document.querySelector('.docflow-pdf-status')?.textContent.includes('page-only evidence')")
+    evidence_message = page.locator(".docflow-pdf-status").inner_text()
+    assert "GLM-OCR" not in evidence_message
+    assert "Verify against the PDF." in evidence_message
     assert page.locator(".docflow-pdf-bbox").count() == 0
     assert amount.get_attribute("step") == "0.01"
     assert page.locator("#review-source-mode-select").input_value() == "review"

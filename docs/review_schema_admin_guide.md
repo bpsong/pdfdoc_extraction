@@ -66,6 +66,20 @@ fields:
 
 ## Before You Begin
 
+For **Lite Parse Extract**, all configured fields have no model confidence and
+the following review gate receives the `liteparse_unscored` flag. Use document
+scope when operators should be able to correct every field, and select the
+exact published form version before publishing the pipeline. Keep scalar,
+object and table keys aligned with extraction; set genuinely absent units or
+other optional values to non-required in the review form.
+
+LiteParse citations are diagnostic, not verified field locations. The source
+viewer retains page navigation, suppresses bounding-box highlights and asks
+the operator to verify against the PDF. **Complete Review** saves approved
+values; a later JSON storage step exports them while retaining the original
+extraction as evidence. See [LiteParse setup](liteparse_extract_task.md) and
+[the visual validation report](liteparse_pipeline_validation.md).
+
 Before creating or changing a schema:
 
 1. Sign in with an administrator account.

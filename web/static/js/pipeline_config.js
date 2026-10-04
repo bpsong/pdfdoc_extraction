@@ -572,6 +572,7 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
             LlamaCloudSplitTask: { enabled: true, api_key: "", allow_uncategorized: "include", split_dir: "processing/split", fail_on_confidence_levels: ["low"], fail_on_unknown_category: true, allowed_categories: [], poll_interval_seconds: 1, timeout_seconds: 7200, categories: [{ name: "invoice", description: "A single invoice document." }] },
             ExtractPdfTask: { api_key: "", tier: "agentic", extraction_target: "per_doc", confidence_scores: true, poll_interval_seconds: 2, timeout_seconds: 1800, fields: {} },
             GlmOcrExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "glm-ocr:latest", document_instructions: "", prompt_style: "detailed", resolution_mode: "document", resolver_model: "qwen3.5:9b-q4_K_M", resolver_max_dimension: 1280, resolver_num_ctx: 18000, resolver_num_predict: 10000, resolver_max_attempts: 2, dpi: 216, num_ctx: 8192, num_predict: 2048, timeout_seconds: 300, fields: {} },
+            LiteParseExtractTask: { ollama_host: "http://127.0.0.1:11434", model: "qwen3.5:9b-q4_K_M", document_instructions: "", ocr_enabled: true, ocr_language: "eng", target_pages: "", dpi: 300, num_ctx: 32768, num_predict: 4096, timeout_seconds: 600, max_input_characters: 60000, fields: {} },
             AssignNanoidTask: { length: 10 },
             StoreMetadataAsCsv: { data_dir: "data", filename: "{id}" },
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },

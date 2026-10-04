@@ -112,6 +112,7 @@
 
     function normalizeFieldSource(field, pathParts) {
         const source = sourceForPath(field, pathParts);
+        const diagnosticOnly = source.box_usage === "diagnostic_only";
         const locations = [];
         const pages = new Set();
         collectCitations(source.provider_source, locations, pages, null);
@@ -121,9 +122,10 @@
             if (normalized) pages.add(normalized);
         });
         return {
-            boxes: locations,
+            boxes: diagnosticOnly ? [] : locations,
             pages: [...pages].sort((left, right) => left - right),
-            locationMode: locations.length ? "bounding_box" : pages.size ? "page_only" : "unavailable",
+            diagnosticOnly,
+            locationMode: !diagnosticOnly && locations.length ? "bounding_box" : pages.size ? "page_only" : "unavailable",
         };
     }
 
@@ -446,10 +448,12 @@
                 state.selectedSource = normalizeFieldSource(field, pathParts || []);
                 const firstPage = state.selectedSource.boxes[0]?.page || state.selectedSource.pages[0];
                 if (firstPage) updateReadout(firstPage);
-                setStatus(state.selectedSource.locationMode === "bounding_box"
+                setStatus(state.selectedSource.diagnosticOnly
+                    ? `${state.selectedLabel || "Selected field"} has diagnostic citations${firstPage ? ` on page ${firstPage}` : ""}. Verify against the PDF; field highlights are unavailable.`
+                    : state.selectedSource.locationMode === "bounding_box"
                     ? `Showing ${state.selectedLabel || "selected field"} source location.`
                     : state.selectedSource.locationMode === "page_only"
-                        ? `${state.selectedLabel || "Selected field"} is located on page ${firstPage}. GLM-OCR returned page-only evidence.`
+                        ? `${state.selectedLabel || "Selected field"} has page-only evidence on page ${firstPage}. Verify against the PDF.`
                         : `${state.selectedLabel || "Selected field"} has no source location available.`);
                 renderHighlights();
                 if (!firstPage) return;

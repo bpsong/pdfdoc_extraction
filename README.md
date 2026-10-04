@@ -10,6 +10,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 ### AI-Powered Data Extraction
 - **Llama Cloud Integration**: Advanced AI service for intelligent document understanding
 - **Local GLM-OCR Integration**: Schema-directed extraction through an administrator-managed Ollama server, with optional complete-document resolution across ordered PDF pages
+- **Local LiteParse + Ollama Integration**: Embedded PDF text or local OCR feeds a configurable structured extraction model, defaulting to `qwen3.5:9b-q4_K_M`, without sending PDF content to a cloud service
 - **Structured Data Extraction**: Converts PDF content into structured JSON/CSV format
 - **Multi-format Support**: Handles invoices, receipts, forms, and various document types
 - **Typed Scalar Lists**: Normalize lists of text, integers, numbers, and yes/no values
@@ -75,7 +76,8 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - Python 3.13+
 - Node.js/npm for frontend asset rebuilds (not required when using committed assets)
 - At least one extraction provider: Llama Cloud API access, or a separately
-  installed Ollama server with the models configured by a GLM-OCR pipeline
+  installed Ollama server with the models configured by a GLM-OCR or LiteParse
+  pipeline. LiteParse uses local OCR for scanned pages.
 
 ### Installation
 
@@ -143,6 +145,8 @@ Key dependencies:
 - **LlamaCloud SDK (`llama-cloud`)**: AI-powered document extraction through Extract v2
 - **Ollama Python client (`ollama`)**: Native local API access for GLM-OCR and
   its optional document resolver
+- **LiteParse (`liteparse`)**: Local PDF text, OCR and word-coordinate parsing
+  for the LiteParse task; its adapter calls the loopback Ollama HTTP API
 - **PyMuPDF**: In-memory PDF page rendering for local vision extraction
 - **PDF.js (`pdfjs-dist`)**: Vendored browser module and worker for source-PDF review
 - **Prefect**: Workflow orchestration engine
@@ -192,6 +196,15 @@ invoice therefore uses the same task implementation but should use a dedicated
 pipeline and matching review form. Published definitions that omit
 `resolution_mode` retain legacy page-merge behavior; newly added GLM-OCR tasks
 in the visual editor default to complete-document resolution.
+
+For text/layout parsing followed by local structured extraction, add **Lite
+Parse Extract** in **Admin → Pipeline**. Configure fields and document guidance,
+then add a matching **Review Gate** and JSON or CSV storage. The LiteParse task
+requires a downloaded local GGUF model and a credential-free HTTP loopback
+endpoint. It supplies no numeric confidence; retained word boxes are diagnostic
+and are not shown as verified review highlights. See the
+[LiteParse setup guide](docs/liteparse_extract_task.md) and
+[six-invoice validation report](docs/liteparse_pipeline_validation.md).
 
 Output folders are task-owned in the exact SQLite pipeline version. CSV/JSON
 tasks use `data_dir`, local PDF storage uses `files_dir`, archive tasks use
@@ -387,7 +400,8 @@ pdfdoc_extraction/
 │   ├── extraction/             # Data extraction tasks
 │   │   ├── extract_pdf.py       # Generic PDF extraction
 │   │   ├── llama_cloud_v2.py    # LlamaCloud Extract v2
-│   │   └── glm_ocr_extract.py   # Local Ollama-backed GLM-OCR
+│   │   ├── glm_ocr_extract.py   # Local Ollama-backed GLM-OCR
+│   │   └── liteparse_extract.py # Local LiteParse + Ollama extraction
 │   ├── storage/                # Data storage tasks
 │   ├── split/                   # PDF split and fan-out tasks
 │   ├── review/                  # Human-review gate
@@ -419,6 +433,8 @@ artifacts; they are not source folders to commit.
 - [Config-check CLI reference](tools/config_check/README.md) and [finding codes](tools/config_check/examples/ERROR_CODES.md)
 - [Watch-folder administration](docs/watch_folder_admin_reference.md): binding lifecycle, revisions, and health checks
 - [Review-form administration](docs/review_schema_admin_guide.md): schema authoring and versioning
+- [LiteParse extraction](docs/liteparse_extract_task.md): local setup, generic fields, review evidence and runtime limits
+- [LiteParse pipeline validation](docs/liteparse_pipeline_validation.md): visual 3+3 invoice results, corrections and verification
 - [Frontend deployment](docs/frontend_deployment.md): asset release and rollback
 - [Standard task creation](tasks/standard_task_creation_guidelines.md): task contract and implementation rules
 

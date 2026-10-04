@@ -1,0 +1,3 @@
+# Optional experiment dependency; production application is unchanged.
+liteparse==2.15.1
+# PyMuPDF and pydantic are already supplied by the root requirements.txt.

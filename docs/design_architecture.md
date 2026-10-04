@@ -165,7 +165,7 @@ flowchart LR
     Runner --> Files[(Filesystem)]
     Services --> Files
     Tasks --> CloudProvider["LlamaCloud APIs"]
-    Tasks --> LocalProvider["Local Ollama / GLM-OCR"]
+    Tasks --> LocalProvider["Local Ollama / GLM-OCR / LiteParse"]
     Pages --> Browser["Browser"]
     Assets --> Browser
     Browser --> APIs
@@ -218,7 +218,17 @@ boundary: tasks normalize results into the shared top-level `context["data"]`
 contract and persist provider-neutral results. Provider-specific configuration,
 chunking, retries, and supported field shapes belong with provider task
 documentation and implementation, not this architecture boundary reference; see
-the [GLM-OCR task design](../tasks/design-and-implementation-glm-ocr-extract-task.md).
+the [GLM-OCR task design](../tasks/design-and-implementation-glm-ocr-extract-task.md)
+and [LiteParse task guide](liteparse_extract_task.md).
+
+LiteParse/Ollama persists typed values and diagnostic parser-derived sources
+through the same extraction repositories and review services. Null confidence
+is preserved; the task requests review through a structured flag and the gate
+owns the pause. Diagnostic citations retain page evidence but are not promoted
+to verified PDF highlights. Review completion persists final values, and the
+pinned downstream storage step registers its export without rerunning
+extraction. See the [visual validation report](liteparse_pipeline_validation.md)
+for the six-invoice run and runtime limitations.
 
 ## Component boundaries
 

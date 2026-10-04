@@ -43,6 +43,9 @@ service-account*.json
 *.sqlite-wal
 *.sqlite3-shm
 *.sqlite3-wal
+*.db-journal
+*.sqlite-journal
+*.sqlite3-journal
 
 # Ignore all PDF documents (do not sync PDFs to the repository)
 *.pdf

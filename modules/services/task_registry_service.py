@@ -16,6 +16,10 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
     "archive_pdf": ("standard_step.archiver.archive_pdf", "ArchivePdfTask"),
     "assign_nanoid": ("standard_step.context.assign_nanoid", "AssignNanoidTask"),
     "extract_pdf": ("standard_step.extraction.extract_pdf", "ExtractPdfTask"),
+    "liteparse_extract": (
+        "standard_step.extraction.liteparse_extract",
+        "LiteParseExtractTask",
+    ),
     "glm_ocr_extract": (
         "standard_step.extraction.glm_ocr_extract",
         "GlmOcrExtractTask",

@@ -237,6 +237,7 @@ Task implementations should:
 Common configured task-key examples:
 
 - `ExtractPdfTask` -> `extract_document_data`
+- `LiteParseExtractTask` -> `liteparse_extract` (configured instance keys may differ)
 - `StoreMetadataAsCsv` -> `store_metadata_csv`
 - `StoreMetadataAsJson` -> `store_metadata_json`
 - `StoreFileToLocaldrive` -> `store_file_to_localdrive`
@@ -314,6 +315,11 @@ Dynamic task imports are allow-listed by exact module/class pair.
 - **Retry Logic:** Configured tasks already receive one Prefect retry from
   `WorkflowLoader`. Add task- or provider-level retries only for clearly
   transient operations, and avoid multiplying retries unintentionally.
+  Retries reuse the mutable context. After an attempt succeeds, clear a prior
+  transient `error` and `error_step` only when `error_step` equals
+  `self.task_key(context)`. Preserve failures belonging to other tasks and any
+  durable failure history. Test a registered failure followed by success using
+  the same context, so a recovered attempt does not remain failed downstream.
 - **Idempotency:** Assume `run()` may execute more than once. Use unique-path,
   existence, transaction, or deduplication safeguards so retries do not create
   duplicate database rows or corrupt durable files. Overlapping workflows must
@@ -358,6 +364,7 @@ For tasks that need to access the UUID-named PDF document in the processing fold
 This convention is used consistently across standard tasks such as:
 
 - `standard_step.extraction.extract_pdf`
+- `standard_step.extraction.liteparse_extract`
 - `standard_step.storage.store_file_to_localdrive`
 - `standard_step.archiver.archive_pdf`
 
@@ -370,6 +377,9 @@ Avoid using other keys like `processed_file_path` for this purpose, as they may 
 Refer to the following standard task modules as examples of best practices and structure:
 
 - `standard_step.extraction.extract_pdf`
+- `standard_step.extraction.liteparse_extract`: generic local parsing and typed
+  extraction with nullable confidence and diagnostic source evidence; see the
+  [task guide](../docs/liteparse_extract_task.md) for its provider-specific limits.
 - `standard_step.split.llamacloud_split`
 - `standard_step.review.review_gate`
 - `standard_step.storage.store_metadata_as_csv`

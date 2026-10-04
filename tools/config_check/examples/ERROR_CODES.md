@@ -123,6 +123,18 @@ fields rather than assume that this document contains every possible code.
 | `param-glm-invalid-choices` | Error | A GLM text field has an empty, duplicate, non-string, or misplaced allowed-values list | Use unique non-empty strings under `choices` on a `str` field only |
 | `param-glm-invalid-normalizer` | Error | A GLM field requests an unsupported or misplaced value normalizer | Use `normalizer: iso_date` on a `str` field only, or remove it |
 
+### LiteParse Extraction Parameters
+
+| Code | Severity | Description | Fix |
+|------|----------|-------------|-----|
+| `param-liteparse-invalid-options` | Error | Local runtime settings violate LiteParse constraints | Use HTTP loopback without credentials, valid OCR/pages, DPI 72–600, positive limits, finite positive timeout and `num_predict < num_ctx`; omit cloud credentials/remote OCR |
+| `param-liteparse-invalid-fields` | Error | Configured LiteParse fields are unsupported or invalid | Use 1–100 top-level typed fields, flat objects and at most one table with supported primitive children |
+
+Choices, normalization and sibling schema-order checks reuse shared validators
+and retain the corresponding `param-glm-*` codes above. These names do not
+identify the extraction provider. See [LiteParse setup and limits](../../../docs/liteparse_extract_task.md)
+for runtime OCR/model checks that configuration validation alone cannot prove.
+
 ## Review Gate Validation Error Codes
 
 | Code | Severity | Description | Fix |

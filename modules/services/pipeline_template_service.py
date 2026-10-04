@@ -582,6 +582,10 @@ class PipelineTemplateService:
                         "standard_step.extraction.glm_ocr_extract",
                         "GlmOcrExtractTask",
                     ),
+                    (
+                        "standard_step.extraction.liteparse_extract",
+                        "LiteParseExtractTask",
+                    ),
                 }:
                     continue
                 params = task.get("params")

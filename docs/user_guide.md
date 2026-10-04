@@ -1,15 +1,15 @@
 <!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.8
-Release Date: 2026-09-27
+Version: 3.9
+Release Date: 2026-10-04
 Author: PDF Processing System team
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
 ---
-Version: 3.8
-Release Date: 2026-09-27
+Version: 3.9
+Release Date: 2026-10-04
 Author: PDF Processing System team
 
 ---
@@ -51,6 +51,7 @@ Author: PDF Processing System team
          - [GLM-OCR extraction (local Ollama)](#glm-ocr-extraction-local-ollama)
            - [Multiline field extraction guidance](#multiline-field-extraction-guidance)
            - [Prompt and schema-order sensitivity](#prompt-and-schema-order-sensitivity)
+         - [LiteParse extraction (local Ollama)](#liteparse-extraction-local-ollama)
        - [4.8.2. split.llamacloud_split](#482-splitllamacloud_split)
        - [4.8.3. storage.store_metadata_as_csv](#483-storagestore_metadata_as_csv)
        - [4.8.4. storage.store_metadata_as_json](#484-storagestore_metadata_as_json)
@@ -97,6 +98,7 @@ Author: PDF Processing System team
 | 3.6     | 2026-09-04 | PDF Processing System team | Added keyboard-friendly upload activation, cancellable uploads, queue retry actions, consistent DaisyUI table styling, and lightweight contextual help |
 | 3.7 | 2026-09-08 | PDF Processing System team | Added independent Watch folders management, lifecycle, explicit upgrades, diagnostics, and activity history. |
 | 3.8 | 2026-09-27 | PDF Processing System team | Refreshed setup guidance, UI labels, logging, configuration references, and review-form administration instructions. |
+| 3.9 | 2026-10-04 | PDF Processing System team | Added generic LiteParse + local Ollama extraction, nullable confidence, diagnostic citations, visual pipeline setup and six-invoice validation guidance. |
 
 ---
 
@@ -247,8 +249,9 @@ When document splitting is enabled, this guide uses two workflow terms:
    watched file uses the exact published version in its folder binding.
 3. State record: The system creates SQLite batch/document records and a task-run record for each configured step.
 4. Extraction: The configured extraction task extracts information. Depending on
-   the pipeline, this may use LlamaCloud Extract v2 or the local GLM-OCR/Ollama
-   provider. Provider-specific confidence and citation behavior varies.
+   the pipeline, this may use LlamaCloud Extract v2, local GLM-OCR/Ollama or
+   local LiteParse/Ollama. Provider-specific confidence and citation behavior
+   varies.
 5. Review gate: Optional rules decide whether the document needs human review.
 6. Rules: Optional business logic runs (e.g., update reference files).
 7. Storage: The PDF and extracted metadata are written to the exact pipeline
@@ -400,9 +403,10 @@ document's originally assigned immutable pipeline version; it does not switch
 the document to the newest publication.
 
 Confidence is provider-dependent. LlamaCloud may provide confidence and
-citations, while GLM-OCR does not provide field confidence or citations. Treat
-local-model results as requiring human confirmation when a review gate is
-configured.
+citations. GLM-OCR and LiteParse/Ollama supply no numeric field confidence.
+GLM-OCR retains page evidence; LiteParse retains diagnostic word citations.
+Treat local-model results as requiring human confirmation when a review gate
+is configured; citations alone do not establish correctness.
 
 ### Compact upload steps
 
@@ -508,8 +512,13 @@ value or its **Show source value** action navigates to the cited page and
 centers the viewer on the extracted source location when the provider returned
 bounding-box coordinates. LlamaCloud Extract citations support this box
 highlight. GLM-OCR evidence is page-only, so the viewer navigates to the cited
-page without drawing a fabricated box; fields without source evidence leave the
-viewer unhighlighted.
+page without drawing a fabricated box. LiteParse word citations are marked
+diagnostic only: the viewer can navigate to the cited page but suppresses field
+highlights and asks the operator to verify against the PDF. Fields without
+source evidence leave the viewer unhighlighted. Page-only status wording is
+provider-neutral; a GLM-OCR label on a LiteParse review indicates an older viewer
+script, not a different extraction provider. Refresh an already-open page after
+deploying the updated viewer.
 
 Review actions have the following meanings:
 
@@ -1719,9 +1728,36 @@ pipeline:
   - glm_extract
 ```
 
+##### LiteParse extraction (local Ollama)
+
+Use `standard_step.extraction.liteparse_extract` / `LiteParseExtractTask` for
+local text/layout parsing followed by configurable Ollama extraction. It reads
+embedded text from generated PDFs and uses local OCR for scanned pages. The
+default model is `qwen3.5:9b-q4_K_M`. Fields, flat objects and one optional table
+are configurable for any document type. No cloud credentials are required.
+
+Add this task visually in **Pipeline**, configure its fields, then add a
+**Review Gate** with a matching published form version and **Store Metadata As
+Json**. All extracted fields are unscored and sent for review when a gate follows.
+Retained word boxes are diagnostic evidence, not verified approval highlights.
+See [LiteParse task setup and limits](liteparse_extract_task.md) for parameters,
+local dependencies, page selection and context/output limits.
+
+Ollama must be running separately and the configured local model must already
+be installed. The app does not start Ollama or download models. Each normal
+attempt uses one inference; an automatic retry may make another call.
+`keep_alive: 0` releases model memory after each request, so the next request
+can include loading time. Large OCR inputs and a 32K context can exceed GPU
+capacity; see the task guide before changing input or context limits.
+
+The published **LiteParse Invoice Review JSON** pipeline was tested with three
+Superstore and three FTS invoices. See the
+[validation report](liteparse_pipeline_validation.md) for original extraction
+accuracy separately from human-corrected exports and the sample limitations.
+
 The registered PDF extraction choices are the existing LlamaCloud
-`ExtractPdfTask` and the independent local `GlmOcrExtractTask`. A pipeline may
-contain only one extraction task.
+`ExtractPdfTask`, local `GlmOcrExtractTask`, and local `LiteParseExtractTask`.
+A pipeline may contain only one extraction task.
 
 #### 4.8.2. split.llamacloud_split
 
@@ -2751,6 +2787,8 @@ portable file.
 - System Architecture: [design_architecture.md](design_architecture.md)
 - Historical Unified Refactor Requirements: [prd-refactor-unified-pdfdoc-processing.md](../tasks/archive/unified-refactor/prd-refactor-unified-pdfdoc-processing.md)
 - Review Schema Administration: [review_schema_admin_guide.md](review_schema_admin_guide.md)
+- LiteParse extraction: [liteparse_extract_task.md](liteparse_extract_task.md)
+- LiteParse visual pipeline validation: [liteparse_pipeline_validation.md](liteparse_pipeline_validation.md)
 - LlamaCloud document splitting: [official LlamaIndex guide](https://developers.llamaindex.ai/llamaparse/split/getting_started)
 
 ---

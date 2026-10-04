@@ -499,6 +499,12 @@ def _operator_failure_message(
 ) -> str:
     """Return a redacted message suitable for operator display."""
     redacted = _redact_text(str(message or ""))
+    module_name = failed_run.get("module_name") or failed_run.get("failed_module_name")
+    if module_name in {
+        "standard_step.extraction.liteparse_extract",
+        "standard_step.extraction.glm_ocr_extract",
+    }:
+        return redacted
     if not _is_extract_task_run(failed_run):
         return redacted
     if redacted.startswith("LlamaCloud Extract "):

@@ -1,6 +1,10 @@
 """Regression checks for the production PDF review viewer."""
 
 from pathlib import Path
+import json
+import subprocess
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -46,9 +50,47 @@ def test_pdf_viewer_keeps_location_centering_automatic_without_a_toolbar_button(
     assert "centerSelected({ behavior: \"auto\" })" in source
 
 
-def test_human_review_invalidates_the_pdf_viewer_cache_after_navigation_change() -> None:
-    """Ensure browsers load the single-page viewer implementation."""
+@pytest.mark.parametrize("template_name", [
+    "human_review.html", "extraction_results.html", "failures.html",
+])
+def test_document_pages_invalidate_the_pdf_viewer_cache(
+    template_name: str,
+) -> None:
+    """Load provider-neutral evidence messages on every shared viewer page."""
 
-    template = (ROOT / "web/templates/human_review.html").read_text(encoding="utf-8")
+    template = (ROOT / "web/templates" / template_name).read_text(encoding="utf-8")
 
-    assert "pdf_viewer.js?v=pdf-render-cancel-3" in template
+    assert "pdf_viewer.js?v=pdf-evidence-4" in template
+
+
+def test_diagnostic_sources_never_become_verified_field_highlights() -> None:
+    """Execute the real source normalizer for diagnostic and legacy boxes."""
+    script = """
+        const fs = require('node:fs');
+        const vm = require('node:vm');
+        const path = process.argv[1];
+        const source = fs.readFileSync(path, 'utf8').replace(
+            'const PDFJS_IMPORT = import(PDFJS_MODULE);',
+            'const PDFJS_IMPORT = Promise.resolve({});'
+        );
+        const context = {window:{}};
+        vm.runInNewContext(source, context);
+        const normalize = context.window.DocFlowPdfViewer.normalizeFieldSource;
+        const evidence = {pages:[2], provider_source:{page:2, bounding_boxes:[
+            {x:10,y:20,w:30,h:40}
+        ]}};
+        const diagnostic = normalize({source:{...evidence, box_usage:'diagnostic_only'}}, []);
+        const legacy = normalize({source:evidence}, []);
+        process.stdout.write(JSON.stringify({diagnostic,legacy}));
+    """
+    completed = subprocess.run(
+        ["node", "-e", script, str(ROOT / "web/static/js/pdf_viewer.js")],
+        capture_output=True, text=True, check=True,
+    )
+    result = json.loads(completed.stdout)
+    assert result["diagnostic"]["boxes"] == []
+    assert result["diagnostic"]["pages"] == [2]
+    assert result["diagnostic"]["locationMode"] == "page_only"
+    assert result["diagnostic"]["diagnosticOnly"] is True
+    assert len(result["legacy"]["boxes"]) == 1
+    assert result["legacy"]["locationMode"] == "bounding_box"

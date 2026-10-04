@@ -245,7 +245,7 @@ export function createPipelineTaskEditors(context) {
     }
 
     function extractionFieldControls(step, hint) {
-        const polishedLayout = step.class === "GlmOcrExtractTask";
+        const polishedLayout = step.class === "GlmOcrExtractTask" || step.class === "LiteParseExtractTask";
         const params = step.params || {};
         const fields = params.fields && typeof params.fields === "object" && !Array.isArray(params.fields) ? params.fields : {};
         const naturalFieldEntries = Object.entries(fields);
@@ -376,7 +376,7 @@ export function createPipelineTaskEditors(context) {
             return "";
         }
         const configKey = schemaKind === "object" ? "object_fields" : "item_fields";
-        const glmConstraints = step.class === "GlmOcrExtractTask";
+        const glmConstraints = step.class === "GlmOcrExtractTask" || step.class === "LiteParseExtractTask";
         const configuredFields = state.fieldSchemaDraft && typeof state.fieldSchemaDraft === "object"
             ? state.fieldSchemaDraft
             : (fieldConfig[configKey] && typeof fieldConfig[configKey] === "object" ? fieldConfig[configKey] : {});
@@ -855,7 +855,36 @@ export function createPipelineTaskEditors(context) {
         `;
     }
 
+    function liteParseExtractControls(step) {
+        const params = step.params || {};
+        return `<div class="space-y-3" data-liteparse-controls>
+            <div class="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm">LiteParse reads embedded PDF text and uses local OCR for scanned pages. Ollama structures the parsed text into your configured fields.</div>
+            <div class="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm">No model confidence is supplied. A following Review Gate sends every configured field for review. Source word boxes are diagnostic evidence and do not establish accuracy.</div>
+            ${section("Local extraction", `<div class="grid gap-3 md:grid-cols-2">
+                ${textControl("Ollama host", ["ollama_host"], params.ollama_host || "http://127.0.0.1:11434", { mono: true, hint: "HTTP loopback only; remote hosts, credentials, redirects and proxies are disabled." })}
+                ${textControl("Model", ["model"], params.model || "qwen3.5:9b-q4_K_M", { mono: true })}
+            </div><div class="mt-3">${textareaControl("Document instructions", ["document_instructions"], params.document_instructions || "", { full: true })}</div>`)}
+            ${section("PDF parsing", `<div class="grid gap-3 md:grid-cols-2">
+                ${checkboxControl("Enable local OCR", ["ocr_enabled"], params.ocr_enabled !== false, "Use local OCR when embedded text is unavailable.")}
+                ${textControl("OCR language", ["ocr_language"], params.ocr_language || "eng", { hint: "Tesseract language(s), for example eng or eng+chi_sim; language data must be installed locally." })}
+                ${textControl("Selected pages", ["target_pages"], params.target_pages || "", { hint: "Leave empty for the whole document, or use one-based pages such as 1-3,5." })}
+                ${numberControl("PDF render DPI", ["dpi"], params.dpi ?? 300, 'min="72" max="600" step="1"')}
+            </div>`)}
+            ${detailsSection("Local runtime settings", `<div class="grid gap-3 md:grid-cols-2">
+                ${numberControl("Context length", ["num_ctx"], params.num_ctx ?? 32768, 'min="1" step="1"')}
+                ${numberControl("Prediction length", ["num_predict"], params.num_predict ?? 4096, 'min="1" step="1"')}
+                ${numberControl("Timeout (seconds)", ["timeout_seconds"], params.timeout_seconds ?? 600, 'min="1" step="1"')}
+                ${numberControl("Parsed input character limit", ["max_input_characters"], params.max_input_characters ?? 60000, 'min="1" step="1"')}
+            </div><p class="mt-3 text-xs text-base-content/60">Oversized inputs fail with guidance; evidence is never silently removed. Choose fewer pages or increase the input/context limits for larger documents.</p>`)}
+            ${extractionFieldControls(step, "Configure scalar fields, typed scalar lists, flat objects and one optional table for any document type.")}
+            ${structuredFieldSchemaDrawer(step)}
+        </div>`;
+    }
+
     function taskSpecificControls(step) {
+        if (step.class === "LiteParseExtractTask") {
+            return liteParseExtractControls(step);
+        }
         if (step.class === "GlmOcrExtractTask") {
             return glmOcrExtractControls(step);
         }

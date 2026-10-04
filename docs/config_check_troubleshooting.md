@@ -20,6 +20,7 @@ than matching prose.
 - [Fast symptom lookup](#fast-symptom-lookup)
 - [Common validation problems](#missing-directories-or-files)
 - [Task configuration problems](#missing-extraction-credentials)
+- [LiteParse local extraction](#liteparse-local-provider-configuration-errors)
 - [Rules task validation](#rules-task-validation-errors)
 - [Optional analyses](#performance-analysis-issues)
 - [Still stuck](#still-stuck)
@@ -332,6 +333,37 @@ mean that the local model is still loading or the document is too demanding;
 check Ollama and application logs, available memory, and the configured timeout.
 The application does not start Ollama automatically and does not fabricate
 confidence when GLM returns none.
+
+## LiteParse Local Provider Configuration Errors
+
+The approved pair is `standard_step.extraction.liteparse_extract` /
+`LiteParseExtractTask`. Add **Lite Parse Extract** in the visual pipeline editor;
+its fields and runtime settings belong to the published pipeline, not new
+`tasks` blocks in deployment YAML.
+
+| Finding | Fix |
+|---|---|
+| `param-liteparse-invalid-options` | Use a credential-free HTTP loopback host, a non-empty model/language, boolean OCR, valid one-based page ranges, DPI 72–600, positive limits and a finite positive timeout. Keep `num_predict` below `num_ctx`. Remove API credentials and remote OCR options. |
+| `param-liteparse-invalid-fields` | Configure 1–100 top-level fields using typed scalars, primitive lists, flat objects and at most one table. Give objects `object_fields` and tables `item_fields` containing supported primitive children. |
+
+LiteParse reuses the shared field constraint validator. Choices, date normalizers
+and sibling schema-order findings can therefore still have `param-glm-*` codes;
+these codes identify the validation rule, not the model used for extraction.
+Use unique non-empty text choices, `normalizer: iso_date` on text and a unique
+positive `schema_order` among siblings when ordering is supplied.
+
+Passing configuration validation does not prove that OCR or inference will run.
+Check local Ollama separately with `ollama list`; the selected model must be a
+downloaded local GGUF, normally `qwen3.5:9b-q4_K_M`. Cloud-backed tags are rejected
+at execution before text is submitted. Install the pinned Python requirements
+and ensure local OCR has the selected language data. No cloud API key is needed.
+
+At execution, oversize input, incomplete output and parse/OCR failures stop the
+task without truncation. HTTP 500 can indicate insufficient model memory; check
+local Ollama logs and ensure any smaller context still fits complete evidence.
+`keep_alive: 0` releases memory after requests but is not an out-of-memory
+guarantee. See [the task guide](liteparse_extract_task.md) for setup, defaults,
+failure handling and diagnostic citation behavior.
 
 ## Structured Object Extraction Fields
 

@@ -8,6 +8,7 @@ PyYAML==6.0.2
 ruamel.yaml==0.19.1
 prefect==3.7.8
 llama-cloud==2.9.0
+liteparse==2.15.1
 pypdf==6.13.1
 ollama==0.6.2
 PyMuPDF==1.28.0

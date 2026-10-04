@@ -23,6 +23,15 @@ The command updates only that feature's template entry and feature-local import
 graph. Shared modules such as `polling.js` carry their own release value and
 must be bumped in each consumer when their public contract changes.
 
+The shared classic script `pdf_viewer.js` also needs a consistent release query
+in every consumer: `human_review.html`, `extraction_results.html` and
+`failures.html`. The current evidence-message release is `pdf-evidence-4`.
+Update all three when viewer behavior changes, deploy the script and templates
+together, and refresh already-open pages. This avoids a cached GLM-OCR-only
+message on a LiteParse review. Diagnostic LiteParse citations keep page
+navigation but do not produce verified field highlights; generic page-only
+messages must remain provider-neutral.
+
 Run the focused frontend tests, `npm run build:css` when utility classes or
 Tailwind inputs changed, and the full pytest suite before promotion. Deploy
 templates and static assets as one artifact. Static assets should be uploaded

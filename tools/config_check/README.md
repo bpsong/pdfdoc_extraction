@@ -938,6 +938,18 @@ invalid files as validator fixtures, not production templates.
 - **`param-glm-invalid-schema-order` / `param-glm-duplicate-schema-order`**: A GLM-OCR schema position is non-positive, non-integer, or reused by a sibling field
   - Fix: Use a positive integer that is unique among the top-level fields or properties in the same object/table row
 
+- **`param-liteparse-invalid-options`**: LiteParse local runtime settings violate their constraints
+  - Fix: Use a credential-free HTTP loopback host, local model/language, valid pages, boolean OCR, DPI 72–600, positive limits and a finite positive timeout; keep `num_predict` below `num_ctx` and omit cloud credentials/remote OCR options
+
+- **`param-liteparse-invalid-fields`**: LiteParse fields are unsupported or invalid
+  - Fix: Use 1–100 top-level typed fields, flat objects and at most one table with valid primitive children
+
+LiteParse shares the choices, date normalizer and schema-order validators, so
+related findings retain their existing `param-glm-*` codes. A validation code is
+not evidence that GLM-OCR performed extraction. Runtime model availability,
+downloaded local GGUF format and local OCR are checked separately; see the
+[LiteParse task guide](../../docs/liteparse_extract_task.md).
+
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path
   - Fix: Ensure the module is installed or the path is correct
