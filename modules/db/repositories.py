@@ -21,6 +21,50 @@ from modules.db.connection import (
 TERMINAL_STATUSES = {"completed", "Pipeline Completed Successfully", "review_completed"}
 
 
+class ManualSplitRepository:
+    """Persist version-pinned manual decisions and optimistic draft revisions."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def get_for_task(self, document_id: str, version_id: str, task_key: str) -> dict[str, Any] | None:
+        return _row_to_dict(self.conn.execute(
+            "SELECT * FROM manual_split_decisions WHERE document_id=? AND pipeline_version_id=? AND task_key=?",
+            (document_id, version_id, task_key),
+        ).fetchone())
+
+    def get_for_review(self, review_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(self.conn.execute(
+            "SELECT * FROM manual_split_decisions WHERE review_item_id=?", (review_id,),
+        ).fetchone())
+
+    def create(self, *, context: dict[str, Any], source_sha256: str, page_count: int, checkpoint: dict[str, Any]) -> dict[str, Any]:
+        decision_id, now = _new_id(), utc_now()
+        self.conn.execute(
+            """INSERT INTO manual_split_decisions
+            (id,document_id,pipeline_version_id,task_key,task_index,task_run_id,source_sha256,page_count,checkpoint_json,created_at,updated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (decision_id, context["document_id"], context["pipeline_version_id"],
+             context["current_task_key"], context["current_task_index"], context["task_run_id"],
+             source_sha256, page_count, json_dumps(checkpoint), now, now),
+        )
+        return self.get_for_task(str(context["document_id"]), str(context["pipeline_version_id"]), str(context["current_task_key"])) or {}
+
+    def attach_review(self, decision_id: str, review_id: str) -> None:
+        self.conn.execute("UPDATE manual_split_decisions SET review_item_id=? WHERE id=?", (review_id, decision_id))
+
+    def save(self, decision_id: str, boundaries: list[int], revision: int, *, action: str | None = None, reason: str | None = None, user: str | None = None) -> bool:
+        now = utc_now()
+        return self.conn.execute(
+            """UPDATE manual_split_decisions SET boundaries_json=?,revision=revision+1,action=?,skip_reason=?,
+            decided_by=?,decided_at=?,updated_at=? WHERE id=? AND revision=? AND action IS NULL""",
+            (json_dumps(boundaries), action, reason, user, now if action else None, now, decision_id, revision),
+        ).rowcount == 1
+
+    def set_phase(self, decision_id: str, phase: str) -> None:
+        self.conn.execute("UPDATE manual_split_decisions SET phase=?,updated_at=? WHERE id=?", (phase, utc_now(), decision_id))
+
+
 class UploadSubmissionRepository:
     """Retain accepted submission receipts for safe retries and status lookup."""
 
@@ -965,6 +1009,7 @@ class ReviewRepository:
         created_by_task_run_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         review_schema_version_id: str | None = None,
+        review_kind: str = "extraction",
     ) -> dict[str, Any]:
         item_id = _new_id()
         now = utc_now()
@@ -974,8 +1019,8 @@ class ReviewRepository:
                 INSERT INTO review_items(
                     id, batch_id, document_id, queue_name, status, reason, scope,
                     created_by_task_run_id, created_at, updated_at, metadata_json,
-                    review_schema_version_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    review_schema_version_id, review_kind
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     item_id,
@@ -989,7 +1034,7 @@ class ReviewRepository:
                     now,
                     now,
                     json_dumps(metadata),
-                    review_schema_version_id,
+                    review_schema_version_id, review_kind,
                 ),
             )
         return self.get(item_id) or {}
@@ -1168,6 +1213,7 @@ class ReviewRepository:
         document_id: str,
         *,
         created_by_task_run_id: str | None = None,
+        review_kind: str | None = None,
     ) -> dict[str, Any] | None:
         """Find a non-completed review item for a document and optional task run."""
         sql = """
@@ -1175,23 +1221,26 @@ class ReviewRepository:
             WHERE document_id = ? AND status IN ('pending', 'in_review')
         """
         params: list[Any] = [document_id]
+        if review_kind:
+            sql += " AND review_kind = ?"
+            params.append(review_kind)
         if created_by_task_run_id:
             sql += " AND created_by_task_run_id = ?"
             params.append(created_by_task_run_id)
         sql += " ORDER BY created_at DESC LIMIT 1"
         return _row_to_dict(self.conn.execute(sql, params).fetchone())
 
-    def find_latest_for_document(self, document_id: str) -> dict[str, Any] | None:
+    def find_latest_for_document(self, document_id: str, *, review_kind: str | None = None) -> dict[str, Any] | None:
         """Return the most recently created review item for a document."""
         return _row_to_dict(
             self.conn.execute(
                 """
                 SELECT * FROM review_items
-                WHERE document_id = ?
+                WHERE document_id = ? AND (? IS NULL OR review_kind = ?)
                 ORDER BY created_at DESC, rowid DESC
                 LIMIT 1
                 """,
-                (document_id,),
+                (document_id, review_kind, review_kind),
             ).fetchone()
         )
 

@@ -86,21 +86,24 @@ def build_split_results(batch_documents: list[dict[str, Any]]) -> dict[str, Any]
                 "page_start": child.get("page_start"), "page_end": child.get("page_end"),
                 "pages": metadata.get("split_pages") or [],
                 "split_confidence": child.get("split_confidence"), "status": child.get("status"),
+                "split_provider": "manual" if metadata.get("manual_split_decision_id") else "llamacloud",
                 "parent_document_id": child.get("parent_document_id"),
             })
         decision = json_loads(root.get("metadata_json"), {}).get("split_result", {})
         single = decision.get("outcome") == "single_document" and not children
-        continuing += int(single)
+        skipped = decision.get("outcome") == "skipped" and not children
+        continuing += int(single or skipped)
         sources.append({
             "document_id": root["id"], "source_file": root.get("original_filename"),
             "file_path": root.get("file_path"), "documents_created": len(children),
             "status": "success" if root.get("status") == "split_completed" else root.get("status"),
             "children": child_payloads,
-            "split_outcome": "single_document" if single else ("split_completed" if children else None),
+            "split_outcome": "single_document" if single else ("split_completed" if children else decision.get("outcome")),
+            "skip_reason": decision.get("reason") if skipped else None,
             "category": decision.get("category") if single else None,
             "split_confidence": decision.get("confidence") if single else None,
             "pages": decision.get("pages", []) if single else [],
-            "extraction_document_id": root["id"] if single else (
+            "extraction_document_id": root["id"] if single or skipped else (
                 children[0]["id"] if children else None
             ),
         })

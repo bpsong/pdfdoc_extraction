@@ -142,6 +142,12 @@ class ReviewService:
         metadata = json_loads(item.get("metadata_json"), {})
         document = self.documents.get(document_id)
         latest_result = self.extractions.get_latest_result(document_id)
+        if item.get("review_kind") == "manual_split":
+            from modules.services.manual_split_service import ManualSplitReviewService
+            return {"review_item": self._review_item_payload(item), "document": self._document_payload(document),
+                    "metadata": metadata, "fields": [], "schema": None, "extraction": None,
+                    "lock": self.reviews.get_lock(review_item_id),
+                    "manual_split": ManualSplitReviewService(self.conn, self.config_manager).detail(review_item_id)}
         return {
             "review_item": self._review_item_payload(item),
             "metadata": metadata,
@@ -172,6 +178,7 @@ class ReviewService:
         created_by_task_run_id: str | None = None,
         metadata: dict[str, Any] | None = None,
         review_schema_version_id: str | None = None,
+        review_kind: str = "extraction",
     ) -> dict[str, Any]:
         """Create a review item unless the same task already has one open."""
         existing = self.reviews.find_open_for_document(
@@ -179,6 +186,8 @@ class ReviewService:
             created_by_task_run_id=created_by_task_run_id,
         )
         if existing:
+            if existing.get("review_kind", "extraction") != review_kind:
+                raise ReviewServiceError("Existing review type does not match the task.")
             if existing.get("review_schema_version_id") != review_schema_version_id:
                 raise ReviewServiceError(
                     "Existing review item schema identity does not match the task."
@@ -206,7 +215,14 @@ class ReviewService:
                 "Review task run does not match the document pipeline assignment."
             )
         pipeline_version_id = document.get("pipeline_version_id")
-        if pipeline_version_id:
+        if review_kind not in {"extraction", "manual_split"}:
+            raise ReviewServiceError("Unsupported review type.")
+        if review_kind == "manual_split":
+            if task_run is None or task_run.get("module_name") != "standard_step.split.manual_split" or task_run.get("class_name") != "ManualSplitTask":
+                raise ReviewServiceError("Manual review requires an approved manual split task run.")
+            if review_schema_version_id is not None:
+                raise ReviewServiceError("Manual splitting does not use an extraction review schema.")
+        if pipeline_version_id and review_kind == "extraction":
             if task_run is None or not review_schema_version_id:
                 raise ReviewServiceError(
                     "Versioned review requires exact task and schema identity."
@@ -243,6 +259,7 @@ class ReviewService:
             created_by_task_run_id=created_by_task_run_id,
             metadata=metadata,
             review_schema_version_id=review_schema_version_id,
+            review_kind=review_kind,
         )
 
     def claim(self, review_item_id: str, user: str, *, timeout_minutes: int | None = None) -> dict[str, Any]:
@@ -294,6 +311,8 @@ class ReviewService:
     def save_draft(self, review_item_id: str, user: str, corrections: dict[str, Any]) -> dict[str, Any]:
         """Save draft corrections without resuming the workflow."""
         item = self._require_item(review_item_id)
+        if item.get("review_kind") == "manual_split":
+            raise ReviewServiceError("Use the manual split decision endpoint.")
         self._require_lock_owner(review_item_id, user)
         metadata = json_loads(item.get("metadata_json"), {})
         metadata["draft"] = {"user": user, "corrections": corrections, "saved_at": datetime.now(timezone.utc).isoformat()}
@@ -311,6 +330,8 @@ class ReviewService:
     def diff_preview(self, review_item_id: str, corrections: dict[str, Any]) -> dict[str, Any]:
         """Return a simple field-level difference preview for corrections."""
         item = self._require_item(review_item_id)
+        if item.get("review_kind") == "manual_split":
+            raise ReviewServiceError("Use the manual split decision endpoint.")
         original = self._final_values(str(item["document_id"]))
         modified = dict(original)
         modified.update(corrections)
@@ -330,6 +351,8 @@ class ReviewService:
     ) -> dict[str, Any]:
         """Validate and persist corrections, complete review, and optionally resume."""
         item = self._require_item(review_item_id)
+        if item.get("review_kind") == "manual_split":
+            raise ReviewServiceError("Use the manual split decision endpoint.")
         self._require_lock_owner(review_item_id, user)
         document_id = str(item["document_id"])
         metadata = json_loads(item.get("metadata_json"), {})
@@ -469,6 +492,9 @@ class ReviewService:
             if field.get("field_key")
         ]
 
+        if item.get("review_kind") == "manual_split":
+            return {**review_item, "document": self._document_payload(document), "review_field_labels": [],
+                    "review_field_count": 0, "lowest_confidence": None, "lock": self.reviews.get_lock(str(item["id"]))}
         return {
             **review_item,
             "document": self._document_payload(document),

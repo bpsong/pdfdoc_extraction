@@ -419,8 +419,10 @@ def test_split_child_creation_and_rollback_compensation(tmp_path, monkeypatch):
     documents = Mock()
     documents.conn = object()
     documents.create_child.return_value = {"id": "child"}
-    monkeypatch.setattr(split_module, "transaction", lambda _conn: nullcontext())
-    monkeypatch.setattr(split_module, "reserve_unique_filepath", lambda directory, base, suffix: Path(directory) / f"{base}{suffix}")
+    from modules.services import split_execution_service as shared_split
+    monkeypatch.setattr(shared_split, "transaction", lambda _conn: nullcontext())
+    monkeypatch.setattr(shared_split, "register_document_artifact", Mock())
+    monkeypatch.setattr(shared_split, "reserve_unique_filepath", lambda directory, base, suffix: Path(directory) / f"{base}{suffix}")
     monkeypatch.setattr(split_module, "create_split_pdf", Mock())
     child_ids = task._create_children(
         documents=documents,
@@ -448,11 +450,11 @@ def test_split_child_creation_and_rollback_compensation(tmp_path, monkeypatch):
 
     documents.delete_pending_child.side_effect = RuntimeError("delete")
     documents.list_children.return_value = [{"id": "remaining", "status": "queued"}, {"id": "done", "status": "completed"}]
-    monkeypatch.setattr(split_module, "release_reserved_filepath", lambda _path: False)
-    monkeypatch.setattr(split_module, "BatchRepository", lambda _conn: Mock(recompute_counts=Mock()))
+    monkeypatch.setattr(shared_split, "release_reserved_filepath", lambda _path: False)
+    monkeypatch.setattr(shared_split, "BatchRepository", lambda _conn: Mock(recompute_counts=Mock()))
     state = Mock()
-    monkeypatch.setattr(split_module, "WorkflowStateService", lambda _conn: state)
-    task._rollback_partial_children(
+    monkeypatch.setattr(shared_split, "WorkflowStateService", lambda _conn: state)
+    shared_split.SplitExecutionService(task.config_manager, task.split_dir, "split", Mock())._rollback_partial_children(
         documents=documents, document={"id": "root", "batch_id": "batch"},
         child_ids=["child"], reserved_paths=[tmp_path / "reserved.pdf"],
     )

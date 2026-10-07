@@ -118,14 +118,14 @@ def test_operator_entries_share_one_release_version() -> None:
         ("processing_overview", "processing-overview", "frontend-hardening-8"),
         ("reports", "reports", "controller-modularization-7a"),
         ("failures", "failures", "controller-modularization-7a"),
-        ("review_queue", "review-queue", "controller-modularization-7a"),
+        ("review_queue", "review-queue", "manual-split-1"),
         ("extraction_results", "extraction-results", "controller-modularization-7a"),
         ("task_catalog", "task-catalog", "controller-modularization-7a"),
         ("admin_dashboard", "admin-dashboard", "controller-modularization-7a"),
         ("admin_audit", "admin-audit", "controller-modularization-7a"),
         ("config_validation", "config-validation", "controller-modularization-7a"),
         ("settings", "settings", "controller-modularization-7a"),
-        ("split_results", "split-results", "controller-modularization-7a-single-document-split-1"),
+        ("split_results", "split-results", "manual-split-1"),
         ("watch_folders", "watch-folders", "controller-modularization-7a"),
     ):
         template = (ROOT / "web/templates" / f"{template_name}.html").read_text(encoding="utf-8")

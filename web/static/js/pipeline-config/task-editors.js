@@ -486,6 +486,12 @@ export function createPipelineTaskEditors(context) {
 
     function splitControls(step) {
         const params = step.params || {};
+        if (step.class === "ManualSplitTask") return `<div class="space-y-3">
+            <p class="text-sm">Pages are split locally using an operator's boundary selections in the Review Queue. One-page documents continue automatically.</p>
+            ${checkboxControl("Enable manual splitting", ["enabled"], params.enabled !== false)}
+            ${directoryControl("Split output directory", ["split_dir"], params.split_dir || "", { hint: "Local destination for child PDFs.", findings: inlineFindings(step, "split_dir") })}
+            ${textControl("Review queue", ["queue_name"], params.queue_name || "default_review")}
+            </div>`;
         const categories = Array.isArray(params.categories) ? params.categories : [];
         const failLevels = Array.isArray(params.fail_on_confidence_levels) ? params.fail_on_confidence_levels : [];
         const policy = params.allow_uncategorized || "include";

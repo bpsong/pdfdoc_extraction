@@ -659,12 +659,18 @@ def create_app() -> FastAPI:
     @app.get("/app/review/{review_item_id}", response_class=HTMLResponse)
     async def app_human_review_page(request: Request, review_item_id: str):
         """Serve the human review workspace."""
-
+        if not await get_current_user(request):
+            return RedirectResponse(url="/login", status_code=303)
+        from modules.db.connection import managed_connect
+        from modules.db.repositories import ReviewRepository
+        with managed_connect(config) as conn:
+            item = ReviewRepository(conn).get(review_item_id)
+        manual = bool(item and item.get("review_kind") == "manual_split")
         return await render_app_page(
             request,
-            "human_review.html",
-            page_title="Human Review",
-            page_subtitle="Review source PDF content and corrected field values.",
+            "manual_split_review.html" if manual else "human_review.html",
+            page_title="Manual Split" if manual else "Human Review",
+            page_subtitle="Choose the page boundaries for this document." if manual else "Review source PDF content and corrected field values.",
             active_nav="review",
             review_item_id=review_item_id,
         )

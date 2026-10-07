@@ -6,7 +6,7 @@ PDF files; physical PDF splitting is handled by ``llamacloud_split.py``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from modules.split_models import SplitSegment, SplitResult
 from datetime import date, datetime
 import time
 from typing import Any, TypedDict
@@ -19,28 +19,6 @@ class _RequestScope(TypedDict, total=False):
 
     project_id: str
     organization_id: str
-
-
-@dataclass(frozen=True)
-class SplitSegment:
-    """Normalized split segment returned by a split provider."""
-
-    category: str | None
-    confidence: str | None
-    pages: list[int]
-    page_start: int
-    page_end: int
-    metadata: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class SplitResult:
-    """Normalized split result consumed by the split pipeline task."""
-
-    provider_job_id: str | None
-    status: str | None
-    segments: list[SplitSegment]
-    raw_response: dict[str, Any]
 
 
 class LlamaCloudSplitAdapter:

@@ -1,15 +1,18 @@
 <!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.9
-Release Date: 2026-10-04
+Version: 3.10
+Release Date: 2026-10-07
 Author: PDF Processing System team
 -->
 
 # PDF Processing System: User Guide (Configurable Tasks Edition)
 
+For local page-boundary splitting and its Review Queue workflow, see
+[Manual PDF split task](manual_split_task.md).
+
 ---
-Version: 3.9
-Release Date: 2026-10-04
+Version: 3.10
+Release Date: 2026-10-07
 Author: PDF Processing System team
 
 ---
@@ -78,6 +81,7 @@ Author: PDF Processing System team
 
 | Version | Date       | Author              | Description                                                                 |
 |---------|------------|---------------------|-----------------------------------------------------------------------------|
+| 3.10    | 2026-10-07 | PDF Processing System team | Added manual split operator workflow, boundary/draft behavior, no-split continuation, and recovery guidance |
 | 1.0     | 2025-04-13 | PDF Processing System team | Initial user guide for fixed pipeline system                                |
 | 2.0     | 2025-08-01 | PDF Processing System team | Redesigned to configurable task-based workflows via `config.yaml`; web TBD    |
 | 2.1     | 2025-08-01 | PDF Processing System team | Added Quick Start guide, simplified explanations, expanded glossary, and improved configuration editing instructions for non-developers |
@@ -481,6 +485,10 @@ Administrators also see **Overview**, **Users**, **Pipeline**, **Watch folders**
 
 Documents enter the review queue when the system cannot confidently accept the extracted information or when an administrator requires review.
 
+The queue also includes **Manual split** tasks. Its **Review signal** column
+shows **Manual task** for page-boundary decisions and confidence for extracted
+fields. Operators can complete both kinds of review with their normal account.
+
 1. Select **Review Queue** from the left navigation menu.
 2. Use the search and filters to find the document.
 3. Select **Claim** beside an available document. This atomically reserves the
@@ -527,6 +535,29 @@ Review actions have the following meanings:
 - **Save Draft:** save corrections without completing the review.
 - **Preview Diff:** compare the proposed corrections with the originally extracted values.
 - **Complete Review:** submit the corrected values and allow the document to continue.
+
+#### Manual Split Review
+
+1. Find a **Manual split** item in **Review Queue** and select **Claim & split**.
+2. Read the pages in vertical order. Select a checkbox between two pages to
+   split after the first page. Matching numbered markers appear beside the
+   checkbox and in the **Split plan**; select a plan marker to jump to it.
+3. Select **Save draft** to pause and return later. Reloading restores the
+   saved boundaries. If another session saves a newer draft, renewals preserve
+   your visible unsaved selections but require a reload before saving or
+   approving them.
+4. Select **Confirm split** when the boundaries are correct. Each resulting
+   document continues through the remaining pipeline steps. Once **Decision
+   saved** appears, you can leave the form; **View processing** opens the
+   dashboard while extraction and later review steps continue.
+5. For a single invoice spanning multiple pages, leave every checkbox clear
+   and select **Continue without splitting**. The original document continues
+   without child workflows. One-page PDFs skip manual split review automatically.
+
+Completed decisions are available in **History**. **Retry continuation**, when
+shown, handles eligible unstarted work; it does not replay downstream tasks.
+Follow the displayed message if an active attempt requires administrator repair.
+See [Manual PDF split task](manual_split_task.md) for setup and recovery details.
 
 #### Review Gate Example
 

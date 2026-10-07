@@ -116,6 +116,7 @@ def build_client(
     )
     monkeypatch.setattr(api_router, "get_dependencies", fake_get_dependencies)
     monkeypatch.setattr(api_router, "is_admin_user", lambda candidate, _config: candidate == "admin")
+    monkeypatch.setattr("modules.db.repositories.ReviewRepository.get", lambda self, item_id: None)
     app = web_server.create_app()
     return TestClient(app)
 
@@ -452,7 +453,7 @@ def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -
     assert "/static/js/processing-overview/index.js?v=frontend-hardening-8" in processing.text
     assert split_results.status_code == 200
     assert 'id="split-results-workspace"' in split_results.text
-    assert "/static/js/split-results/index.js?v=controller-modularization-7a-single-document-split-1" in split_results.text
+    assert "/static/js/split-results/index.js?v=manual-split-1" in split_results.text
 
 
 def test_failures_page_includes_operator_assets(monkeypatch) -> None:
@@ -486,7 +487,7 @@ def test_review_pages_include_task_19_assets(monkeypatch) -> None:
 
     assert queue.status_code == 200
     assert 'id="review-queue-workspace"' in queue.text
-    assert "/static/js/review-queue/index.js?v=controller-modularization-7a" in queue.text
+    assert "/static/js/review-queue/index.js?v=manual-split-1" in queue.text
     assert review.status_code == 200
     assert 'id="human-review-workspace"' in review.text
     assert "/static/js/pdf_viewer.js" in review.text
@@ -543,7 +544,7 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 6
     assert 'type="module"' in response.text
-    assert "/static/js/pipeline-config/index.js?v=controller-modularization-4" in response.text
+    assert "/static/js/pipeline-config/index.js?v=manual-split-1" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:

@@ -271,6 +271,14 @@ class PipelineValidationService:
         pipeline: list[Any] = raw_pipeline if isinstance(raw_pipeline, list) else []
         split_task_keys: list[str] = []
         for task_key, task_cfg in _iter_tasks(config_data):
+            if task_cfg.get("class") == "ManualSplitTask":
+                params = task_cfg.get("params", {})
+                if not isinstance(params, dict) or not isinstance(params.get("split_dir"), str) or not params["split_dir"].strip():
+                    findings.append(_finding(severity="error", path=f"tasks.{task_key}.params.split_dir", message="ManualSplitTask requires a local split_dir.", code="manual-split-missing-directory"))
+                elif type(params.get("enabled", True)) is not bool or not isinstance(params.get("queue_name", "default_review"), str) or not params.get("queue_name", "default_review").strip():
+                    findings.append(_finding(severity="error", path=f"tasks.{task_key}.params", message="Manual split enabled must be boolean and queue_name must be non-empty.", code="manual-split-invalid-parameters"))
+                split_task_keys.append(task_key)
+                continue
             if task_cfg.get("class") != "LlamaCloudSplitTask":
                 continue
             split_task_keys.append(task_key)

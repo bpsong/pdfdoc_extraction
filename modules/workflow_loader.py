@@ -137,6 +137,7 @@ class WorkflowLoader:
             "error": _redact_text(str(context.get("error") or "")) if context.get("error") else None,
             "error_step": context.get("error_step"),
             "fatal_failure": _redact(context.get("fatal_failure")),
+            "split_result": ({key: data["split_result"].get(key) for key in ("status", "reason", "children", "decision_id")} if isinstance(data, dict) and isinstance(data.get("split_result"), dict) else None),
             "data_keys": sorted(data.keys()) if isinstance(data, dict) else [],
             "metadata_keys": sorted(metadata.keys()) if isinstance(metadata, dict) else [],
         }

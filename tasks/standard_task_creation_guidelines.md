@@ -1,5 +1,34 @@
 # Standardized Rules and Guidelines for Creating New Tasks
 
+## Typed human decisions and shared split artifacts
+
+Manual split reviews use `review_kind=manual_split` and their own revisioned
+decision record; extraction review schemas and correction endpoints apply
+only to extraction items. A human decision must commit before continuation.
+The manual completion endpoint acknowledges that commit before starting
+downstream work in the background; do not hold the approval response open
+until child extraction finishes. UI save state and workflow progress are
+separate states.
+The manual step re-enters its pinned task index to apply a decision; extraction
+reviews retain next-task resume. Persist a bounded business-context checkpoint
+without credentials or task instances, restoring identity from SQLite.
+
+Both split providers use `SplitExecutionService` for child PDFs and records.
+Use `register_document_artifact(..., connection=conn)` for strict artifact
+registration inside the child transaction. Failures must compensate partial
+outputs. A skipped split continues the original document and must not set
+`split_children` or `pipeline_state=fan_out`. Child workflows start after the
+split step, preserve version attribution, and use existing fan-in. Recovery
+must never replay a started child or arbitrary downstream task. See
+[manual split operations](../docs/manual_split_task.md) for the supported
+recovery boundary and crash limitations.
+
+Treat a claimed continuation as active even before it records its first task.
+Load child workflows before claiming them. Successful internal cleanup does
+not count as downstream business work when retrying a failed manual split;
+failed cleanup does. Preserve failed attempts in history while excluding a
+recovered split attempt from errors inherited by its continuation.
+
 This document outlines the standardized structure, rules, and best practices for creating or substantially changing tasks within the PDF document processing system. Following these guidelines will ensure consistency, maintainability, safe dynamic imports, and integration with the Prefect-backed workflow runner and SQLite workflow state.
 
 ---

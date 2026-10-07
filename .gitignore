@@ -144,3 +144,4 @@ venv.bak/
 # OS files
 .DS_Store
 Thumbs.db
+qa_artifacts/manual_split/

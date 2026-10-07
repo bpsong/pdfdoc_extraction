@@ -89,10 +89,10 @@ export function createView(deps) {
         const owner = activeOwner(item);
         const operator = document.getElementById("review-queue-workspace").dataset.operator;
         if (item.status === "completed" || owner) {
-            const label = item.status === "completed" ? "View" : owner === operator ? "Continue review" : "View";
+            const label = item.review_kind === "manual_split" ? (item.status === "completed" ? "View split" : owner === operator ? "Open split" : "View split") : item.status === "completed" ? "View" : owner === operator ? "Continue review" : "View";
             return `<a class="btn btn-outline btn-xs" href="/app/review/${id}">${label}</a>`;
         }
-        return `<button class="btn btn-primary btn-xs review-claim-action" type="button" data-review-id="${escapeHtml(item.id)}">Claim &amp; review</button>`;
+        return `<button class="btn btn-primary btn-xs review-claim-action" type="button" data-review-id="${escapeHtml(item.id)}">${item.review_kind === "manual_split" ? "Claim &amp; split" : "Claim &amp; review"}</button>`;
     }
 
     function renderRows() {
@@ -105,21 +105,21 @@ export function createView(deps) {
 
         body.innerHTML = items.map((item) => {
             const labels = item.review_field_labels || [];
-            const labelText = labels.length ? labels.slice(0, 3).join(", ") : titleCase(item.reason);
+            const labelText = item.review_kind === "manual_split" ? "—" : labels.length ? labels.slice(0, 3).join(", ") : titleCase(item.reason);
             const extra = labels.length > 3 ? ` +${labels.length - 3}` : "";
             const document = item.document || {};
             const createdAt = docFlow.formatDateTime(item.created_at);
             return `
                 <tr class="hover">
                     <td class="px-4 py-3">
-                        <a class="font-medium text-primary" href="/app/review/${encodeURIComponent(item.id)}">${escapeHtml(documentLabel(item))}</a>
-                        <div class="text-xs text-base-content/50">${escapeHtml(createdAt)}</div>
+                        <a class="font-medium text-primary" href="/app/review/${encodeURIComponent(item.id)}">${escapeHtml(documentLabel(item))}</a>${item.review_kind === "manual_split" ? ' <span class="badge badge-outline badge-sm">Manual split</span>' : ""}
+                        <div class="text-xs text-base-content/50">${item.review_kind === "manual_split" ? `${escapeHtml(item.metadata?.page_count || "")} pages · Choose split boundaries` : escapeHtml(createdAt)}</div>
                     </td>
                     <td>${escapeHtml(item.pipeline_name || "Unassigned")}</td>
                     <td class="max-w-sm">
                         <span class="text-sm">${escapeHtml(labelText)}${escapeHtml(extra)}</span>
                     </td>
-                    <td>${confidenceBadge(item.lowest_confidence)}</td>
+                    <td>${item.review_kind === "manual_split" ? '<span class="badge badge-ghost badge-sm">Manual task</span>' : confidenceBadge(item.lowest_confidence)}</td>
                     <td>${escapeHtml(createdAt)}</td>
                     <td>${statusBadge(item.status === "completed" ? "completed" : activeOwner(item) ? "in_review" : "pending")}<div class="text-xs">${escapeHtml(item.status === "completed" ? "" : activeOwner(item) ? `Claimed by ${activeOwner(item)}` : "Unclaimed")}</div></td>
                     <td class="text-right">${actionButtons(item)}</td>

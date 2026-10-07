@@ -46,6 +46,13 @@ export function createView(deps) {
     }
 
     function childRows(source) {
+        if (source.split_outcome === "skipped") {
+            const reason = {single_page: 'Single-page PDF', operator_no_split: 'Operator chose not to split', disabled: 'Manual splitting disabled'}[source.skip_reason] || 'No split needed';
+            return `<tr class="split-child-row"><td colspan="4" class="text-sm">${escapeHtml(reason)} — continuing the original document.</td></tr>`;
+        }
+        if (source.split_outcome === "manual_review_pending") {
+            return '<tr class="split-child-row"><td colspan="4" class="text-sm">Waiting for manual split review.</td></tr>';
+        }
         if (source.split_outcome === "single_document") {
             return `<tr class="split-child-row"><td colspan="4" class="text-sm">No split needed — processing the original document. ${escapeHtml(pageLabel(source))} | ${escapeHtml(source.category || "uncategorized")} | ${escapeHtml(source.split_confidence || "unknown")} confidence</td></tr>`;
         }
@@ -62,7 +69,7 @@ export function createView(deps) {
                 <tr class="split-child-row bg-base-200/40">
                     <td>
                         <div class="text-sm font-medium">${escapeHtml(child.filename || child.document_id)}</div>
-                        <div class="text-xs text-base-content/50">${escapeHtml(pageLabel(child))} | ${escapeHtml(child.category || "uncategorized")} | ${escapeHtml(child.split_confidence || "unknown")} confidence</div>
+                        <div class="text-xs text-base-content/50">${escapeHtml(pageLabel(child))} | ${escapeHtml(child.category || "uncategorized")} | ${child.split_provider === 'manual' ? 'Manual split' : `${escapeHtml(child.split_confidence || "unknown")} confidence`}</div>
                     </td>
                     <td class="text-sm" data-label="Document">Child</td>
                     <td data-label="Status">${statusBadge(child.status)}</td>

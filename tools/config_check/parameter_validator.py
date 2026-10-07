@@ -258,7 +258,13 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
         elif classification == "housekeeping":
             _validate_housekeeping_params(params, params_path, errors)
         elif classification == "split":
-            _validate_split_params(params, params_path, errors)
+            if task_config.get("class") == "ManualSplitTask":
+                if not isinstance(params, dict) or not isinstance(params.get("split_dir"), str) or not params["split_dir"].strip():
+                    errors.append(ParameterIssue(path=f"{params_path}.split_dir", message="ManualSplitTask requires split_dir", code="param-manual-split-missing-directory"))
+                elif type(params.get("enabled", True)) is not bool or not isinstance(params.get("queue_name", "default_review"), str) or not params.get("queue_name", "default_review").strip():
+                    errors.append(ParameterIssue(path=params_path, message="Manual split enabled must be boolean and queue_name must be non-empty", code="param-manual-split-invalid"))
+            else:
+                _validate_split_params(params, params_path, errors)
 
     return ParameterValidationResult(errors=errors, warnings=warnings)
 

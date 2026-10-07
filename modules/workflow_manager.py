@@ -236,6 +236,16 @@ class WorkflowManager:
             if not flow_func:
                 self.logger.error("Failed to load child workflow for %s", child["id"])
                 continue
+            if parent_context.get("manual_split_decision_id"):
+                with managed_connect(self.config_manager) as conn:
+                    cursor = conn.execute(
+                        """UPDATE documents SET status='processing'
+                        WHERE id=? AND status='queued'
+                          AND NOT EXISTS (SELECT 1 FROM task_runs WHERE document_id=documents.id)""",
+                        (child["id"],),
+                    )
+                    if cursor.rowcount != 1:
+                        continue
             self.logger.info(
                 "Starting child workflow for document %s from task index %s",
                 child["id"],
@@ -449,6 +459,7 @@ class WorkflowManager:
             "split_pages": metadata.get("split_pages") or [],
             "page_start": child.get("page_start"),
             "page_end": child.get("page_end"),
+            "data": dict(metadata.get("inherited_context") or {}) if isinstance(metadata.get("inherited_context"), dict) else {},
             "start_task_index": start_task_index,
             "pipeline_template_id": child.get("pipeline_template_id"),
             "pipeline_version_id": child.get("pipeline_version_id"),

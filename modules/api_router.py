@@ -36,7 +36,7 @@ import yaml
 from datetime import datetime, timezone, timedelta
 from urllib.parse import parse_qs
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Query, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Request, Query, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
@@ -2425,8 +2425,8 @@ def build_router() -> APIRouter:
             latest_result = extractions.get_latest_result(document_id)
             fields = [_parsed_field_payload(field) for field in extractions.get_fields(document_id)]
             files = [_parsed_file_payload(file_record) for file_record in documents.list_files(document_id)]
-            open_review = reviews.find_open_for_document(document_id)
-            latest_review = reviews.find_latest_for_document(document_id)
+            open_review = reviews.find_open_for_document(document_id, review_kind="extraction")
+            latest_review = reviews.find_latest_for_document(document_id, review_kind="extraction")
             siblings = [
                 {
                     "id": sibling["id"],
@@ -2631,6 +2631,45 @@ def build_router() -> APIRouter:
         try:
             with managed_connect(config) as conn:
                 return ReviewService(conn, config).complete(review_item_id, operator, corrections)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.post("/api/review/items/{review_item_id}/split/draft")
+    async def save_manual_split_draft(review_item_id: str, request: Request, user: str = Depends(get_current_user)) -> dict[str, Any]:
+        """Save a locked, revision-checked manual split plan."""
+        from .services.manual_split_service import ManualSplitReviewService
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        try:
+            with managed_connect(config) as conn:
+                return ManualSplitReviewService(conn, config).save(review_item_id, user, payload)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.post("/api/review/items/{review_item_id}/split/complete", status_code=202)
+    async def complete_manual_split(review_item_id: str, request: Request, background_tasks: BackgroundTasks, user: str = Depends(get_current_user)) -> dict[str, Any]:
+        """Acknowledge the committed decision before running downstream work."""
+        from .services.manual_split_service import ManualSplitReviewService, continue_manual_split
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        try:
+            with managed_connect(config) as conn:
+                result = ManualSplitReviewService(conn, config).save(review_item_id, user, payload, complete=True)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        background_tasks.add_task(continue_manual_split, config, result["document_id"], user)
+        result["resume_scheduled"] = True
+        return result
+
+    @router.post("/api/review/items/{review_item_id}/split/retry")
+    async def retry_manual_split(review_item_id: str, request: Request, user: str = Depends(get_current_user)) -> dict[str, Any]:
+        """Recover only accepted manual work that is safe to continue."""
+        from starlette.concurrency import run_in_threadpool
+        from .services.manual_split_service import recover_manual_split
+        config, _, _, _, _ = get_dependencies()
+        await _json_body(request)
+        try:
+            return await run_in_threadpool(recover_manual_split, config, review_item_id, user)
         except ReviewServiceError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
 

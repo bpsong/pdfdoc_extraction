@@ -621,6 +621,30 @@ For split processing:
 
 ## Human review
 
+Reviews are typed as `extraction` or `manual_split`. Manual decisions and
+draft revisions live in `manual_split_decisions`, independently of extracted
+fields and review schemas. Source identity and task/version attribution are
+checked before approval and application. Manual approval resumes at the same
+task to apply the accepted decision, then uses the shared split materializer
+and existing fan-out/fan-in. Skips continue the original document without
+children. See [manual split task](manual_split_task.md) for the API, operator
+flow, and explicit recovery limits.
+
+Manual recovery preserves the original continuation claim until the attempt
+finishes or an operator repairs it. Child workflow loading happens before
+the atomic child claim, and retry dispatch carries the parent document and
+batch identity for preflight failure attribution. Successful internal cleanup
+does not block retrying an unapplied split decision; started downstream work
+or failed cleanup does. Recovered manual failures remain in task history but
+are excluded from errors inherited by successful continuations.
+
+Manual split completion commits the immutable decision and returns HTTP 202
+before running the resumed flow as a server background task. Child extraction
+latency therefore does not hold the approval response open. The manual form
+acknowledges the save immediately and refreshes application state separately;
+the processing dashboard remains the source for downstream progress. This
+dispatch mechanism is in-process and retains the documented recovery limits.
+
 Human review is a persisted stop and new-flow restart:
 
 1. Extraction persists normalized results and fields.

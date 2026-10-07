@@ -1,1 +1,1 @@
-import './controller.js?v=controller-modularization-7a-single-document-split-1';
+import './controller.js?v=manual-split-1';

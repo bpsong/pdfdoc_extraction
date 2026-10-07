@@ -1,6 +1,6 @@
 # Manual PDF split task: proposed design
 
-Status: **Draft for review — implementation has not started.**
+Status: **Approved; implemented. See [operations and recovery limits](../docs/manual_split_task.md) and [implementation checklist](tasks-manual-split.md).**
 
 Date: 2026-10-07
 

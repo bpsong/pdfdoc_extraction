@@ -1,0 +1,37 @@
+{% extends "app_base.html" %}
+{% block header_actions %}
+<div class="review-actions flex items-center gap-2">
+    <a href="/app/review" class="btn btn-outline btn-sm">Back to Queue</a>
+    <a id="split-progress" class="btn btn-outline btn-sm" hidden>View processing</a>
+    <button class="btn btn-outline btn-sm" id="split-claim" type="button">Claim</button>
+    <button class="btn btn-outline btn-sm" id="split-release" type="button" disabled>Release</button>
+    <button class="btn btn-outline btn-sm" id="split-save" type="button" disabled>Save draft</button>
+    <button class="btn btn-outline btn-sm" id="split-retry" type="button" hidden>Retry continuation</button>
+    <button class="btn btn-primary btn-sm" id="split-complete" type="button" disabled>Continue without splitting</button>
+</div>
+{% endblock %}
+{% block content %}
+<div id="manual-split-workspace" data-review-id="{{ review_item_id }}" data-operator="{{ username }}">
+    <div class="manual-filebar card bg-base-100 shadow-sm">
+        <div><h2 id="split-filename" class="font-semibold">Source PDF</h2><p id="split-subtitle" class="text-xs text-base-content/60">Loading manual split details…</p></div>
+        <span class="badge badge-outline">PDF stays on this server</span>
+    </div>
+    <div id="split-status" class="manual-status" role="status" aria-live="polite"></div>
+    <div class="manual-split-layout">
+        <section class="card bg-base-100 shadow-sm manual-viewer" aria-label="PDF page viewer">
+            <div class="manual-toolbar"><strong>Document preview</strong><div><button class="btn btn-outline btn-xs" id="split-zoom-out" aria-label="Zoom out">−</button><span id="split-zoom">Fit width</span><button class="btn btn-outline btn-xs" id="split-zoom-in" aria-label="Zoom in">+</button><button class="btn btn-outline btn-xs" id="split-fit">Fit width</button></div></div>
+            <p id="split-pdf-status" class="text-xs text-base-content/60 p-3" role="status">Loading PDF…</p>
+            <div id="split-pages" class="manual-pages" tabindex="0" aria-label="Pages in source order"></div>
+        </section>
+        <aside class="card bg-base-100 shadow-sm manual-plan">
+            <h2 class="font-semibold">Split plan</h2><p id="split-plan-summary" class="text-xs text-base-content/60" aria-live="polite"></p>
+            <p class="manual-help">Select the checkbox between pages to start a new document. Matching numbers identify your boundaries.</p>
+            <div id="split-plan"></div>
+            <p class="manual-plan-footer">Your source PDF remains unchanged.</p>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script type="module" src="/static/js/manual-split-review/index.js?v=manual-split-3"></script>
+{% endblock %}

@@ -7,13 +7,13 @@ import {
     summaryText,
     taskKind,
     withoutHousekeeping,
-} from "./pipeline-config/model.js?v=controller-modularization-4";
-import { deleteParam, getParam, setParam } from "./pipeline-config/parameters.js?v=controller-modularization-4";
-import { createPipelineApi } from "./pipeline-config/api.js?v=controller-modularization-4";
-import { buildPipelineYamlPreview } from "./pipeline-config/preview.js?v=controller-modularization-4";
-import { createPipelineWorkspaceView } from "./pipeline-config/workspace-view.js?v=controller-modularization-4";
-import { createPipelineTaskEditors } from "./pipeline-config/task-editors.js?v=controller-modularization-4";
-import { createPipelineResourceBrowser } from "./pipeline-config/resource-browser.js?v=controller-modularization-4";
+} from "./pipeline-config/model.js?v=manual-split-1";
+import { deleteParam, getParam, setParam } from "./pipeline-config/parameters.js?v=manual-split-1";
+import { createPipelineApi } from "./pipeline-config/api.js?v=manual-split-1";
+import { buildPipelineYamlPreview } from "./pipeline-config/preview.js?v=manual-split-1";
+import { createPipelineWorkspaceView } from "./pipeline-config/workspace-view.js?v=manual-split-1";
+import { createPipelineTaskEditors } from "./pipeline-config/task-editors.js?v=manual-split-1";
+import { createPipelineResourceBrowser } from "./pipeline-config/resource-browser.js?v=manual-split-1";
 
 (function () {
     "use strict";

@@ -66,6 +66,7 @@ def upgrade_v2_to_v3_structure(conn: sqlite3.Connection) -> None:
         },
         "review_items": {
             "review_schema_version_id": "TEXT",
+            "review_kind": "TEXT NOT NULL DEFAULT 'extraction' CHECK(review_kind IN ('extraction','manual_split'))",
         },
     }
     schema_path = Path(__file__).with_name("schema.sql")

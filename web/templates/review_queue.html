@@ -39,7 +39,7 @@
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="document" type="button">Document <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="pipeline" type="button">Pipeline <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="fields" type="button">Fields to check <span aria-hidden="true"></span></button></th>
-                    <th><button class="btn btn-ghost btn-xs" data-review-sort="confidence" type="button">Lowest Confidence <span aria-hidden="true"></span></button></th>
+                    <th><button class="btn btn-ghost btn-xs" data-review-sort="confidence" type="button" title="Extraction confidence; manual split tasks have no score">Review signal <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="created_at" type="button">Queued at <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="status" type="button">Status <span aria-hidden="true"></span></button></th>
                     <th class="text-right">Actions</th>
@@ -64,5 +64,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/js/review-queue/index.js?v=controller-modularization-7a"></script>
+<script type="module" src="/static/js/review-queue/index.js?v=manual-split-1"></script>
 {% endblock %}

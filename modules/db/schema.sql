@@ -158,11 +158,35 @@ CREATE TABLE IF NOT EXISTS review_items (
     updated_at TEXT NOT NULL,
     completed_at TEXT,
     review_schema_version_id TEXT,
+    review_kind TEXT NOT NULL DEFAULT 'extraction' CHECK(review_kind IN ('extraction','manual_split')),
     metadata_json TEXT NOT NULL DEFAULT '{}',
     FOREIGN KEY(batch_id) REFERENCES batches(id),
     FOREIGN KEY(document_id) REFERENCES documents(id),
     FOREIGN KEY(created_by_task_run_id) REFERENCES task_runs(id),
     FOREIGN KEY(review_schema_version_id) REFERENCES review_schema_versions(id)
+);
+
+CREATE TABLE IF NOT EXISTS manual_split_decisions (
+    id TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL REFERENCES documents(id),
+    pipeline_version_id TEXT NOT NULL REFERENCES pipeline_versions(id),
+    task_key TEXT NOT NULL,
+    task_index INTEGER NOT NULL,
+    task_run_id TEXT NOT NULL REFERENCES task_runs(id),
+    review_item_id TEXT UNIQUE REFERENCES review_items(id),
+    source_sha256 TEXT NOT NULL,
+    page_count INTEGER NOT NULL CHECK(page_count >= 1),
+    revision INTEGER NOT NULL DEFAULT 1,
+    boundaries_json TEXT NOT NULL DEFAULT '[]',
+    action TEXT CHECK(action IN ('split','skip')),
+    skip_reason TEXT,
+    phase TEXT NOT NULL DEFAULT 'pending' CHECK(phase IN ('pending','applying','applied','failed')),
+    checkpoint_json TEXT NOT NULL DEFAULT '{}',
+    decided_by TEXT,
+    decided_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(document_id, pipeline_version_id, task_key)
 );
 
 CREATE TABLE IF NOT EXISTS review_locks (

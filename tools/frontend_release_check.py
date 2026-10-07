@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import argparse
 import re
+import tempfile
+import time
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 FEATURES = {
+    "manual-split-review": "manual_split_review.html",
     "admin-audit": "admin_audit.html",
     "admin-dashboard": "admin_dashboard.html",
     "config-validation": "config_validation.html",
@@ -81,7 +84,7 @@ def bump_feature(feature: str, version: str, root: Path = ROOT) -> None:
     updated_template, count = entry_pattern.subn(rf"\g<1>{version}", template)
     if count != 1:
         raise ValueError(f"Expected one {feature} entry in {template_path.name}")
-    template_path.write_text(updated_template, encoding="utf-8")
+    _replace_text(template_path, updated_template)
 
     for module_path in (root / "web/static/js" / feature).glob("*.js"):
         source = module_path.read_text(encoding="utf-8")
@@ -91,7 +94,25 @@ def bump_feature(feature: str, version: str, root: Path = ROOT) -> None:
             ),
             source,
         )
-        module_path.write_text(updated, encoding="utf-8")
+        _replace_text(module_path, updated)
+
+
+def _replace_text(path: Path, content: str) -> None:
+    """Replace a release file without truncating an existing Windows file."""
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent, delete=False) as stream:
+        stream.write(content)
+        temporary = Path(stream.name)
+    try:
+        for attempt in range(6):
+            try:
+                temporary.replace(path)
+                break
+            except PermissionError:
+                if attempt == 5:
+                    raise
+                time.sleep(0.05 * (2 ** attempt))
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def main() -> int:

@@ -28,6 +28,7 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
     "review_gate": ("standard_step.review.review_gate", "ReviewGateTask"),
     "update_reference": ("standard_step.rules.update_reference", "UpdateReferenceTask"),
     "llamacloud_split": ("standard_step.split.llamacloud_split", "LlamaCloudSplitTask"),
+    "manual_split": ("standard_step.split.manual_split", "ManualSplitTask"),
     "store_file_to_localdrive": (
         "standard_step.storage.store_file_to_localdrive",
         "StoreFileToLocaldrive",
