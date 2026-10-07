@@ -159,15 +159,61 @@ The request releases model memory after completion (`keep_alive: 0`) so a large
 resident model does not occupy GPU memory while the operator reviews the PDF.
 The next extraction may therefore include model-loading time.
 
-For larger documents, select relevant pages or increase context/input/output
-allowances within the machine's capacity. Splitting mixed-document bundles is a
-separate pipeline responsibility. Output amounts remain what was printed;
+For larger documents, use the selection criteria below before increasing
+context/input/output allowances. Selecting relevant pages can reduce input when
+excluded pages contain no required fields or items. Splitting mixed-document
+bundles is a separate pipeline responsibility. Output amounts remain what was printed;
 arithmetic calculations should be configured as a separate business task rather
 than replacing extracted values.
 
 Larger context settings can move model layers from GPU to CPU and slow inference
 substantially. Use a smaller context that still fits complete evidence when the
 machine's memory is limited; the task fails clearly rather than truncating it.
+
+### Choosing LiteParse or GLM-OCR for larger documents
+
+GLM-OCR is better positioned to handle larger documents because its initial
+extraction processes each page separately. LiteParse currently sends all selected
+pages' parsed evidence to one Ollama request, so both the input evidence and the
+complete extracted item list must fit that request's context and output limits.
+There is no universal page-count cutoff: text density, item count, schema size,
+model settings, and available GPU/system memory determine the practical limit.
+
+LiteParse has a potential processing-speed advantage because a normal attempt
+uses one Ollama inference request for all selected pages. GLM-OCR uses separate
+per-page requests for configured scalar/object fields and tables, with additional
+calls for recovery or document resolution. Fewer calls reduce request overhead
+and repeated prompt processing, so LiteParse can be faster when the complete
+input and output fit comfortably in one request. Actual elapsed time still
+depends on parsing/OCR, model choice, document size, and GPU/system memory;
+context-driven CPU offloading can outweigh this advantage.
+
+| Selection criterion | Preferred starting point |
+| --- | --- |
+| Selected text and all required output fit comfortably in one request | LiteParse + Ollama, particularly for PDFs with reliable embedded text; fewer Ollama calls can improve processing speed. |
+| Many pages or a long item table make one complete-document request impractical | GLM-OCR, with page extraction and a resolution mode chosen for the document. |
+| Independent pages can be combined without semantic reconciliation | GLM-OCR `page_merge`, which stops after deterministic merging. |
+| Header roles or table content need reconciliation across pages | GLM-OCR `document`, subject to the resolver limits below. |
+
+GLM-OCR is not unlimited. In `document` mode, table resolution partitions
+structured candidate evidence into approximately 12,000-character chunks
+(characters, not tokens) and supplies the corresponding page images. Scalar and
+flat-object resolution still supplies all ordered page images in each field's
+request; reduced image dimensions do not bound the number of pages. The task
+also renders all PDF pages into memory upfront. These stages can become memory
+or context bottlenecks on very large documents.
+
+In `page_merge` mode, the first nonempty scalar value is retained and conflicts
+are flagged. Identical complete table rows are deduplicated, so configure a
+printed line number or other distinguishing reference when legitimate repeated
+items must remain separate. GLM-OCR makes multiple model calls per page and may
+take longer; page-based processing does not establish better accuracy or speed.
+
+This recommendation reflects the current task architecture, not a comparative
+GLM-OCR versus LiteParse accuracy benchmark. Validate representative documents,
+including cross-page tables and repeated items, on the deployment hardware and
+retain a matching Review Gate before production use. See the
+[GLM-OCR operating guidance](user_guide.md#glm-ocr-extraction-local-ollama).
 
 Results retain safe model/version, source fingerprint, page and timing metadata,
 plus nullable-confidence field rows. The task creates no durable files itself;

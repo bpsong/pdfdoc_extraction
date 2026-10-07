@@ -206,6 +206,17 @@ and are not shown as verified review highlights. See the
 [LiteParse setup guide](docs/liteparse_extract_task.md) and
 [six-invoice validation report](docs/liteparse_pipeline_validation.md).
 
+LiteParse can process suitable documents faster because a normal attempt uses
+one Ollama request, avoiding GLM-OCR's multiple per-page and resolver calls.
+Actual speed depends on document size, model choice, OCR, and available memory.
+
+For larger documents whose complete evidence or item output cannot fit one
+local-model request, GLM-OCR is better positioned through page-based extraction
+and chunked table resolution. Its document-mode header resolver still receives
+all page images, so this is a scalability selection criterion rather than a
+guarantee of unlimited size or better accuracy. See the
+[document-size selection criteria](docs/liteparse_extract_task.md#choosing-liteparse-or-glm-ocr-for-larger-documents).
+
 Output folders are task-owned in the exact SQLite pipeline version. CSV/JSON
 tasks use `data_dir`, local PDF storage uses `files_dir`, archive tasks use
 `archive_dir`, and split tasks use `split_dir`. CSV/JSON/local-PDF/split tasks

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Manual Split · DocFlow AI</title>
+  <link rel="stylesheet" href="./prototype.css" />
+  <link rel="stylesheet" href="./listing.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="brand-mark">▤</span><strong>DocFlow AI</strong><button class="collapse" aria-label="Collapse sidebar">‹</button></div>
+    <nav aria-label="Main navigation">
+      <a href="#"><span>⇧</span> Upload &amp; Process</a>
+      <a class="active" href="#"><span>▤</span> Review Queue</a>
+      <a href="#"><span>△</span> Failures</a>
+      <a href="#"><span>▥</span> Reports</a>
+      <a href="#"><span>⚙</span> Settings</a>
+    </nav>
+    <div class="sidebar-foot"><span class="avatar">MC</span><div><strong>Maya Chen</strong><small>Operator</small></div><span class="dots">···</span></div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div><div class="breadcrumb" id="breadcrumb">Review Queue</div><h1 id="pageTitle">Review Queue</h1><p class="top-subtitle" id="pageSubtitle">Work documents that require human review.</p></div>
+      <div class="top-actions"><button class="button secondary hidden" id="backButton">‹ Back to queue</button><span class="saved hidden" id="savedState"><i></i> Draft saved</span><button class="button secondary hidden" id="saveButton">Save draft</button><button class="button primary hidden" id="confirmButton">Confirm split</button><button class="button secondary" id="refreshButton">Refresh</button><button class="icon-button" aria-label="Notifications">♧</button><span class="user">operator</span></div>
+    </header>
+
+    <section class="queue-content content" id="queueScreen">
+      <p class="queue-intro">Review documents that need attention. Completed reviews are available in History.</p>
+      <div class="queue-tabs"><button class="queue-tab active">Needs review <b>2</b></button><button class="queue-tab">History <b>119</b></button></div>
+      <div class="queue-ownership"><button class="filter-pill active">All active</button><button class="filter-pill">Unclaimed <b>2</b></button><button class="filter-pill">Assigned to me <b>0</b></button><button class="filter-pill">Claimed by others <b>0</b></button></div>
+      <div class="queue-filters"><select aria-label="Pipeline"><option>All pipelines</option><option>Accounts Payable v3</option></select><label class="searchbox">⌕ <input type="search" placeholder="Search documents…" aria-label="Search documents"></label></div>
+      <div class="queue-table-wrap"><table class="queue-table"><thead><tr><th>Document</th><th>Pipeline</th><th>Fields to check</th><th>Review signal</th><th>Queued at ↑</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        <tr><td><a class="doc-link" href="#split">sample_invoice.pdf</a><small>Sep 16, 2026, 02:09 PM</small></td><td>Insurance Invoice</td><td>Invoice amount</td><td><span class="confidence high">High confidence · 95%</span></td><td>Sep 16, 2026, 02:09 PM</td><td><span class="pending">Pending</span><small>Unclaimed</small></td><td><button class="button primary row-action">Claim &amp; review</button></td></tr>
+        <tr><td><a class="doc-link" href="#split">invoice_Steven_Ward_9240_segment_001.pdf</a><small>Sep 29, 2026, 08:52 AM</small></td><td>LlamaCloud Invoice Live</td><td>Line items</td><td><span class="confidence medium">Medium confidence · 90%</span></td><td>Sep 29, 2026, 08:52 AM</td><td><span class="pending">Pending</span><small>Unclaimed</small></td><td><button class="button primary row-action">Claim &amp; review</button></td></tr>
+        <tr class="manual-row"><td><a class="doc-link" href="#split">invoice_bundle_042.pdf <span class="manual-badge">Manual split</span></a><small>18 pages · Choose split boundaries</small></td><td>Accounts Payable v3</td><td class="muted-cell">—</td><td><span class="confidence neutral">Manual task</span></td><td>Oct 7, 2026, 09:14 AM</td><td><span class="pending">Pending</span><small>Unclaimed</small></td><td><button class="button primary row-action open-split">Claim &amp; split</button></td></tr>
+      </tbody></table><div class="queue-pagination"><span>1-3 of 3</span><label>Rows per page <select><option>25</option><option>50</option></select></label><div><button disabled>Previous</button><button disabled>Next</button></div></div></div>
+    </section>
+
+    <section class="split-content content hidden" id="splitScreen">
+      <section class="filebar">
+        <div class="file-icon">PDF</div><div class="file-info"><strong>invoice_bundle_042.pdf</strong><span>18 pages <b>·</b> 42.6 MB <b>·</b> Accounts Payable v3</span></div>
+        <div class="privacy"><span>▣</span> PDF stays on this server</div>
+      </section>
+
+      <div class="workspace">
+        <section class="viewer card" aria-label="PDF page viewer">
+          <div class="viewer-toolbar"><div><strong>Document preview</strong><span class="viewer-sub">All pages · vertical order</span></div><div class="tools"><button aria-label="Zoom out">−</button><span>100%</span><button aria-label="Zoom in">+</button><span class="tool-divider"></span><button aria-label="Fit width">↔</button><button aria-label="Rotate">↻</button><span class="page-count">Page <b id="currentPage">1</b> of 18</span></div></div>
+          <div class="page-list" id="pageList"></div>
+        </section>
+
+        <aside class="plan card">
+          <div class="plan-heading"><div><h2>Split plan</h2><p id="docCount">1 document · no boundaries</p></div><span class="plan-icon">⤓</span></div>
+          <div class="plan-callout"><span class="info-icon">i</span><span>Select the checkbox between pages to start a new document.</span></div>
+          <div class="document-list" id="documentList"></div>
+          <div class="plan-bottom"><div class="plan-stat"><span>Boundaries selected</span><strong id="boundaryCount">0</strong></div><div class="progress-track"><span id="progressBar"></span></div><p id="planHint">Your source file will remain unchanged.</p></div>
+          <button class="button primary full" id="confirmButtonSide">Confirm split</button>
+          <button class="button text full" id="cancelButton">Cancel</button>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
+

@@ -1743,6 +1743,21 @@ Retained word boxes are diagnostic evidence, not verified approval highlights.
 See [LiteParse task setup and limits](liteparse_extract_task.md) for parameters,
 local dependencies, page selection and context/output limits.
 
+LiteParse can offer faster processing through fewer Ollama calls: a normal
+attempt uses one request for all selected pages, whereas GLM-OCR makes separate
+page extraction calls and may add recovery or resolver calls. This advantage
+applies when the complete input and output fit comfortably in one request;
+actual speed also depends on OCR, model choice, document size, and memory.
+
+For larger documents, prefer GLM-OCR when the complete parsed evidence or item
+output cannot fit comfortably in LiteParse's single inference request. GLM-OCR
+extracts pages separately and chunks table evidence during document resolution;
+its scalar/object resolver still receives all page images, and rendering uses
+memory for the whole PDF. This makes GLM-OCR better positioned for larger
+documents, without proving better accuracy or speed. See the
+[selection criteria and resolution-mode limits](liteparse_extract_task.md#choosing-liteparse-or-glm-ocr-for-larger-documents)
+before choosing a pipeline, and validate representative documents with review.
+
 Ollama must be running separately and the configured local model must already
 be installed. The app does not start Ollama or download models. Each normal
 attempt uses one inference; an automatic retry may make another call.
