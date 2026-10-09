@@ -91,7 +91,6 @@ from .services.ingress_binding_service import (
 from .services.processing_state_service import ProcessingStateService
 from .services.reports_service import ReportsService
 from .services.review_service import ReviewService, ReviewServiceError
-from .services.runtime_settings_service import RuntimeSettingsService
 from .services.runtime_health_service import (
     RuntimeHealthService,
     expected_components_from_env,
@@ -1117,13 +1116,6 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         with managed_connect(config) as conn:
             return ReportsService(conn).summary()
-
-    @router.get("/api/settings")
-    def get_runtime_settings(user: str = Depends(get_current_user)):
-        """Return read-only non-secret runtime settings."""
-        config, _, _, _, _ = get_dependencies()
-        with managed_connect(config) as conn:
-            return RuntimeSettingsService(config, conn).settings()
 
     @router.get("/api/admin/task-catalog")
     def get_admin_task_catalog(user: str = Depends(get_current_user)):

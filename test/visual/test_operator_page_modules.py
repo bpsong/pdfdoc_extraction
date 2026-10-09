@@ -124,7 +124,6 @@ def test_operator_entries_share_one_release_version() -> None:
         ("admin_dashboard", "admin-dashboard", "controller-modularization-7a"),
         ("admin_audit", "admin-audit", "controller-modularization-7a"),
         ("config_validation", "config-validation", "controller-modularization-7a"),
-        ("settings", "settings", "controller-modularization-7a"),
         ("split_results", "split-results", "manual-split-1"),
         ("watch_folders", "watch-folders", "controller-modularization-7a"),
     ):

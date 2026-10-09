@@ -3,6 +3,11 @@
 > Archived historical record: this implementation design describes the
 > completed unified refactor. It is not the current architecture authority.
 
+> Retirement update (2026-10-09): the read-only Settings screen described in
+> this historical design has been removed, including its page/API routes,
+> template, scripts, and dedicated service. Use Admin Overview for application
+> settings and Pipeline for workflow configuration. Validation remains available.
+
 ## 1. Purpose
 
 This design document translates `tasks/prd-refactor-unified-pdfdoc-processing.md` into implementation guidance.

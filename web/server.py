@@ -700,18 +700,6 @@ def create_app() -> FastAPI:
             admin_required=True,
         )
 
-    @app.get("/app/settings", response_class=HTMLResponse)
-    async def app_settings_page(request: Request):
-        """Serve the operator settings page."""
-
-        return await render_app_page(
-            request,
-            "settings.html",
-            page_title="Settings",
-            page_subtitle="View runtime settings for the current application.",
-            active_nav="settings",
-        )
-
     @app.get("/app/schemas", response_class=HTMLResponse)
     async def app_schema_editor_page(request: Request):
         """Serve the admin schema editor page."""

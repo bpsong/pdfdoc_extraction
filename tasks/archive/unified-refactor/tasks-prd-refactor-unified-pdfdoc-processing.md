@@ -3,6 +3,11 @@
 > Archived historical record: this completed task list is retained for
 > implementation history. Paths below reflect its original repository layout.
 
+> Retirement update (2026-10-09): the read-only Settings screen delivered by
+> task 25.2 and its dedicated API, service, assets, and output tests have been
+> removed. Completed checkboxes below record historical work, not current
+> availability. Admin Overview, Pipeline, and Validation remain supported.
+
 - `tasks/prd-refactor-unified-pdfdoc-processing.md` - Requirements source for the unified refactor.
 - `tasks/design-refactor-unified-pdfdoc-processing.md` - Implementation design source for this task list.
 - `tasks/markdown-documentation-audit.md` - Markdown documentation age, update, merge, archive, and removal audit for task 26 cleanup.

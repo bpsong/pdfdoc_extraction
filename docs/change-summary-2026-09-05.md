@@ -4,6 +4,11 @@ This checkpoint records the accumulated local changes and the previously
 unpushed `b41de23` commit ("experiment a"). The associated test suite repairs
 are included in the follow-up commit after this checkpoint.
 
+> Retirement update (2026-10-09): the read-only Settings screen and its
+> dedicated runtime service/API and tests have been removed. Test identifiers
+> below record the original checkpoint; current settings controls remain in
+> Admin Overview and Pipeline.
+
 ## Processing and workflow state
 
 - Add schema version 4 and a durable `processing_jobs` table, repository,
@@ -116,7 +121,6 @@ and related GLM-OCR adapter/prompt changes described above.
 - `modules/services/processing_state_service.py`
 - `modules/services/processing_worker.py`
 - `modules/services/review_service.py`
-- `modules/services/runtime_settings_service.py`
 - `modules/services/task_catalog_service.py`
 - `modules/services/task_registry_service.py`
 - `modules/services/watch_folder_coordinator.py`

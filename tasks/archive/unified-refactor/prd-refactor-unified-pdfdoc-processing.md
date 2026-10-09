@@ -3,6 +3,11 @@
 > Archived historical record: this refactor has been implemented. Use
 > `docs/design_architecture.md` and `docs/user_guide.md` for current behavior.
 
+> Retirement update (2026-10-09): the historical requirement for an operator
+> read-only Settings screen is superseded. That screen and its dedicated API
+> have been removed. Admin Overview and Pipeline retain configuration controls;
+> the administrator Validation screen remains available.
+
 ## 1. Overview
 
 This document defines the requirements for refactoring `pdfdoc_extraction` into a unified document processing application that combines:

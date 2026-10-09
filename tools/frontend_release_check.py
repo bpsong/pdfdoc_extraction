@@ -23,7 +23,6 @@ FEATURES = {
     "reports": "reports.html",
     "review-queue": "review_queue.html",
     "schema-editor": "schema_editor.html",
-    "settings": "settings.html",
     "split-results": "split_results.html",
     "task-catalog": "task_catalog.html",
     "upload-process": "upload_process.html",

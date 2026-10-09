@@ -30,7 +30,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "app_name": "DocFlow AI",
         "page_size": 25,
         "admin_enabled": True,
-        "operator_sidebar": ["upload", "review", "reports", "settings"],
+        "operator_sidebar": ["upload", "review", "reports"],
     },
     "web": {
         "max_upload_mb": 50,

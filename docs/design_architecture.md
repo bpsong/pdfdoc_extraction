@@ -1004,9 +1004,10 @@ metadata. The editor entry and its imports use one release asset version so a
 deployment cannot combine cached modules from different releases.
 
 Operator pages cover upload, processing, split and extraction inspection,
-review, failures, reports, and settings. Admin pages cover the overview, fixed
-user accounts, watch folders, versioned pipelines and review forms, the task catalog, legacy
-schema validation, and the filtered administrative audit log.
+review, failures, and reports. Admin pages cover the overview with editable
+non-secret operational settings, fixed user accounts, watch folders, versioned
+pipelines and review forms, the task catalog, legacy schema validation, and the
+filtered administrative audit log.
 
 Extraction and human-review pages use local PDF.js modules to render source PDFs
 and may navigate to provider-supplied evidence. Source files are served through
@@ -1024,7 +1025,7 @@ render cancellations during page changes or teardown as non-errors.
 
 Operator and administrative pages now use versioned feature entries under
 `web/static/js/`, including upload, processing overview, failures, reports,
-review queue, extraction and split results, watch folders, settings, validation,
+review queue, extraction and split results, watch folders, validation,
 audit, task catalog, and admin overview. Each entry imports a page controller;
 request adapters and DOM presentation live in feature-local API and view
 modules. Upload validation and cancellation state also live in a feature-local
@@ -1092,8 +1093,8 @@ behavior until deliberately ported into `web/`.
 
 `modules/api_router.build_router()` composes APIs for authentication, uploads,
 batches, documents, extraction, review, split results, failures, reports,
-settings, schemas, pipeline administration, users, audit, and legacy
-compatibility.
+administrator settings, schemas, pipeline administration, users, audit, and
+legacy compatibility.
 
 Endpoints should validate requests, enforce authorization, call services, and
 construct responses. Cross-table invariants belong in services. A router-wide

@@ -20,7 +20,6 @@ from modules.services import user_service as user_service_module
 from modules.auth_utils import PasswordPolicyError
 from modules.services.schema_service import SchemaService
 from modules.services.batch_service import BatchService
-from modules.services.runtime_settings_service import RuntimeSettingsService
 from modules.services.user_service import UserService
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.services.pipeline_definition_service import PipelineDefinitionError, PipelineDefinitionService
@@ -178,12 +177,7 @@ def test_document_artifact_user_and_portable_defensive_paths(monkeypatch: pytest
     assert dependencies == {}
 
 
-def test_runtime_settings_and_workflow_state_missing_branches() -> None:
-    settings = RuntimeSettingsService(SimpleNamespace())
-    assert settings.config == {}
-    assert settings._first_task_by_class("ReviewGateTask") == {}
-    assert settings._pipeline_steps() == []
-
+def test_workflow_state_missing_branches() -> None:
     state = WorkflowStateService.__new__(WorkflowStateService)
     state.pipeline = ["first"]
     state.pipeline_version_id = "v1"

@@ -1,7 +1,7 @@
 <!--
 PDF Processing System: User Guide (Configurable Tasks Edition)
-Version: 3.10
-Release Date: 2026-10-07
+Version: 3.11
+Release Date: 2026-10-09
 Author: PDF Processing System team
 -->
 
@@ -11,8 +11,8 @@ For local page-boundary splitting and its Review Queue workflow, see
 [Manual PDF split task](manual_split_task.md).
 
 ---
-Version: 3.10
-Release Date: 2026-10-07
+Version: 3.11
+Release Date: 2026-10-09
 Author: PDF Processing System team
 
 ---
@@ -103,6 +103,8 @@ Author: PDF Processing System team
 | 3.7 | 2026-09-08 | PDF Processing System team | Added independent Watch folders management, lifecycle, explicit upgrades, diagnostics, and activity history. |
 | 3.8 | 2026-09-27 | PDF Processing System team | Refreshed setup guidance, UI labels, logging, configuration references, and review-form administration instructions. |
 | 3.9 | 2026-10-04 | PDF Processing System team | Added generic LiteParse + local Ollama extraction, nullable confidence, diagnostic citations, visual pipeline setup and six-invoice validation guidance. |
+| 3.10 | 2026-10-07 | PDF Processing System team | Documented manual PDF splitting and its Review Queue workflow. |
+| 3.11 | 2026-10-09 | PDF Processing System team | Retired the read-only Settings screen and documented application settings in Admin Overview and workflow configuration in Pipeline. |
 
 ---
 
@@ -280,7 +282,8 @@ The system has two fixed account roles:
 |------------|:--------:|:-------------:|
 | Upload documents and monitor processing | Yes | Yes |
 | Review and correct extracted information | Yes | Yes |
-| View failures, reports, and runtime settings | Yes | Yes |
+| View failures and reports | Yes | Yes |
+| View and change non-secret application settings in Admin Overview | No | Yes |
 | Configure schemas, pipeline tasks, review thresholds, and split behavior | No | Yes |
 | Change account passwords and view the administrative audit history | No | Yes |
 
@@ -455,7 +458,6 @@ pipeline version and do not silently use the newest publication.
 | **Review Queue** | Correct documents that require human review. |
 | **Failures** | Investigate documents that could not be processed. |
 | **Reports** | View processing and review activity summaries. |
-| **Settings** | View non-secret runtime settings and configured paths. |
 
 Administrators also see **Overview**, **Users**, **Pipeline**, **Watch folders**, **Review Forms**, **Task Catalog**, **Validation**, and **Audit Log**. These administrative areas are not available to operators.
 
@@ -475,11 +477,6 @@ Administrators also see **Overview**, **Users**, **Pipeline**, **Watch folders**
 - **Reports** summarizes batches and documents, persisted statuses, ingestion
   sources, review counts, completed/failed totals, average processing time, and
   recent batches. Select a recent batch for details and its **Open processing dashboard** link.
-- **Settings** is read-only for operators. It exposes safe deployment paths and
-  runtime summaries with secret-like values redacted. In a multi-pipeline
-  deployment, a zero or empty legacy pipeline summary on this page does not
-  mean that SQLite pipeline versions are absent; use the pipeline shown on the
-  batch/document instead.
 
 #### Human Review
 
@@ -910,7 +907,7 @@ The housekeeping cleanup step is managed automatically by the WorkflowLoader and
 The application has two fixed accounts:
 
 - **admin:** can use all operator and administrator features.
-- **operator:** can upload, monitor, review, investigate failures, view reports, and view non-secret settings.
+- **operator:** can upload, monitor, review, investigate failures, and view reports.
 
 The account names and roles cannot be changed. Passwords are stored in the SQLite database configured by `database.path`; they are not read from an `authentication` section in runtime YAML.
 
@@ -1046,7 +1043,7 @@ PDF previews in the web app are served only when the registered file path resolv
 
 #### 4.5.4. Operator and Administrator State Views
 
-- Operators use **Upload & Process**, **Processing Overview**, **Review Queue**, **Failures**, **Reports**, and **Settings**.
+- Operators use **Upload & Process**, **Processing Overview**, **Review Queue**, **Failures**, and **Reports**.
 - Administrators can use all operator areas and the additional configuration areas shown under **Admin**.
 - The technical page paths are listed in the appendix for troubleshooting and support use.
 
@@ -1054,7 +1051,10 @@ PDF previews in the web app are served only when the registered file path resolv
 
 The administrator menu provides these workflows:
 
-- **Overview:** review configuration health, pipeline and review summaries, split status, and recent audit events.
+- **Overview:** review configuration health, pipeline and review summaries,
+  split status, and recent audit events. Use **Non-secret Settings** to change
+  the application name, default page size, review queue, review lock timeout,
+  and validation options, then select **Save Settings**.
 - **Users:** change the administrator or operator password after confirming the current administrator password.
 - **Pipeline:** create or clone templates, manage lifecycle state, maintain task
   order and parameters, select exact published review-schema versions, compare
@@ -1180,7 +1180,7 @@ PATCH accepts `expected_revision` and optional `action` values `pause`,
 `POST /api/admin/watch-folder-check` accepts `folder_path`.
 All these routes require administrator access; cookie mutations require CSRF.
 
-##### Use Overview, Settings, Task Catalog, and Validation
+##### Use Overview, Task Catalog, and Validation
 
 - **Overview** displays deployment/filesystem configuration health, legacy
   pipeline/review/split summaries, recent `admin_` events, and the allow-list of
@@ -1190,9 +1190,6 @@ All these routes require administrator access; cookie mutations require CSRF.
   Settings** writes only the displayed keys (application name/page size,
   validation options, review queue name, and review lock timeout) to deployment
   configuration and SQLite history. It cannot save credentials.
-- **Settings** is the read-only operator-safe view of deployment paths and
-  redacted runtime summaries. It is not the authoritative list of all SQLite
-  pipeline versions.
 - **Task Catalog** is an inventory and diagnostic view: search or filter by
   category/import state, select a task to inspect its metadata, and use **Add in
   Pipeline** to open the editor. It does not alter a draft by itself.
@@ -1277,7 +1274,7 @@ administrator interface.
 
 For schema-driven review fields, see the [review schema administrator guide](review_schema_admin_guide.md).
 
-Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Secret values are not exposed through runtime settings. Store provider secrets such as `api_key` under deployment-owned `pipeline_secrets`. The administrator Pipeline editor displays and edits only the corresponding secret alias; it never displays or versions the resolved value.
+Administrator access is determined by the immutable SQLite role. The fixed `admin` account can access all pages and APIs; the fixed `operator` account cannot access administrative pages or APIs. Admin Overview exposes only allow-listed non-secret application settings. Store provider secrets such as `api_key` under deployment-owned `pipeline_secrets`. The administrator Pipeline editor displays and edits only the corresponding secret alias; it never displays or versions the resolved value.
 
 #### 4.5.6. Backup and Recovery
 
@@ -2804,7 +2801,6 @@ Normal users should navigate with the left menu. The paths below are provided fo
 | Review item | `/app/review/{review_item_id}` | Operator and administrator | Select **Review Queue**, find the document, then select **Claim** or **View**. |
 | Failures | `/app/failures` | Operator and administrator | Select **Failures** from the left navigation menu. |
 | Reports | `/app/reports` | Operator and administrator | Select **Reports** from the left navigation menu. |
-| Settings | `/app/settings` | Operator and administrator | Select **Settings** from the left navigation menu. |
 | Overview | `/app/admin` | Administrator only | Sign in as the administrator, then select **Overview** from the left navigation menu. |
 | Users | `/app/admin/users` | Administrator only | Sign in as the administrator, then select **Users** from the left navigation menu. |
 | Pipeline | `/app/admin/pipeline` | Administrator only | Select **Pipeline** to manage templates and publications. |

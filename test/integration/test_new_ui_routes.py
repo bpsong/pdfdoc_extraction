@@ -41,7 +41,7 @@ class FakeConfig:
             "ui": {
                 "app_name": "DocFlow AI",
                 "admin_enabled": True,
-                "operator_sidebar": ["upload", "review", "reports", "settings"],
+                "operator_sidebar": ["upload", "review", "reports"],
             },
             "auth": {
                 "roles_enabled": True,
@@ -423,7 +423,6 @@ def test_operator_app_routes_render_shared_shell_without_admin_navigation(monkey
         ("/app/review/review-1", "Human Review"),
         ("/app/failures", "Failures"),
         ("/app/reports", "Reports"),
-        ("/app/settings", "Settings"),
     ]
 
     for route, title in routes:
@@ -572,15 +571,31 @@ def test_reports_page_includes_task_25_assets(monkeypatch) -> None:
     assert "/static/js/reports/index.js?v=controller-modularization-7a" in response.text
 
 
-def test_settings_page_includes_task_25_assets(monkeypatch) -> None:
-    client = build_client(monkeypatch, username="operator", admin_users=["admin"])
+@pytest.mark.parametrize("username", ["operator", "admin"])
+def test_retired_settings_surfaces_are_unavailable(
+    monkeypatch: pytest.MonkeyPatch, username: str,
+) -> None:
+    client = build_client(monkeypatch, username=username, admin_users=["admin"])
     authenticate(client)
 
-    response = client.get("/app/settings")
+    for path in (
+        "/app/settings",
+        "/api/settings",
+        "/static/js/settings/index.js",
+        "/static/js/settings/controller.js",
+        "/static/js/settings/api.js",
+        "/static/js/settings/view.js",
+    ):
+        assert client.get(path).status_code == 404, path
 
+    response = client.get("/app/admin" if username == "admin" else "/app/upload")
     assert response.status_code == 200
-    assert 'id="settings-workspace"' in response.text
-    assert "/static/js/settings/index.js?v=controller-modularization-7a" in response.text
+    assert 'href="/app/settings"' not in response.text
+    assert 'data-nav-label="Settings"' not in response.text
+    assert 'href="/logout"' in response.text
+    if username == "admin":
+        assert 'id="admin-save-settings-button"' in response.text
+        assert 'href="/app/settings/validation"' in response.text
 
 
 def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> None:

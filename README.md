@@ -49,7 +49,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 
 ### Modern Web Interface
 - **FastAPI Backend**: High-performance REST API
-- **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/reports`, and `/app/settings`
+- **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/failures`, and `/app/reports`
 - **Admin App**: `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`,
   `/app/schemas`, `/app/admin/tasks`, `/app/settings/validation`, and
   `/app/admin/audit`
@@ -375,7 +375,6 @@ The `admin` account has full access. The `operator` account cannot access admini
 - `POST /api/review/items/{review_item_id}/claim`: Claim a review item
 - `POST /api/review/items/{review_item_id}/complete`: Complete review and persist corrected values
 - `GET /api/reports/summary`: Processing and review activity summary
-- `GET /api/settings`: Non-secret runtime settings for operators
 - `GET /api/admin/settings`, `PUT /api/admin/settings`: Admin configuration state
 - `GET /api/admin/audit`: Admin audit events
 - `/api/admin/pipeline-templates`: Create/list named templates; per-template

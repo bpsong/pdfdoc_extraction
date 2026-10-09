@@ -13,7 +13,6 @@ from modules.services.reports_service import (
     _duration_display,
     _parse_iso_datetime,
 )
-from modules.services.runtime_settings_service import RuntimeSettingsService
 from modules.services.processing_state_service import _config_value
 from modules.services.user_service import UserService, UserServiceError
 from modules import utils
@@ -122,22 +121,7 @@ def test_reports_helpers_and_invalid_table():
     assert _duration_display(7200) == "2.0h"
 
 
-def test_runtime_settings_invalid_pipeline_and_redaction():
-    service = object.__new__(RuntimeSettingsService)
-    service.conn = None
-    service.config_manager = Config()
-    service.config = {"tasks": [], "pipeline": "bad"}
-    assert service._get("tasks.missing", "default") == "default"
-    assert service._pipeline_steps() == []
-    assert service._first_task_by_class("ReviewGateTask") == {}
-
-    service.config = {
-        "tasks": {"missing": "bad", "task": {"class": "Task", "params": {"api_key": "x"}}},
-        "pipeline": [1, "missing", "task"],
-    }
-    steps = service._pipeline_steps()
-    assert steps[0]["configured"] is False
-    assert steps[1]["params"]["api_key"] == "[REDACTED]"
+def test_processing_state_config_value_without_provider() -> None:
     assert _config_value(object(), "missing", "fallback") == "fallback"
 
 

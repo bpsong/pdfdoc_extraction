@@ -1,5 +1,9 @@
 # Frontend Controller Modularization Plan
 
+> Maintenance update (2026-10-09): the read-only Settings screen and its
+> feature modules have been retired. Historical verification notes below
+> describe the original rollout; current settings controls live in Admin Overview.
+
 ## Objective
 
 Reduce production frontend risk by replacing large page-level vanilla JavaScript
@@ -401,14 +405,14 @@ test explicitly verifies activation.
   `extraction_results.html`, and `split_results.html` — Phase 7 operator
   feature-module entries.
 - `web/templates/admin_dashboard.html`, `admin_audit.html`,
-  `config_validation.html`, `settings.html`, `task_catalog.html`, and
+  `config_validation.html`, `task_catalog.html`, and
   `watch_folders.html` — Phase 7 administrative feature-module entries.
 - `web/static/js/upload-process/`, `processing-overview/`, `reports/`,
   `failures/`, `review-queue/`, `extraction-results/`, and `split-results/`
   — feature-local API/view/controller modules; upload also owns validation
   model and cancellable XHR transport.
 - `web/static/js/admin-dashboard/`, `admin-audit/`,
-  `config-validation/`, `settings/`, `task-catalog/`, and `watch-folders/`
+  `config-validation/`, `task-catalog/`, and `watch-folders/`
   — administrative API/view/controller modules.
 - `test/visual/test_operator_page_modules.py` — Phase 7 upload API/model and
   feature entry contracts.

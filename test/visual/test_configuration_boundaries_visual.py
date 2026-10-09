@@ -20,6 +20,7 @@ def test_configuration_pages_share_startup_dependencies(
         response = page.goto(visual_app["base_url"] + route)
         assert response is not None and response.status == 200
         expect(page.locator("h1")).to_be_visible()
+        expect(page.locator('a[href="/app/settings"]')).to_have_count(0)
         if name == "upload":
             page.locator("#pipeline-version-list input[name='pipeline-version']").first.wait_for()
         if name == "admin":

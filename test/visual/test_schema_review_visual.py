@@ -51,7 +51,7 @@ def _write_config(tmp_path: Path, port: int, schema_dir: Path) -> Path:
         "database": {"path": str(tmp_path / "app_state.sqlite3"), "run_migrations_on_startup": True},
         "review": {"lock_timeout_minutes": 60, "default_queue_name": "visual_review"},
         "validation": {"config_validation_enabled": True, "allow_ui_config_save": False},
-        "ui": {"app_name": "DocFlow AI", "admin_enabled": True, "operator_sidebar": ["upload", "review", "reports", "settings"]},
+        "ui": {"app_name": "DocFlow AI", "admin_enabled": True, "operator_sidebar": ["upload", "review", "reports"]},
         "auth": {"roles_enabled": True, "default_admin_users": ["admin"]},
         "web": {"host": "127.0.0.1", "port": port, "secret_key": "visual-test-secret", "upload_dir": str(tmp_path / "web_upload")},
         "watch_folder": {"dir": str(tmp_path / "watch"), "processing_dir": str(tmp_path / "processing")},

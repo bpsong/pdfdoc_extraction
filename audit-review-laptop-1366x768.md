@@ -1,3 +1,7 @@
+> Historical UI capture: the Settings link in this snapshot was retired on
+> 2026-10-09. Current navigation omits it for both roles; administrator settings
+> remain in Admin Overview and Pipeline. The snapshot below is preserved as evidence.
+
 - generic [ref=e2] [box=0,0,1351,1357]:
   - complementary [ref=e3] [box=0,0,76,1357]:
     - generic [ref=e4] [box=8,16,59,92]:
