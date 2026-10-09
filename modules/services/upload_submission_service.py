@@ -25,4 +25,6 @@ def submission_status(conn: sqlite3.Connection, user: str, submission_id: str) -
     if row is None:
         return {"status": "unknown"}
     created = json.loads(row["response_json"])
+    if created.get("purged"):
+        return {"status": "purged"}
     return {"status": "accepted", "batch_id": created["batch"]["id"]}

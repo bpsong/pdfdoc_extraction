@@ -131,3 +131,28 @@ def upgrade_watch_folder_management(conn: sqlite3.Connection) -> None:
                 raise RuntimeError("Watch-folder migration would break historical references.")
     finally:
         conn.execute("PRAGMA foreign_keys = ON")
+
+
+def upgrade_processing_cleanup_audit(conn: sqlite3.Connection) -> None:
+    """Retain immutable audit identities independently of processing retention."""
+    if not conn.execute("PRAGMA foreign_key_list(audit_events)").fetchall():
+        return
+    with immediate_transaction(conn):
+        conn.execute("""
+            CREATE TABLE audit_events_next (
+                id TEXT PRIMARY KEY, batch_id TEXT, document_id TEXT,
+                review_item_id TEXT, user TEXT, event_type TEXT NOT NULL,
+                event_json TEXT NOT NULL, created_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            INSERT INTO audit_events_next
+                (rowid, id, batch_id, document_id, review_item_id, user,
+                 event_type, event_json, created_at)
+            SELECT rowid, id, batch_id, document_id, review_item_id, user,
+                   event_type, event_json, created_at FROM audit_events
+        """)
+        conn.execute("DROP TABLE audit_events")
+        conn.execute("ALTER TABLE audit_events_next RENAME TO audit_events")
+        if conn.execute("PRAGMA foreign_key_check").fetchall():
+            raise RuntimeError("Processing cleanup migration broke foreign keys.")

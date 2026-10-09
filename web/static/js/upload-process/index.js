@@ -1,1 +1,1 @@
-import './controller.js?v=controller-modularization-7a';
+import './controller.js?v=pipeline-cleanup-1';

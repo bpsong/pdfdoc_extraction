@@ -149,7 +149,12 @@ class IngestionAssignmentService:
                 if previous:
                     if previous["fingerprint"] != fingerprint:
                         raise IngestionAssignmentError("Submission ID already used for different upload content.")
-                    return {**json_loads(previous["response_json"]), "replayed": True}
+                    receipt = json_loads(previous["response_json"])
+                    if receipt.get("purged"):
+                        raise IngestionAssignmentError(
+                            "Submission history was cleaned up. Start a new upload with a new submission ID."
+                        )
+                    return {**receipt, "replayed": True}
             summary = self.resolve_selection(pipeline_version_id, role=role)
             created = BatchService(self.conn).create_ingestion_batch_with_documents(
                 source=source,

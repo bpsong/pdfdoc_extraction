@@ -31,7 +31,7 @@
                         <select id="pipeline-template-status" class="select select-bordered select-sm" disabled>
                             <option value="inactive">Inactive</option>
                             <option value="active">Active</option>
-                            <option value="archived">Archived</option>
+                            <option value="archived" disabled>Archived</option>
                         </select>
                     </label>
                     <button id="pipeline-template-activate" class="btn btn-success btn-sm" type="button" disabled title="Make this pipeline available on Upload & Process">Activate for uploads</button>
@@ -41,6 +41,12 @@
                 <span id="pipeline-draft-revision">Draft revision —</span>
                 <span id="pipeline-base-version">Base version —</span>
                 <span id="pipeline-version-history">No published versions</span>
+            </div>
+            <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-base-300 pt-3">
+                <label class="flex items-center gap-2 text-sm"><input id="pipeline-show-archived" type="checkbox" class="checkbox checkbox-sm">Show archived</label>
+                <button id="pipeline-archive-button" class="btn btn-outline btn-sm" type="button" disabled>Archive pipeline</button>
+                <button id="pipeline-cleanup-button" class="btn btn-outline btn-sm" type="button" disabled>Clean up processing data</button>
+                <span class="text-xs text-base-content/60">Archiving keeps history. Cleanup removes eligible history separately.</span>
             </div>
         </div>
     </section>
@@ -141,6 +147,17 @@
     </section>
 </div>
 <input id="pipeline-import-file" type="file" accept=".yaml,.yml,.json,application/yaml,application/json" class="hidden">
+<dialog id="pipeline-lifecycle-dialog" class="modal" aria-labelledby="pipeline-lifecycle-title">
+    <div class="modal-box w-full max-w-2xl">
+        <h2 id="pipeline-lifecycle-title" class="text-lg font-semibold" tabindex="-1"></h2>
+        <div id="pipeline-lifecycle-body" class="mt-4"></div>
+        <p id="pipeline-lifecycle-error" class="mt-3 text-sm text-error" role="alert"></p>
+        <div class="modal-action flex-wrap">
+            <button id="pipeline-lifecycle-close" class="btn btn-ghost" type="button">Cancel</button>
+            <button id="pipeline-lifecycle-next" class="btn btn-primary" type="button"></button>
+        </div>
+    </div>
+</dialog>
 <div id="pipeline-template-dialog" class="fixed inset-0 z-50 hidden items-center justify-center bg-base-content/40 p-4" role="dialog" aria-modal="true" aria-labelledby="pipeline-template-dialog-title">
     <form id="pipeline-template-form" class="w-full max-w-lg rounded-box border border-base-300 bg-base-100 p-6 shadow-lg">
         <h2 id="pipeline-template-dialog-title" class="text-lg font-semibold">New pipeline</h2>
@@ -196,5 +213,5 @@
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script type="module" src="/static/js/pipeline-config/index.js?v=manual-split-1"></script>
+<script type="module" src="/static/js/pipeline-config/index.js?v=pipeline-lifecycle-2"></script>
 {% endblock %}

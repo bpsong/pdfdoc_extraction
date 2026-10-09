@@ -587,7 +587,7 @@ Other supported review-gate parameters include `per_document_type_thresholds`,
 `require_review_when_missing_confidence`. `resume_policy` currently accepts only
 `next_task`; it is not exposed as an editor choice. `schema_file` is legacy
 migration input and is rejected for a current pipeline definition. See the
-[user guide, section 4.8](user_guide.md#48-task-system-standard-steps-and-parameters)
+[technical operations reference, section 4.8](technical_operations_reference.md#48-task-system-standard-steps-and-parameters)
 for the full parameter descriptions.
 
 ## Test the Operator's Form
@@ -731,7 +731,7 @@ both configurations when their shared structure changes.
 
 ## Advanced Validation
 
-For common config-check findings, see [Config Check Troubleshooting](config_check_troubleshooting.md). The complete review-gate parameter list is in [the user guide, section 4.8](user_guide.md#48-task-system-standard-steps-and-parameters).
+For common config-check findings, see [Config Check Troubleshooting](config_check_troubleshooting.md). The complete review-gate parameter list is in [the technical operations reference, section 4.8.8](technical_operations_reference.md#488-reviewreview_gate).
 
 The Review Form Editor is the primary validation method for administrators. A
 terminal user can validate a stored draft/version without changing SQLite:

@@ -1,6 +1,6 @@
-import { createModel } from './model.js?v=controller-modularization-7a';
-import { createView } from './view.js?v=controller-modularization-7a';
-import { createApi } from './api.js?v=controller-modularization-7a';
+import { createModel } from './model.js?v=pipeline-cleanup-1';
+import { createView } from './view.js?v=pipeline-cleanup-1';
+import { createApi } from './api.js?v=pipeline-cleanup-1';
 (function () {
     "use strict";
 
@@ -36,6 +36,7 @@ import { createApi } from './api.js?v=controller-modularization-7a';
     
     let submissionId = null;
     let submissionSignature = null;
+    let receiptPurged = false;
     const receiptStorageKey = "docflow-upload-receipt";
     const identitiesStorageKey = "docflow-upload-identities";
     let submissionIdentities = {};
@@ -58,6 +59,14 @@ import { createApi } from './api.js?v=controller-modularization-7a';
     async function resolveAcceptance() {
         if (!submissionId) return false;
         const receipt = await api.getReceipt(submissionId);
+        if (receipt.status === "purged") {
+            delete submissionIdentities[submissionSignature];
+            sessionStorage.setItem(identitiesStorageKey, JSON.stringify(submissionIdentities));
+            sessionStorage.removeItem(receiptStorageKey);
+            submissionId = null;
+            submissionSignature = null;
+            receiptPurged = true;
+        }
         if (receipt.status === "accepted") {
             delete submissionIdentities[submissionSignature];
             sessionStorage.setItem(identitiesStorageKey, JSON.stringify(submissionIdentities));
@@ -136,6 +145,7 @@ import { createApi } from './api.js?v=controller-modularization-7a';
         validFiles.forEach((entry) => formData.append("files", entry.file, entry.file.name));
 
         uploading = true;
+        receiptPurged = false;
         startButton.disabled = true;
         startButton.classList.add("loading");
         cancelUploadButton.classList.remove("hidden");
@@ -169,7 +179,9 @@ import { createApi } from './api.js?v=controller-modularization-7a';
             uploadProgressRegion.setAttribute("aria-busy", "false");
             const cancelled = error.name === "AbortError";
             const busy = error.status === 429;
-            uploadStatus.textContent = cancelled
+            uploadStatus.textContent = receiptPurged
+                ? "Previous upload history was cleaned up. Start a new upload if you want to process these files again."
+                : cancelled
                 ? "Transfer stopped. Acceptance is unconfirmed; retry the same files and pipeline safely."
                 : busy
                     ? "Upload capacity is temporarily full."
@@ -253,7 +265,9 @@ import { createApi } from './api.js?v=controller-modularization-7a';
     if (submissionId) {
         uploadStatus.textContent = "Checking previous upload acceptance...";
         resolveAcceptance().then(accepted => {
-            if (!accepted) uploadStatus.textContent = "Previous upload unconfirmed. Select the same files and pipeline to retry safely.";
+            if (!accepted) uploadStatus.textContent = receiptPurged
+                ? "Previous upload history was cleaned up. Start a new upload if you want to process these files again."
+                : "Previous upload unconfirmed. Select the same files and pipeline to retry safely.";
         }).catch(() => {
             uploadStatus.textContent = "Unable to check previous upload. Select the same files and pipeline to retry safely.";
         });

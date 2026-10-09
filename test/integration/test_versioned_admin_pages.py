@@ -26,7 +26,7 @@ def test_admin_pages_render_versioned_workspace_contracts(monkeypatch):
     assert 'id="pipeline-publish-dialog-confirm"' in pipelines.text
     assert 'versioned_admin_view_models.js' in pipelines.text
     assert 'type="module"' in pipelines.text
-    assert 'pipeline-config/index.js?v=manual-split-1' in pipelines.text
+    assert 'pipeline-config/index.js?v=pipeline-lifecycle-2' in pipelines.text
 
 
 def test_operator_is_redirected_from_versioned_admin_pages(monkeypatch):

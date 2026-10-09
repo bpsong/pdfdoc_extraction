@@ -39,6 +39,9 @@ A sophisticated PDF document processing system that leverages AI-powered extract
   custom-task approvals, and secret aliases—not new workflow definitions
 - **Extensible Framework**: Easy to add new processing steps
 - **SQLite-backed Workflow State**: Batches, documents, task runs, extracted fields, review items, artifacts, settings, and audit history are persisted in SQLite
+- **Pipeline Retention Controls**: Archive retired pipelines separately from
+  previewed cleanup of finished processing history; protect active work and
+  retain definitions, audit events, and physical files
 
 ### Flexible Data Storage
 - **CSV Export**: Structured data in spreadsheet format
@@ -279,6 +282,12 @@ SQLite is the primary workflow-state store. The application records:
 
 Workflow state is persisted in SQLite. `/api/files` and `/api/status/{file_id}` remain as legacy response shapes backed by SQLite; filesystem status files are not used. Use `/app/*` pages for browser workflows.
 
+Admins can remove eligible whole-batch history through **Clean up processing
+data** on the Pipeline page. Deleted pages become reusable; immediate database
+file shrinkage is not promised and compaction is separate maintenance. See the
+[pipeline retention guide](docs/pipeline_retention_admin_guide.md) for archive
+prerequisites, protected work, retained files, and recovery limits.
+
 ## Usage
 
 ### Web Interface
@@ -359,6 +368,8 @@ The `admin` account has full access. The `operator` account cannot access admini
   durable processing jobs; multipart file data is streamed through disk-backed
   staging under configured file-count, file-size, request-size, and concurrency limits
 - `GET /api/batches`: List ingestion batches
+- `GET /api/upload-submissions/{submission_id}`: Resolve an upload receipt;
+  cleaned history returns `status: purged` and requires a deliberate new upload
 - `GET /api/batches/{batch_id}`: Get batch details
 - `GET /api/batches/{batch_id}/documents`: List batch documents
 - `GET /api/batches/{batch_id}/split-results`: Show split source/child document relationships
@@ -380,6 +391,15 @@ The `admin` account has full access. The `operator` account cannot access admini
 - `/api/admin/pipeline-templates`: Create/list named templates; per-template
   endpoints manage metadata, clone, draft save/validate/import/export/diff,
   immutable publish, and version history
+- `GET /api/admin/pipeline-templates/{template_id}/archive-preview`: Explain
+  archive impact and watch-folder blockers
+- `POST /api/admin/pipeline-templates/{template_id}/archive`: Archive an inactive
+  pipeline after name confirmation; definitions and history remain
+- `POST /api/admin/pipeline-templates/{template_id}/cleanup-preview`: Preview
+  eligible whole batches before an exclusive UTC `cutoff_date`
+- `POST /api/admin/pipeline-templates/{template_id}/cleanup`: Confirm a current
+  preview and exact pipeline name to delete eligible processing history;
+  [request/response details](docs/pipeline_retention_admin_guide.md#api-contract)
 - `/api/admin/review-schemas`: Create/list review forms; per-template endpoints
   manage metadata, draft save/validate/import/export, immutable publish,
   versions, and dependency usage
@@ -437,11 +457,13 @@ artifacts; they are not source folders to commit.
 
 ## Documentation
 
-- [User guide](docs/user_guide.md): setup, operator workflows, and deployment configuration
+- [User guide](docs/user_guide.md): app-based instructions for operators and administrators
+- [Technical operations reference](docs/technical_operations_reference.md): IT setup, maintenance, configuration, and task parameters
 - [Architecture reference](docs/design_architecture.md): process boundaries, state, persistence, and safe-change guidance
 - [Config-check troubleshooting](docs/config_check_troubleshooting.md): CLI modes, findings, and recovery guidance
 - [Config-check CLI reference](tools/config_check/README.md) and [finding codes](tools/config_check/examples/ERROR_CODES.md)
 - [Watch-folder administration](docs/watch_folder_admin_reference.md): binding lifecycle, revisions, and health checks
+- [Pipeline retention administration](docs/pipeline_retention_admin_guide.md): archive, cleanup eligibility, API contracts, retained files, SQLite space, and upgrade requirements
 - [Review-form administration](docs/review_schema_admin_guide.md): schema authoring and versioning
 - [LiteParse extraction](docs/liteparse_extract_task.md): local setup, generic fields, review evidence and runtime limits
 - [LiteParse pipeline validation](docs/liteparse_pipeline_validation.md): visual 3+3 invoice results, corrections and verification

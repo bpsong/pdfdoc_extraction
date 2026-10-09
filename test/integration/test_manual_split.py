@@ -431,13 +431,13 @@ def test_version7_migration_preserves_reviews_as_extraction(manual_case):
     with connect(config) as conn:
         conn.execute("DROP TABLE manual_split_decisions")
         conn.execute("ALTER TABLE review_items DROP COLUMN review_kind")
-        conn.execute("DELETE FROM schema_migrations WHERE version=8")
+        conn.execute("DELETE FROM schema_migrations WHERE version>=8")
         conn.execute("INSERT INTO schema_migrations(version,applied_at) VALUES (7,'synthetic')")
     initialize_database(config)
     initialize_database(config)
     with connect(config) as conn:
         assert ReviewRepository(conn).get(result["review_item_id"])["review_kind"] == "extraction"
-        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 8
+        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 9
         assert conn.execute("SELECT COUNT(*) FROM manual_split_decisions").fetchone()[0] == 0
 
 

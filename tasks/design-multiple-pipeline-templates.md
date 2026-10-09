@@ -11,6 +11,7 @@
 | Prerequisite | Current SQLite-backed batch, document, task-run, review, split, and audit model |
 | Source direction | [Implemented Direction: Multiple Pipeline Templates](future-multi-document-routing.md) |
 | Deferred extension | [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md) |
+| Retention extension | [Pipeline archive and processing-data cleanup](../docs/pipeline_retention_admin_guide.md), implemented with schema 9 |
 
 ## Summary
 
@@ -595,6 +596,9 @@ Admins edit template metadata independently from the draft. Draft changes use
 optimistic concurrency. Saving a draft does not affect existing or new
 ingestion because only published versions are selectable.
 
+Metadata and availability saves update only the saved fields in the editor;
+they do not reload the draft or discard unsaved task edits and task selection.
+
 ### Validate
 
 Validation operates on the submitted draft revision and returns structured,
@@ -640,6 +644,25 @@ coordinator's next reconciliation. Pinned documents continue.
 Archiving requires an inactive template and no enabled bindings. Archived
 templates and versions remain queryable to authorized administrators and
 remain loadable for pinned execution, review resume, and audit.
+
+Archiving is terminal and uses a dedicated impact/confirmation dialog. It does
+not remove definitions, versions, drafts, history, audit events, or physical
+files. The availability dropdown selects active/inactive states; archive is a
+separate action. Archived templates are hidden from the default admin list,
+available through **Show archived**, and read-only, including draft reset.
+
+### Processing-data retention extension
+
+**Clean up processing data** is independent of archive and available in any
+pipeline lifecycle state. Schema 9 supports actor-bound 15-minute previews,
+exclusive UTC activity cutoffs, whole-batch eligibility, and atomic revalidation
+before deletion. Active/resumable work, pending reviews/live locks, mixed
+assignments, and cross-batch children are protected. Definitions, immutable
+versions, original audits, bindings, and physical files remain; upload receipts
+become minimal tombstones. Reports and application file links lose deleted
+history. Permanent pipeline deletion and compaction remain deferred. See the
+[retention reference](../docs/pipeline_retention_admin_guide.md) for the full
+contract, table counts, exclusions, and storage/recovery consequences.
 
 ## Ingestion design
 
@@ -919,11 +942,15 @@ cookie-authenticated mutations.
 | `GET /api/admin/review-schemas/{schema_template_id}/draft/export` | Export the current draft as portable YAML or JSON |
 | `GET /api/admin/review-schemas/{schema_template_id}/versions/{schema_version_id}/export` | Export redacted portable YAML or JSON |
 | `GET /api/admin/review-schemas/{schema_template_id}/usage` | List published pipeline dependencies |
-| `GET /api/admin/pipeline-templates` | List templates with latest version and draft summary |
+| `GET /api/admin/pipeline-templates` | List templates with latest version and draft summary; archived hidden unless `include_archived=true` |
 | `POST /api/admin/pipeline-templates` | Create inactive template and empty draft |
 | `GET /api/admin/pipeline-templates/schema-versions` | List eligible review-form versions for pipeline editing |
 | `GET /api/admin/pipeline-templates/{template_id}` | Get metadata, draft summary, versions, and bindings |
 | `PATCH /api/admin/pipeline-templates/{template_id}` | Update metadata or perform a valid lifecycle transition |
+| `GET /api/admin/pipeline-templates/{template_id}/archive-preview` | Explain retained history and watch-folder blockers |
+| `POST /api/admin/pipeline-templates/{template_id}/archive` | Confirm pipeline name and archive under lifecycle guards |
+| `POST /api/admin/pipeline-templates/{template_id}/cleanup-preview` | Preview eligible whole-batch processing history before a UTC date |
+| `POST /api/admin/pipeline-templates/{template_id}/cleanup` | Confirm exact name and current preview to atomically delete eligible history |
 | `POST /api/admin/pipeline-templates/{template_id}/clone` | Clone latest published definition into a new template |
 | `GET /api/admin/pipeline-templates/{template_id}/draft` | Read redacted draft and revision |
 | `PUT /api/admin/pipeline-templates/{template_id}/draft` | Save draft using `expected_revision` |
@@ -938,10 +965,14 @@ cookie-authenticated mutations.
 | `GET /api/admin/watch-folder-bindings` | List bindings and validation state |
 | `POST /api/admin/watch-folder-bindings` | Create exact-version binding |
 | `PATCH /api/admin/watch-folder-bindings/{binding_id}` | Update path, version, or enabled state |
-| `DELETE /api/admin/watch-folder-bindings/{binding_id}` | Delete only a disabled, never-used binding |
+| `DELETE /api/admin/watch-folder-bindings/{binding_id}` | Delete only an unreferenced binding |
 
 Bindings referenced by batches cannot be deleted; they remain disabled
 historical records. The delete endpoint returns `409` in that case.
+
+Processing-data cleanup may remove batch references, but never invokes binding
+deletion. Archive/cleanup request and response payloads are specified in the
+[retention API contract](../docs/pipeline_retention_admin_guide.md#api-contract).
 
 Published schema versions referenced by
 `pipeline_version_schema_dependencies` cannot be deleted. The API provides no
@@ -1036,7 +1067,9 @@ JavaScript controller. It provides:
 - template list with lifecycle and latest-version badges;
 - create and clone actions;
 - metadata and operator-instruction editor;
-- active/inactive/archive controls with prerequisite explanations;
+- active/inactive availability and separate archive impact/confirmation controls;
+- archived-list filter, read-only archived drafts, and separate processing-data
+  cleanup preview/confirmation/results;
 - existing ordered task editor scoped to the selected template draft;
 - visible draft revision and stale-save conflict recovery;
 - validation findings and redacted YAML/JSON preview;
@@ -1049,6 +1082,12 @@ JavaScript controller. It provides:
 Changing the selected template reloads its server-side draft. Unsaved changes
 must trigger the existing-style navigation confirmation. The UI never stores
 draft state as authoritative browser storage.
+
+Overlapping loads stage one complete template/draft/base-version snapshot and
+discard stale responses after a newer selection. Mutation controls stay disabled
+while loading. A successful archive refreshes the complete archived list without
+reloading the selected draft; a list-refresh failure does not turn the completed
+archive into a failed mutation.
 
 ### Upload page
 

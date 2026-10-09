@@ -21,6 +21,7 @@ REQUIRED_RUNTIME_TABLES = frozenset(
         "documents",
         "pipeline_versions",
         "processing_jobs",
+        "pipeline_cleanup_previews",
         "review_schema_versions",
         "manual_split_decisions",
         "runtime_component_health",

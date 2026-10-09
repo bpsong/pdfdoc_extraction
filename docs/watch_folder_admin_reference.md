@@ -13,6 +13,23 @@ reusable through a new binding identity; historical batch references remain
 intact. Only unreferenced settings may be permanently deleted. Lifecycle
 actions do not delete source directories or PDFs.
 
+## Pipeline archiving and history cleanup
+
+Before archiving a pipeline, set it inactive and resolve every enabled binding
+pointing to it: pause, reassign, unbind, or retire the binding. The archive dialog
+lists linked folders and blocks confirmation while an enabled binding remains.
+Paused bindings retain their exact assignment and reserved path. Archiving does
+not stop already pinned jobs or reviews, and does not remove watch-folder
+configuration, directories, or PDFs. Archived pipelines cannot be restored.
+
+**Clean up processing data** is a separate action on the Pipeline page. It can
+remove eligible whole batches from binding activity history and Reports while
+retaining binding settings, health observations, and original audit events.
+Removing all batch references may make a binding eligible for the
+existing separate settings-delete action; cleanup never invokes that action.
+See the [pipeline retention guide](pipeline_retention_admin_guide.md) for cutoff,
+review protection, storage, and confirmation rules.
+
 ## Persistence and revisions
 
 Schema version 7 rebuilds binding constraints to allow nullable assignments and

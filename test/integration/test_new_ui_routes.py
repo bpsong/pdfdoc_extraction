@@ -446,7 +446,7 @@ def test_upload_processing_and_split_pages_include_task_16_assets(monkeypatch) -
 
     assert upload.status_code == 200
     assert 'id="upload-drop-zone"' in upload.text
-    assert "/static/js/upload-process/index.js?v=controller-modularization-7a" in upload.text
+    assert "/static/js/upload-process/index.js?v=pipeline-cleanup-1" in upload.text
     assert processing.status_code == 200
     assert 'id="processing-workspace"' in processing.text
     assert "/static/js/processing-overview/index.js?v=frontend-hardening-8" in processing.text
@@ -543,7 +543,7 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 6
     assert 'type="module"' in response.text
-    assert "/static/js/pipeline-config/index.js?v=manual-split-1" in response.text
+    assert "/static/js/pipeline-config/index.js?v=pipeline-lifecycle-2" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:

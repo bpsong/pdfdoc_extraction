@@ -7,13 +7,14 @@ import {
     summaryText,
     taskKind,
     withoutHousekeeping,
-} from "./pipeline-config/model.js?v=manual-split-1";
-import { deleteParam, getParam, setParam } from "./pipeline-config/parameters.js?v=manual-split-1";
-import { createPipelineApi } from "./pipeline-config/api.js?v=manual-split-1";
-import { buildPipelineYamlPreview } from "./pipeline-config/preview.js?v=manual-split-1";
-import { createPipelineWorkspaceView } from "./pipeline-config/workspace-view.js?v=manual-split-1";
-import { createPipelineTaskEditors } from "./pipeline-config/task-editors.js?v=manual-split-1";
-import { createPipelineResourceBrowser } from "./pipeline-config/resource-browser.js?v=manual-split-1";
+} from "./pipeline-config/model.js?v=pipeline-lifecycle-2";
+import { deleteParam, getParam, setParam } from "./pipeline-config/parameters.js?v=pipeline-lifecycle-2";
+import { createPipelineApi } from "./pipeline-config/api.js?v=pipeline-lifecycle-2";
+import { buildPipelineYamlPreview } from "./pipeline-config/preview.js?v=pipeline-lifecycle-2";
+import { createPipelineWorkspaceView } from "./pipeline-config/workspace-view.js?v=pipeline-lifecycle-2";
+import { createPipelineTaskEditors } from "./pipeline-config/task-editors.js?v=pipeline-lifecycle-2";
+import { createPipelineResourceBrowser } from "./pipeline-config/resource-browser.js?v=pipeline-lifecycle-2";
+import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=pipeline-lifecycle-2";
 
 (function () {
     "use strict";
@@ -51,7 +52,9 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
         versions: [],
         schemaVersions: [],
         templateDialogMode: "create",
+        loading: false,
     };
+    let loadGeneration = 0;
 
     const activeList = document.getElementById("pipeline-active-list");
     const draftList = document.getElementById("pipeline-draft-list");
@@ -70,6 +73,7 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
     const validateButton = document.getElementById("pipeline-validate-button");
     const publishHelp = document.getElementById("pipeline-publish-help");
     const templateSelect = document.getElementById("pipeline-template-select");
+    const showArchived = document.getElementById("pipeline-show-archived");
     const templateName = document.getElementById("pipeline-template-name");
     const templateDescription = document.getElementById("pipeline-template-description");
     const templateDocumentType = document.getElementById("pipeline-template-document-type");
@@ -155,19 +159,46 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
             .replace(/'/g, "&#39;");
     }
 
-    function templateMetadataPayload(extra = {}) {
-        return {
-            name: templateName.value.trim(),
-            description: templateDescription.value.trim(),
-            document_type: templateDocumentType.value.trim() || null,
-            ...extra,
-        };
+    async function saveTemplateMetadata(changes, message = "Pipeline details saved") {
+        const templateId = state.templateId;
+        const result = await api.updateTemplate(templateId, changes);
+        // Apply only the saved fields so responses for other edits cannot undo them.
+        const saved = Object.fromEntries(
+            Object.keys(changes).map((key) => [key, result.template[key]]),
+        );
+        state.templates = state.templates.map((template) => (
+            template.id === templateId ? { ...template, ...saved } : template
+        ));
+        const template = state.templates.find((item) => item.id === templateId);
+        const option = Array.from(templateSelect.options).find((item) => item.value === templateId);
+        if (template && option) {
+            option.textContent = `${template.name} · ${template.template_key} · ${template.status}`;
+        }
+        if (state.templateId === templateId) {
+            state.template = { ...state.template, ...saved };
+            if ("status" in saved) {
+                templateStatus.value = saved.status;
+                syncTemplateLifecycleControls();
+            }
+        }
+        window.DocFlow.showToast(message, "success");
+    }
+
+    function renderTemplateOptions() {
+        templateSelect.innerHTML = '<option value="">Select a template</option>' + state.templates.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === state.templateId ? "selected" : ""}>${escapeHtml(item.name)} · ${escapeHtml(item.template_key)} · ${escapeHtml(item.status)}</option>`).join("");
     }
 
     function syncTemplateLifecycleControls() {
         const status = state.template?.status || "inactive";
         const hasPublishedVersion = state.versions.length > 0;
-        const canActivate = Boolean(state.templateId) && hasPublishedVersion && status === "inactive";
+        const selected = state.template?.id === state.templateId && !state.loading;
+        const canActivate = selected && hasPublishedVersion && status === "inactive";
+        const archived = status === "archived";
+        document.getElementById("pipeline-archive-button").disabled = !selected || archived;
+        document.getElementById("pipeline-cleanup-button").disabled = !selected;
+        templateStatus.disabled = !selected || archived;
+        templateClone.disabled = !selected || !hasPublishedVersion;
+        [templateName, templateDescription, templateDocumentType].forEach(input => { input.disabled = !selected || archived; });
 
         templateActivate.disabled = !canActivate;
         if (status === "active") {
@@ -185,9 +216,10 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
         }
     }
 
-    async function loadBindings() {
+    async function loadBindings(templateId, generation) {
         const payload = await api.listWatchFolderBindings();
-        const count = (payload.bindings || []).filter(item => item.pipeline_template_id === state.templateId && !item.retired_at).length;
+        if (generation !== loadGeneration || templateId !== state.templateId) return;
+        const count = (payload.bindings || []).filter(item => item.pipeline_template_id === templateId && !item.retired_at).length;
         document.getElementById("pipeline-watch-summary").textContent = `${count} watch folders use this pipeline. Manage watch folders →`;
     }
 
@@ -536,6 +568,22 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
         workspaceView.render(state);
         renderEditorWithFocusRestore();
         yamlPreview.textContent = buildPipelineYamlPreview(state.draft);
+        syncTemplateLifecycleControls();
+        const reset = document.getElementById("pipeline-reset-button");
+        const unavailable = state.loading || !state.template || state.template.id !== state.templateId;
+        reset.disabled = unavailable || !state.baseVersionId || state.template.status === "archived";
+        exportButton.disabled = unavailable;
+        document.getElementById("pipeline-diff-button").disabled = unavailable || (state.template.status === "archived" && state.dirty);
+        if (state.loading || !state.template || state.template.id !== state.templateId || state.template.status === "archived") {
+            [saveDraftButton, validateButton, publishButton, importButton, addTaskSelect, document.getElementById("pipeline-add-task-button")].forEach(button => { button.disabled = true; });
+            editorBody.querySelectorAll("input, select, textarea, button").forEach(control => { control.disabled = true; });
+            draftList.querySelectorAll("[data-move-step], [data-toggle-step], [data-delete-step]").forEach(control => { control.disabled = true; });
+            publishHelp.textContent = state.loading ? "Loading selected pipeline…" : state.template?.status === "archived" ? "Archived pipeline: retained for reference. Processing data can be cleaned up separately." : "Select or create a pipeline.";
+        } else {
+            importButton.disabled = false;
+            addTaskSelect.disabled = false;
+            document.getElementById("pipeline-add-task-button").disabled = false;
+        }
     }
 
     function markDirty() {
@@ -585,61 +633,83 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
     }
 
     async function loadPipelineConfig() {
-        const [listPayload, catalog] = await Promise.all([
-            api.listTemplates(),
-            api.getTaskCatalog(),
-        ]);
-        state.templates = listPayload.templates || [];
-        if (!state.templateId || !state.templates.some((item) => item.id === state.templateId)) {
-            state.templateId = state.templates.length ? state.templates[0].id : "";
-        }
-        templateSelect.innerHTML = '<option value="">Select a template</option>' + state.templates.map((item) => `<option value="${escapeHtml(item.id)}" ${item.id === state.templateId ? "selected" : ""}>${escapeHtml(item.name)} · ${escapeHtml(item.template_key)} · ${escapeHtml(item.status)}</option>`).join("");
-        state.catalog = catalog.tasks || [];
-        if (!state.templateId) {
-            state.template = null;
-            state.active = { steps: [] };
-            state.draft = { steps: [] };
-            state.versions = [];
-            templateStatus.value = "inactive";
-            templateStatus.disabled = true;
-            templateClone.disabled = true;
-            templateActivate.disabled = true;
-            templateActivate.textContent = "Activate for uploads";
-            render();
-            return;
-        }
-        const payload = await api.getTemplate(state.templateId);
-        state.template = payload.template;
-        state.revision = payload.draft.revision;
-        state.baseVersionId = payload.draft.base_version_id;
-        state.versions = payload.versions || [];
-        state.schemaVersions = payload.schema_versions || [];
-        state.draft = withoutHousekeeping(definitionToModel(payload.draft.definition));
-        state.active = { steps: [] };
-        if (state.baseVersionId) {
-            const base = await api.getVersion(state.templateId, state.baseVersionId);
-            state.active = withoutHousekeeping(definitionToModel(base.version.definition));
-        }
-        templateName.value = state.template.name || "";
-        templateDescription.value = state.template.description || "";
-        templateDocumentType.value = state.template.document_type || "";
-        templateStatus.value = state.template.status || "inactive";
-        templateStatus.disabled = false;
-        templateClone.disabled = !state.versions.length;
-        syncTemplateLifecycleControls();
-        revisionLabel.textContent = `Draft revision ${state.revision}`;
-        baseVersionLabel.textContent = state.baseVersionId ? `Base version ${state.versions.find((item) => item.id === state.baseVersionId)?.version_number || "—"}` : "No published base";
-        versionHistoryLabel.textContent = state.versions.length ? `${state.versions.length} immutable version(s); latest v${state.versions[0].version_number}` : "No published versions";
-        exportButton.disabled = false;
-        state.selectedIndex = stepsOf(state.draft).length ? 0 : -1;
-        state.validation = null;
-        state.dirty = false;
-        state.paramsInvalid = false;
-        state.providerModes = {};
-        state.providerModeDrafts = {};
-        diffPreview.textContent = "No diff loaded";
+        const generation = ++loadGeneration;
+        const requestedId = state.templateId;
+        state.loading = true;
         render();
-        await loadBindings();
+        try {
+            const [listPayload, catalog] = await Promise.all([
+                api.listTemplates(showArchived.checked),
+                api.getTaskCatalog(),
+            ]);
+            if (generation !== loadGeneration) return;
+            const templates = listPayload.templates || [];
+            const templateId = templates.some(item => item.id === requestedId)
+                ? requestedId : templates[0]?.id || "";
+            if (!templateId) {
+                state.templateId = "";
+                state.templates = templates;
+                state.catalog = catalog.tasks || [];
+                renderTemplateOptions();
+                state.template = null;
+                state.active = { steps: [] };
+                state.draft = { steps: [] };
+                state.versions = [];
+                state.schemaVersions = [];
+                state.baseVersionId = null;
+                state.validation = null;
+                state.dirty = false;
+                [templateName, templateDescription, templateDocumentType].forEach(input => { input.value = ""; });
+                revisionLabel.textContent = "Draft revision —";
+                baseVersionLabel.textContent = "Base version —";
+                versionHistoryLabel.textContent = "No published versions";
+                templateStatus.value = "inactive";
+                return;
+            }
+            const payload = await api.getTemplate(templateId);
+            if (generation !== loadGeneration) return;
+            let activeModel = { steps: [] };
+            if (payload.draft.base_version_id) {
+                const base = await api.getVersion(templateId, payload.draft.base_version_id);
+                if (generation !== loadGeneration) return;
+                activeModel = withoutHousekeeping(definitionToModel(base.version.definition));
+            }
+            // Commit one complete snapshot so delayed reads cannot mix pipelines.
+            state.templateId = templateId;
+            state.templates = templates;
+            state.catalog = catalog.tasks || [];
+            renderTemplateOptions();
+            state.template = payload.template;
+            state.revision = payload.draft.revision;
+            state.baseVersionId = payload.draft.base_version_id;
+            state.versions = payload.versions || [];
+            state.schemaVersions = payload.schema_versions || [];
+            state.draft = withoutHousekeeping(definitionToModel(payload.draft.definition));
+            state.active = activeModel;
+            templateName.value = state.template.name || "";
+            templateDescription.value = state.template.description || "";
+            templateDocumentType.value = state.template.document_type || "";
+            templateStatus.value = state.template.status || "inactive";
+            revisionLabel.textContent = `Draft revision ${state.revision}`;
+            baseVersionLabel.textContent = state.baseVersionId ? `Base version ${state.versions.find((item) => item.id === state.baseVersionId)?.version_number || "—"}` : "No published base";
+            versionHistoryLabel.textContent = state.versions.length ? `${state.versions.length} immutable version(s); latest v${state.versions[0].version_number}` : "No published versions";
+            state.selectedIndex = stepsOf(state.draft).length ? 0 : -1;
+            state.validation = null;
+            state.dirty = false;
+            state.paramsInvalid = false;
+            state.providerModes = {};
+            state.providerModeDrafts = {};
+            diffPreview.textContent = "No diff loaded";
+            render();
+            await loadBindings(templateId, generation);
+        } catch (error) {
+            if (generation === loadGeneration) throw error;
+        } finally {
+            if (generation === loadGeneration) {
+                state.loading = false;
+                render();
+            }
+        }
     }
 
     async function saveDraft() {
@@ -1497,6 +1567,37 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
             publishDialogConfirm.disabled = false;
         }
     });
+    createPipelineLifecycle({
+        api, escapeHtml,
+        getTemplate: () => !state.loading && state.template?.id === state.templateId ? state.template : null,
+        hasUnsavedChanges: () => state.dirty,
+        onArchived: async (template) => {
+            state.template = template;
+            state.templates = state.templates.map(item => item.id === template.id ? template : item);
+            showArchived.checked = true;
+            templateStatus.value = "archived";
+            templateName.value = template.name || "";
+            templateDescription.value = template.description || "";
+            templateDocumentType.value = template.document_type || "";
+            const option = Array.from(templateSelect.options).find(item => item.value === template.id);
+            if (option) option.textContent = `${template.name} · ${template.template_key} · archived`;
+            render();
+            try {
+                const list = await api.listTemplates(true);
+                state.templates = list.templates || [];
+                renderTemplateOptions();
+            } catch (error) {
+                window.DocFlow.showToast("Pipeline archived. The list could not refresh; use Refresh to load the remaining archived pipelines.", "warning");
+            }
+        },
+    });
+    showArchived.addEventListener("change", () => {
+        if (state.dirty && !window.confirm("Discard unsaved draft changes and reload the pipeline list?")) {
+            showArchived.checked = !showArchived.checked;
+            return;
+        }
+        loadPipelineConfig().catch(error => window.DocFlow.showToast(error.message, "error"));
+    });
     templateSelect.addEventListener("change", () => {
         if (state.dirty && !window.confirm("Discard unsaved draft changes and switch templates?")) {
             templateSelect.value = state.templateId;
@@ -1552,14 +1653,16 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
     });
     templateStatus.addEventListener("change", async () => {
         if (!state.templateId) return;
-        try {
-            await api.updateTemplate(
-                state.templateId,
-                templateMetadataPayload({ status: templateStatus.value }),
-            );
-            await loadPipelineConfig();
-        } catch (error) {
+        const templateId = state.templateId;
+        if (templateStatus.value === "archived") {
             templateStatus.value = state.template.status;
+            window.DocFlow.showToast("Use Archive pipeline to review and confirm archiving.", "warning");
+            return;
+        }
+        try {
+            await saveTemplateMetadata({ status: templateStatus.value });
+        } catch (error) {
+            if (state.templateId === templateId && state.template) templateStatus.value = state.template.status;
             window.DocFlow.showToast(error.message, "error");
         }
     });
@@ -1567,29 +1670,25 @@ import { createPipelineResourceBrowser } from "./pipeline-config/resource-browse
         if (!state.templateId || templateActivate.disabled) return;
         try {
             templateActivate.disabled = true;
-            await api.updateTemplate(
-                state.templateId,
-                templateMetadataPayload({ status: "active" }),
-            );
-            window.DocFlow.showToast(
+            await saveTemplateMetadata(
+                { status: "active" },
                 "Pipeline activated. It is now available on Upload & Process.",
-                "success",
             );
-            await loadPipelineConfig();
         } catch (error) {
             window.DocFlow.showToast(error.message, "error");
             syncTemplateLifecycleControls();
         }
     });
-    [templateName, templateDescription, templateDocumentType].forEach((input) => {
+    [
+        [templateName, "name"],
+        [templateDescription, "description"],
+        [templateDocumentType, "document_type"],
+    ].forEach(([input, field]) => {
         input.addEventListener("change", async () => {
             if (!state.templateId) return;
             try {
-                await api.updateTemplate(
-                    state.templateId,
-                    templateMetadataPayload(),
-                );
-                await loadPipelineConfig();
+                const value = input.value.trim();
+                await saveTemplateMetadata({ [field]: field === "document_type" ? value || null : value });
             } catch (error) {
                 window.DocFlow.showToast(error.message, "error");
             }

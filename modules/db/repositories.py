@@ -84,6 +84,138 @@ class UploadSubmissionRepository:
             "INSERT INTO upload_submissions VALUES (?, ?, ?, ?, ?)",
             (username, submission_id, fingerprint, json_dumps(response), utc_now()),
         )
+
+
+class ProcessingHistoryRepository:
+    """Query and remove explicitly selected whole-batch processing history.
+
+    Callers own the transaction and eligibility policy. The temporary selection
+    avoids SQLite parameter limits for large historical batches.
+    """
+
+    DOCUMENT_SCOPE = "document_id IN (SELECT id FROM documents WHERE batch_id IN (SELECT id FROM cleanup_batch_selection))"
+    BATCH_SCOPE = "batch_id IN (SELECT id FROM cleanup_batch_selection)"
+    SCOPES = {
+        "review_locks": "review_item_id IN (SELECT id FROM review_items WHERE batch_id IN (SELECT id FROM cleanup_batch_selection))",
+        "manual_split_decisions": DOCUMENT_SCOPE,
+        "extracted_fields": DOCUMENT_SCOPE,
+        "extraction_results": DOCUMENT_SCOPE,
+        "document_files": DOCUMENT_SCOPE,
+        "review_items": BATCH_SCOPE,
+        "task_runs": BATCH_SCOPE,
+        "processing_jobs": BATCH_SCOPE,
+        "documents": BATCH_SCOPE,
+        "batches": "id IN (SELECT id FROM cleanup_batch_selection)",
+        "upload_submissions": "json_extract(response_json, '$.batch.id') IN (SELECT id FROM cleanup_batch_selection)",
+    }
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def candidate_rows(self, template_id: str) -> dict[str, list[dict[str, Any]]]:
+        """Load processing state without extraction contents or file paths."""
+        queries = {
+            "batches": "SELECT id, status, updated_at FROM batches WHERE pipeline_template_id = ?",
+            "documents": "SELECT id, batch_id, parent_document_id, pipeline_template_id, status, updated_at FROM documents WHERE batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "processing_jobs": "SELECT id, batch_id, status, updated_at FROM processing_jobs WHERE batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "task_runs": "SELECT id, batch_id, status, started_at, ended_at FROM task_runs WHERE batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "review_items": "SELECT id, batch_id, status, created_at, updated_at, completed_at FROM review_items WHERE batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "artifact_activity": "SELECT d.batch_id, f.created_at FROM document_files f JOIN documents d ON d.id=f.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "extraction_activity": "SELECT d.batch_id, e.created_at FROM extraction_results e JOIN documents d ON d.id=e.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "field_activity": "SELECT d.batch_id, e.updated_at FROM extracted_fields e JOIN documents d ON d.id=e.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "manual_split_decisions": "SELECT m.id, d.batch_id, m.phase, m.updated_at FROM manual_split_decisions m JOIN documents d ON d.id = m.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "review_locks": "SELECT l.id, r.batch_id, l.expires_at FROM review_locks l JOIN review_items r ON r.id = l.review_item_id WHERE r.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "external_children": "SELECT DISTINCT p.batch_id FROM documents c JOIN documents p ON p.id = c.parent_document_id WHERE c.batch_id != p.batch_id AND p.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "external_parents": "SELECT DISTINCT c.batch_id FROM documents c JOIN documents p ON p.id = c.parent_document_id WHERE c.batch_id != p.batch_id AND c.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+        }
+        return {
+            table: [dict(row) for row in self.conn.execute(sql, (template_id,))]
+            for table, sql in queries.items()
+        }
+
+    def select_batches(self, batch_ids: list[str]) -> None:
+        """Replace the connection-local selection; never persists customer data."""
+        self.conn.execute("CREATE TEMP TABLE IF NOT EXISTS cleanup_batch_selection (id TEXT PRIMARY KEY)")
+        self.conn.execute("DELETE FROM cleanup_batch_selection")
+        self.conn.executemany(
+            "INSERT INTO cleanup_batch_selection(id) VALUES (?)",
+            ((batch_id,) for batch_id in batch_ids),
+        )
+
+    def selected_summary(self) -> tuple[dict[str, int], str]:
+        """Return counts and a streamed content digest for the exact selection."""
+        digest = hashlib.sha256()
+        counts: dict[str, int] = {}
+        for table, scope in self.SCOPES.items():
+            counts[table] = 0
+            order = "username, submission_id" if table == "upload_submissions" else "id"
+            for row in self.conn.execute(f"SELECT * FROM {table} WHERE {scope} ORDER BY {order}"):
+                counts[table] += 1
+                digest.update(json_dumps([table, dict(row)]).encode("utf-8"))
+        return counts, digest.hexdigest()
+
+    def delete_selected_table(self, table: str) -> int:
+        """Delete one allowed table in the service's dependency order."""
+        if table not in self.SCOPES or table == "upload_submissions":
+            raise ValueError("Unsupported cleanup table.")
+        return self.conn.execute(
+            f"DELETE FROM {table} WHERE {self.SCOPES[table]}"
+        ).rowcount
+
+    def tombstone_selected_receipts(self) -> int:
+        """Keep idempotency keys while removing stale response payloads."""
+        return self.conn.execute(
+            f"UPDATE upload_submissions SET response_json = ? WHERE {self.SCOPES['upload_submissions']}",
+            (json_dumps({"purged": True}),),
+        ).rowcount
+
+    def record_preview(
+        self, *, template_id: str, user: str, cutoff: str,
+        fingerprint: str, expires_at: str,
+    ) -> dict[str, Any]:
+        """Store a short-lived preview bound to its administrator and cutoff."""
+        now, preview_id = utc_now(), _new_id()
+        self.conn.execute("DELETE FROM pipeline_cleanup_previews WHERE expires_at <= ?", (now,))
+        self.conn.execute(
+            "INSERT INTO pipeline_cleanup_previews VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (preview_id, template_id, user, cutoff, fingerprint, now, expires_at),
+        )
+        return self.get_preview(preview_id) or {}
+
+    def get_preview(self, preview_id: str) -> dict[str, Any] | None:
+        return _row_to_dict(self.conn.execute(
+            "SELECT * FROM pipeline_cleanup_previews WHERE id = ?", (preview_id,),
+        ).fetchone())
+
+    def consume_preview(self, preview_id: str) -> None:
+        self.conn.execute("DELETE FROM pipeline_cleanup_previews WHERE id = ?", (preview_id,))
+
+    def pipeline_impact(self, template_id: str) -> dict[str, Any]:
+        """Return archive impact without modifying intake or processing state."""
+        counts = {}
+        for table, column in (
+            ("pipeline_versions", "template_id"),
+            ("batches", "pipeline_template_id"),
+            ("documents", "pipeline_template_id"),
+        ):
+            counts[table] = self.conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE {column} = ?", (template_id,),
+            ).fetchone()[0]
+        bindings = self.conn.execute(
+            "SELECT id, folder_path, enabled, retired_at FROM watch_folder_bindings WHERE pipeline_template_id = ? ORDER BY folder_path",
+            (template_id,),
+        ).fetchall()
+        counts["pending_reviews"] = self.conn.execute(
+            "SELECT COUNT(*) FROM review_items WHERE status != 'completed' AND batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            (template_id,),
+        ).fetchone()[0]
+        counts["active_jobs"] = self.conn.execute(
+            "SELECT COUNT(*) FROM processing_jobs WHERE status IN ('queued', 'running') AND batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            (template_id,),
+        ).fetchone()[0]
+        return {"counts": counts, "bindings": [dict(row) for row in bindings]}
+
+
 FAILED_STATUSES = {"failed", "Workflow Trigger Failed", "Pipeline Completed with Errors"}
 FIXED_USERS = {"admin": "admin", "operator": "operator"}
 

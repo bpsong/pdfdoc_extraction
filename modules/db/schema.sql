@@ -206,10 +206,18 @@ CREATE TABLE IF NOT EXISTS audit_events (
     user TEXT,
     event_type TEXT NOT NULL,
     event_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+-- Audit entity IDs are historical references retained after processing cleanup.
+CREATE TABLE IF NOT EXISTS pipeline_cleanup_previews (
+    id TEXT PRIMARY KEY,
+    template_id TEXT NOT NULL REFERENCES pipeline_templates(id),
+    created_by TEXT NOT NULL,
+    cutoff_date TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
     created_at TEXT NOT NULL,
-    FOREIGN KEY(batch_id) REFERENCES batches(id),
-    FOREIGN KEY(document_id) REFERENCES documents(id),
-    FOREIGN KEY(review_item_id) REFERENCES review_items(id)
+    expires_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS app_settings (

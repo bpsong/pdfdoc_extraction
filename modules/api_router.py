@@ -73,6 +73,10 @@ from .services.pipeline_template_service import (
     PipelineTemplateService,
     PipelineTemplateValidationError,
 )
+from .services.pipeline_cleanup_service import (
+    PipelineCleanupConflictError,
+    PipelineCleanupService,
+)
 from .services.ingestion_assignment_service import (
     IngestionAssignmentError,
     IngestionAssignmentService,
@@ -1607,6 +1611,69 @@ def build_router() -> APIRouter:
             _raise_versioned_error(exc)
 
     # Versioned pipeline-template administration
+
+    @router.get("/api/admin/pipeline-templates/{template_id}/archive-preview")
+    def preview_pipeline_archive(
+        template_id: str, user: str = Depends(get_current_user),
+    ) -> dict[str, Any]:
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        try:
+            with managed_connect(config) as conn:
+                return PipelineCleanupService(conn).archive_preview(template_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc.args[0])) from exc
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/archive")
+    async def archive_pipeline_template(
+        template_id: str, request: Request, user: str = Depends(get_current_user),
+    ) -> dict[str, Any]:
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with managed_connect(config) as conn:
+                return PipelineCleanupService(conn).archive(
+                    template_id, confirmation_name=str(payload.get("confirmation_name") or ""), user=user,
+                )
+        except (KeyError, ValueError, PipelineTemplateConflictError) as exc:
+            _raise_versioned_error(exc)
+        raise AssertionError("Unreachable")
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/cleanup-preview")
+    async def preview_pipeline_cleanup(
+        template_id: str, request: Request, user: str = Depends(get_current_user),
+    ) -> dict[str, Any]:
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with managed_connect(config) as conn:
+                return PipelineCleanupService(conn).preview(
+                    template_id, cutoff_date=payload.get("cutoff_date"), user=user,
+                )
+        except (KeyError, ValueError) as exc:
+            _raise_versioned_error(exc)
+        raise AssertionError("Unreachable")
+
+    @router.post("/api/admin/pipeline-templates/{template_id}/cleanup")
+    async def cleanup_pipeline_processing_data(
+        template_id: str, request: Request, user: str = Depends(get_current_user),
+    ) -> dict[str, Any]:
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        payload = await _json_body(request)
+        try:
+            with managed_connect(config) as conn:
+                return PipelineCleanupService(conn).cleanup(
+                    template_id, preview_id=str(payload.get("preview_id") or ""),
+                    confirmation_name=str(payload.get("confirmation_name") or ""), user=user,
+                )
+        except PipelineCleanupConflictError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (KeyError, ValueError) as exc:
+            _raise_versioned_error(exc)
+        raise AssertionError("Unreachable")
 
     @router.get("/api/admin/pipeline-templates")
     def list_versioned_pipeline_templates(

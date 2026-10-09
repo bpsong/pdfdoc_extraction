@@ -1,7 +1,9 @@
 """API coverage for versioned pipeline-template administration."""
 
+from pathlib import Path
 from typing import cast
 
+import pytest
 from fastapi import FastAPI
 
 import modules.api_router as api_router
@@ -136,6 +138,50 @@ def test_pipeline_stale_revision_operator_forbidden_and_legacy_writes_gone(
         lambda: "operator"
     )
     assert client.get("/api/admin/pipeline-templates").status_code == 403
+
+
+def test_pipeline_rename_preserves_identity_draft_and_published_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = _admin_client(tmp_path, monkeypatch)
+    created = client.post(
+        "/api/admin/pipeline-templates",
+        json={
+            "template_key": "rename-invoices",
+            "name": "Original invoices",
+            "definition": _definition(),
+        },
+    ).json()
+    template_id = created["template"]["id"]
+    published = client.post(
+        f"/api/admin/pipeline-templates/{template_id}/publish",
+        json={"expected_revision": 1},
+    ).json()
+    version_url = (
+        f"/api/admin/pipeline-templates/{template_id}/versions/"
+        f"{published['version']['id']}"
+    )
+    original_version = client.get(version_url).json()
+    original_draft = client.get(
+        f"/api/admin/pipeline-templates/{template_id}/draft"
+    ).json()
+
+    renamed = client.patch(
+        f"/api/admin/pipeline-templates/{template_id}",
+        json={"name": "Renamed invoices"},
+    )
+
+    assert renamed.status_code == 200
+    assert renamed.json()["template"]["name"] == "Renamed invoices"
+    assert renamed.json()["template"]["id"] == template_id
+    assert renamed.json()["template"]["template_key"] == "rename-invoices"
+    assert client.get(version_url).json() == original_version
+    assert client.get(
+        f"/api/admin/pipeline-templates/{template_id}/draft"
+    ).json() == original_draft
+    summaries = client.get("/api/admin/pipeline-templates").json()["templates"]
+    summary = next(item for item in summaries if item["id"] == template_id)
+    assert summary["name"] == "Renamed invoices"
 
 
 def test_operator_cannot_publish_glm_task_configuration(tmp_path, monkeypatch):

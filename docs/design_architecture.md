@@ -8,8 +8,8 @@
 | Audience | Senior engineers, architects, technical leads, and operational owners |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
 | Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
-| Last verified | 2026-10-03 |
-| Verified revision | Current release after the configuration and migration boundary refactor |
+| Last verified | 2026-10-09 |
+| Verified revision | Schema 9 pipeline archiving, processing-data cleanup, and editor regression review |
 | Owner | Application maintainers; update with architecture-affecting changes |
 | Review cadence | Review when process ownership, workflow state, persistence, or trust boundaries change |
 
@@ -756,7 +756,7 @@ and services coordinate cross-table invariants.
 | Extraction | `extraction_results`, `extracted_fields` |
 | Review | `review_items`, `review_locks` |
 | Artifacts | `document_files` |
-| Governance | `audit_events`, `app_settings`, `config_versions` |
+| Governance | `audit_events`, `app_settings`, `config_versions`, `pipeline_cleanup_previews` |
 | Versioned pipelines | `pipeline_templates`, `pipeline_drafts`, `pipeline_versions`, `pipeline_version_schema_dependencies` |
 | Versioned review forms | `review_schema_templates`, `review_schema_drafts`, `review_schema_versions` |
 | Ingress configuration | `watch_folder_bindings` |
@@ -794,6 +794,36 @@ downgrade scripts. During normal startup, only the parent runs migrations; its
 web and worker children verify the exact schema without modifying it. Request
 handling does not run schema migrations. Standalone web or worker processes
 must explicitly select migration mode when they own database initialization.
+
+Schema 9 separates audit identities from processing retention. The upgrade
+rebuilds `audit_events` without processing-record foreign keys, preserving every
+event, historical entity ID, payload, timestamp, and rowid. Historical audit IDs
+may point to removed operational records. Pipeline/version identities and their
+immutability triggers remain intact.
+
+`PipelineCleanupService` coordinates independent archive and whole-batch cleanup
+actions; `ProcessingHistoryRepository` owns table queries and dependency-ordered
+deletion. Archive requires an inactive template and no enabled ingress bindings,
+and retains existing pinned execution. Cleanup checks terminal documents/children,
+jobs, task runs, reviews, locks, split decisions, and latest activity against an
+exclusive UTC cutoff. It excludes mixed assignments and cross-batch children.
+An actor-bound 15-minute preview stores a SHA-256 digest of the selected records;
+confirmation recomputes it under `BEGIN IMMEDIATE` before deleting anything.
+All deletions, receipt trimming, preview consumption, and the admin audit event
+commit together. A retained foreign-key reference aborts and rolls back cleanup.
+The connection-local temporary selection avoids SQL parameter-count limits.
+
+Cleanup removes artifact registrations but never their physical files. Audit
+events and version definitions remain. Upload receipt response payloads become
+minimal tombstones while user/key/fingerprint identities remain to prevent old
+submission retries from recreating purged work. Receipt lookup returns `purged`;
+the browser clears its stale receipt and waits for an explicit new upload.
+Freed SQLite pages can be reused; neither VACUUM nor physical-file cleanup is
+part of this workflow.
+
+The operator consequences, API payloads, compaction limits, and schema-9 upgrade
+requirements are maintained in the
+[pipeline retention reference](pipeline_retention_admin_guide.md).
 
 `modules/services/startup_migration_service.initialize_database()` coordinates
 structural upgrades, legacy configuration import, YAML compensation on failure,
@@ -1045,6 +1075,15 @@ items and extracted-field records remain the authoritative state and history.
 Tailwind-generated CSS is committed. Build and release procedures are maintained
 in [frontend deployment](frontend_deployment.md).
 
+The pipeline editor loads each selected template, draft, and base version as one
+snapshot. A request generation discards stale reads after a newer selection;
+mutation controls stay disabled while loading. Metadata and availability saves
+apply only their saved fields without reloading or discarding unsaved task edits.
+Archiving uses a dedicated impact/confirmation dialog, refreshes the complete
+archived list independently of the completed mutation, and disables archived
+draft/metadata mutations including reset. Cleanup uses its own preview and exact
+name confirmation and remains available for all pipeline lifecycle states.
+
 ### Browser security
 
 - JWT access tokens use an HTTP-only cookie.
@@ -1238,8 +1277,9 @@ These are current constraints, not an approved target-state plan.
 
 Task cleanup handles workflow-owned temporary files, and upload reconciliation
 removes upload-owned orphans after interrupted submissions. This document does
-not define a general retention period, orphan scan for all artifact roles, or
-log rotation policy; operators should not infer one from workflow cleanup.
+not define an automatic retention period, orphan scan for all artifact roles, or
+log rotation policy. Explicit admin processing-history cleanup is separate from
+task housekeeping and retains physical files; neither performs compaction.
 
 ## Debugging checklist
 
@@ -1312,6 +1352,7 @@ for extensions too. For tasks, also follow the [standard task guidelines](../tas
 
 - [User guide](user_guide.md)
 - [Review schema administration](review_schema_admin_guide.md)
+- [Pipeline retention administration](pipeline_retention_admin_guide.md)
 - [Configuration checker troubleshooting](config_check_troubleshooting.md)
 - [Configuration checker reference](../tools/config_check/README.md)
 - [Standard task creation guidelines](../tasks/standard_task_creation_guidelines.md)

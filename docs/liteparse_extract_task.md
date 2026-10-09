@@ -213,7 +213,7 @@ This recommendation reflects the current task architecture, not a comparative
 GLM-OCR versus LiteParse accuracy benchmark. Validate representative documents,
 including cross-page tables and repeated items, on the deployment hardware and
 retain a matching Review Gate before production use. See the
-[GLM-OCR operating guidance](user_guide.md#glm-ocr-extraction-local-ollama).
+[GLM-OCR operating guidance](technical_operations_reference.md#glm-ocr-extraction-local-ollama).
 
 Results retain safe model/version, source fingerprint, page and timing metadata,
 plus nullable-confidence field rows. The task creates no durable files itself;

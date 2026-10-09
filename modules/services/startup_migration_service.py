@@ -10,6 +10,7 @@ from modules.db.connection import connect, immediate_transaction, utc_now
 from modules.db.migrations import (
     prepare_versioned_config_schema,
     upgrade_watch_folder_management,
+    upgrade_processing_cleanup_audit,
 )
 from modules.db.schema_version import (
     LEGACY_SCHEMA_VERSION,
@@ -30,6 +31,7 @@ def initialize_database(config_manager: ConfigProvider) -> None:
     with closing(connect(config_manager)) as conn, conn:
         prepare_versioned_config_schema(conn)
         upgrade_watch_folder_management(conn)
+        upgrade_processing_cleanup_audit(conn)
         existing = conn.execute(
             "SELECT version FROM schema_migrations WHERE version = ?",
             (SCHEMA_VERSION,),

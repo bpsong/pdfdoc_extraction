@@ -114,7 +114,7 @@ def test_watch_folder_transport_preserves_same_origin_and_csrf() -> None:
 
 def test_operator_entries_share_one_release_version() -> None:
     for template_name, folder, version in (
-        ("upload_process", "upload-process", "controller-modularization-7a"),
+        ("upload_process", "upload-process", "pipeline-cleanup-1"),
         ("processing_overview", "processing-overview", "frontend-hardening-8"),
         ("reports", "reports", "controller-modularization-7a"),
         ("failures", "failures", "controller-modularization-7a"),

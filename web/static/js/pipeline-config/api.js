@@ -24,7 +24,11 @@ export function createPipelineApi(docFlow, fetchImpl = globalThis.fetch) {
     }
 
     return {
-        listTemplates: () => docFlow.apiGet("/api/admin/pipeline-templates?include_archived=true"),
+        listTemplates: (includeArchived = false) => docFlow.apiGet(`/api/admin/pipeline-templates?include_archived=${includeArchived}`),
+        archivePreview: (id) => docFlow.apiGet(`/api/admin/pipeline-templates/${encodeURIComponent(id)}/archive-preview`),
+        archive: (id, confirmationName) => docFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(id)}/archive`, { confirmation_name: confirmationName }),
+        cleanupPreview: (id, cutoffDate) => docFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(id)}/cleanup-preview`, { cutoff_date: cutoffDate }),
+        cleanup: (id, previewId, confirmationName) => docFlow.apiPost(`/api/admin/pipeline-templates/${encodeURIComponent(id)}/cleanup`, { preview_id: previewId, confirmation_name: confirmationName }),
         getTaskCatalog: () => docFlow.apiGet("/api/admin/task-catalog"),
         getTemplate: (templateId) => docFlow.apiGet(
             `/api/admin/pipeline-templates/${encodeURIComponent(templateId)}`,

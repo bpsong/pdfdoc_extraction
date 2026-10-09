@@ -105,8 +105,8 @@ def test_pipeline_template_loads_feature_entry_as_a_native_module() -> None:
     entry = (MODULE_ROOT / "index.js").read_text(encoding="utf-8")
 
     assert 'type="module"' in template
-    assert "/static/js/pipeline-config/index.js?v=manual-split-1" in template
-    assert 'import "../pipeline_config.js?v=manual-split-1";' in entry
+    assert "/static/js/pipeline-config/index.js?v=pipeline-lifecycle-2" in template
+    assert 'import "../pipeline_config.js?v=pipeline-lifecycle-2";' in entry
 
 
 def test_pipeline_api_owns_encoded_routes_and_request_methods() -> None:
