@@ -1,0 +1,2045 @@
+{
+  "date": "2026-10-10",
+  "scope": "Audience-based current documentation; exact originals in dated archive",
+  "pages": [
+    {
+      "path": "README.md",
+      "title": "PDF processing documentation",
+      "audience": "Operators, administrators, architects, developers and IT support"
+    },
+    {
+      "path": "admin/README.md",
+      "title": "Application administrator guide",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/accounts-and-settings.md",
+      "title": "Manage passwords and application settings",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/archiving-and-retention.md",
+      "title": "Archive pipelines and clean processing history",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/configuring-extraction.md",
+      "title": "Configure document extraction",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/managing-pipelines.md",
+      "title": "Manage pipelines",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/managing-review-forms.md",
+      "title": "Manage review forms",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/managing-watch-folders.md",
+      "title": "Manage incoming watch folders",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/task-guide.md",
+      "title": "Choose and configure pipeline tasks",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "admin/validation-and-audit.md",
+      "title": "Validate settings and inspect administrative history",
+      "audience": "Application administrators"
+    },
+    {
+      "path": "architecture/README.md",
+      "title": "Architecture reading path",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "architecture/configuration-and-versioning.md",
+      "title": "Configuration ownership and immutable versions",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "architecture/decisions-and-constraints.md",
+      "title": "Architectural decisions and constraints",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "architecture/persistence-and-artifacts.md",
+      "title": "Persistence and artifact ownership",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "architecture/runtime-and-boundaries.md",
+      "title": "Runtime topology and component boundaries",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "architecture/security-and-trust.md",
+      "title": "Security and trust boundaries",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "architecture/workflow-and-state.md",
+      "title": "Workflow execution and state",
+      "audience": "Software architects and technical leads"
+    },
+    {
+      "path": "audits/admin-navigation-2026-07-03/audit.md",
+      "title": "Moved: Admin Navigation Information Architecture Audit",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "change-summary-2026-09-05.md",
+      "title": "Moved: Change summary — 2026-09-05",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "config_check_troubleshooting.md",
+      "title": "Moved: Config Check Troubleshooting Guide",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "design_architecture.md",
+      "title": "PDF processing system architecture",
+      "audience": "Software architects, technical leads and maintainers"
+    },
+    {
+      "path": "developer/README.md",
+      "title": "Developer and maintainer guide",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/backend-development.md",
+      "title": "Change backend behaviour",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/codebase-map.md",
+      "title": "Codebase map and ownership",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/database-migrations.md",
+      "title": "Develop database migrations",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/development-setup.md",
+      "title": "Set up a development environment",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/execution-walkthroughs.md",
+      "title": "Trace execution through the code",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/frontend-development.md",
+      "title": "Maintain the production frontend",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/performance.md",
+      "title": "Measure and investigate performance",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/task-development.md",
+      "title": "Develop and change pipeline tasks",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "developer/testing-and-verification.md",
+      "title": "Test and verify changes",
+      "audience": "Developers and maintainers"
+    },
+    {
+      "path": "frontend_deployment.md",
+      "title": "Moved: Frontend module deployment and rollback",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "history/README.md",
+      "title": "Historical records",
+      "audience": "All documentation readers"
+    },
+    {
+      "path": "history/archive/2026-10-10/README.md",
+      "title": "Original documentation snapshot: 2026-10-10",
+      "audience": "Readers investigating historical documentation"
+    },
+    {
+      "path": "history/audits/admin-navigation-2026-07-03/audit.md",
+      "title": "Admin navigation audit: 2026-07-03",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/benchmarks/performance-2026-09-29.md",
+      "title": "Performance measurement: 2026-09-29",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/changes/2026-09-05.md",
+      "title": "Change record: 2026-09-05",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/changes/2026-10-10.md",
+      "title": "Documentation reorganisation: 2026-10-10",
+      "audience": "All documentation readers"
+    },
+    {
+      "path": "history/changes/user-guide-history.md",
+      "title": "Earlier user-guide revision history",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/validation/liteparse-pipeline-2026-10-04.md",
+      "title": "LiteParse pipeline validation: 2026-10-04",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/validation/manual-split-2026-10-07.md",
+      "title": "Manual split validation: 2026-10-07",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "it-support/README.md",
+      "title": "IT Support guide",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/account-recovery.md",
+      "title": "Provision accounts and recover administrator access",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/backup-and-restore.md",
+      "title": "Back up, restore and maintain deployment storage",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/config-check-troubleshooting.md",
+      "title": "Troubleshoot configuration validation",
+      "audience": "IT support and maintainers"
+    },
+    {
+      "path": "it-support/configuration-and-access.md",
+      "title": "Configure deployment access and filesystem permissions",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/deployment-and-upgrades.md",
+      "title": "Deploy, upgrade and roll back the application",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/incident-runbooks.md",
+      "title": "Investigate runtime incidents",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/installation-and-provider-setup.md",
+      "title": "Install the application and extraction providers",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/monitoring-and-logs.md",
+      "title": "Monitor runtime health and logs",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "it-support/starting-and-stopping.md",
+      "title": "Start, stop and restart the application",
+      "audience": "IT support and deployment owners"
+    },
+    {
+      "path": "liteparse_extract_task.md",
+      "title": "Moved: LiteParse + Ollama extraction",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "liteparse_pipeline_validation.md",
+      "title": "Moved: LiteParse production pipeline validation",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "manual_split_task.md",
+      "title": "Moved: Manual PDF split task",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "manual_split_validation.md",
+      "title": "Moved: Manual split validation — 2026-10-07",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "operator/README.md",
+      "title": "Operator guide",
+      "audience": "Operators"
+    },
+    {
+      "path": "operator/manual-splitting.md",
+      "title": "Split a PDF during review",
+      "audience": "Operators"
+    },
+    {
+      "path": "operator/monitoring-and-results.md",
+      "title": "Monitor processing and find results",
+      "audience": "Operators"
+    },
+    {
+      "path": "operator/quick-start.md",
+      "title": "Process your first document",
+      "audience": "Operators"
+    },
+    {
+      "path": "operator/reviewing-extracted-data.md",
+      "title": "Review extracted information",
+      "audience": "Operators"
+    },
+    {
+      "path": "operator/submitting-documents.md",
+      "title": "Submit documents",
+      "audience": "Operators"
+    },
+    {
+      "path": "operator/troubleshooting.md",
+      "title": "Resolve common problems and request help",
+      "audience": "Operators"
+    },
+    {
+      "path": "performance_benchmark.md",
+      "title": "Moved: Performance benchmark",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "pipeline_retention_admin_guide.md",
+      "title": "Moved: Pipeline archiving and processing-data cleanup",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "reference/README.md",
+      "title": "Shared technical reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/api-contracts.md",
+      "title": "API contracts and compatibility",
+      "audience": "Developers and IT support"
+    },
+    {
+      "path": "reference/deployment-configuration.md",
+      "title": "Deployment configuration reference",
+      "audience": "IT support and developers"
+    },
+    {
+      "path": "reference/glossary.md",
+      "title": "Shared terminology",
+      "audience": "All documentation readers"
+    },
+    {
+      "path": "reference/pipeline-definition-format.md",
+      "title": "Portable pipeline definition format",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/review-schema-format.md",
+      "title": "Review schema format and validation",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/README.md",
+      "title": "Pipeline task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/glm-ocr-extraction.md",
+      "title": "GLM-OCR extraction task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/liteparse-extraction.md",
+      "title": "LiteParse extraction task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/llamacloud-extraction.md",
+      "title": "LlamaCloud extraction task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/review-gate.md",
+      "title": "Review gate task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/rules-context-housekeeping.md",
+      "title": "Rules, context and housekeeping task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/splitting.md",
+      "title": "Split task parameters and continuation contracts",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "reference/tasks/storage-and-archiving.md",
+      "title": "Storage and archive task reference",
+      "audience": "Developers, IT support and advanced configuration maintainers"
+    },
+    {
+      "path": "review_schema_admin_guide.md",
+      "title": "Moved: Review Schema Administrator Guide",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "technical_operations_reference.md",
+      "title": "Moved: Technical Operations Reference",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "user_guide.md",
+      "title": "Moved: PDF Processing System: User Guide",
+      "audience": "Readers following an earlier documentation link"
+    },
+    {
+      "path": "watch_folder_admin_reference.md",
+      "title": "Moved: Watch-folder administration reference",
+      "audience": "Readers following an earlier documentation link"
+    }
+  ],
+  "original_destinations": {
+    "user_guide.md": "operator/README.md",
+    "technical_operations_reference.md": "it-support/README.md",
+    "design_architecture.md": "design_architecture.md",
+    "review_schema_admin_guide.md": "admin/managing-review-forms.md",
+    "pipeline_retention_admin_guide.md": "admin/archiving-and-retention.md",
+    "watch_folder_admin_reference.md": "admin/managing-watch-folders.md",
+    "manual_split_task.md": "reference/tasks/splitting.md",
+    "liteparse_extract_task.md": "reference/tasks/liteparse-extraction.md",
+    "config_check_troubleshooting.md": "it-support/config-check-troubleshooting.md",
+    "frontend_deployment.md": "it-support/deployment-and-upgrades.md",
+    "performance_benchmark.md": "developer/performance.md",
+    "manual_split_validation.md": "history/validation/manual-split-2026-10-07.md",
+    "liteparse_pipeline_validation.md": "history/validation/liteparse-pipeline-2026-10-04.md",
+    "change-summary-2026-09-05.md": "history/changes/2026-09-05.md",
+    "audits/admin-navigation-2026-07-03/audit.md": "history/audits/admin-navigation-2026-07-03/audit.md"
+  },
+  "legacy_anchors": {
+    "change-summary-2026-09-05.md": [
+      {
+        "id": "change-summary--2026-09-05",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "change-summary--2026-09-05"
+      },
+      {
+        "id": "processing-and-workflow-state",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "processing-and-workflow-state"
+      },
+      {
+        "id": "pdf-review-and-operator-interface",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "pdf-review-and-operator-interface"
+      },
+      {
+        "id": "glm-ocr-and-experiments",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "glm-ocr-and-experiments"
+      },
+      {
+        "id": "tests-and-documentation",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "tests-and-documentation"
+      },
+      {
+        "id": "verification",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "verification"
+      },
+      {
+        "id": "follow-up",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "follow-up"
+      },
+      {
+        "id": "file-inventory-for-this-checkpoint",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "file-inventory-for-this-checkpoint"
+      },
+      {
+        "id": "initial-failing-checks-repaired-in-the-follow-up",
+        "target": "history/changes/2026-09-05.md",
+        "fragment": "initial-failing-checks-repaired-in-the-follow-up"
+      }
+    ],
+    "config_check_troubleshooting.md": [
+      {
+        "id": "config-check-troubleshooting-guide",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": ""
+      },
+      {
+        "id": "contents",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "contents"
+      },
+      {
+        "id": "choose-the-right-validation-world",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "choose-the-right-validation-world"
+      },
+      {
+        "id": "fast-symptom-lookup",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "fast-symptom-lookup"
+      },
+      {
+        "id": "stored-configuration-and-database-findings",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "stored-configuration-and-database-findings"
+      },
+      {
+        "id": "portable-definition-findings",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "portable-definition-findings"
+      },
+      {
+        "id": "missing-directories-or-files",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "missing-directories-or-files"
+      },
+      {
+        "id": "watch-folder-not-prepared",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "watch-folder-not-prepared"
+      },
+      {
+        "id": "yaml-parse-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "yaml-parse-errors"
+      },
+      {
+        "id": "unknown-keys-in-strict-mode",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "unknown-keys-in-strict-mode"
+      },
+      {
+        "id": "import-failures",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "import-failures"
+      },
+      {
+        "id": "unapproved-pipeline-task",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "unapproved-pipeline-task"
+      },
+      {
+        "id": "pipeline-cardinality-or-ordering-errors-storedportable-definitions",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "pipeline-cardinality-or-ordering-errors-storedportable-definitions"
+      },
+      {
+        "id": "duplicate-pipeline-task-type-warnings",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "duplicate-pipeline-task-type-warnings"
+      },
+      {
+        "id": "missing-extraction-credentials",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "missing-extraction-credentials"
+      },
+      {
+        "id": "multiple-table-extraction-fields",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "multiple-table-extraction-fields"
+      },
+      {
+        "id": "glm-ocr-local-provider-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "glm-ocr-local-provider-configuration-errors"
+      },
+      {
+        "id": "liteparse-local-provider-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "liteparse-local-provider-configuration-errors"
+      },
+      {
+        "id": "structured-object-extraction-fields",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "structured-object-extraction-fields"
+      },
+      {
+        "id": "local-drive-storage-requirements",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "local-drive-storage-requirements"
+      },
+      {
+        "id": "nested-storage-overrides",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "nested-storage-overrides"
+      },
+      {
+        "id": "rules-task-required-configuration",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "rules-task-required-configuration"
+      },
+      {
+        "id": "deprecated-task-slug",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "deprecated-task-slug"
+      },
+      {
+        "id": "housekeeping-task-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "housekeeping-task-configuration-errors"
+      },
+      {
+        "id": "split-task-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "split-task-configuration-errors"
+      },
+      {
+        "id": "review-gate-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "review-gate-configuration-errors"
+      },
+      {
+        "id": "web-server-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "web-server-configuration-errors"
+      },
+      {
+        "id": "watch-folder-configuration-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "watch-folder-configuration-errors"
+      },
+      {
+        "id": "enhanced-import-validation-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "enhanced-import-validation-errors"
+      },
+      {
+        "id": "rules-task-validation-errors",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "rules-task-validation-errors"
+      },
+      {
+        "id": "csv-file-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "csv-file-issues"
+      },
+      {
+        "id": "column-reference-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "column-reference-issues"
+      },
+      {
+        "id": "clause-configuration-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "clause-configuration-issues"
+      },
+      {
+        "id": "context-path-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "context-path-issues"
+      },
+      {
+        "id": "semantic-validation-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "semantic-validation-issues"
+      },
+      {
+        "id": "runtime-file-validation-issues---check-files-flag",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "runtime-file-validation-issues---check-files-flag"
+      },
+      {
+        "id": "pandas-dependency-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "pandas-dependency-issues"
+      },
+      {
+        "id": "token-or-dependency-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "token-or-dependency-issues"
+      },
+      {
+        "id": "performance-analysis-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "performance-analysis-issues"
+      },
+      {
+        "id": "excessive-extraction-fields",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "excessive-extraction-fields"
+      },
+      {
+        "id": "complex-context-paths",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "complex-context-paths"
+      },
+      {
+        "id": "pipeline-performance-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "pipeline-performance-issues"
+      },
+      {
+        "id": "security-analysis-issues",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "security-analysis-issues"
+      },
+      {
+        "id": "path-traversal-vulnerabilities",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "path-traversal-vulnerabilities"
+      },
+      {
+        "id": "suspicious-system-paths",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "suspicious-system-paths"
+      },
+      {
+        "id": "command-injection-risks",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "command-injection-risks"
+      },
+      {
+        "id": "environment-variable-risks",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "environment-variable-risks"
+      },
+      {
+        "id": "unsafe-directory-locations",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "unsafe-directory-locations"
+      },
+      {
+        "id": "still-stuck",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": "still-stuck"
+      }
+    ],
+    "design_architecture.md": [
+      {
+        "id": "pdf-processing-system-architecture",
+        "target": "design_architecture.md",
+        "fragment": ""
+      },
+      {
+        "id": "document-status",
+        "target": "design_architecture.md",
+        "fragment": ""
+      },
+      {
+        "id": "contents-and-reading-paths",
+        "target": "design_architecture.md",
+        "fragment": ""
+      },
+      {
+        "id": "start-here-for-a-codebase-takeover",
+        "target": "design_architecture.md",
+        "fragment": ""
+      },
+      {
+        "id": "architecture-at-a-glance",
+        "target": "design_architecture.md",
+        "fragment": ""
+      },
+      {
+        "id": "key-architectural-decisions",
+        "target": "architecture/decisions-and-constraints.md",
+        "fragment": "key-architectural-decisions"
+      },
+      {
+        "id": "invariants-to-preserve",
+        "target": "architecture/decisions-and-constraints.md",
+        "fragment": "invariants-to-preserve"
+      },
+      {
+        "id": "runtime-topology",
+        "target": "architecture/runtime-and-boundaries.md",
+        "fragment": "runtime-topology"
+      },
+      {
+        "id": "component-boundaries",
+        "target": "developer/codebase-map.md",
+        "fragment": "component-boundaries"
+      },
+      {
+        "id": "frontend-module-boundaries",
+        "target": "architecture/runtime-and-boundaries.md",
+        "fragment": "frontend-module-boundaries"
+      },
+      {
+        "id": "service-ownership-map",
+        "target": "developer/codebase-map.md",
+        "fragment": "service-ownership-map"
+      },
+      {
+        "id": "representative-request-traces",
+        "target": "developer/execution-walkthroughs.md",
+        "fragment": "representative-request-traces"
+      },
+      {
+        "id": "ingestion-and-workflow-execution",
+        "target": "architecture/workflow-and-state.md",
+        "fragment": "ingestion-and-workflow-execution"
+      },
+      {
+        "id": "ingestion-paths",
+        "target": "architecture/workflow-and-state.md",
+        "fragment": "ingestion-paths"
+      },
+      {
+        "id": "watch-folder-administration",
+        "target": "architecture/configuration-and-versioning.md",
+        "fragment": "watch-folder-administration"
+      },
+      {
+        "id": "pipeline-construction",
+        "target": "architecture/configuration-and-versioning.md",
+        "fragment": "pipeline-construction"
+      },
+      {
+        "id": "task-and-context-contract",
+        "target": "developer/task-development.md",
+        "fragment": "task-and-context-contract"
+      },
+      {
+        "id": "glossary",
+        "target": "reference/glossary.md",
+        "fragment": ""
+      },
+      {
+        "id": "state-model",
+        "target": "architecture/workflow-and-state.md",
+        "fragment": "state-model"
+      },
+      {
+        "id": "human-review",
+        "target": "architecture/workflow-and-state.md",
+        "fragment": "human-review"
+      },
+      {
+        "id": "split-fan-out-and-fan-in",
+        "target": "architecture/workflow-and-state.md",
+        "fragment": "split-fan-out-and-fan-in"
+      },
+      {
+        "id": "persistence-and-artifacts",
+        "target": "architecture/persistence-and-artifacts.md",
+        "fragment": "persistence-and-artifacts"
+      },
+      {
+        "id": "configuration-architecture",
+        "target": "architecture/configuration-and-versioning.md",
+        "fragment": "configuration-architecture"
+      },
+      {
+        "id": "frontend-and-ui-architecture",
+        "target": "developer/frontend-development.md",
+        "fragment": "frontend-and-ui-architecture"
+      },
+      {
+        "id": "rendering-and-data-flow",
+        "target": "developer/frontend-development.md",
+        "fragment": "rendering-and-data-flow"
+      },
+      {
+        "id": "frontend-layers",
+        "target": "developer/frontend-development.md",
+        "fragment": "frontend-layers"
+      },
+      {
+        "id": "browser-security",
+        "target": "developer/frontend-development.md",
+        "fragment": "browser-security"
+      },
+      {
+        "id": "frontend-constraints",
+        "target": "developer/frontend-development.md",
+        "fragment": "frontend-constraints"
+      },
+      {
+        "id": "api-authentication-and-trust-boundaries",
+        "target": "architecture/security-and-trust.md",
+        "fragment": "api-authentication-and-trust-boundaries"
+      },
+      {
+        "id": "errors-recovery-and-observability",
+        "target": "architecture/workflow-and-state.md",
+        "fragment": "errors-recovery-and-observability"
+      },
+      {
+        "id": "testing-and-verification",
+        "target": "developer/testing-and-verification.md",
+        "fragment": "testing-and-verification"
+      },
+      {
+        "id": "known-architectural-debt",
+        "target": "architecture/decisions-and-constraints.md",
+        "fragment": "known-architectural-debt"
+      },
+      {
+        "id": "debugging-checklist",
+        "target": "developer/execution-walkthroughs.md",
+        "fragment": "debugging-checklist"
+      },
+      {
+        "id": "safe-change-workflow",
+        "target": "developer/backend-development.md",
+        "fragment": "safe-change-workflow"
+      },
+      {
+        "id": "migration-development-workflow",
+        "target": "developer/database-migrations.md",
+        "fragment": "migration-development-workflow"
+      },
+      {
+        "id": "related-documentation",
+        "target": "design_architecture.md",
+        "fragment": ""
+      }
+    ],
+    "frontend_deployment.md": [
+      {
+        "id": "frontend-module-deployment-and-rollback",
+        "target": "it-support/deployment-and-upgrades.md",
+        "fragment": ""
+      },
+      {
+        "id": "release-validation",
+        "target": "developer/frontend-development.md",
+        "fragment": "release-validation"
+      },
+      {
+        "id": "pipeline-archive-and-cleanup-release",
+        "target": "it-support/deployment-and-upgrades.md",
+        "fragment": "pipeline-archive-and-cleanup-release"
+      },
+      {
+        "id": "progressive-rollout",
+        "target": "it-support/deployment-and-upgrades.md",
+        "fragment": ""
+      },
+      {
+        "id": "rollback",
+        "target": "it-support/deployment-and-upgrades.md",
+        "fragment": "rollback"
+      }
+    ],
+    "liteparse_extract_task.md": [
+      {
+        "id": "liteparse--ollama-extraction",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": ""
+      },
+      {
+        "id": "parameters",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": "parameters"
+      },
+      {
+        "id": "visual-setup",
+        "target": "admin/configuring-extraction.md",
+        "fragment": ""
+      },
+      {
+        "id": "generic-parameter-example",
+        "target": "admin/configuring-extraction.md",
+        "fragment": ""
+      },
+      {
+        "id": "review-and-source-evidence",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": "review-and-source-evidence"
+      },
+      {
+        "id": "limits-and-failure-handling",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": "limits-and-failure-handling"
+      },
+      {
+        "id": "choosing-liteparse-or-glm-ocr-for-larger-documents",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": "choosing-liteparse-or-glm-ocr-for-larger-documents"
+      },
+      {
+        "id": "troubleshooting",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": "troubleshooting"
+      },
+      {
+        "id": "verification",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": "verification"
+      }
+    ],
+    "liteparse_pipeline_validation.md": [
+      {
+        "id": "liteparse-production-pipeline-validation",
+        "target": "history/validation/liteparse-pipeline-2026-10-04.md",
+        "fragment": "liteparse-production-pipeline-validation"
+      },
+      {
+        "id": "published-configuration",
+        "target": "history/validation/liteparse-pipeline-2026-10-04.md",
+        "fragment": "published-configuration"
+      },
+      {
+        "id": "inputs-and-scoring",
+        "target": "history/validation/liteparse-pipeline-2026-10-04.md",
+        "fragment": "inputs-and-scoring"
+      },
+      {
+        "id": "issues-found-and-resolved",
+        "target": "history/validation/liteparse-pipeline-2026-10-04.md",
+        "fragment": "issues-found-and-resolved"
+      },
+      {
+        "id": "verification-and-evidence",
+        "target": "history/validation/liteparse-pipeline-2026-10-04.md",
+        "fragment": "verification-and-evidence"
+      }
+    ],
+    "manual_split_task.md": [
+      {
+        "id": "manual-pdf-split-task",
+        "target": "reference/tasks/splitting.md",
+        "fragment": ""
+      },
+      {
+        "id": "pipeline-setup",
+        "target": "reference/tasks/splitting.md",
+        "fragment": "pipeline-setup"
+      },
+      {
+        "id": "operator-workflow",
+        "target": "operator/manual-splitting.md",
+        "fragment": ""
+      },
+      {
+        "id": "execution-and-skips",
+        "target": "reference/tasks/splitting.md",
+        "fragment": "execution-and-skips"
+      },
+      {
+        "id": "persistence-and-recovery",
+        "target": "reference/tasks/splitting.md",
+        "fragment": "persistence-and-recovery"
+      }
+    ],
+    "manual_split_validation.md": [
+      {
+        "id": "manual-split-validation--2026-10-07",
+        "target": "history/validation/manual-split-2026-10-07.md",
+        "fragment": "manual-split-validation--2026-10-07"
+      },
+      {
+        "id": "automated-checks",
+        "target": "history/validation/manual-split-2026-10-07.md",
+        "fragment": "automated-checks"
+      },
+      {
+        "id": "admin-pipeline-and-real-browser-walkthrough",
+        "target": "history/validation/manual-split-2026-10-07.md",
+        "fragment": "admin-pipeline-and-real-browser-walkthrough"
+      },
+      {
+        "id": "synthetic-two-page-invoice-operator-chooses-no-split",
+        "target": "history/validation/manual-split-2026-10-07.md",
+        "fragment": "synthetic-two-page-invoice-operator-chooses-no-split"
+      },
+      {
+        "id": "source-review-and-operator-validation--2026-10-07",
+        "target": "history/validation/manual-split-2026-10-07.md",
+        "fragment": "source-review-and-operator-validation--2026-10-07"
+      },
+      {
+        "id": "submission-waiting-for-child-workflows--2026-10-07",
+        "target": "history/validation/manual-split-2026-10-07.md",
+        "fragment": "submission-waiting-for-child-workflows--2026-10-07"
+      }
+    ],
+    "performance_benchmark.md": [
+      {
+        "id": "performance-benchmark",
+        "target": "developer/performance.md",
+        "fragment": ""
+      },
+      {
+        "id": "workloads-and-interpretation",
+        "target": "developer/performance.md",
+        "fragment": "workloads-and-interpretation"
+      },
+      {
+        "id": "measured-result-after-the-first-optimizations",
+        "target": "history/benchmarks/performance-2026-09-29.md",
+        "fragment": "measured-result-after-the-first-optimizations"
+      }
+    ],
+    "pipeline_retention_admin_guide.md": [
+      {
+        "id": "pipeline-archiving-and-processing-data-cleanup",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": ""
+      },
+      {
+        "id": "find-a-pipeline-or-change-its-name",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "find-a-pipeline-or-change-its-name"
+      },
+      {
+        "id": "archive-a-pipeline",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "archive-a-pipeline"
+      },
+      {
+        "id": "pause-linked-watch-folders",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "pause-linked-watch-folders"
+      },
+      {
+        "id": "clean-up-processing-data",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "clean-up-processing-data"
+      },
+      {
+        "id": "understand-the-excluded-batches",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "understand-the-excluded-batches"
+      },
+      {
+        "id": "if-you-cannot-continue",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "if-you-cannot-continue"
+      },
+      {
+        "id": "what-cleanup-removes-and-retains",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": "what-cleanup-removes-and-retains"
+      },
+      {
+        "id": "optional-technical-reference-for-itsupport",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": ""
+      },
+      {
+        "id": "sqlite-storage-and-compaction",
+        "target": "it-support/backup-and-restore.md",
+        "fragment": "sqlite-storage-and-compaction"
+      },
+      {
+        "id": "api-contract",
+        "target": "reference/api-contracts.md",
+        "fragment": "api-contract"
+      },
+      {
+        "id": "upgrade-and-verification",
+        "target": "admin/archiving-and-retention.md",
+        "fragment": ""
+      }
+    ],
+    "review_schema_admin_guide.md": [
+      {
+        "id": "review-schema-administrator-guide",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "contents",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "what-a-review-schema-controls",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "before-you-begin",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "authoring-use-the-review-form-editor",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "open-the-editor",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "create-a-schema",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "edit-an-existing-schema",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "add-and-configure-a-field",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "choose-the-right-field-type",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "add-grouped-or-repeating-fields",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "validate-save-publish-import-export-and-change-lifecycle",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "import-export-and-legacy-migration",
+        "target": "reference/review-schema-format.md",
+        "fragment": "import-export-and-legacy-migration"
+      },
+      {
+        "id": "legacy-schema_file-migration",
+        "target": "reference/review-schema-format.md",
+        "fragment": "legacy-schema_file-migration"
+      },
+      {
+        "id": "safe-import-procedure",
+        "target": "reference/review-schema-format.md",
+        "fragment": "safe-import-procedure"
+      },
+      {
+        "id": "yaml-formatting-rules",
+        "target": "reference/review-schema-format.md",
+        "fragment": "yaml-formatting-rules"
+      },
+      {
+        "id": "schema-file-reference",
+        "target": "reference/review-schema-format.md",
+        "fragment": "schema-file-reference"
+      },
+      {
+        "id": "top-level-settings",
+        "target": "reference/review-schema-format.md",
+        "fragment": "top-level-settings"
+      },
+      {
+        "id": "field-settings",
+        "target": "reference/review-schema-format.md",
+        "fragment": "field-settings"
+      },
+      {
+        "id": "date-values",
+        "target": "reference/review-schema-format.md",
+        "fragment": "date-values"
+      },
+      {
+        "id": "text-patterns",
+        "target": "reference/review-schema-format.md",
+        "fragment": "text-patterns"
+      },
+      {
+        "id": "complete-example-invoice-review-form",
+        "target": "reference/review-schema-format.md",
+        "fragment": "complete-example-invoice-review-form"
+      },
+      {
+        "id": "connect-the-schema-to-the-review-gate",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "test-the-operators-form",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "safely-change-an-existing-schema",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "troubleshooting",
+        "target": "admin/managing-review-forms.md",
+        "fragment": ""
+      },
+      {
+        "id": "advanced-behavior",
+        "target": "reference/review-schema-format.md",
+        "fragment": "advanced-behavior"
+      },
+      {
+        "id": "required-fields-and-review-routing",
+        "target": "reference/review-schema-format.md",
+        "fragment": "required-fields-and-review-routing"
+      },
+      {
+        "id": "mapping-a-structured-extraction-object",
+        "target": "reference/review-schema-format.md",
+        "fragment": "mapping-a-structured-extraction-object"
+      },
+      {
+        "id": "advanced-validation",
+        "target": "reference/review-schema-format.md",
+        "fragment": "advanced-validation"
+      },
+      {
+        "id": "maintainer-only-test-commands",
+        "target": "reference/review-schema-format.md",
+        "fragment": "maintainer-only-test-commands"
+      }
+    ],
+    "technical_operations_reference.md": [
+      {
+        "id": "technical-operations-reference",
+        "target": "it-support/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "find-the-technical-details",
+        "target": "it-support/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "41-starting-and-stopping-services",
+        "target": "it-support/starting-and-stopping.md",
+        "fragment": "starting-and-stopping-services"
+      },
+      {
+        "id": "42-required-folders-and-permissions",
+        "target": "reference/deployment-configuration.md",
+        "fragment": "required-folders-and-permissions"
+      },
+      {
+        "id": "421-pre-existing-vs-auto-created-folders-consolidated",
+        "target": "reference/deployment-configuration.md",
+        "fragment": "pre-existing-vs-auto-created-folders-consolidated"
+      },
+      {
+        "id": "43-configuration-management",
+        "target": "it-support/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "431-high-level-structure",
+        "target": "reference/deployment-configuration.md",
+        "fragment": "high-level-structure"
+      },
+      {
+        "id": "432-global-sections",
+        "target": "reference/deployment-configuration.md",
+        "fragment": "global-sections"
+      },
+      {
+        "id": "433-pipeline-configuration",
+        "target": "it-support/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "account-provisioning-and-recovery",
+        "target": "it-support/account-recovery.md",
+        "fragment": "account-provisioning-and-recovery"
+      },
+      {
+        "id": "first-time-account-setup",
+        "target": "it-support/account-recovery.md",
+        "fragment": "first-time-account-setup"
+      },
+      {
+        "id": "recover-access-when-the-administrator-cannot-sign-in",
+        "target": "it-support/account-recovery.md",
+        "fragment": "recover-access-when-the-administrator-cannot-sign-in"
+      },
+      {
+        "id": "production-web-hardening",
+        "target": "it-support/configuration-and-access.md",
+        "fragment": "production-web-hardening"
+      },
+      {
+        "id": "45-database-state-and-artifact-storage",
+        "target": "architecture/persistence-and-artifacts.md",
+        "fragment": ""
+      },
+      {
+        "id": "451-database-initialization",
+        "target": "architecture/persistence-and-artifacts.md",
+        "fragment": ""
+      },
+      {
+        "id": "452-what-sqlite-stores",
+        "target": "architecture/persistence-and-artifacts.md",
+        "fragment": ""
+      },
+      {
+        "id": "453-filesystem-artifact-boundaries",
+        "target": "architecture/persistence-and-artifacts.md",
+        "fragment": ""
+      },
+      {
+        "id": "456-backup-and-recovery",
+        "target": "it-support/backup-and-restore.md",
+        "fragment": "backup-and-recovery"
+      },
+      {
+        "id": "46-log-files-and-troubleshooting",
+        "target": "it-support/monitoring-and-logs.md",
+        "fragment": "log-files-and-troubleshooting"
+      },
+      {
+        "id": "47-graceful-shutdown-and-error-recovery",
+        "target": "it-support/starting-and-stopping.md",
+        "fragment": "graceful-shutdown-and-error-recovery"
+      },
+      {
+        "id": "48-task-system-standard-steps-and-parameters",
+        "target": "it-support/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "481-extraction",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "extraction"
+      },
+      {
+        "id": "glm-ocr-extraction-local-ollama",
+        "target": "reference/tasks/glm-ocr-extraction.md",
+        "fragment": "glm-ocr-extraction-local-ollama"
+      },
+      {
+        "id": "multiline-field-extraction-guidance",
+        "target": "reference/tasks/glm-ocr-extraction.md",
+        "fragment": "multiline-field-extraction-guidance"
+      },
+      {
+        "id": "prompt-and-schema-order-sensitivity",
+        "target": "reference/tasks/glm-ocr-extraction.md",
+        "fragment": "prompt-and-schema-order-sensitivity"
+      },
+      {
+        "id": "liteparse-extraction-local-ollama",
+        "target": "reference/tasks/liteparse-extraction.md",
+        "fragment": ""
+      },
+      {
+        "id": "482-splitllamacloud_split",
+        "target": "reference/tasks/splitting.md",
+        "fragment": "splitllamacloud_split"
+      },
+      {
+        "id": "483-storagestore_metadata_as_csv",
+        "target": "reference/tasks/storage-and-archiving.md",
+        "fragment": "storagestore_metadata_as_csv"
+      },
+      {
+        "id": "484-storagestore_metadata_as_json",
+        "target": "reference/tasks/storage-and-archiving.md",
+        "fragment": "storagestore_metadata_as_json"
+      },
+      {
+        "id": "485-storagestore_file_to_localdrive",
+        "target": "reference/tasks/storage-and-archiving.md",
+        "fragment": "storagestore_file_to_localdrive"
+      },
+      {
+        "id": "486-archiverarchive_pdf",
+        "target": "reference/tasks/storage-and-archiving.md",
+        "fragment": "archiverarchive_pdf"
+      },
+      {
+        "id": "487-rulesupdate_reference",
+        "target": "reference/tasks/rules-context-housekeeping.md",
+        "fragment": "rulesupdate_reference"
+      },
+      {
+        "id": "488-reviewreview_gate",
+        "target": "reference/tasks/review-gate.md",
+        "fragment": "reviewreview_gate"
+      },
+      {
+        "id": "489-assign-nanoid-standard_stepcontext",
+        "target": "reference/tasks/rules-context-housekeeping.md",
+        "fragment": "assign-nanoid-standard_stepcontext"
+      },
+      {
+        "id": "4810-housekeepingcleanup",
+        "target": "reference/tasks/rules-context-housekeeping.md",
+        "fragment": "housekeepingcleanup"
+      },
+      {
+        "id": "4811-validation-and-failure-behavior",
+        "target": "reference/tasks/rules-context-housekeeping.md",
+        "fragment": "validation-and-failure-behavior"
+      },
+      {
+        "id": "49-llamacloud-extract-v2-structured-data-support",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "llamacloud-extract-v2-structured-data-support"
+      },
+      {
+        "id": "491-flat-objects",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "flat-objects"
+      },
+      {
+        "id": "492-scalar-lists",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "scalar-lists"
+      },
+      {
+        "id": "493-arrays-of-objects",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "arrays-of-objects"
+      },
+      {
+        "id": "overview",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "overview"
+      },
+      {
+        "id": "configuration",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "configuration"
+      },
+      {
+        "id": "storage-behavior",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "storage-behavior"
+      },
+      {
+        "id": "confidence-persistence",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "confidence-persistence"
+      },
+      {
+        "id": "json-storage",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "json-storage"
+      },
+      {
+        "id": "csv-storage",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "csv-storage"
+      },
+      {
+        "id": "494-migration-guide",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "migration-guide"
+      },
+      {
+        "id": "495-current-limitations",
+        "target": "reference/tasks/llamacloud-extraction.md",
+        "fragment": "current-limitations"
+      },
+      {
+        "id": "410-example-workflows",
+        "target": "reference/pipeline-definition-format.md",
+        "fragment": ""
+      },
+      {
+        "id": "411-housekeeping-and-the-processing-folder",
+        "target": "reference/tasks/rules-context-housekeeping.md",
+        "fragment": "housekeeping-and-the-processing-folder"
+      },
+      {
+        "id": "412-config-check-validation-tool",
+        "target": "it-support/config-check-troubleshooting.md",
+        "fragment": ""
+      },
+      {
+        "id": "technical-page-reference",
+        "target": "reference/api-contracts.md",
+        "fragment": ""
+      },
+      {
+        "id": "example-configuration-files",
+        "target": "it-support/README.md",
+        "fragment": ""
+      }
+    ],
+    "user_guide.md": [
+      {
+        "id": "pdf-processing-system-user-guide",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "table-of-contents",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "history-of-changes",
+        "target": "history/changes/user-guide-history.md",
+        "fragment": "history-of-changes"
+      },
+      {
+        "id": "quick-start-guide",
+        "target": "operator/quick-start.md",
+        "fragment": ""
+      },
+      {
+        "id": "find-the-right-section",
+        "target": "operator/quick-start.md",
+        "fragment": ""
+      },
+      {
+        "id": "1-overview",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "2-system-architecture--data-flow",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "components",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "data-flow-diagram",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "what-happens-to-your-document",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "3-operator-guide",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "31-using-the-watch-folder",
+        "target": "operator/submitting-documents.md",
+        "fragment": ""
+      },
+      {
+        "id": "32-using-the-web-interface",
+        "target": "operator/submitting-documents.md",
+        "fragment": ""
+      },
+      {
+        "id": "compact-upload-steps",
+        "target": "operator/submitting-documents.md",
+        "fragment": ""
+      },
+      {
+        "id": "finding-failures-from-a-batch",
+        "target": "operator/submitting-documents.md",
+        "fragment": ""
+      },
+      {
+        "id": "33-operator-workflows-in-the-unified-app",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "human-review",
+        "target": "operator/reviewing-extracted-data.md",
+        "fragment": ""
+      },
+      {
+        "id": "manual-split-review",
+        "target": "operator/manual-splitting.md",
+        "fragment": ""
+      },
+      {
+        "id": "review-gate-example",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "schema-based-review-migration",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "split-results",
+        "target": "operator/monitoring-and-results.md",
+        "fragment": ""
+      },
+      {
+        "id": "failures",
+        "target": "operator/troubleshooting.md",
+        "fragment": ""
+      },
+      {
+        "id": "4-administrator-guide",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "41-starting-and-stopping-services",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "42-required-folders-and-permissions",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "421-pre-existing-vs-auto-created-folders-consolidated",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "43-configuration-management",
+        "target": "admin/managing-pipelines.md",
+        "fragment": ""
+      },
+      {
+        "id": "431-high-level-structure",
+        "target": "admin/managing-pipelines.md",
+        "fragment": ""
+      },
+      {
+        "id": "432-global-sections",
+        "target": "admin/managing-pipelines.md",
+        "fragment": ""
+      },
+      {
+        "id": "433-pipeline-configuration",
+        "target": "admin/managing-pipelines.md",
+        "fragment": ""
+      },
+      {
+        "id": "44-managing-application-accounts-and-passwords",
+        "target": "admin/accounts-and-settings.md",
+        "fragment": ""
+      },
+      {
+        "id": "first-time-account-setup",
+        "target": "admin/accounts-and-settings.md",
+        "fragment": ""
+      },
+      {
+        "id": "change-a-password-normally",
+        "target": "admin/accounts-and-settings.md",
+        "fragment": ""
+      },
+      {
+        "id": "recover-access-when-the-administrator-cannot-sign-in",
+        "target": "admin/accounts-and-settings.md",
+        "fragment": ""
+      },
+      {
+        "id": "password-and-login-rules",
+        "target": "admin/accounts-and-settings.md",
+        "fragment": ""
+      },
+      {
+        "id": "production-web-hardening",
+        "target": "admin/accounts-and-settings.md",
+        "fragment": ""
+      },
+      {
+        "id": "45-database-state-and-artifact-storage",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "451-database-initialization",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "452-what-sqlite-stores",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "453-filesystem-artifact-boundaries",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "454-operator-and-administrator-state-views",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "455-administrator-workflow-details",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "create-and-publish-a-pipeline-visually",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "create-and-publish-a-review-form-visually",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "add-a-watch-folder-binding-visually",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "use-overview-task-catalog-and-validation",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "administrator-audit-history",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "456-backup-and-recovery",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "46-log-files-and-troubleshooting",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "47-graceful-shutdown-and-error-recovery",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "48-task-system-standard-steps-and-parameters",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "481-extraction",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "glm-ocr-extraction-local-ollama",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "liteparse-extraction-local-ollama",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "482-splitllamacloud_split",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "483-storagestore_metadata_as_csv",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "484-storagestore_metadata_as_json",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "485-storagestore_file_to_localdrive",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "486-archiverarchive_pdf",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "487-rulesupdate_reference",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "488-reviewreview_gate",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "489-assign-nanoid-standard_stepcontext",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "4810-housekeepingcleanup",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "4811-validation-and-failure-behavior",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "49-llamacloud-extract-v2-structured-data-support",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "491-flat-objects",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "492-scalar-lists",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "493-arrays-of-objects",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "494-migration-guide",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "495-current-limitations",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "410-example-workflows",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "411-housekeeping-and-the-processing-folder",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "412-config-check-validation-tool",
+        "target": "admin/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "5-frequently-asked-questions-faq",
+        "target": "operator/troubleshooting.md",
+        "fragment": ""
+      },
+      {
+        "id": "6-appendix",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "glossary",
+        "target": "reference/glossary.md",
+        "fragment": ""
+      },
+      {
+        "id": "technical-page-reference",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "example-configuration-files",
+        "target": "operator/README.md",
+        "fragment": ""
+      },
+      {
+        "id": "further-documentation",
+        "target": "operator/README.md",
+        "fragment": ""
+      }
+    ],
+    "watch_folder_admin_reference.md": [
+      {
+        "id": "watch-folder-administration-reference",
+        "target": "admin/managing-watch-folders.md",
+        "fragment": ""
+      },
+      {
+        "id": "binding-lifecycle",
+        "target": "architecture/configuration-and-versioning.md",
+        "fragment": "binding-lifecycle"
+      },
+      {
+        "id": "pipeline-archiving-and-history-cleanup",
+        "target": "admin/managing-watch-folders.md",
+        "fragment": ""
+      },
+      {
+        "id": "persistence-and-revisions",
+        "target": "architecture/persistence-and-artifacts.md",
+        "fragment": "persistence-and-revisions"
+      },
+      {
+        "id": "health-and-access-checks",
+        "target": "architecture/configuration-and-versioning.md",
+        "fragment": "health-and-access-checks"
+      }
+    ],
+    "audits/admin-navigation-2026-07-03/audit.md": [
+      {
+        "id": "admin-navigation-information-architecture-audit",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "admin-navigation-information-architecture-audit"
+      },
+      {
+        "id": "scope",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "scope"
+      },
+      {
+        "id": "step-1--admin-navigation",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "step-1--admin-navigation"
+      },
+      {
+        "id": "step-2--schema-editor",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "step-2--schema-editor"
+      },
+      {
+        "id": "step-3--task-catalog",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "step-3--task-catalog"
+      },
+      {
+        "id": "step-4--pipeline-configuration",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "step-4--pipeline-configuration"
+      },
+      {
+        "id": "step-5--validation-center",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "step-5--validation-center"
+      },
+      {
+        "id": "recommendation",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "recommendation"
+      },
+      {
+        "id": "accessibility-and-evidence-limits",
+        "target": "history/audits/admin-navigation-2026-07-03/audit.md",
+        "fragment": "accessibility-and-evidence-limits"
+      }
+    ]
+  }
+}

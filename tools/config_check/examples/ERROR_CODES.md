@@ -132,7 +132,7 @@ fields rather than assume that this document contains every possible code.
 
 Choices, normalization and sibling schema-order checks reuse shared validators
 and retain the corresponding `param-glm-*` codes above. These names do not
-identify the extraction provider. See [LiteParse setup and limits](../../../docs/liteparse_extract_task.md)
+identify the extraction provider. See [LiteParse setup and limits](../../../docs/reference/tasks/liteparse-extraction.md)
 for runtime OCR/model checks that configuration validation alone cannot prove.
 
 ## Review Gate Validation Error Codes

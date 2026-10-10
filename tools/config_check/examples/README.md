@@ -72,7 +72,7 @@ definition, replace credentials with `$secret` references, and supply your own
 synthetic CSV before validating it. Automated rules validation is covered by
 `test/tools/config_check/`.
 
-For detailed troubleshooting of rules task validation issues, see the main troubleshooting guide at [`docs/config_check_troubleshooting.md`](../../../docs/config_check_troubleshooting.md).
+For detailed troubleshooting of rules task validation issues, see the main troubleshooting guide at [`docs/it-support/config-check-troubleshooting.md`](../../../docs/it-support/config-check-troubleshooting.md).
 
 ## Error Code Reference
 

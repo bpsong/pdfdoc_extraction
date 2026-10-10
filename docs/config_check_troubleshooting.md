@@ -1,906 +1,213 @@
-# Config Check Troubleshooting Guide
+# Moved: Config Check Troubleshooting Guide
 
 | Item | Value |
 | --- | --- |
-| Purpose | Operator troubleshooting for the `tools.config_check` CLI |
-| Verified against | `config-check` 0.1.0 |
-| Last verified | 2026-09-27 |
-| Maintainer | Config-check maintainers; refresh when CLI options or finding behavior changes |
-
-This guide helps identify the validation mode, interpret findings, and choose a
-repair path. Command examples use the repository virtual environment from the
-repository root. Symptom blocks are representative excerpts; exact messages
-vary by validation path. For automation, use the returned JSON fields rather
-than matching prose.
-
-## Contents
-
-- [Stored configuration and database findings](#stored-configuration-and-database-findings)
-- [Portable definitions](#portable-definition-findings)
-- [Fast symptom lookup](#fast-symptom-lookup)
-- [Common validation problems](#missing-directories-or-files)
-- [Task configuration problems](#missing-extraction-credentials)
-- [LiteParse local extraction](#liteparse-local-provider-configuration-errors)
-- [Rules task validation](#rules-task-validation-errors)
-- [Optional analyses](#performance-analysis-issues)
-- [Still stuck](#still-stuck)
-
-### Choose the right validation world
-
-- **Deployment YAML:** `validate` checks runtime settings and, when configured,
-  opens SQLite read-only to inspect active stored pipelines and watch bindings.
-- **Stored draft/version:** `validate --pipeline KEY --draft` or
-  `validate --review-schema KEY --version N` selects one stored object. These
-  commands need a configured database and never publish or mutate it.
-- **Portable file:** `validate-file` checks a standalone runtime or review
-  schema file. The current CLI accepts `--kind pipeline`, but its pipeline
-  validator expects a `pipeline-bundle` wrapper and returns an error. Do not
-  rely on that path for pipeline bundles; validate through the admin draft
-  validation flow or select the stored draft after import.
-
-The exhaustive finding catalog is maintained in
-[`ERROR_CODES.md`](../tools/config_check/examples/ERROR_CODES.md). In JSON,
-`code`, `severity`, `path`, and `message` are authoritative; this guide lists
-common codes for navigation rather than duplicating the catalog.
-
-## Fast symptom lookup
-
-| Symptom | Finding code | See |
-| --- | --- | --- |
-| SQLite cannot be opened or its schema is old/incomplete | `database-unavailable`, `database-schema-outdated`, `database-schema-incomplete` | [Stored configuration](#stored-configuration-and-database-findings) |
-| Selected stored key/version is absent | `stored-pipeline-not-found`, `stored-review-schema-not-found`, `stored-selector-invalid` | [Stored configuration](#stored-configuration-and-database-findings) |
-| Configured directory is missing | `path-missing-dir` | [Missing directories](#missing-directories-or-files) |
-| Required watch-folder path is missing | `watch-folder-missing-dir` | [Watch folder](#watch-folder-not-prepared) |
-| Module or class cannot be imported | `task-import-module-not-found`, `task-import-class-not-found` | [Import failures](#import-failures) |
-| Rules task has invalid clauses or context paths | `rules-duplicate-clause`, `rules-context-path-invalid`, `rules-field-not-found` | [Rules validation](#rules-task-validation-errors) |
-| Stored/portable pipeline task order or dependencies fail | `pipeline-multiple-split-tasks`, `pipeline-split-after-extract` | [Pipeline validation](../tools/config_check/README.md#pipeline-shape-and-ordering) |
-
-Some runtime YAML path findings currently have no stable finding code. Use the
-reported `path` and `message` fields to identify those; do not infer a code from
-the wording.
-
-## Stored Configuration And Database Findings
-
-The default `validate` command reads `database.path` in read-only mode and
-checks active published pipeline versions plus watch-folder bindings. It never
-runs migrations or repairs data.
-
-The shared checker validates portable/stored definitions. Additional pipeline
-business rules are applied by the admin draft validation and publish flow;
-runtime YAML validation does not run that same full pipeline-rule pass.
-
-- `database-unavailable`: confirm the configured SQLite path exists and the
-  account can read it.
-- `database-schema-unavailable`, `database-schema-outdated`, or
-  `database-schema-incomplete`: stop using stored selectors, back up the
-  database, and start the application with approved migrations enabled. Do not
-  ask the validator to migrate production state.
-- `stored-active-pipeline-missing`: publish and activate at least one valid
-  pipeline and bind every enabled ingress path.
-- `stored-pipeline-not-found` or `stored-review-schema-not-found`: check the
-  stable key and selector. Use exactly one source selector:
-  `--pipeline invoices --draft`, `--pipeline invoices --version 3`,
-  `--review-schema invoice --draft`, or
-  `--review-schema invoice --version 2`. `--draft` and `--version` require a
-  selected key; they cannot be combined, and `--pipeline` and
-  `--review-schema` are mutually exclusive. `--all-stored` cannot be combined
-  with an individual selector.
-- A stored content-hash mismatch indicates corruption or unsupported direct
-  database modification. Restore a verified backup; do not edit an immutable
-  row.
-- Dependency or binding findings mean an exact referenced version is missing,
-  ineligible, or mismatched with its template. Correct the draft/binding
-  through the administrator UI and publish where required.
-
-Use `--all-stored --format json` to collect the full set. JSON output and
-redacted diffs must not contain resolved secrets. Exit code `0` is clean, `1`
-has errors, `2` is warning-only, and `64` indicates bad command usage.
-When a run contains both errors and warnings, the exit code is `1`; error status
-takes precedence, so automation must inspect JSON findings if it also needs to
-detect warnings.
-
-Top-level deployment YAML `pipeline` and `tasks` sections are optional after
-their definitions have been published into SQLite. If they remain, the checker
-reports migration-only deprecation warnings; remove them when they are no
-longer needed as import sources. Keep `pipeline_secrets`, because stored
-definitions resolve references such as:
-
-```yaml
-api_key:
-  $secret: llamacloud-primary
-```
-
-The referenced alias must exist under deployment-owned `pipeline_secrets`.
-Config-check accepts the reference object without requiring or exposing the
-resolved value.
-
-## Portable Definition Findings
-
-Portable files are not active configuration: import updates a draft only, and
-an explicit publish is still required. The current `validate-file --kind
-pipeline` path fails because the command passes `pipeline` to a validator that
-requires `pipeline-bundle`, while the CLI does not accept `pipeline-bundle` for
-`validate-file`. For now, validate a pipeline in its admin draft before
-publishing. `validate-file --kind review-schema` remains available. Stable keys
-and version metadata are portable; database UUIDs and resolved secret values
-are not.
-
-## Missing Directories Or Files
-
-**Symptom**
-```
-[ERROR] web.upload_dir: Directory does not exist: C:\missing\uploads
-```
-
-**Fixes**
-- Create the directory on disk before running jobs: `New-Item -ItemType Directory -Path C:/missing/uploads`
-- Or adjust the configuration value to point to an existing location.
-- Relative paths default to the checked YAML file's directory. Use `--base-dir`
-  only to deliberately override filesystem validation; it never redirects the
-  SQLite database selected by `database.path` beside the YAML file.
-
-## Watch Folder Not Prepared
-
-**Symptom**
-```
-[ERROR] watch_folder.dir: watch_folder.dir directory does not exist
-```
-
-**Fixes**
-- Provision the folder manually. The validator intentionally refuses to auto-create watch folders.
-- Double check that the account running the service has read/write permissions.
-- `watch_folder.dir` is a required startup-compatibility path; it does not route
-  documents. Provision and validate every enabled SQLite watch-folder binding
-  separately, because each binding selects one exact published pipeline
-  version.
-
-## YAML Parse Errors
-
-**Symptom**
-```
-[ERROR] config: while scanning a quoted scalar ... found unexpected end of stream
-```
-
-**Fixes**
-- Run `.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --format json` to get precise line/column hints.
-- Verify indentation is two spaces and that all quoted strings are terminated.
-- For large files, validate subsets by commenting blocks with `#` until the offending section is isolated.
-
-## Unknown Keys In Strict Mode
-
-**Symptom**
-```
-[ERROR] web.unexpected: Unknown key is not permitted in strict mode
-```
-
-**Fixes**
-- Remove the unexpected key or move it under the nearest `params` mapping if it belongs to a task.
-- Omit `--strict` when validating a legacy file that intentionally carries
-  extra metadata. Without `--strict`, unknown keys are warnings rather than
-  blockers; review them instead of assuming the configuration was fully
-  recognized. Add `--strict` when unknown keys should fail validation.
-
-## Import Failures
-
-**Symptom**
-```
-[ERROR] tasks.store_json.module: Unable to import module 'custom.invalid.module'
-```
-
-**Fixes**
-- Confirm the package is installed in the repository environment (`.\.venv\Scripts\python.exe -m pip show package-name`).
-- Add the project root to `PYTHONPATH` or install the module in editable mode.
-- Verify the class name matches the exported symbol inside the module.
-
-## Unapproved Pipeline Task
-
-**Symptom**
-```
-[ERROR] tasks.customer_validation: Pipeline task 'customer_validation' uses unapproved task class custom_step.customer_validation.CustomerValidationTask.
-```
-
-**Fixes**
-- Use a built-in `standard_step.*` task class, or deploy the customer task under the `custom_step.` package.
-- Add the exact custom module/class pair to deployment YAML under `custom_steps.registry`.
-
-```yaml
-custom_steps:
-  enabled: true
-  registry:
-    customer_validation:
-      module: custom_step.customer_validation
-      class: CustomerValidationTask
-```
-
-## Pipeline Cardinality Or Ordering Errors (Stored/Portable Definitions)
-
-These pipeline business-rule findings come from pipeline draft/version
-validation. They are not produced by basic deployment YAML validation. Use the
-admin draft validator, or validate a selected stored draft/version, to check
-these ordering and cardinality rules.
-
-**Symptoms**
-```
-[ERROR] pipeline[2]: Workflow pipeline can include only one split task; found 2.
-[ERROR] pipeline[3]: Split task must be configured before the extract task.
-[ERROR] pipeline[0]: Review gate task must be configured after the extract task.
-[ERROR] pipeline: Pipeline must include at least one extraction task to produce metadata for downstream steps
-```
-
-**Fixes**
-- Keep only one active extraction task, one active split task, and one active review-gate task in `pipeline`.
-- It is acceptable to define alternate task entries under `tasks`, but only one task of each singleton type should be listed in the active `pipeline`.
-- Put split before extraction when split is used, for example:
-  ```yaml
-  pipeline:
-    - split_documents
-    - extract_document_data
-    - review_gate
-    - store_metadata_json
-  ```
-- Put review gate after extraction so extracted fields, confidence values, and schema checks are available.
-- Ensure at least one extraction task appears before downstream storage or rules tasks.
-
-Multiple extraction tasks violate the one-extraction cardinality rule and are
-a blocking pipeline validation error, not just a performance warning.
-
-## Duplicate Pipeline Task Type Warnings
-
-**Symptom**
-```
-[WARNING] pipeline[5]: Task type 'standard_step.storage.store_metadata_as_json.StoreMetadataAsJson' appears multiple times in the pipeline. This is allowed, but verify the duplicate is intentional.
-```
-
-**Fixes**
-- If repeated execution is intentional, leave the duplicate and document why the workflow needs two instances.
-- If it is accidental, remove the duplicate pipeline entry or consolidate the two task configurations.
-- For singleton types (extract, split, review gate), duplicates are blocking errors rather than warnings.
-
-## Missing Extraction Credentials
-
-**Symptom**
-```
-[ERROR] tasks.extract_metadata.params.api_key: Extraction tasks require 'api_key' to be a non-empty string or valid $secret reference.
-```
-
-**Fixes**
-- In a stored or portable versioned definition, use a secret reference rather
-  than a literal or placeholder:
-  ```yaml
-  api_key:
-    $secret: llamacloud-primary
-  ```
-- Define the referenced alias under deployment-owned `pipeline_secrets` in the
-  ignored runtime YAML. Never put the resolved credential in SQLite, exports,
-  committed examples, or validation output.
-- A legacy YAML pipeline may still contain a non-empty string while being
-  migrated, but remove that legacy workflow definition after publishing the
-  versioned pipeline.
-- For LlamaCloud Extract v2, `configuration_id` is optional. If omitted, the task builds an inline schema from `fields`.
-- If you provide `configuration_id`, it must be a non-empty string from the LlamaCloud UI.
-- `agent_id` is legacy and is not required for new Extract v2 configuration.
-
-## Multiple Table Extraction Fields
-
-**Symptom**
-```
-[ERROR] tasks.extract_metadata.params.fields: Multiple extraction fields are marked is_table: true; ExtractPdfTask supports only a single table payload.
-```
-
-**Fixes**
-- Keep only one table field in the extraction task. A field is treated as a table when `is_table: true` or its type is `List[Any]`, including `Optional[List[Any]]`.
-- Change additional collection fields to a typed scalar list such as `List[str]`, or redesign the extraction schema so the single table contains the required structured rows.
-- Do not add another extraction task as a workaround. The active pipeline permits at most one extraction task, and both violations are blocking errors.
-- The administrator Pipeline editor and publish endpoint use the same
-  validation. A rejected publish creates no immutable SQLite version and
-  leaves the editable draft unchanged.
-
-## GLM-OCR Local Provider Configuration Errors
-
-**Common findings**
-
-```text
-[ERROR] tasks.glm_extract.params.ollama_host: GLM-OCR ollama_host must not contain credentials.
-[ERROR] tasks.glm_extract.params.ollama_host: GLM-OCR ollama_host must be an HTTP(S) base URL without a path, query, fragment, or invalid port.
-[ERROR] tasks.glm_extract.params.model: Required parameter 'model' must be a non-empty string.
-[ERROR] tasks.glm_extract.params.dpi: GLM-OCR dpi must be a positive integer.
-[ERROR] tasks.glm_extract.params.resolver_model: GLM-OCR resolver_model must be a non-empty string in document mode.
-[ERROR] tasks.glm_extract.params.resolver_max_dimension: GLM-OCR resolver_max_dimension must be between 256 and 4096.
-[ERROR] tasks.glm_extract.params.resolver_max_attempts: GLM-OCR resolver_max_attempts must be between 1 and 5.
-```
-
-**Fixes**
-
-- Use a base URL such as `http://127.0.0.1:11434`; never embed a username,
-  password, API key, query string, or fragment.
-- Set `model` to a model already installed in Ollama, normally
-  `glm-ocr:latest`.
-- Keep `dpi`, `num_ctx`, and `num_predict` as positive integers and
-  `timeout_seconds` as a positive number, or omit them to use task defaults.
-- Use `resolution_mode: document` for complete-PDF field resolution and install
-  the non-empty `resolver_model` named by that published pipeline. Keep
-  `resolver_num_ctx` and `resolver_num_predict` positive, image dimension from
-  256 through 4096, and attempts from 1 through 5. Use `page_merge` only when
-  preserving the legacy first-supported-page behavior is intentional.
-- Remove LlamaCloud-only parameters such as `api_key`, `configuration_id`,
-  `tier`, `cite_sources`, and `confidence_scores` from the GLM task.
-- Keep at most one table field and give it non-empty `item_fields`.
-
-If validation passes but execution reports that Ollama is unavailable, start
-Ollama outside the application and verify `GET /api/version` on the configured
-host. If the model is missing, run `ollama pull glm-ocr:latest`. A timeout can
-mean that the local model is still loading or the document is too demanding;
-check Ollama and application logs, available memory, and the configured timeout.
-The application does not start Ollama automatically and does not fabricate
-confidence when GLM returns none.
-
-## LiteParse Local Provider Configuration Errors
-
-The approved pair is `standard_step.extraction.liteparse_extract` /
-`LiteParseExtractTask`. Add **Lite Parse Extract** in the visual pipeline editor;
-its fields and runtime settings belong to the published pipeline, not new
-`tasks` blocks in deployment YAML.
-
-| Finding | Fix |
-|---|---|
-| `param-liteparse-invalid-options` | Use a credential-free HTTP loopback host, a non-empty model/language, boolean OCR, valid one-based page ranges, DPI 72–600, positive limits and a finite positive timeout. Keep `num_predict` below `num_ctx`. Remove API credentials and remote OCR options. |
-| `param-liteparse-invalid-fields` | Configure 1–100 top-level fields using typed scalars, primitive lists, flat objects and at most one table. Give objects `object_fields` and tables `item_fields` containing supported primitive children. |
-
-LiteParse reuses the shared field constraint validator. Choices, date normalizers
-and sibling schema-order findings can therefore still have `param-glm-*` codes;
-these codes identify the validation rule, not the model used for extraction.
-Use unique non-empty text choices, `normalizer: iso_date` on text and a unique
-positive `schema_order` among siblings when ordering is supplied.
-
-Passing configuration validation does not prove that OCR or inference will run.
-Check local Ollama separately with `ollama list`; the selected model must be a
-downloaded local GGUF, normally `qwen3.5:9b-q4_K_M`. Cloud-backed tags are rejected
-at execution before text is submitted. Install the pinned Python requirements
-and ensure local OCR has the selected language data. No cloud API key is needed.
-
-At execution, oversize input, incomplete output and parse/OCR failures stop the
-task without truncation. HTTP 500 can indicate insufficient model memory; check
-local Ollama logs and ensure any smaller context still fits complete evidence.
-`keep_alive: 0` releases memory after requests but is not an out-of-memory
-guarantee. See [the task guide](liteparse_extract_task.md) for setup, defaults,
-failure handling and diagnostic citation behavior.
-
-## Structured Object Extraction Fields
-
-**Symptoms**
-```
-[ERROR] tasks.extract_metadata.params.fields.summary.object_fields: object_fields must define at least one object property
-[ERROR] tasks.extract_metadata.params.fields.summary.object_fields: object_fields is supported only for Dict[str, Any] fields
-[ERROR] tasks.extract_metadata.params.fields.summary.object_fields.values.type: Structured object properties must use str, int, float, or bool
-```
-
-**Fixes**
-- Use `type: "Dict[str, Any]"` on the parent extraction field.
-- Define at least one child under `object_fields`.
-- Keep `object_fields` flat. Child types may be `str`, `int`, `float`, `bool`, or their `Optional[...]` forms.
-- Use a `List[Any]` table field with `item_fields` when the extracted value is a list of objects rather than one object.
-- Configure the review schema separately with `type: object` and matching child keys under `properties`.
-
-## Local Drive Storage Requirements
-
-**Symptom**
-```
-[ERROR] tasks.store_local.params.files_dir: Parameter 'files_dir' is required and must be a non-empty string
-[ERROR] tasks.store_local.params.filename: Parameter 'filename' is required and must be a non-empty string
-```
-
-**Fixes**
-- Point `files_dir` at the directory where local-drive exports should be
-  written. The storage task creates it when execution begins, but the service
-  account must be able to create or write it.
-- Provide a filename template (for example `{supplier_name}.pdf`) so each processed document is uniquely named.
-- Confirm the service account can write to the directory; the validator checks only for configuration shape, not permissions.
-
-## Nested Storage Overrides
-
-**Symptom**
-```
-[WARNING] tasks.store_json.params.storage.extra: storage overrides do not support key 'extra'; allowed keys are data_dir, filename.
-```
-```
-[ERROR] tasks.store_json.params.storage: storage overrides must be provided as a mapping
-```
-
-**Fixes**
-- When using `storage:` overrides, keep only the supported keys (`data_dir` and `filename`). Remove or rename any other entries.
-- Define overrides as a mapping, e.g. `storage: { data_dir: ./alt-output, filename: {id}.json }`.
-- If overrides are unnecessary, drop the `storage` block entirely and keep the legacy top-level `data_dir` and `filename` parameters.
-
-## Rules Task Required Configuration
-
-**Symptom**
-```
-[ERROR] tasks.update_reference.params.csv_match.type: csv_match.type must be 'column_equals_all'
-[ERROR] tasks.update_reference.params.csv_match.clauses: csv_match.clauses must define between 1 and 5 entries
-[ERROR] tasks.update_reference.params.write_value: Parameter 'write_value' must be a string when provided
-[ERROR] tasks.update_reference.params.backup: Parameter 'backup' must be a boolean when provided
-```
-
-**Fixes**
-- Confirm `tasks.<name>.module` points at `standard_step.rules.update_reference` (or a compatible custom implementation).
-- Provide required strings:
-  - `reference_file`: path to the CSV file being updated.
-  - `update_field`: the column that will be rewritten.
-- Ensure `csv_match` is a mapping with `type: column_equals_all` and a
-  `clauses` list containing 1-5 mappings. Detailed clause, column, context,
-  and CSV findings are in [Rules task validation](#rules-task-validation-errors).
-- Optional parameters must have correct types when provided:
-  - `write_value`: string value to write to matched rows (optional, defaults to "Updated").
-  - `backup`: boolean flag to create .backup files (optional, defaults to true).
-
-## Deprecated Task Slug
-
-**Symptom**
-```
-[WARNING] tasks.update_reference.params.task_slug: Parameter 'task_slug' is deprecated and ignored; the key listed in pipeline is the authoritative task identity
-```
-
-**Fix**
-- Remove `task_slug` from the task's `params` mapping.
-- Keep the desired task identity as the key referenced by the top-level `pipeline` list. No replacement parameter is required.
-
-## Housekeeping Task Configuration Errors
-
-**Symptom**
-```
-[ERROR] tasks.cleanup_task.params.processing_dir: CleanupTask processing_dir must be a non-empty string when provided
-```
-
-**Fixes**
-- For a legacy explicit housekeeping definition, confirm `tasks.<name>.module`
-  points at `standard_step.housekeeping.cleanup_task` before removing that
-  definition from deployment YAML.
-- The `processing_dir` parameter is optional but when provided must be:
-  - A non-empty string value.
-  - A valid directory path where temporary processing files are cleaned up. Workflow state is stored in SQLite, not status files.
-- Do not add the built-in cleanup task to `tasks` or `pipeline`. `WorkflowLoader`
-  runs it automatically and records the reserved `cleanup_task` task run.
-- If not provided, the task defaults to using `'processing'` as the directory name.
-- Ensure the directory exists and the service account has read/write permissions.
-
-## Split Task Configuration Errors
-
-**Symptom**
-```
-[ERROR] tasks.split_documents.params.split_dir: Parameter 'split_dir' is required and must be a non-empty string
-[ERROR] tasks.split_documents.params.categories: Enabled LlamaCloudSplitTask requires categories or configuration_id.
-[ERROR] tasks.split_documents.params.allow_uncategorized: allow_uncategorized must be one of include, forbid, or omit.
-```
-
-**Fixes**
-- Add `split_dir` under the configured `LlamaCloudSplitTask` params.
-- Use a directory path owned by the split task, for example:
-  ```yaml
-  tasks:
-    split_documents:
-      module: standard_step.split.llamacloud_split
-      class: LlamaCloudSplitTask
-      params:
-        split_dir: "data/app/split"
-  ```
-- The split task creates `split_dir` when it reserves its first child PDF.
-  `ConfigManager` does not inspect or create directories inside SQLite-backed
-  pipeline definitions.
-- When `enabled: true`, configure either `configuration_id` from LlamaCloud or a non-empty `categories` list.
-- Set `allow_uncategorized` to exactly one of `include`, `forbid`, or `omit`.
-- Use only `high`, `medium`, and `low` in `fail_on_confidence_levels`.
-- Set `fail_on_unknown_category` to a real boolean (`true` or `false`), not a quoted string.
-- Admin pipeline validation may also report `split-final-pipeline-step` when a
-  split task has no downstream child work. Add downstream tasks or remove the
-  split if fan-out is not needed.
-
-## Review Gate Configuration Errors
-
-**Symptoms**
-```
-[ERROR] tasks.review_gate.params.confidence_threshold: ReviewGateTask confidence_threshold must be between 0 and 1.
-[ERROR] tasks.review_gate.params.resume_policy: ReviewGateTask currently supports only resume_policy: next_task.
-[ERROR] tasks.review_gate.params.schema_version_id: ReviewGateTask requires an exact published schema_version_id.
-```
-
-**Fixes**
-- Set `confidence_threshold` to a number from `0` through `1`, for example `0.95`.
-- Use `resume_policy: next_task` or omit the setting.
-- Use only `high`, `medium`, and `low` in `split_confidence_levels_requiring_review`.
-- In the Pipeline editor, select an exact published review-form version. The
-  task parameter and persisted pipeline dependency must agree on that
-  `schema_version_id`.
-- If validating a legacy migration file that still uses `schema_file`, confirm
-  it points to a YAML, YML, or JSON schema under a configured legacy schema
-  directory, import and publish it, and replace the file reference before
-  publishing the pipeline.
-
-## Web Server Configuration Errors
-
-**Symptoms**
-```
-[ERROR] web.host: Web host must be a non-empty string
-[ERROR] web.port: Web port must be an integer between 1 and 65535
-```
-
-**Fixes**
-- **Empty or missing host**: Set `web.host` to a valid hostname or IP address:
-  - `host: "127.0.0.1"` for localhost access only
-  - `host: "0.0.0.0"` to accept connections from any interface
-  - `host: "localhost"` for local development
-- **Invalid port number**: Set `web.port` to a valid port number between 1 and 65535:
-  - `port: 8000` for development (default)
-  - `port: 80` for HTTP (requires admin privileges on Windows)
-  - `port: 443` for HTTPS (requires admin privileges on Windows)
-  - Avoid ports below 1024 unless running with administrator privileges
-
-## Watch Folder Configuration Errors
-
-**Symptoms**
-```
-[ERROR] watch_folder.validate_pdf_header: PDF header validation must be a boolean value
-[ERROR] watch_folder.processing_dir: Processing directory must be a non-empty string
-```
-
-**Fixes**
-- **Invalid PDF validation setting**: Set `watch_folder.validate_pdf_header` to a boolean value:
-  - `validate_pdf_header: true` to enable PDF header validation (recommended)
-  - `validate_pdf_header: false` remains accepted for legacy compatibility
-  - Remove quotes around boolean values (not `"true"` but `true`)
-- The primary batch-upload API and the SQLite watch-folder coordinator always
-  validate the `%PDF-` signature, regardless of this legacy setting.
-- **Empty or missing processing directory**: Set `watch_folder.processing_dir` to a valid directory name:
-  - `processing_dir: "processing"` (default)
-  - `processing_dir: "temp_processing"` for custom directory
-  - Ensure the directory name is not empty or just whitespace
-
-## Enhanced Import Validation Errors
-
-**Symptoms** (when using `--import-checks` flag)
-```
-[ERROR] tasks.my_task.module: Module 'nonexistent.module' not found
-[ERROR] tasks.my_task.class: Class 'NonExistentClass' not found in module 'standard_step.extraction.extract_pdf'
-[ERROR] tasks.my_task.class: 'join' is not a callable class in module 'os.path'
-```
-
-**Fixes**
-- **Module not found**: 
-  - Verify the module name spelling: `module: standard_step.extraction.extract_pdf`
-  - Ensure the module is installed or available in the Python path
-  - Check that the module file exists in the expected location
-  - For custom modules, ensure they are properly installed or in PYTHONPATH
-- **Class not found in module**:
-  - Verify the class name spelling: `class: ExtractPdfTask`
-  - Check that the class exists in the specified module
-  - Ensure the class hasn't been renamed or moved to a different module
-- **Attribute is not a callable class**:
-  - Ensure you're referencing a class, not a function or variable
-  - Example: `os.path.join` is a function, not a class
-  - Use actual task classes like `ExtractPdfTask`, not utility functions
-
-## Rules Task Validation Errors
-
-### CSV File Issues
-
-**Symptoms**
-```
-[ERROR] tasks.update_reference.params.reference_file: Reference CSV file 'suppliers.csv' not found
-[ERROR] tasks.update_reference.params.reference_file: Cannot read CSV file 'suppliers.csv': [Errno 13] Permission denied
-[ERROR] tasks.update_reference.params.reference_file: Reference CSV file 'suppliers.csv' is empty
-[ERROR] tasks.update_reference.params.reference_file: Reference CSV file 'suppliers.csv' is empty or has no columns
-```
-
-**Fixes**
-- **File not found (`file-not-found`)**:
-  - Verify the CSV file path is correct: `reference_file: "reference_file/suppliers.csv"`
-  - Ensure the file exists at the specified location
-  - Use absolute paths for testing: `reference_file: "C:/full/path/to/suppliers.csv"`
-  - Check paths relative to the YAML directory; `--base-dir` explicitly overrides filesystem validation only
-- **Cannot read CSV (`rules-csv-not-readable`)**:
-  - Check file permissions: ensure the file is readable by the current user
-  - Close the file in Excel or other applications that might have it locked
-  - Verify the file is not corrupted by opening it manually
-  - Ensure the file is in valid CSV format
-- **Empty CSV file (`rules-csv-empty`)**:
-  - Add data to the CSV file or use a different reference file
-  - Ensure the CSV contains at least header rows with column names
-- **Missing headers (`rules-csv-missing-headers`)**:
-  - Add proper column headers to the first row of the CSV file
-  - Example: `supplier_name,invoice_number,total_amount,status`
-
-### Column Reference Issues
-
-**Symptoms**
-```
-[ERROR] tasks.update_reference.params.update_field: Update field 'Status' not found in CSV columns: supplier_name, invoice_number, status
-[ERROR] tasks.update_reference.params.csv_match.clauses[0].column: Clause column 'Supplier_Name' not found in CSV columns: supplier_name, invoice_number, status
-```
-
-**Fixes**
-- **Column not found (`rules-column-not-found`)**:
-  - Check exact column names in CSV file (case-sensitive)
-  - Fix case mismatches: `Status` → `status`, `Supplier_Name` → `supplier_name`
-  - Verify column names don't have extra spaces or special characters
-  - Add missing columns to CSV file if needed
-  - Use `Get-Content "file.csv" | Select-Object -First 1` to view actual headers
-
-### Clause Configuration Issues
-
-**Symptoms**
-```
-[ERROR] tasks.update_reference.params.csv_match.clauses[1]: Duplicate clause: column='supplier_name', from_context='supplier_name'
-[WARNING] tasks.update_reference.params.csv_match.clauses: Multiple clauses reference column 'supplier_name' (indices: [0, 2]). This may create impossible AND conditions.
-[WARNING] tasks.update_reference.params.csv_match.clauses: Multiple clauses use context 'supplier_name' (indices: [0, 3]). This might be intentional but worth noting.
-```
-
-**Fixes**
-- The CLI currently renders low-priority rule diagnostics as `[WARNING]`, even
-  when the finding code's internal diagnostic metadata says `info`. The summary
-  therefore reports `0 info messages`; treat these as advisory where appropriate.
-- **Duplicate clauses (`rules-duplicate-clause`)**:
-  - Remove exact duplicate clauses with identical column and from_context values
-  - Make clauses unique by using different columns or contexts
-  - Check for copy-paste errors in configuration
-- **Impossible conditions (`rules-impossible-condition`)**:
-  - Review business logic: multiple clauses on same column create AND conditions
-  - Example: `supplier_name = "A" AND supplier_name = "B"` is impossible
-  - Use different columns for different conditions
-  - Consider if OR logic is needed (may require separate rules tasks)
-- **Context reuse (`rules-context-reuse`)**:
-  - This is a low-priority diagnostic; multiple clauses using the same context may be intentional
-  - Review if this matches your business requirements
-  - Consider using different context values if clauses should be independent
-
-### Context Path Issues
-
-**Symptoms**
-```
-[ERROR] tasks.update_reference.params.csv_match.clauses[0].from_context: Invalid dotted path syntax: 'supplier..name'
-[WARNING] tasks.update_reference.params.csv_match.clauses[1].from_context: Deprecated 'data.' prefix in context path: 'data.supplier_name'. Use bare field name 'supplier_name' instead.
-[WARNING] tasks.update_reference.params.csv_match.clauses[2].from_context: Field 'nonexistent_field' not found in extraction fields
-```
-
-**Fixes**
-- **Invalid path syntax (`rules-context-path-invalid`)**:
-  - Fix malformed dotted notation: `supplier..name` → `supplier_name`
-  - Remove leading/trailing dots: `.supplier_name` → `supplier_name`
-  - Use proper dotted notation: `invoice.total_amount` for nested fields
-- **Deprecated data prefix (`rules-deprecated-data-prefix`)**:
-  - Remove 'data.' prefix from context paths
-  - Change: `data.supplier_name` → `supplier_name`
-  - Modern extraction tasks don't use the data. prefix
-- **Field not found (`rules-field-not-found`)**:
-  - Ensure the field exists in your extraction task configuration
-  - Verify field names match between extraction and rules tasks
-  - Add missing fields to extraction task if needed
-  - Use `--check-files` flag for comprehensive field validation
-
-### Semantic Validation Issues
-
-**Symptoms**
-```
-[WARNING] tasks.update_reference.params.csv_match.clauses[0]: Column 'amount' appears to be numeric but clause forces string comparison. Consider removing 'number: false' or verify the column type.
-[WARNING] tasks.update_reference.params.csv_match.clauses[1]: Field reference 'unlikely_field_name' doesn't match common extraction patterns. Verify this field exists in your extraction configuration.
-```
-
-**Fixes**
-- **Type mismatch (`rules-semantic-type-mismatch`)**:
-  - Use correct type flag for numeric columns: `number: true`
-  - For text columns, use `number: false` or omit (default is false)
-  - Verify CSV column actually contains the expected data type
-  - Example: For amount columns, use `number: true` for numeric comparison
-- **Unrealistic field reference (`rules-unrealistic-field-reference`)**:
-  - This is a low-priority diagnostic - verify the field name exists in extraction configuration
-  - Check field names follow your extraction naming conventions
-  - May be intentional for custom fields, but worth double-checking
-
-### Runtime File Validation Issues (--check-files flag)
-
-**Symptoms**
-```
-[ERROR] tasks.update_reference.params.reference_file: Reference file does not exist: C:/path/to/suppliers.csv
-[ERROR] tasks.update_reference.params.reference_file: Reference file is not readable (permission denied): C:/path/to/suppliers.csv
-[ERROR] tasks.update_reference.params.reference_file: Reference path is not a file: C:/path/to/directory
-```
-
-**Fixes**
-- **File not found (`file-not-found`)**:
-  - Ensure file exists at the specified path
-  - Check file path spelling and location
-  - Verify working directory is correct
-- **File not readable (`file-not-readable`)**:
-  - Check file permissions for the current user
-  - Ensure file is not locked by another application
-  - Verify file system permissions allow read access
-- **Path is not a file (`file-not-file`)**:
-  - Ensure path points to a file, not a directory
-  - Check for typos in file path that might point to directory instead
-
-### Pandas Dependency Issues
-
-**Symptoms**
-```
-[ERROR] tasks.update_reference.params.reference_file: pandas is required for CSV validation but is not available
-```
-
-**Fixes**
-- **Missing pandas (`rules-csv-pandas-missing`)**:
-  - Restore project dependencies through the repository environment:
-    `.\.venv\Scripts\python.exe -m pip install -r requirements.txt`
-  - Verify pandas is available in the current Python environment
-  - Check that the correct Python environment is being used
-
-## Token Or Dependency Issues
-
-**Symptoms**
-```
-[ERROR] pipeline[1]: Storage task 'store_json' uses extracted data tokens but no extraction task runs earlier.
-[WARNING] pipeline[2]: Storage task 'store_json' expects extraction metadata but no metadata-producing extraction task runs earlier.
-[WARNING] tasks.store_json.params.filename: Filename token '{line_items}' in storage task 'store_json' references non-scalar extraction field 'line_items'. Use a scalar field or update the template.
-[ERROR] tasks.store_json.params.filename: Unknown template token 'supplier_code'. Add an extraction field or update the template.
-```
-
-**Fixes**
-- Ensure at least one extraction task runs before any storage or archive steps, so tokens resolve correctly.
-- Schedule a metadata-producing extraction task, such as `extract_document_data`, ahead of metadata storage tasks that expect extraction field metadata.
-- Insert a context initializer task (for example `standard_step.context.generate_ids`) before referencing `{nanoid}` or other context-scoped tokens.
-- Expose table columns that need to appear in filenames as scalar extraction fields, or adjust the filename template to avoid table tokens.
-- Create the missing extraction field (preferably scalar) or remove the unknown placeholder if the value is not needed.
-
-## Performance Analysis Issues
-
-### Excessive Extraction Fields
-
-**Symptoms**
-```
-[WARNING] tasks.extract_data.params.fields: Extraction task has 25 fields. Consider reducing to under 20 for optimal performance.
-[ERROR] tasks.extract_data.params.fields: Extraction task has 55 fields, which may severely impact performance. Consider reducing to under 20 fields.
-```
-
-**Fixes**
-- **Reduce field count**: Remove unnecessary extraction fields
-- **Simplify the schema**: Move optional or unused provider fields out of the
-  definition
-- **Prioritize fields**: Keep only essential fields for core functionality
-- **Use selective extraction**: Extract only fields needed for immediate processing
-
-### Complex Context Paths
-
-**Symptoms**
-```
-[WARNING] tasks.update_reference.params.csv_match.clauses: Rules task has 2 clauses with deeply nested context paths (4+ levels). Consider simplifying context path structure.
-```
-
-**Fixes**
-- **Simplify paths**: Reduce deeply nested context paths (4+ levels) to simpler references
-- **Flatten structure**: Consider flattening the extraction field structure to avoid deep nesting
-- **Use workflow field keys**: Keep `from_context` references pointed at normalized workflow fields, and avoid unnecessary nested structures.
-- **Review necessity**: Ensure deeply nested paths are necessary for the business requirements
-
-### Pipeline Performance Issues
-
-**Symptoms**
-```
-[WARNING] pipeline: Pipeline has 20 tasks. Consider optimizing for better performance (recommended: <15).
-```
-
-**Fixes**
-- **Consolidate tasks**: Combine related tasks into single, more efficient tasks
-- **Optimize extraction**: Keep the required single extraction task focused on the fields needed by the workflow
-- **Parallel processing**: Consider if some tasks can be parallelized (requires code changes)
-- **Remove redundancy**: Eliminate duplicate or unnecessary processing steps
-
-## Security Analysis Issues
-
-### Path Traversal Vulnerabilities
-
-**Symptoms**
-```
-[ERROR] web.upload_dir: Upload directory path '../../../etc/uploads' contains potentially dangerous patterns: ../, ../. This may be vulnerable to path traversal attacks.
-[WARNING] tasks.store_data.params.data_dir: Task parameter 'data_dir' path '../output' contains potentially dangerous patterns: ../. This may be vulnerable to path traversal attacks.
-```
-
-**Fixes**
-- **Choose an application-owned path**: Replace unintended traversal with a
-  path under the deployment's intended data root, such as `C:\app\uploads`.
-- **Remove traversal patterns**: Eliminate `../`, `..\\`, and `..` from paths
-- Confirm the resolved path is the intended location and that the service
-  account has only the access it needs. The security analysis is heuristic; a
-  finding alone does not establish exploitability.
-
-### Suspicious System Paths
-
-**Symptoms**
-```
-[WARNING] web.upload_dir: Upload directory path 'C:\Windows\System32\uploads' references system directories: C:\Windows\. Ensure this is intentional and properly secured.
-[WARNING] watch_folder.dir: Watch directory path '/etc/watch-folder' references system directories: /etc/. Ensure this is intentional and properly secured.
-```
-
-**Fixes**
-- **Avoid system directories**: Don't use system directories unless absolutely necessary
-  - Avoid: `/etc/`, `/var/`, `C:\Windows\`, `C:\Program Files\`
-  - Use: `./data/`, `C:\app\data\`, `/opt/app/data/`
-- **Use application directories**: Create dedicated directories for your application
-- **Verify permissions**: Ensure proper access controls if system directories are required
-- **Document justification**: If system directories are necessary, document why and ensure security measures
-
-### Command Injection Risks
-
-**Symptoms**
-```
-[WARNING] tasks.store_data.params.files_dir: Task parameter 'files_dir' path '/tmp; rm -rf /' contains potentially dangerous patterns: ;. This may be vulnerable to path traversal attacks.
-```
-
-**Fixes**
-- Treat this as a heuristic path warning, not evidence that the path is passed
-  to a shell. Confirm the resolved path is intended and prefer a path without
-  suspicious separators if they are not required by the deployment.
-
-### Environment Variable Risks
-
-**Symptoms**
-```
-[WARNING] web.upload_dir: Upload directory path '$HOME/../sensitive' contains potentially dangerous patterns: $, ../. This may be vulnerable to path traversal attacks.
-```
-
-**Fixes**
-- Environment-variable expansion is supported by configuration path handling.
-  This analyzer flags `$`/`%` patterns heuristically; confirm the resolved path
-  is intended, and use an explicit path if the warning is not useful in your
-  deployment.
-
-### Unsafe Directory Locations
-
-**Symptoms**
-```
-[WARNING] web.upload_dir: Directory 'C:\Windows\Temp\uploads' is located in a potentially unsafe system location. Consider using a more secure location.
-```
-
-**Fixes**
-- **Use application directories**: Move directories to application-specific locations
-  - Change: `C:\Windows\Temp\uploads` → `C:\app\uploads`
-  - Change: `/tmp/uploads` → `/opt/app/uploads`
-- **Create dedicated directories**: Establish directories specifically for your application
-- **Set proper permissions**: Ensure directories have appropriate access controls
-- **Avoid temporary directories**: Don't use system temporary directories for persistent data
-
-## Still Stuck?
-
-Run the validator in verbose mode to see detailed logging:
-```
-.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml
-```
-
-For comprehensive validation including import checks:
-```
-.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --import-checks
-```
-
-For full validation including file system checks:
-```
-.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --check-files
-```
-
-For performance and security analysis:
-```
-.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --performance-analysis --security-analysis
-```
-
-For a combined deployment analysis and full stored-object audit:
-```
-.\.venv\Scripts\python.exe -m tools.config_check --verbose validate --config .\config.yaml --all-stored --import-checks --check-files --performance-analysis --security-analysis
-```
-
-This combines optional analysis of runtime/legacy YAML with the read-only
-`--all-stored` audit. The optional import, file, performance, and security flags
-do not run a second analysis pass over SQLite definitions; stored definitions
-receive their normal structural, parameter, approval, secret, and dependency
-checks.
-
-Get machine-readable output for automated troubleshooting:
-```
-.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --format json
-.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --check-files --performance-analysis --security-analysis --format json
-```
-
-If the failure persists, attach the JSON output and relevant configuration snippet when contacting the engineering team. Include which validation flags you used (`--import-checks`, `--check-files`, `--performance-analysis`, `--security-analysis`) as these affect which validation errors are reported.
+| Audience | Readers following an earlier documentation link |
+| Owner | Application maintainers |
+| Status | Compatibility navigation |
+| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Applies to | Previous documentation addresses; follow current links below |
+
+This address is retained for navigation. Use the
+[current documentation](it-support/config-check-troubleshooting.md) or choose another
+[reading path](README.md).
+The [original document](history/archive/2026-10-10/docs/config_check_troubleshooting.md)
+is preserved unchanged for historical reference.
+
+## Previous section links
+
+<a id="config-check-troubleshooting-guide"></a>
+
+[Config Check Troubleshooting Guide](it-support/config-check-troubleshooting.md)
+
+<a id="contents"></a>
+
+[Contents](it-support/config-check-troubleshooting.md#contents)
+
+<a id="choose-the-right-validation-world"></a>
+
+[Choose the right validation world](it-support/config-check-troubleshooting.md#choose-the-right-validation-world)
+
+<a id="fast-symptom-lookup"></a>
+
+[Fast symptom lookup](it-support/config-check-troubleshooting.md#fast-symptom-lookup)
+
+<a id="stored-configuration-and-database-findings"></a>
+
+[Stored Configuration And Database Findings](it-support/config-check-troubleshooting.md#stored-configuration-and-database-findings)
+
+<a id="portable-definition-findings"></a>
+
+[Portable Definition Findings](it-support/config-check-troubleshooting.md#portable-definition-findings)
+
+<a id="missing-directories-or-files"></a>
+
+[Missing Directories Or Files](it-support/config-check-troubleshooting.md#missing-directories-or-files)
+
+<a id="watch-folder-not-prepared"></a>
+
+[Watch Folder Not Prepared](it-support/config-check-troubleshooting.md#watch-folder-not-prepared)
+
+<a id="yaml-parse-errors"></a>
+
+[YAML Parse Errors](it-support/config-check-troubleshooting.md#yaml-parse-errors)
+
+<a id="unknown-keys-in-strict-mode"></a>
+
+[Unknown Keys In Strict Mode](it-support/config-check-troubleshooting.md#unknown-keys-in-strict-mode)
+
+<a id="import-failures"></a>
+
+[Import Failures](it-support/config-check-troubleshooting.md#import-failures)
+
+<a id="unapproved-pipeline-task"></a>
+
+[Unapproved Pipeline Task](it-support/config-check-troubleshooting.md#unapproved-pipeline-task)
+
+<a id="pipeline-cardinality-or-ordering-errors-storedportable-definitions"></a>
+
+[Pipeline Cardinality Or Ordering Errors (Stored/Portable Definitions)](it-support/config-check-troubleshooting.md#pipeline-cardinality-or-ordering-errors-storedportable-definitions)
+
+<a id="duplicate-pipeline-task-type-warnings"></a>
+
+[Duplicate Pipeline Task Type Warnings](it-support/config-check-troubleshooting.md#duplicate-pipeline-task-type-warnings)
+
+<a id="missing-extraction-credentials"></a>
+
+[Missing Extraction Credentials](it-support/config-check-troubleshooting.md#missing-extraction-credentials)
+
+<a id="multiple-table-extraction-fields"></a>
+
+[Multiple Table Extraction Fields](it-support/config-check-troubleshooting.md#multiple-table-extraction-fields)
+
+<a id="glm-ocr-local-provider-configuration-errors"></a>
+
+[GLM-OCR Local Provider Configuration Errors](it-support/config-check-troubleshooting.md#glm-ocr-local-provider-configuration-errors)
+
+<a id="liteparse-local-provider-configuration-errors"></a>
+
+[LiteParse Local Provider Configuration Errors](it-support/config-check-troubleshooting.md#liteparse-local-provider-configuration-errors)
+
+<a id="structured-object-extraction-fields"></a>
+
+[Structured Object Extraction Fields](it-support/config-check-troubleshooting.md#structured-object-extraction-fields)
+
+<a id="local-drive-storage-requirements"></a>
+
+[Local Drive Storage Requirements](it-support/config-check-troubleshooting.md#local-drive-storage-requirements)
+
+<a id="nested-storage-overrides"></a>
+
+[Nested Storage Overrides](it-support/config-check-troubleshooting.md#nested-storage-overrides)
+
+<a id="rules-task-required-configuration"></a>
+
+[Rules Task Required Configuration](it-support/config-check-troubleshooting.md#rules-task-required-configuration)
+
+<a id="deprecated-task-slug"></a>
+
+[Deprecated Task Slug](it-support/config-check-troubleshooting.md#deprecated-task-slug)
+
+<a id="housekeeping-task-configuration-errors"></a>
+
+[Housekeeping Task Configuration Errors](it-support/config-check-troubleshooting.md#housekeeping-task-configuration-errors)
+
+<a id="split-task-configuration-errors"></a>
+
+[Split Task Configuration Errors](it-support/config-check-troubleshooting.md#split-task-configuration-errors)
+
+<a id="review-gate-configuration-errors"></a>
+
+[Review Gate Configuration Errors](it-support/config-check-troubleshooting.md#review-gate-configuration-errors)
+
+<a id="web-server-configuration-errors"></a>
+
+[Web Server Configuration Errors](it-support/config-check-troubleshooting.md#web-server-configuration-errors)
+
+<a id="watch-folder-configuration-errors"></a>
+
+[Watch Folder Configuration Errors](it-support/config-check-troubleshooting.md#watch-folder-configuration-errors)
+
+<a id="enhanced-import-validation-errors"></a>
+
+[Enhanced Import Validation Errors](it-support/config-check-troubleshooting.md#enhanced-import-validation-errors)
+
+<a id="rules-task-validation-errors"></a>
+
+[Rules Task Validation Errors](it-support/config-check-troubleshooting.md#rules-task-validation-errors)
+
+<a id="csv-file-issues"></a>
+
+[CSV File Issues](it-support/config-check-troubleshooting.md#csv-file-issues)
+
+<a id="column-reference-issues"></a>
+
+[Column Reference Issues](it-support/config-check-troubleshooting.md#column-reference-issues)
+
+<a id="clause-configuration-issues"></a>
+
+[Clause Configuration Issues](it-support/config-check-troubleshooting.md#clause-configuration-issues)
+
+<a id="context-path-issues"></a>
+
+[Context Path Issues](it-support/config-check-troubleshooting.md#context-path-issues)
+
+<a id="semantic-validation-issues"></a>
+
+[Semantic Validation Issues](it-support/config-check-troubleshooting.md#semantic-validation-issues)
+
+<a id="runtime-file-validation-issues---check-files-flag"></a>
+
+[Runtime File Validation Issues (--check-files flag)](it-support/config-check-troubleshooting.md#runtime-file-validation-issues---check-files-flag)
+
+<a id="pandas-dependency-issues"></a>
+
+[Pandas Dependency Issues](it-support/config-check-troubleshooting.md#pandas-dependency-issues)
+
+<a id="token-or-dependency-issues"></a>
+
+[Token Or Dependency Issues](it-support/config-check-troubleshooting.md#token-or-dependency-issues)
+
+<a id="performance-analysis-issues"></a>
+
+[Performance Analysis Issues](it-support/config-check-troubleshooting.md#performance-analysis-issues)
+
+<a id="excessive-extraction-fields"></a>
+
+[Excessive Extraction Fields](it-support/config-check-troubleshooting.md#excessive-extraction-fields)
+
+<a id="complex-context-paths"></a>
+
+[Complex Context Paths](it-support/config-check-troubleshooting.md#complex-context-paths)
+
+<a id="pipeline-performance-issues"></a>
+
+[Pipeline Performance Issues](it-support/config-check-troubleshooting.md#pipeline-performance-issues)
+
+<a id="security-analysis-issues"></a>
+
+[Security Analysis Issues](it-support/config-check-troubleshooting.md#security-analysis-issues)
+
+<a id="path-traversal-vulnerabilities"></a>
+
+[Path Traversal Vulnerabilities](it-support/config-check-troubleshooting.md#path-traversal-vulnerabilities)
+
+<a id="suspicious-system-paths"></a>
+
+[Suspicious System Paths](it-support/config-check-troubleshooting.md#suspicious-system-paths)
+
+<a id="command-injection-risks"></a>
+
+[Command Injection Risks](it-support/config-check-troubleshooting.md#command-injection-risks)
+
+<a id="environment-variable-risks"></a>
+
+[Environment Variable Risks](it-support/config-check-troubleshooting.md#environment-variable-risks)
+
+<a id="unsafe-directory-locations"></a>
+
+[Unsafe Directory Locations](it-support/config-check-troubleshooting.md#unsafe-directory-locations)
+
+<a id="still-stuck"></a>
+
+[Still Stuck?](it-support/config-check-troubleshooting.md#still-stuck)

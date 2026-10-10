@@ -20,7 +20,7 @@ outputs. A skipped split continues the original document and must not set
 `split_children` or `pipeline_state=fan_out`. Child workflows start after the
 split step, preserve version attribution, and use existing fan-in. Recovery
 must never replay a started child or arbitrary downstream task. See
-[manual split operations](../docs/manual_split_task.md) for the supported
+[manual split operations](../docs/reference/tasks/splitting.md) for the supported
 recovery boundary and crash limitations.
 
 Treat a claimed continuation as active even before it records its first task.
@@ -408,7 +408,7 @@ Refer to the following standard task modules as examples of best practices and s
 - `standard_step.extraction.extract_pdf`
 - `standard_step.extraction.liteparse_extract`: generic local parsing and typed
   extraction with nullable confidence and diagnostic source evidence; see the
-  [task guide](../docs/liteparse_extract_task.md) for its provider-specific limits.
+  [task guide](../docs/reference/tasks/liteparse-extraction.md) for its provider-specific limits.
 - `standard_step.split.llamacloud_split`
 - `standard_step.review.review_gate`
 - `standard_step.storage.store_metadata_as_csv`

@@ -1,0 +1,1359 @@
+# PDF Processing System Architecture
+
+## Document status
+
+| Item | Value |
+| --- | --- |
+| Purpose | Technical orientation and architectural boundary reference |
+| Audience | Senior engineers, architects, technical leads, and operational owners |
+| Scope | Production application under `main.py`, `modules/`, `standard_step/`, and `web/` |
+| Excluded | User procedures, provider-specific field configuration, and the visual-editor prototype |
+| Last verified | 2026-10-09 |
+| Verified revision | Schema 9 pipeline archiving, processing-data cleanup, and editor regression review |
+| Owner | Application maintainers; update with architecture-affecting changes |
+| Review cadence | Review when process ownership, workflow state, persistence, or trust boundaries change |
+
+This document describes the current implementation, not a target-state
+architecture.
+
+## Contents and reading paths
+
+- [Start here](#start-here-for-a-codebase-takeover)
+- [Architecture and invariants](#architecture-at-a-glance)
+- [Runtime topology](#runtime-topology)
+- [Component boundaries and request traces](#component-boundaries)
+- [Ingestion and workflow execution](#ingestion-and-workflow-execution)
+- [State model and human review](#state-model)
+- [Split fan-out and fan-in](#split-fan-out-and-fan-in)
+- [Persistence and artifacts](#persistence-and-artifacts)
+- [Configuration architecture](#configuration-architecture)
+- [Frontend and UI architecture](#frontend-and-ui-architecture)
+- [API and trust boundaries](#api-authentication-and-trust-boundaries)
+- [Recovery and debugging](#errors-recovery-and-observability)
+- [Testing, debt, and change workflow](#testing-and-verification)
+
+**Reading paths:** Backend changes: component boundaries, ingestion, state,
+persistence, and API sections. Frontend changes: [frontend architecture](#frontend-and-ui-architecture)
+and [browser security](#browser-security). Operations/debugging: [runtime topology](#runtime-topology),
+[configuration](#configuration-architecture), and [debugging checklist](#debugging-checklist).
+New tasks: [task and context contract](#task-and-context-contract) and the
+[standard task guidelines](../tasks/standard_task_creation_guidelines.md).
+
+## Start here for a codebase takeover
+
+The normal execution path is a supervised local deployment:
+
+```text
+main.py
+ ├─ ConfigManager and startup checks
+ ├─ WatchFolderCoordinator (polling thread)
+ ├─ ProcessingWorker subprocess
+ │    └─ FileProcessor → WorkflowManager → WorkflowLoader → tasks
+ └─ Uvicorn web subprocess
+      └─ web/server.py → modules/api_router.py → services/repositories
+```
+
+The parent process owns normal database migration and supervision. The web
+process accepts browser/API work, while the worker is the only process that
+executes queued root workflows. All three processes use the configured SQLite
+database and filesystem, but each process owns an independent deployment
+configuration instance. Start investigations by identifying the process, then
+the batch/document/review ID, then the relevant task run and artifact records.
+
+For a first orientation, read this document with [`main.py`](../main.py),
+[`web/server.py`](../web/server.py), [`modules/api_router.py`](../modules/api_router.py),
+[`modules/services/processing_worker.py`](../modules/services/processing_worker.py),
+[`modules/workflow_manager.py`](../modules/workflow_manager.py), and
+[`modules/workflow_loader.py`](../modules/workflow_loader.py) open beside it.
+
+## Architecture at a glance
+
+The application processes PDFs through named, immutable pipeline versions
+stored in SQLite. Files enter through an exact watch-folder binding or an
+authenticated upload whose operator explicitly selects one eligible published
+version. Deployment YAML supplies paths, services, security settings, and
+secret aliases; legacy root `pipeline`/`tasks` and filesystem review schemas
+are migration/import sources rather than active runtime definitions.
+
+The essential model is:
+
+- SQLite is authoritative for operational workflow state.
+- SQLite is authoritative for pipeline/review-schema templates, editable
+  drafts, immutable versions, exact dependencies, and ingress bindings.
+- The filesystem stores PDFs, exports, schemas, configuration, and other large
+  artifacts.
+- Prefect wraps task execution and retries; it is not the authoritative
+  workflow-state store.
+- Human review is an application-level pause. Resume reconstructs context from
+  SQLite and starts a new flow at the next task.
+- Split processing continues a single whole-document segment on the original
+  workflow; other segment results create children with independent downstream
+  workflows and leaf-derived fan-in.
+- The production frontend is a server-rendered FastAPI/Jinja multi-page
+  application enhanced by page-specific vanilla JavaScript.
+- Dynamic task imports are allow-listed.
+- `/api/files` and `/api/status/{file_id}` are compatibility-only response
+  shapes backed by SQLite. Filesystem status files and `StatusManager` are not
+  part of runtime workflow state.
+
+## Key architectural decisions
+
+1. **SQLite owns operational state.** New workflow-state features use
+   repositories and services rather than status files.
+2. **The filesystem owns large artifacts.** SQLite records artifact role,
+   path, and metadata rather than file contents.
+3. **Pipeline composition is stored and versioned.** An editable SQLite draft
+   defines task order, implementation, parameters, and error behavior.
+   Publication creates an immutable executable version; YAML/JSON remain
+   portable import/export formats.
+4. **Workflow control is application-managed.** SQLite and workflow context
+   drive progress, pause, resume, failure, and split behavior.
+5. **Backend responsibilities are layered.** Routes handle HTTP concerns,
+   services handle use cases, and repositories handle table-specific storage.
+6. **Production and prototype UI are separate.** Production behavior belongs
+   under `web/`; `pipeline_visual_editor_prototype/` is not loaded at runtime.
+
+### Invariants to preserve
+
+- Every accepted document is pinned to one immutable pipeline version.
+- A review item is pinned to the exact review-schema version used by its
+  pipeline version.
+- The worker is the only normal executor of queued root workflows.
+- The parent is the only normal migration owner.
+- SQLite owns workflow state; the filesystem owns artifact contents.
+- Published pipeline and review-schema versions are immutable.
+- Review completion can acquire downstream resume only once.
+- Upload idempotency applies only to the same key, user, pipeline, and content.
+- Legacy YAML pipeline/task definitions are import sources, not runtime state.
+
+## Runtime topology
+
+**TL;DR:** The parent migrates the database, supervises child processes, and
+polls watch-folder bindings. The web process handles browser/API requests; the
+worker subprocess alone runs queued root workflows. All processes share SQLite
+and configured filesystem paths.
+
+```mermaid
+flowchart LR
+    subgraph Parent["Main process"]
+        Main["main.py<br/>startup and supervision"]
+        Watch["WatchFolderCoordinator"]
+        Main --> Watch
+    end
+
+    subgraph Worker["Processing worker subprocess"]
+        JobWorker["ProcessingWorker"] --> Runner["FileProcessor<br/>WorkflowManager<br/>WorkflowLoader"]
+        Runner --> Tasks["Configured tasks"]
+    end
+
+    subgraph Web["Uvicorn subprocess"]
+        App["FastAPI application"]
+        Pages["Jinja /app pages"]
+        APIs["JSON /api endpoints"]
+        Assets["CSS and JavaScript"]
+        App --> Pages
+        App --> APIs
+        App --> Assets
+    end
+
+    Main -->|starts and supervises| App
+    Main -->|starts and supervises| JobWorker
+    Watch --> DB[(SQLite)]
+    JobWorker --> DB
+    Runner --> DB[(SQLite)]
+    APIs --> Services["Services"] --> DB
+    Runner --> Files[(Filesystem)]
+    Services --> Files
+    Tasks --> CloudProvider["LlamaCloud APIs"]
+    Tasks --> LocalProvider["Local Ollama / GLM-OCR / LiteParse"]
+    Pages --> Browser["Browser"]
+    Assets --> Browser
+    Browser --> APIs
+```
+
+The default deployment contains a parent process plus two child processes:
+
+1. `main.py` resolves configuration, configures supervisor logging, runs
+   migrations, validates the task registry, and constructs ingestion/workflow
+   components.
+2. Unless `--no-web` is supplied, it starts Uvicorn as a subprocess.
+3. It starts a dedicated durable processing-worker subprocess.
+4. The parent process runs the polling watch-folder coordinator in a thread and
+   supervises both child processes.
+5. The parent, web, and worker processes access the configured SQLite database and
+   filesystem; only the worker executes queued root workflows.
+
+The parent is the sole migration owner in this topology. Before either child
+accepts work, the web and worker processes use read-only startup verification
+to require the exact supported schema version and essential runtime tables.
+Startup validation failures propagate out of application construction; the web
+process does not continue serving a partially initialized application.
+
+Each launch has a fresh run ID. The supervisor, web process, worker, and
+watch-folder coordinator write run-scoped heartbeats to SQLite and must all
+report ready within a bounded startup window. Worker heartbeats continue on a
+dedicated thread while OCR is running; inaccessible watch-folder bindings mark
+ingestion degraded without marking the worker unavailable. Unexpected
+component exits make the supervisor stop the remaining process trees and exit
+nonzero. On Windows, children run in separate process groups so shutdown first
+requests an orderly stop after current worker activity, then force-terminates
+the full process tree only if the bounded grace period expires.
+
+`logging.log_file` is a deployment-configured base path. Normal startup derives
+separate `.supervisor`, `.web`, and `.worker` files from it, resolves a
+relative path beside the active configuration file, and applies
+`logging.log_level` to each process. Log records include the process role and
+PID. The parent redirects Uvicorn stdout and stderr to the web-role log so
+output emitted before web logging initializes is retained.
+
+Watch-folder files and web batch uploads are persisted as SQLite processing jobs
+before the producer acknowledges them. A worker claims one job with a lease and
+executes it; expired leases are requeued after a worker interruption. Split
+children are still launched sequentially inside the claimed workflow. There is
+one local worker, not a distributed queue, worker pool, or multi-host
+coordination layer.
+
+Extraction providers are independent implementations behind the same workflow
+boundary: tasks normalize results into the shared top-level `context["data"]`
+contract and persist provider-neutral results. Provider-specific configuration,
+chunking, retries, and supported field shapes belong with provider task
+documentation and implementation, not this architecture boundary reference; see
+the [GLM-OCR task design](../tasks/design-and-implementation-glm-ocr-extract-task.md)
+and [LiteParse task guide](liteparse_extract_task.md).
+
+LiteParse/Ollama persists typed values and diagnostic parser-derived sources
+through the same extraction repositories and review services. Null confidence
+is preserved; the task requests review through a structured flag and the gate
+owns the pause. Diagnostic citations retain page evidence but are not promoted
+to verified PDF highlights. Review completion persists final values, and the
+pinned downstream storage step registers its export without rerunning
+extraction. See the [visual validation report](liteparse_pipeline_validation.md)
+for the six-invoice run and runtime limitations.
+
+## Component boundaries
+
+| Component | Responsibility | Boundary |
+| --- | --- | --- |
+| [`main.py`](../main.py) | Startup, supervision, shutdown | No workflow business logic |
+| [`WatchFolderCoordinator`](../modules/services/watch_folder_coordinator.py) | Reconcile enabled bindings, validate and claim PDFs, and enqueue assigned jobs | Does not execute workflows |
+| [`ProcessingWorker`](../modules/services/processing_worker.py) | Lease queued jobs and trigger the assigned workflow | No ingestion or task policy |
+| [`FileProcessor`](../modules/file_processor.py) | Validate the assigned SQLite context and trigger processing for a worker job | No task policy |
+| [`WorkflowManager`](../modules/workflow_manager.py) | Start root, child, and resumed flows | No table-specific persistence |
+| [`WorkflowLoader`](../modules/workflow_loader.py) | Approve, instantiate, and execute configured tasks | No domain task behavior |
+| [`BaseTask`](../modules/base_task.py), `standard_step/` | One configured operation | Preserve context and failure contracts |
+| [`modules/services/`](../modules/services/) | Use cases and cross-table invariants | No HTTP request concerns |
+| [`modules/db/repositories.py`](../modules/db/repositories.py) | Table-specific persistence | No cross-domain orchestration |
+| [`modules/api_router.py`](../modules/api_router.py) | JSON API composition | New business logic belongs in services |
+| [`web/server.py`](../web/server.py) | App construction and authenticated page routes | No workflow-state ownership |
+| [`web/templates/`](../web/templates/) | Server-rendered structure | No authorization enforcement |
+| [`web/static/js/`](../web/static/js/) | Browser interaction and API consumption | No authoritative business state |
+
+### Frontend module boundaries
+
+The production UI remains a server-rendered, multi-page application using
+native browser JavaScript. The large page-controller migration is complete for
+the production operator and administrative pages; the remaining top-level
+controllers are compatibility/orchestration entry points. Feature directories
+contain a thin entry point, a transport adapter, browser-independent model
+operations, preview/formatting logic, and DOM views. The page controller
+coordinates those pieces and continues to rely on the backend APIs as the
+authoritative state boundary.
+
+Feature-specific property editors receive selected model state and findings
+through explicit contracts, while file and directory browsing is isolated
+behind injected API and rendering callbacks. This keeps task-family HTML and
+resource-loading behavior out of page-level event orchestration.
+
+Native module entry points and every import in their dependency graph must carry
+the same release asset version until content-hashed assets replace query-based
+versioning. This prevents a newly deployed entry point from executing with a
+cached model or view from an earlier release.
+
+`modules/api_router.py` remains a large integration point. The intended
+route/service/repository boundary is therefore both a design rule and current
+technical debt.
+
+### Service ownership map
+
+The `modules/services/` directory is intentionally split by use case. When
+changing behavior, put the cross-table invariant in the service that owns the
+use case rather than adding it to a route or repository.
+
+| Service | Primary responsibility |
+| --- | --- |
+| `upload_receiver.py` | Multipart parsing, staging, limits, and cancellation cleanup |
+| `upload_submission_service.py` | Idempotent upload receipts and batch creation |
+| `processing_job_service.py` | Queue state, leases, retries, and requeue behavior |
+| `processing_worker.py` | Poll jobs and invoke the assigned workflow |
+| `workflow_state_service.py` | Document/task state transitions and finalization |
+| `review_service.py` | Review claims, edits, locks, completion, and release |
+| `resume_manager.py` | Reconstruct context and resume downstream work |
+| `pipeline_definition_service.py` | Resolve and verify immutable executable versions |
+| `pipeline_config_service.py` | Pipeline drafts, validation, publication, and cloning |
+| `review_schema_version_service.py` | Review-schema draft/version lifecycle |
+| `artifact_service.py` | Register durable filesystem artifacts in SQLite |
+| `runtime_health_service.py` | Process readiness, heartbeats, and component health |
+| `task_registry_service.py` | Approved dynamic task imports and startup trust checks |
+| `schema_service.py` | Legacy/filesystem schema resolution and loading |
+| `startup_migration_service.py` | Structural migration and legacy configuration import |
+
+### Representative request traces
+
+Use these paths as navigation guides when debugging. Names may gain helper
+layers, but the ownership boundaries should remain stable.
+
+```text
+POST /api/batches/upload
+ → api_router.py
+ → UploadReceiver
+ → UploadSubmissionService
+ → repositories
+ → processing_jobs
+ → ProcessingWorker
+ → FileProcessor
+ → WorkflowManager
+ → WorkflowLoader
+ → configured BaseTask
+```
+
+```text
+Review completion
+ → review UI / api_router.py
+ → ReviewService
+ → review item and document transaction
+ → ResumeManager
+ → WorkflowManager
+ → next configured task
+ → cleanup and FanInService
+```
+
+```text
+Admin pipeline publication
+ → api_router.py
+ → PipelineConfigService
+ → PipelineValidationService
+ → PipelineDefinitionService dependencies
+ → immutable pipeline_versions row
+```
+
+For a representative upload, the same identifiers connect each persistence
+layer: `batch_id` groups the accepted submission, `document_id` identifies an
+ingested PDF, `processing_jobs.document_id` queues its execution, and each
+`task_runs.id` records a task attempt. A review gate creates a `review_items.id`
+for that document and links it to the creating task run. Start from the
+document ID when tracing one file; then inspect its task runs, review item, job,
+and `document_files` rows. For canonical columns and foreign keys, see
+[`modules/db/schema.sql`](../modules/db/schema.sql).
+
+Useful read-only queries (bind IDs rather than copying customer data):
+
+```sql
+SELECT id, status, pipeline_version_id FROM batches WHERE id = ?;
+SELECT id, status, parent_document_id, current_task_key
+FROM documents WHERE id = ?;
+SELECT id, status, task_key, task_index, started_at, ended_at
+FROM task_runs WHERE document_id = ? ORDER BY started_at, task_index;
+SELECT id, status, reason, created_by_task_run_id
+FROM review_items WHERE document_id = ? ORDER BY created_at DESC;
+SELECT id, status, attempt_count, lease_expires_at
+FROM processing_jobs WHERE document_id = ?;
+SELECT id, file_type, file_path FROM document_files WHERE document_id = ?;
+```
+
+## Ingestion and workflow execution
+
+**TL;DR:** Ingestion validates a PDF, pins it to an immutable pipeline version,
+creates batch/document/artifact records, then enqueues a durable job. A leased
+worker executes tasks and writes state to SQLite; filesystem artifacts are
+registered separately.
+
+```mermaid
+sequenceDiagram
+    participant Source as Watch folder or browser
+    participant Ingest as Ingestion layer
+    participant DB as SQLite
+    participant Runner as Workflow runner
+    participant Task as Configured task
+    participant FS as Filesystem
+
+    Source->>Ingest: PDF
+    Ingest->>Ingest: Validate header and move file
+    Ingest->>DB: Create batch, document, source artifact
+    Ingest->>DB: Enqueue processing job with persisted identifiers
+    DB->>Runner: Worker claims a leased job
+    loop Pipeline
+        Runner->>DB: Start task run
+        Runner->>Task: on_start(context), run(context)
+        Task->>FS: Read or create files
+        Task->>DB: Persist domain output or artifact
+        Runner->>DB: Complete, pause, or fail task run
+    end
+    Runner->>Runner: Mandatory cleanup
+    Runner->>DB: Finalize document and batch state
+```
+
+### Ingestion paths
+
+- **Watch folder:** the serialized coordinator reconciles enabled bindings,
+  claims a file only after resolving the binding's exact eligible version,
+  validates the `%PDF-` signature, assigns a UUID, moves the file, and creates
+  assignment-bearing batch/document rows plus a durable processing job
+  atomically. Binding changes affect later claims only. Workflow execution is
+  performed by the worker, not by the coordinator.
+- **Primary web upload:** `POST /api/batches/upload` creates one batch with a
+  document per accepted PDF only after the operator supplies one eligible
+  published `pipeline_version_id`. The whole batch shares that exact version;
+  invalid or stale selections create no rows or orphan files. Each accepted
+  document receives its durable processing job in the same transaction. The
+  multipart receiver streams file parts to disk and enforces request and
+  concurrency limits without buffering the full body. It requires a complete
+  multipart boundary before creating work, reconciles upload-owned orphan files
+  after interrupted submissions, and serializes submissions/reconciliation
+  with OS locks. Cancellation cleans staging files. Exact parser limits,
+  deadlines, lock-file names, and receipt semantics are implementation details
+  owned by `upload_receiver.py` and `upload_submission_service.py`.
+  Browser submissions carry a UUID `Idempotency-Key`; SQLite `upload_submissions`
+  receipts commit atomically with the batch and jobs. Repeating the same key,
+  user, pipeline, and file contents returns the original batch; changed content
+  is rejected. API clients omitting the key retain non-idempotent behavior.
+  `GET /api/upload-submissions/{id}` returns an owner-scoped accepted receipt or
+  `unknown`, which must never be interpreted as confirmed cancellation.
+- **Legacy web upload:** `POST /upload` is retired and returns `410 Gone`.
+  Legacy read-only response shapes remain for compatibility.
+
+### Watch-folder administration
+
+**TL;DR:** A binding selects an exact eligible pipeline version for future
+claims. Its lifecycle controls whether claims can occur; it does not delete
+source directories or PDFs. The coordinator serializes claims against binding
+changes.
+
+`/app/admin/watch-folders` independently manages binding configuration. A binding
+is enabled, paused (assignment retained), unbound (assignment cleared), or retired
+(disabled and immutable). Paused/unbound paths remain reserved. Retired paths
+are reusable through a new binding identity; historical batch references remain
+intact. Only unreferenced settings may be permanently deleted. No lifecycle
+action deletes source directories or PDFs.
+
+Detailed lifecycle operations, revision semantics, health freshness, and admin
+page behavior are in the [watch-folder administration reference](watch_folder_admin_reference.md).
+The architecture invariant is that each claim re-reads its binding while serialized against
+administrative changes; an in-flight claim may finish, and later claims use the
+current assignment.
+
+### Pipeline construction
+
+The exact `pipeline_version_id` assigned before ingestion determines order and
+task configuration. `PipelineDefinitionService` loads that immutable version,
+verifies its content hash and approved module/class pairs, injects exact
+published review-schema dependencies, and resolves configured secret aliases
+in memory. A portable definition uses the familiar shape:
+
+```yaml
+tasks:
+  example_task:
+    module: standard_step.example
+    class: ExampleTask
+    params: {}
+    on_error: stop
+
+pipeline:
+  - example_task
+```
+
+For each task, `WorkflowLoader` verifies module/class approval, places the
+configured pipeline key and index in `current_task_key` and
+`current_task_index`, starts a SQLite task run attributed to the pinned
+`pipeline_version_id`, instantiates the task with the resolved immutable
+parameters, invokes it through a Prefect task wrapper, and persists the result.
+It never reloads the current global YAML pipeline or substitutes the newest
+published version. Versioned tasks receive a restricted configuration provider
+that exposes the SQLite database location for shared persistence but hides
+deployment YAML workflow sections and secrets; task behavior comes only from
+the resolved published parameters.
+`on_error` is `stop` or `continue`. A continued failure is recorded in
+`continued_failures` while the transient `error` fields are cleared for the
+next task, so a successful downstream task receives its own completed task-run
+state. The latest continued failure is restored before leaf finalization, so
+the document still finishes as failed rather than hiding the earlier error.
+
+Configured tasks and cleanup currently receive one Prefect retry. Individual
+provider tasks can add their own retries, so retry policy is not centralized.
+The processing queue retries transient workflow startup failures and input I/O
+errors raised by the file processor, up to its configured attempt limit. A workflow returning failure
+or an unclassified exception is terminal at the queue level; replaying a flow
+that may already have performed durable work requires an explicit recovery
+decision. Configured task retries remain separate from queue retries.
+After configured execution exhausts the pipeline or stops on an ordinary
+failure, cleanup runs as an internally managed task with the reserved key
+`cleanup_task` and index immediately after the configured pipeline. It has its
+own SQLite task run but does not move the document's configured pipeline
+cursor. Review pause and split fan-out return before cleanup; resumed and split
+child flows run cleanup when their configured work finishes.
+
+### Task and context contract
+
+**TL;DR:** Tasks share a mutable context dictionary and preserve identity,
+position, outputs, and failure/review signals. State needed after a process
+restart or for operator/audit use must also be persisted in SQLite.
+
+Standard tasks inherit from `BaseTask` and implement `on_start`, `run`, and
+`validate_required_fields`. Expected failures use `TaskError` and
+`register_error`. New tasks must not write workflow status through
+filesystem status files. Tasks use their injected parameters and must not
+reload their own parameters from a fixed `tasks.<name>` configuration path,
+because one implementation may be configured under different pipeline keys.
+
+The mutable context is the internal task protocol:
+
+| Category | Representative keys |
+| --- | --- |
+| Identity | `id`, `batch_id`, `document_id` |
+| Input | `file_path`, `original_filename`, `source` |
+| Position | `current_task_index`, `current_task_key`, `task_run_id` |
+| Output | `data`, `metadata` |
+| Failure | `error`, `error_step`, `fatal_failure`, `continued_failures` |
+| Review | `review_required`, `review_item_id`, `pipeline_state` |
+| Split | `parent_document_id`, `split_children`, `fan_out_start_task_index` |
+
+The context is extensible but weakly typed. State required for resume,
+operator visibility, or audit must also be persisted in SQLite. Detailed task
+rules are in the
+[standard task creation guidelines](../tasks/standard_task_creation_guidelines.md).
+`pipeline_template_id` and `pipeline_version_id` are cached execution identity
+in context; tasks must preserve them, while SQLite remains authoritative.
+
+### Glossary
+
+| Term | Meaning |
+| --- | --- |
+| Batch | Ingestion-level group of documents. |
+| Document | One root PDF or a split child; each has its own workflow state. |
+| Task run | Persisted execution attempt of one configured task for one document. |
+| Review item | Persisted operator work created by a review gate. |
+| Root / parent | Original document at the top of a split tree; a parent may itself be a child of a higher root. |
+| Leaf | Document with no children; leaf outcomes drive aggregate root and batch status. |
+| Fan-out / fan-in | Creating child workflows from a split, then aggregating their leaf outcomes. |
+| Pinned version | Immutable pipeline or review-schema version recorded for assigned work; later publication does not change it. |
+| `continued_failures` | Context history of failures allowed by `on_error: continue`; finalization restores them so the document does not hide them. |
+
+## State model
+
+**TL;DR:** SQLite stores job, document, task-run, review, and aggregate states.
+Review is a persisted pause followed by a new downstream flow. Split roots and
+batches aggregate outcomes from leaf documents.
+
+- A **batch** groups documents from one ingestion.
+- A **document** represents a root PDF or split child.
+- A **task run** records one configured task execution for one document.
+- A **review item** represents operator work created by the review gate.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> processing
+    processing --> completed
+    processing --> failed
+    processing --> review_required
+    processing --> split_completed: child workflows created
+    review_required --> in_review
+    in_review --> review_required: release
+    in_review --> review_completed
+    review_completed --> resuming
+    resuming --> completed
+    resuming --> failed
+    resuming --> review_required: downstream review gate
+```
+
+Task runs use `running`, `completed`, `paused`, and `failed`. Context values
+such as `pipeline_state: paused` and `pipeline_state: fan_out` are execution
+signals, not database entities.
+
+Processing jobs have a separate lifecycle and are not document states:
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued
+    queued --> running: worker claims lease
+    running --> queued: lease expires / retry available
+    running --> completed: workflow finished
+    running --> failed: attempts exhausted or terminal job failure
+```
+
+Root and batch status is an aggregate of leaf document outcomes:
+
+```mermaid
+stateDiagram-v2
+    [*] --> processing
+    processing --> review_required: at least one leaf paused for review
+    processing --> completed: all leaves succeeded
+    processing --> completed_with_errors: mixed success and failure
+    processing --> failed: all leaves failed
+    review_required --> completed: review resolved; all leaves succeeded
+    review_required --> completed_with_errors: mixed terminal outcomes
+    review_required --> failed: all leaves failed
+```
+
+State transition ownership is split as follows:
+
+| Transition or state | Owner |
+| --- | --- |
+| Job `queued`/`running`/lease expiry | `ProcessingJobService` and worker |
+| Document task progress and terminal state | `WorkflowStateService` |
+| `processing` → `review_required` | `ReviewGateTask` |
+| `review_required` → `in_review` | `ReviewService` claim transaction |
+| Review edits, release, and completion | `ReviewService` |
+| `review_completed` → `resuming` | `ResumeManager` acquisition transaction |
+| Resumed downstream execution | `WorkflowManager` and `WorkflowLoader` |
+| Root/batch aggregate state | `FanInService` |
+
+Do not infer workflow state from a status file, Prefect state, or a UI label.
+Those may be compatibility or presentation surfaces; SQLite state and the
+service transitions above are authoritative.
+
+For split processing:
+
+- A root may become `split_completed` after child creation.
+- A root or batch remains `processing` while a leaf is non-terminal.
+- A review leaf produces aggregate `review_required`.
+- Mixed successful and failed leaves produce `completed_with_errors`.
+- All failed leaves produce `failed`.
+
+## Human review
+
+Reviews are typed as `extraction` or `manual_split`. Manual decisions and
+draft revisions live in `manual_split_decisions`, independently of extracted
+fields and review schemas. Source identity and task/version attribution are
+checked before approval and application. Manual approval resumes at the same
+task to apply the accepted decision, then uses the shared split materializer
+and existing fan-out/fan-in. Skips continue the original document without
+children. See [manual split task](manual_split_task.md) for the API, operator
+flow, and explicit recovery limits.
+
+Manual recovery preserves the original continuation claim until the attempt
+finishes or an operator repairs it. Child workflow loading happens before
+the atomic child claim, and retry dispatch carries the parent document and
+batch identity for preflight failure attribution. Successful internal cleanup
+does not block retrying an unapplied split decision; started downstream work
+or failed cleanup does. Recovered manual failures remain in task history but
+are excluded from errors inherited by successful continuations.
+
+Manual split completion commits the immutable decision and returns HTTP 202
+before running the resumed flow as a server background task. Child extraction
+latency therefore does not hold the approval response open. The manual form
+acknowledges the save immediately and refreshes application state separately;
+the processing dashboard remains the source for downstream progress. This
+dispatch mechanism is in-process and retains the documented recovery limits.
+
+Human review is a persisted stop and new-flow restart:
+
+1. Extraction persists normalized results and fields.
+2. `ReviewGateTask` evaluates confidence, required-field, split-confidence,
+   structured review flags, and configured policy.
+3. If required, it creates a review item, marks the document
+   `review_required`, and sets `pipeline_state` to `paused`.
+4. The loader marks the task run paused and returns before downstream execution
+   or cleanup. Cleanup runs after the resumed flow finishes configured work.
+5. An operator claims the item, creating a time-limited lock and changing the
+   document to `in_review`.
+6. Draft corrections, diffs, and completion are handled by `ReviewService`.
+7. Completion persists final values, completes the paused task run, and marks
+   the document `review_completed`.
+8. `ResumeManager` reconstructs context from SQLite, prevents duplicate
+   downstream work, and starts a new flow at the next task.
+
+While the synchronous completion request is in flight, the review page keeps
+the operator informed with a live status message and changes the action to
+`Saving review…`. Review actions are disabled for that interval so a slow
+resume cannot be mistaken for an unresponsive page or trigger duplicate
+submissions. A failed request restores the controls and reports the error.
+
+Only pending or in-review items may be claimed or released. Resume acquisition
+uses an atomic `review_completed` to `resuming` transition, so overlapping
+requests cannot start the same downstream work twice. When the review gate is
+the final configured step, resume still starts the terminal runner path so
+cleanup and leaf-derived fan-in complete normally.
+
+The original Prefect flow is not suspended. SQLite retains the business state
+needed for operator work and resume.
+
+Extraction tasks may preserve numeric provider confidence when it exists or
+persist it as null when it does not. They must never fabricate a score.
+Provider-neutral structured review flags contain a stable reason plus configured
+top-level field keys; they must not contain prompts, provider responses,
+credentials, or extracted customer values. A flag does not pause a workflow by
+itself. A downstream review gate consumes it, marks the specified fields for
+review, creates durable review state, and pauses. Without a review gate, the
+same extraction output can continue directly to storage or another task.
+
+Review lock acquisition is enforced atomically in SQLite. The current operator
+may renew a lock, an expired lock may be claimed by another operator, and an
+active lock cannot be overwritten by a competing claim.
+
+## Split fan-out and fan-in
+
+```mermaid
+flowchart TD
+    Root["Root document"] --> Split["Split task"]
+    Split -->|One full segment in source order| Original["Original downstream flow"]
+    Split --> A["Child A"]
+    Split --> B["Child B"]
+    Split --> N["Child N"]
+    A --> FA["Downstream flow"]
+    B --> FB["Downstream flow"]
+    N --> FN["Downstream flow"]
+    FA --> FanIn["Leaf-derived fan-in"]
+    FB --> FanIn
+    FN --> FanIn
+    FanIn --> Aggregate["Root and batch state"]
+    Original --> FanIn
+```
+
+When one validated segment contains every source page exactly once in original
+order, the split task keeps the original document ID, file path, and pinned
+pipeline version. It persists category, confidence, pages, and the
+`single_document` outcome without setting `fan_out` or `split_completed`.
+Downstream tasks, review, cleanup, and leaf finalization run on the original.
+
+`split_result_service` coordinates classification, metadata, and a redacted
+`split_not_needed` audit event in one transaction. Saved decisions are scoped
+to the configured task key, pipeline version, and source PDF SHA-256; retries
+reuse a matching decision after rechecking policy. Review resume restores the
+classification from SQLite. Empty results and disabled splitting retain their
+existing continuation behavior without implying a classified single document.
+
+For multiple segments, or one partial/reordered segment, the split task creates
+child PDFs and document rows, records parent/root
+relationships and split metadata, registers `split_pdf` artifacts, and sets
+`pipeline_state` to `fan_out`. `WorkflowManager` starts each child after the
+split step. It can run extraction preflight validation and record one
+source-level failure affecting all children.
+
+Child creation compensates files and queued child rows if a later segment
+fails. If compensation cannot remove a partial child, the remaining partial
+records are marked failed so the source and batch do not remain non-terminal.
+
+`FanInService` calculates root and batch status from leaf documents. Parent
+containers are not double-counted. Paused children keep the aggregate in
+review; mixed terminal outcomes produce `completed_with_errors`.
+
+The split-results API preserves child-count meanings and adds
+`documents_continuing`, `split_outcome`, original classification, and an
+`extraction_document_id`. The production page links a single-document outcome
+to the original extraction and displays its downstream status separately from
+the split decision. Existing historical children remain unchanged.
+
+## Persistence and artifacts
+
+**TL;DR:** SQLite stores operational records and artifact references; the local
+filesystem stores PDF and export contents. Repositories own table operations,
+and services coordinate cross-table invariants.
+
+| Domain | SQLite tables |
+| --- | --- |
+| Identity | `users` |
+| Processing | `batches`, `documents`, `task_runs` |
+| Extraction | `extraction_results`, `extracted_fields` |
+| Review | `review_items`, `review_locks` |
+| Artifacts | `document_files` |
+| Governance | `audit_events`, `app_settings`, `config_versions`, `pipeline_cleanup_previews` |
+| Versioned pipelines | `pipeline_templates`, `pipeline_drafts`, `pipeline_versions`, `pipeline_version_schema_dependencies` |
+| Versioned review forms | `review_schema_templates`, `review_schema_drafts`, `review_schema_versions` |
+| Ingress configuration | `watch_folder_bindings` |
+| Runtime health | `runtime_component_health`, `watch_folder_health` |
+| Schema management | `schema_migrations` |
+
+The main execution relationship is `batches → documents → task_runs`; a review
+gate adds `review_items`, artifacts are recorded in `document_files`, and
+ingestion queues each document in `processing_jobs`. Split documents point to
+their parent through `documents.parent_document_id`.
+
+```mermaid
+erDiagram
+    BATCHES ||--o{ DOCUMENTS : groups
+    DOCUMENTS ||--o{ TASK_RUNS : executes
+    DOCUMENTS ||--o{ REVIEW_ITEMS : reviews
+    DOCUMENTS ||--o{ DOCUMENT_FILES : references
+    DOCUMENTS ||--o| PROCESSING_JOBS : queues
+    DOCUMENTS ||--o{ DOCUMENTS : splits_into
+    TASK_RUNS o|--o{ REVIEW_ITEMS : creates
+    BATCHES ||--o{ TASK_RUNS : groups
+```
+
+[`modules/db/connection.py`](../modules/db/connection.py) resolves the database
+relative to the active configuration, enables row access and foreign keys,
+and provides transaction helpers. Repositories own table-specific operations;
+services coordinate cross-table behavior.
+Use `managed_connect(config)` for a scoped transaction so the connection is
+closed after commit or rollback. Use `connect(config)` only when a service owns
+the connection beyond one block, and close it explicitly when finished.
+
+Migrations currently apply an idempotent schema and record a coarse version.
+This is not a complete ordered migration chain with per-change upgrade and
+downgrade scripts. During normal startup, only the parent runs migrations; its
+web and worker children verify the exact schema without modifying it. Request
+handling does not run schema migrations. Standalone web or worker processes
+must explicitly select migration mode when they own database initialization.
+
+Schema 9 separates audit identities from processing retention. The upgrade
+rebuilds `audit_events` without processing-record foreign keys, preserving every
+event, historical entity ID, payload, timestamp, and rowid. Historical audit IDs
+may point to removed operational records. Pipeline/version identities and their
+immutability triggers remain intact.
+
+`PipelineCleanupService` coordinates independent archive and whole-batch cleanup
+actions; `ProcessingHistoryRepository` owns table queries and dependency-ordered
+deletion. Archive requires an inactive template and no enabled ingress bindings,
+and retains existing pinned execution. Cleanup checks terminal documents/children,
+jobs, task runs, reviews, locks, split decisions, and latest activity against an
+exclusive UTC cutoff. It excludes mixed assignments and cross-batch children.
+An actor-bound 15-minute preview stores a SHA-256 digest of the selected records;
+confirmation recomputes it under `BEGIN IMMEDIATE` before deleting anything.
+All deletions, receipt trimming, preview consumption, and the admin audit event
+commit together. A retained foreign-key reference aborts and rolls back cleanup.
+The connection-local temporary selection avoids SQL parameter-count limits.
+
+Cleanup removes artifact registrations but never their physical files. Audit
+events and version definitions remain. Upload receipt response payloads become
+minimal tombstones while user/key/fingerprint identities remain to prevent old
+submission retries from recreating purged work. Receipt lookup returns `purged`;
+the browser clears its stale receipt and waits for an explicit new upload.
+Freed SQLite pages can be reused; neither VACUUM nor physical-file cleanup is
+part of this workflow.
+
+The operator consequences, API payloads, compaction limits, and schema-9 upgrade
+requirements are maintained in the
+[pipeline retention reference](pipeline_retention_admin_guide.md).
+
+`modules/services/startup_migration_service.initialize_database()` coordinates
+structural upgrades, legacy configuration import, YAML compensation on failure,
+and refresh of the migration owner's configuration snapshot. Structural upgrades
+in `modules/db/migrations.py` do not import application services. Supported schema
+markers live in `modules/db/schema_version.py`; read-only checks can import these
+without loading the legacy importer. The legacy importer uses the public
+`SchemaService.resolve_schema_path()` API, which enforces configured schema roots.
+
+SQLite stores artifact identity, role, path, and metadata. The filesystem
+stores contents. Canonical roles are:
+
+| Role | Meaning |
+| --- | --- |
+| `source_original` | Original ingested PDF |
+| `split_pdf` | Split child PDF |
+| `source_archive` | Archived source copy |
+| `export_pdf` | Final PDF output |
+| `export_csv` | CSV metadata export |
+| `export_json` | JSON metadata export |
+
+Task-created artifact metadata records `task_key` from the workflow context
+when producer attribution is needed. Artifact role remains represented by
+`file_type`; a separate task slug is not part of the task contract. Ingestion
+artifacts such as `source_original` have no producer task key. Split children
+and their `split_pdf` artifacts record the configured split task key.
+
+Generated archive, export, and split paths are reserved with exclusive file
+creation before content is written. This prevents overlapping local workflows
+from selecting and overwriting the same nominally unique output path.
+
+Runtime directories such as `data/`, `files/`, `processing*/`,
+`archive_folder/`, `web_upload/`, and `watch_folder/` may contain customer
+data and are not source code. Durable task outputs should use
+`register_document_artifact`; registered artifacts must survive cleanup.
+Registration is currently best-effort, so an unregistered successful file
+operation remains a traceability risk. Database exceptions during registration
+produce a warning containing only the document identifier, artifact role, and
+exception type; the primary file-operation result remains unchanged.
+
+SQLite and local filesystem coupling suit a local or modest-volume
+installation. They do not provide a horizontally scaled worker architecture.
+
+## Configuration architecture
+
+**TL;DR:** Deployment YAML configures process infrastructure and secret aliases.
+SQLite stores operational settings and immutable pipeline/review versions.
+Each process has its own config snapshot, so YAML edits require restart.
+
+Runtime YAML is resolved in this order:
+
+1. `--config-path`
+2. `CONFIG_PATH`
+3. Repository-root `config.yaml`
+
+| Concern | Current owner |
+| --- | --- |
+| Pipeline templates, drafts, immutable versions | SQLite versioned-configuration tables |
+| Review-form templates, drafts, immutable versions | SQLite versioned-configuration tables |
+| Exact pipeline-to-review-schema dependency | SQLite `pipeline_version_schema_dependencies` |
+| Upload selection and watch-folder binding | SQLite assignment columns and `watch_folder_bindings` |
+| Paths, web/auth options, database location, secret aliases | Deployment YAML/environment |
+| Operational/admin settings | SQLite `app_settings` |
+| Legacy root pipelines and filesystem schemas | Migration/import-only sources |
+
+`ConfigManager` remains the deployment configuration provider for application
+startup, paths, authentication/web options, the SQLite location, task
+approval, and resolving secret aliases before execution. It is not the source
+of workflow composition or task behavior for a versioned document. The watch
+input directory is not auto-created.
+
+Configuration instances are explicitly owned by each process; they are not
+Python singletons. Each web app constructs its dependencies once at startup and
+binds that dependency set to request contexts, including synchronous handlers.
+`get()`, `get_all()`, and the compatibility `config` property return defensive
+copies. Startup migration can validate and replace its own snapshot explicitly
+after committing the cutover. Children load the resulting YAML after migration.
+Snapshots are not synchronized across processes: deployment YAML edits require
+a coordinated restart. Live operational settings remain authoritative in SQLite.
+
+Configuration loading raises `ConfigurationError` rather than exiting Python.
+Process entry points fail startup with safe diagnostics. The loader separates
+directory preparation from validation; `prepare_directories=False` validates
+existing paths without creating directories. The default startup behavior still
+prepares configured `*_dir` paths after required upload/watch roots are checked.
+
+Relative deployment paths resolve from the absolute YAML file directory, with
+user-home and environment-variable expansion. Runtime database access, schema
+loading, and config-check use shared resolution rules. Config-check defaults to
+the checked YAML directory; `--base-dir` overrides only filesystem validation,
+not the deployment-selected SQLite database. Validation of an in-memory mapping
+without an explicit base or source file defaults to the current directory.
+
+A minimal deployment configuration has this shape (the actual task composition
+is normally stored in published SQLite versions):
+
+```yaml
+database:
+  path: data/docflow.db
+web:
+  host: 127.0.0.1
+  port: 8000
+  upload_dir: web_upload
+watch_folder:
+  dir: watch_folder
+  processing_dir: processing
+logging:
+  log_file: logs/docflow.log
+  log_level: INFO
+authentication:
+  username: admin
+  password_hash: <bcrypt hash>
+```
+
+The configuration precedence and relative-path rules above apply to all
+processes. Deployment YAML edits require a coordinated restart of parent, web,
+and worker processes.
+Publishing a pipeline or changing SQLite-backed operational settings does not
+change already-pinned batches and generally does not require a process restart.
+
+The parent sets these process-coordination variables for its children:
+`DOCFLOW_PROCESS_ROLE`, `DOCFLOW_STARTUP_MODE`, `DOCFLOW_RUN_ID`,
+`DOCFLOW_EXPECTED_COMPONENTS`, and `DOCFLOW_STDIO_CAPTURED`. `APP_ENV` (or
+`ENV`/`ENVIRONMENT`) controls production security defaults, while `USE_RELOAD`
+controls development reload behavior and is disabled in production.
+
+The standalone checker validates deployment YAML and, when `database.path` is
+configured, opens SQLite in read-only/query-only mode and validates the active
+published configuration and bindings by default. Deployment YAML may omit
+legacy root `pipeline` and `tasks` after migration. Valid `$secret` references
+are checked as aliases while resolved values remain outside stored definitions:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.config_check validate `
+  --config path\to\config.yaml --import-checks
+```
+
+Stored selectors include `--pipeline KEY` or `--review-schema KEY` with exactly
+one of `--draft`/`--version N`; `--all-stored` audits every stored source.
+`validate-file --kind runtime|pipeline|review-schema` validates a portable
+YAML/JSON file without importing it. Warning-only results use exit code `2`;
+usage errors use `64`. The checker does not migrate or modify SQLite.
+
+Admin services support template lifecycle, optimistic draft revision checks,
+validation, redacted diff/export, import into drafts, and immutable publication.
+Create a separate form by creating a new template and importing a definition.
+Existing batches/documents, split children, task runs, and review items remain pinned
+to their recorded versions across later publication or lifecycle changes.
+Provider secrets must never enter API responses, audits, summaries, logs,
+screenshots, tests, commits, or documentation.
+
+## Frontend and UI architecture
+
+**TL;DR:** Production pages are server-rendered with Jinja and page-specific
+JavaScript modules. Browser code calls same-origin APIs; SQLite and services
+remain authoritative, while authenticated routes protect pages and PDF previews.
+
+### Rendering and data flow
+
+```mermaid
+flowchart LR
+    Browser["Browser"] -->|GET /app/*| Route["FastAPI page route"]
+    Route --> Auth["Cookie auth and role check"]
+    Auth --> Template["Jinja feature template"]
+    Template --> Shell["app_base.html"]
+    Shell --> Browser
+    Browser --> Script["Feature JavaScript"]
+    Script -->|same-origin /api/*| API["JSON API"]
+    API --> Service["Service layer"] --> DB[(SQLite / filesystem)]
+```
+
+The production frontend is a server-rendered multi-page application.
+[`web/server.py`](../web/server.py) authenticates `/app/*` requests, enforces
+admin access, and renders Jinja templates with small identifiers such as a
+batch, document, review item, or schema name. Page scripts then fetch most
+business data from `/api/*`.
+
+Navigation performs full-page transitions. There is no production client
+router, component framework, or central client store. Processing pages poll
+for state changes; the processing overview currently refreshes about every
+three seconds.
+
+### Frontend layers
+
+| Layer | Location | Responsibility |
+| --- | --- | --- |
+| Page routes | [`web/server.py`](../web/server.py) | Authentication, roles, template, render context |
+| Shared shell | [`app_base.html`](../web/templates/app_base.html) | Navigation, header, slots, shared script |
+| Feature templates | [`web/templates/`](../web/templates/) | Semantic structure and server identifiers |
+| Shared browser utilities | [`app.js`](../web/static/js/app.js) | API wrappers, CSRF, auth redirect, toasts, navigation |
+| Feature entries and controllers | [`web/static/js/*/index.js`](../web/static/js/) and feature-local `controller.js` | Module startup, event-to-action orchestration, page-scoped transient state |
+| Feature API/model/view modules | [`web/static/js/*/api.js`](../web/static/js/), `model.js`, `view.js` | Endpoint contracts, browser-independent state operations, DOM rendering and presentation |
+| Vendored PDF.js | [`web/static/vendor/pdfjs/`](../web/static/vendor/pdfjs/) | Same-origin PDF rendering for source inspection |
+| Styling | Tailwind, DaisyUI, [`app.css`](../web/static/css/app.css) | Design utilities and application styles |
+
+Templates and controllers form implicit DOM/API contracts and must change
+together. Authoritative state remains on the server. `localStorage` holds
+presentation preferences and short-lived caches; `sessionStorage` holds
+limited navigation convenience; neither may represent workflow or permission
+state.
+
+The versioned review-form editor uses a native ES-module entry in
+`web/static/js/schema-editor/`. Its controller maps browser events to actions;
+the model owns DOM-independent nested-field changes and client validation;
+the API owns review-schema requests and CSRF-aware imports; and the view owns
+field rendering, outline/search, focus restoration, validation, and lifecycle
+metadata. The editor entry and its imports use one release asset version so a
+deployment cannot combine cached modules from different releases.
+
+Operator pages cover upload, processing, split and extraction inspection,
+review, failures, and reports. Admin pages cover the overview with editable
+non-secret operational settings, fixed user accounts, watch folders, versioned
+pipelines and review forms, the task catalog, legacy schema validation, and the
+filtered administrative audit log.
+
+Extraction and human-review pages use local PDF.js modules to render source PDFs
+and may navigate to provider-supplied evidence. Source files are served through
+the authenticated, same-origin preview endpoint. Detailed pane sizing,
+preferences, responsive breakpoints, and PDF rendering behavior are UI
+implementation details.
+
+The human-review page uses a versioned native ES-module entry in
+`web/static/js/human-review/`. Its controller owns event-to-action orchestration;
+the model owns browser-independent schema/value normalization, nested paths,
+corrections, and edit policy; the API owns review-item requests; the field view
+renders scalar, object, and array controls; and the workspace view owns lock,
+diff, source PDF, and pane presentation. The shared PDF viewer treats expected
+render cancellations during page changes or teardown as non-errors.
+
+Operator and administrative pages now use versioned feature entries under
+`web/static/js/`, including upload, processing overview, failures, reports,
+review queue, extraction and split results, watch folders, validation,
+audit, task catalog, and admin overview. Each entry imports a page controller;
+request adapters and DOM presentation live in feature-local API and view
+modules. Upload validation and cancellation state also live in a feature-local
+model. The existing `window.DocFlow` shell remains the shared authenticated
+request, CSRF, and notification boundary; feature controllers own their own
+polling and transient state rather than sharing a mutable application store.
+Feature release graphs are validated and independently versioned with
+`tools.frontend_release_check`; deployment and rollback procedures are in
+`docs/frontend_deployment.md`.
+
+Extraction field flags remain immutable evidence of why review was requested.
+The extraction API also exposes the latest review item's status so presentation
+layers can distinguish an outstanding `required` field from one accepted by a
+completed human review. This changes display vocabulary only: SQLite review
+items and extracted-field records remain the authoritative state and history.
+
+Tailwind-generated CSS is committed. Build and release procedures are maintained
+in [frontend deployment](frontend_deployment.md).
+
+The pipeline editor loads each selected template, draft, and base version as one
+snapshot. A request generation discards stale reads after a newer selection;
+mutation controls stay disabled while loading. Metadata and availability saves
+apply only their saved fields without reloading or discarding unsaved task edits.
+Archiving uses a dedicated impact/confirmation dialog, refreshes the complete
+archived list independently of the completed mutation, and disables archived
+draft/metadata mutations including reset. Cleanup uses its own preview and exact
+name confirmation and remains available for all pipeline lifecycle states.
+
+### Browser security
+
+- JWT access tokens use an HTTP-only cookie.
+- Login and CSRF cookies use `Secure` in production; development HTTP remains
+  available without the production environment flag.
+- Cookie-authenticated mutations require a CSRF cookie and matching
+  `X-CSRF-Token` header.
+- Page routes and APIs enforce roles server-side; hidden navigation is not an
+  authorization control.
+- Config validation APIs require an administrator and redact deployment
+  secrets before serializing results; the CLI retains full validation data.
+- API requests are same-origin by default; CORS requires explicit trusted
+  origins.
+- Trusted-host, CSP, content-type, referrer, permissions, and frame headers
+  are applied globally.
+- Normal pages deny framing; the review workspace fetches same-origin PDF
+  responses for its local PDF.js viewer.
+
+### Frontend constraints
+
+- Major editors and operator pages now use feature-local ES modules; some
+  smaller legacy controllers still combine presentation and orchestration.
+- API and DOM contracts are not typed or generated.
+- Shared forms, tables, modals, loading, and errors are only partly
+  centralized.
+- Polling replaces server-pushed updates.
+- Shared operator pages expose concise live-region announcements for meaningful
+  processing/review changes, and upload progress reports client-side transfer
+  progress before the existing batch-upload response and redirect.
+- Upload cancellation is limited to aborting the in-flight browser transfer;
+  it does not guarantee cancellation of server acceptance or processing.
+  The browser checks the receipt after abort/network failure and on page reload.
+  Unconfirmed retries retain the submission ID in tab session storage; clearing
+  that storage or retrying in another tab does not preserve this protection.
+- Operator queue presentation is scoped to shared table classes and native
+  HTML disclosures for contextual help; these are presentation concerns and do
+  not introduce workflow-state or API contracts.
+- Production JavaScript has no bundling or static type-checking stage.
+- Demoted review-gate and split-settings templates/scripts remain although
+  their routes redirect to the pipeline page.
+
+The React/Vite visual editor has separate dependencies and is not production
+behavior until deliberately ported into `web/`.
+
+## API, authentication, and trust boundaries
+
+`modules/api_router.build_router()` composes APIs for authentication, uploads,
+batches, documents, extraction, review, split results, failures, reports,
+administrator settings, schemas, pipeline administration, users, audit, and
+legacy compatibility.
+
+Endpoints should validate requests, enforce authorization, call services, and
+construct responses. Cross-table invariants belong in services. A router-wide
+dependency protects cookie-authenticated mutations with CSRF checks;
+Bearer-token callers are exempt from the cookie-specific check.
+
+The current identity model has fixed `admin` and `operator` accounts. SQLite
+stores role, bcrypt password hash, token version, and password timestamps.
+JWT validation compares subject, role, and token version with the current user
+row, so password changes can revoke sessions. Login throttling is in-memory
+and therefore process-local.
+
+The route surface uses two roles. `operator` can use processing, upload, and
+review workflows; `admin` can additionally manage users, settings, pipelines,
+review schemas, watch folders, and audit data. Cookie-authenticated mutations
+require CSRF validation; GET requests do not. Bearer-token callers are exempt
+from the cookie-specific CSRF check. Representative route groups:
+
+| Route group | Operator | Admin | CSRF for cookie auth |
+| --- | --- | --- | --- |
+| `/api/batches/*`, `/api/documents/*`, `/api/processing-state` | Yes, subject to document authorization | Yes | Mutations only |
+| `/api/review/*` | Yes, subject to item/lock rules | Yes, subject to item/lock rules | Mutations only |
+| `/api/batches/upload`, `/api/upload-submissions/*` | Yes, owner-scoped receipt | Yes, owner-scoped receipt | Upload mutation |
+| `/api/admin/*`, `/api/schemas/*` | No | Yes | Mutations only |
+| `/api/config/validation`, `/api/pipeline/validate` | Authenticated | Authenticated | Mutations only |
+| `/api/login`, `/api/session/refresh` | Public/session flow | Public/session flow | Endpoint-specific session protections |
+| Legacy `/api/files`, `/api/status/*` | Authenticated compatibility surface | Authenticated compatibility surface | Mutations not supported |
+
+This is a route-family guide, not a substitute for endpoint dependencies and
+document-level checks. Confirm exact behavior in `modules/api_router.py` when
+changing a route; preserve its authorization and CSRF dependencies.
+
+Principal trust boundaries are:
+
+- Uploaded PDFs are untrusted and receive only minimal signature validation.
+- Dynamic task imports must match approved registrations.
+- Schema paths must remain under configured roots.
+- Extracted values are untrusted when rendered or used in filenames/exports.
+- Provider credentials and responses require redaction.
+- Protected document files must be resolved through authorized APIs.
+
+## Errors, recovery, and observability
+
+Expected task failures use `TaskError`; unexpected exceptions become failed
+context and task-run state. `on_error` controls stop/continue behavior. Fatal
+failure summaries are redacted before persistence or API exposure.
+
+Runtime approval, import, class lookup, and `BaseTask` inheritance failures use
+`TaskSetupError`. They always stop and fail only the affected document, then
+continue through cleanup and fan-in; they do not invoke process shutdown or
+terminate the web server. Invalid configured implementations should still be
+caught by startup/config import validation before work is accepted.
+
+Current operational evidence consists of logs, task-run timelines, batch and
+document state, failure records, review/audit events, and artifact records.
+Supported metrics and distributed tracing are not currently emitted.
+
+Recovery paths include the following:
+
+- Completed review resumes from the next task using final persisted values.
+- Resume reloads the document's pinned pipeline version and the review item's
+  exact stored schema version; inactive or archived templates remain available
+  for already-assigned work.
+- Corrected provider/task failures are normally re-ingested.
+- Fan-in is recomputed as child leaves finish.
+- A claimed job whose lease expires is returned to the queue by the next worker
+  poll. A workflow that fails after task execution begins still requires task
+  idempotency or operator re-ingestion; the queue does not make external
+  provider calls transactional.
+
+## Testing and verification
+
+Tests live under `test/` and are organized by the layer or behavior they cover;
+the test tree is the authoritative inventory. Prototype tests are isolated under
+`test/pipeline_visual_editor_prototype/`. Use the focused checks below, then
+select neighboring tests from the relevant area when changing a boundary.
+
+Live LlamaCloud checks are opt-in because they require credentials and external
+resources. Browser tests may require Playwright Chromium. Pyright has
+configuration but is not pinned in the project dependency files. Ruff is not a
+supported project check. Pytest, pytest-cov, and Playwright are pinned in
+`requirements-dev.txt`; production installs use `requirements.txt`.
+
+The shared visual-app fixture uses `test/helpers_visual.py` to launch an
+isolated server with a 60-second readiness deadline. Startup stdout/stderr go
+to `visual-server.log` in the temporary fixture directory, so a large diagnostic
+cannot fill an unread pipe and block startup. Failure messages identify the
+log instead of copying child output into pytest errors. The helper terminates
+and reaps the server on startup failure, test failure, and normal teardown.
+
+Run browser suites sequentially when host memory is constrained. Transient
+browser launch or database file errors should be reproduced with adequate
+headroom before changing application behavior. Use `--tb=short` for diagnostic
+runs to avoid displaying credentials or other sensitive local values from
+third-party traceback frames.
+
+Useful focused checks from the repository root are:
+
+```powershell
+# Configuration and process startup
+.\.venv\Scripts\python.exe -m pytest -q test\core\test_configuration_boundaries.py
+
+# Database migration boundaries
+.\.venv\Scripts\python.exe -m pytest -q test\db\test_migration_boundaries.py
+
+# Upload, workflow, and review integration
+.\.venv\Scripts\python.exe -m pytest -q test\integration\test_batch_upload_api.py test\integration\test_review_ui_api.py
+
+# Browser smoke coverage
+.\.venv\Scripts\python.exe -m pytest -q test\visual\test_configuration_boundaries_visual.py
+
+# Full suite without opt-in live provider checks
+$env:RUN_LLAMACLOUD_SPLIT_SMOKE = '0'
+.\.venv\Scripts\python.exe -m pytest -v
+```
+
+Changes to templates, JavaScript, CSS, or browser behavior require a visual
+test decision; backend-only changes normally do not. Changes to startup,
+migrations, workflow execution, review resume, or artifact registration should
+include the corresponding focused integration tests before the full suite.
+
+## Known architectural debt
+
+| Area | Current constraint |
+| --- | --- |
+| Workflow contract | Weakly typed mutable context dictionary |
+| API composition | Large `api_router.py` integration surface |
+| Configuration | YAML, SQLite settings, and versions have different semantics |
+| Execution | One SQLite-backed worker and lease recovery; no distributed worker pool or multi-host coordination |
+| Throughput | Sequential watch-folder and split-child processing |
+| Persistence | SQLite write-concurrency ceiling and coarse migrations |
+| I/O | Blocking file and provider operations in local processes |
+| Capacity | No measured or supported documents-per-day capacity target |
+| Review | New-flow resume rather than durable engine suspension |
+| Compatibility | Legacy SQLite response shapes remain; filesystem status is removed |
+| Frontend | Large controllers and implicit DOM/API contracts |
+| Secrets | Provider credentials may reside in local runtime YAML |
+| Storage | Artifact availability assumes shared local filesystem access |
+
+These are current constraints, not an approved target-state plan.
+
+Task cleanup handles workflow-owned temporary files, and upload reconciliation
+removes upload-owned orphans after interrupted submissions. This document does
+not define an automatic retention period, orphan scan for all artifact roles, or
+log rotation policy. Explicit admin processing-history cleanup is separate from
+task housekeeping and retains physical files; neither performs compaction.
+
+## Debugging checklist
+
+1. Identify whether the failure is in the parent, web process, worker, or
+   watch-folder thread.
+2. Confirm the active configuration file and resolved database path.
+3. Capture the batch, document, review-item, or processing-job ID.
+4. Inspect the pinned pipeline/review-schema version and task-run timeline.
+5. Check processing-job lease state and worker/runtime heartbeats.
+6. For review issues, inspect `review_items`, `review_locks`, and resume state.
+7. For output issues, inspect `document_files` and artifact registration logs.
+8. Check the role-specific log: `.supervisor`, `.web`, or `.worker`.
+
+Common first checks:
+
+| Symptom | First places to inspect |
+| --- | --- |
+| Upload accepted but not processing | `processing_jobs`, worker heartbeat, worker log |
+| Stuck at review | `review_items`, `review_locks`, paused task run |
+| Web/worker startup failure | Role log, `StartupReadinessError`, schema version |
+| Watch folder does nothing | Binding lifecycle, `watch_folder_health`, source path |
+| Extraction succeeded but storage did not | Task runs, `continued_failures`, artifact records |
+| Duplicate upload | `upload_submissions` and idempotency key |
+| Missing output file | `document_files` and artifact-service warnings |
+
+Do not repair state by editing SQLite rows or deleting runtime files while the
+application is running. Use the supported admin/recovery flow, stop the
+application before filesystem repair, and preserve the relevant logs and IDs.
+
+## Safe-change workflow
+
+Update this architecture reference when a change alters process ownership,
+state transitions, persistence boundaries, or trust contracts. For a new task,
+also update the [task creation guidelines](../tasks/standard_task_creation_guidelines.md)
+when the shared task standard changes. Keep detailed operator procedures in a
+focused guide and link it here rather than duplicating them.
+
+- **New task:** inherit `BaseTask`, register the exact module/class pair, follow
+  the [standard task guidelines](../tasks/standard_task_creation_guidelines.md),
+  and add task plus workflow tests.
+- **Persistence:** update the schema/migration, repository, service, and
+  integration tests together.
+- **API:** keep request parsing and authorization in the router, put invariants
+  in a service, and add API/security tests.
+- **Production UI:** update the route, template, controller, and API contract
+  together; run the focused visual test when rendering or interaction changes.
+- **Pipeline behavior:** test the pinned-version path, review gate, resume, and
+  split/fan-in behavior as applicable.
+- **Configuration semantics:** test relative paths, malformed configuration,
+  process-entry failures, and config-check behavior.
+- **Startup or migration:** test idempotency, rollback/compensation, schema
+  verification, and a fresh application startup.
+
+## Migration development workflow
+
+The canonical structural schema is [`modules/db/schema.sql`](../modules/db/schema.sql).
+Structural upgrade logic belongs in [`modules/db/migrations.py`](../modules/db/migrations.py);
+startup orchestration and legacy YAML import belong in
+[`startup_migration_service.py`](../modules/services/startup_migration_service.py).
+The structural migration module must remain free of application-service imports.
+There is no general downgrade chain. For a migration change, use a temporary
+database, verify the exact supported version and required tables, run startup a
+second time to prove idempotency, and exercise legacy-import compensation when
+the change touches YAML cutover.
+
+The [safe-change workflow](#safe-change-workflow) is the canonical checklist
+for extensions too. For tasks, also follow the [standard task guidelines](../tasks/standard_task_creation_guidelines.md).
+
+## Related documentation
+
+- [User guide](user_guide.md)
+- [Review schema administration](review_schema_admin_guide.md)
+- [Pipeline retention administration](pipeline_retention_admin_guide.md)
+- [Configuration checker troubleshooting](config_check_troubleshooting.md)
+- [Configuration checker reference](../tools/config_check/README.md)
+- [Standard task creation guidelines](../tasks/standard_task_creation_guidelines.md)
+- [Future lightweight pipeline visualization](../tasks/future-lightweight-pipeline-visualization.md)

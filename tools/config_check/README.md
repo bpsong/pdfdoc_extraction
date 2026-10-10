@@ -948,7 +948,7 @@ LiteParse shares the choices, date normalizer and schema-order validators, so
 related findings retain their existing `param-glm-*` codes. A validation code is
 not evidence that GLM-OCR performed extraction. Runtime model availability,
 downloaded local GGUF format and local OCR are checked separately; see the
-[LiteParse task guide](../../docs/liteparse_extract_task.md).
+[LiteParse task guide](../../docs/reference/tasks/liteparse-extraction.md).
 
 #### Import Validation Errors
 - **`task-import-module-not-found`**: Module not found in Python path
@@ -1029,7 +1029,7 @@ downloaded local GGUF format and local OCR are checked separately; see the
   - Note: This is informational - may be intentional for custom fields
 
 ### Advanced Troubleshooting
-For detailed troubleshooting of all validation issues including rules task validation, runtime file validation, path validation, parameter validation, and pipeline dependency issues, see [`docs/config_check_troubleshooting.md`](../../docs/config_check_troubleshooting.md).
+For detailed troubleshooting of all validation issues including rules task validation, runtime file validation, path validation, parameter validation, and pipeline dependency issues, see [`docs/it-support/config-check-troubleshooting.md`](../../docs/it-support/config-check-troubleshooting.md).
 
 ## Development
 

@@ -1,0 +1,125 @@
+{
+  "snapshot_date": "2026-10-10",
+  "files": [
+    {
+      "original": "docs/audits/admin-navigation-2026-07-03/01-admin-navigation.png",
+      "snapshot": "docs/audits/admin-navigation-2026-07-03/01-admin-navigation.png",
+      "sha256": "15a54e0a9abc57a1089bf5dca292989ccc24f2e349fc2263deba33d9f512f2df",
+      "bytes": 66928
+    },
+    {
+      "original": "docs/audits/admin-navigation-2026-07-03/02-review-schema-editor.png",
+      "snapshot": "docs/audits/admin-navigation-2026-07-03/02-review-schema-editor.png",
+      "sha256": "826f1d29f0763c0633dcf27eabbd5df051cc10f6a1c33fabc645515d07a39dc0",
+      "bytes": 128731
+    },
+    {
+      "original": "docs/audits/admin-navigation-2026-07-03/03-task-catalog.png",
+      "snapshot": "docs/audits/admin-navigation-2026-07-03/03-task-catalog.png",
+      "sha256": "2ef0929dabcd4e8fb3f4004941febfcf2dcbf8b7d15ff9612f53ea6475af39bd",
+      "bytes": 111844
+    },
+    {
+      "original": "docs/audits/admin-navigation-2026-07-03/04-pipeline-configuration.png",
+      "snapshot": "docs/audits/admin-navigation-2026-07-03/04-pipeline-configuration.png",
+      "sha256": "b441dce3b6b9680a36562616d4822ed4541abc7f488b4b9655990d5547d0e7ab",
+      "bytes": 135369
+    },
+    {
+      "original": "docs/audits/admin-navigation-2026-07-03/05-validation-center.png",
+      "snapshot": "docs/audits/admin-navigation-2026-07-03/05-validation-center.png",
+      "sha256": "e59f4977b724508abca6afe740fe2a5c1d8eafb643148ab270cc9625d308a242",
+      "bytes": 91519
+    },
+    {
+      "original": "docs/audits/admin-navigation-2026-07-03/audit.md",
+      "snapshot": "docs/audits/admin-navigation-2026-07-03/audit.md",
+      "sha256": "d99dc2f2f5902090eacda280486f6e501e801e43870352d5f5c1d392de0d9aac",
+      "bytes": 7605
+    },
+    {
+      "original": "docs/change-summary-2026-09-05.md",
+      "snapshot": "docs/change-summary-2026-09-05.md",
+      "sha256": "3eb009612f4b7f46a8e5efdea6dcc03fb2693012e9da5ed88bf183d682ad5988",
+      "bytes": 19432
+    },
+    {
+      "original": "docs/config_check_troubleshooting.md",
+      "snapshot": "docs/config_check_troubleshooting.md",
+      "sha256": "67977ed5de974771474b08033160f084d39cbb13ac0a3beac532d2d088043942",
+      "bytes": 45388
+    },
+    {
+      "original": "docs/design_architecture.md",
+      "snapshot": "docs/design_architecture.md",
+      "sha256": "cb03f52672c4528dbc64f834681feadcc81cd6229737991c26899636e8a16c1d",
+      "bytes": 71448
+    },
+    {
+      "original": "docs/frontend_deployment.md",
+      "snapshot": "docs/frontend_deployment.md",
+      "sha256": "cda2f869de99e94e9e66b04acd9743fdc3ee3b07c250c0186d8480ddb1c94ecc",
+      "bytes": 5635
+    },
+    {
+      "original": "docs/liteparse_extract_task.md",
+      "snapshot": "docs/liteparse_extract_task.md",
+      "sha256": "6299eb5413ac72f99fac30bcdbd7d4ba11ed56ac80ca675aacc95397f9f1f3c3",
+      "bytes": 14476
+    },
+    {
+      "original": "docs/liteparse_pipeline_validation.md",
+      "snapshot": "docs/liteparse_pipeline_validation.md",
+      "sha256": "95d62f7c8f59f9ed99681553fcc7fedfc412f4a5c23a54ca872be09d486ad02e",
+      "bytes": 11255
+    },
+    {
+      "original": "docs/manual_split_task.md",
+      "snapshot": "docs/manual_split_task.md",
+      "sha256": "f231619b3719b6162feded76b49b548c96d94aaf05f64aa164b8a790ec28de64",
+      "bytes": 5542
+    },
+    {
+      "original": "docs/manual_split_validation.md",
+      "snapshot": "docs/manual_split_validation.md",
+      "sha256": "e78fbb0283c93fc64c83c78a426dd5908213b45c302123af18c4ad8ebf687797",
+      "bytes": 11108
+    },
+    {
+      "original": "docs/performance_benchmark.md",
+      "snapshot": "docs/performance_benchmark.md",
+      "sha256": "4df17e832238124d184d085c75b468e32989bdb3275f959cf12141c0f4b71d6e",
+      "bytes": 3676
+    },
+    {
+      "original": "docs/pipeline_retention_admin_guide.md",
+      "snapshot": "docs/pipeline_retention_admin_guide.md",
+      "sha256": "c4ad2a7e179aa3974ebeb1456ed5336dd79ca0b4b4f1f4550f39548e757e1600",
+      "bytes": 16076
+    },
+    {
+      "original": "docs/review_schema_admin_guide.md",
+      "snapshot": "docs/review_schema_admin_guide.md",
+      "sha256": "975a8e48b0ad9d073cf8a92bb7b6a19cf90418bcd28953054e394c73a6dcbb27",
+      "bytes": 34035
+    },
+    {
+      "original": "docs/technical_operations_reference.md",
+      "snapshot": "docs/technical_operations_reference.md",
+      "sha256": "04988a3577a39592920b557847357b32f2e58d3f378d249fe4fc68cfc2d70518",
+      "bytes": 101677
+    },
+    {
+      "original": "docs/user_guide.md",
+      "snapshot": "docs/user_guide.md",
+      "sha256": "3759bc9992f78d434c6f4882538f41f00513377968c30239dedabec287992da0",
+      "bytes": 54303
+    },
+    {
+      "original": "docs/watch_folder_admin_reference.md",
+      "snapshot": "docs/watch_folder_admin_reference.md",
+      "sha256": "e42a1bb0082f293033a09ebd4e640ab9dbcddd476b9d012a33e174b84342ef86",
+      "bytes": 3362
+    }
+  ]
+}

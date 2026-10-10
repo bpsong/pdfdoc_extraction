@@ -206,8 +206,8 @@ then add a matching **Review Gate** and JSON or CSV storage. The LiteParse task
 requires a downloaded local GGUF model and a credential-free HTTP loopback
 endpoint. It supplies no numeric confidence; retained word boxes are diagnostic
 and are not shown as verified review highlights. See the
-[LiteParse setup guide](docs/liteparse_extract_task.md) and
-[six-invoice validation report](docs/liteparse_pipeline_validation.md).
+[LiteParse setup guide](docs/reference/tasks/liteparse-extraction.md) and
+[six-invoice validation report](docs/history/validation/liteparse-pipeline-2026-10-04.md).
 
 LiteParse can process suitable documents faster because a normal attempt uses
 one Ollama request, avoiding GLM-OCR's multiple per-page and resolver calls.
@@ -218,7 +218,7 @@ local-model request, GLM-OCR is better positioned through page-based extraction
 and chunked table resolution. Its document-mode header resolver still receives
 all page images, so this is a scalability selection criterion rather than a
 guarantee of unlimited size or better accuracy. See the
-[document-size selection criteria](docs/liteparse_extract_task.md#choosing-liteparse-or-glm-ocr-for-larger-documents).
+[document-size selection criteria](docs/reference/tasks/liteparse-extraction.md#choosing-liteparse-or-glm-ocr-for-larger-documents).
 
 Output folders are task-owned in the exact SQLite pipeline version. CSV/JSON
 tasks use `data_dir`, local PDF storage uses `files_dir`, archive tasks use
@@ -285,7 +285,7 @@ Workflow state is persisted in SQLite. `/api/files` and `/api/status/{file_id}` 
 Admins can remove eligible whole-batch history through **Clean up processing
 data** on the Pipeline page. Deleted pages become reusable; immediate database
 file shrinkage is not promised and compaction is separate maintenance. See the
-[pipeline retention guide](docs/pipeline_retention_admin_guide.md) for archive
+[pipeline retention guide](docs/admin/archiving-and-retention.md) for archive
 prerequisites, protected work, retained files, and recovery limits.
 
 ## Usage
@@ -399,7 +399,7 @@ The `admin` account has full access. The `operator` account cannot access admini
   eligible whole batches before an exclusive UTC `cutoff_date`
 - `POST /api/admin/pipeline-templates/{template_id}/cleanup`: Confirm a current
   preview and exact pipeline name to delete eligible processing history;
-  [request/response details](docs/pipeline_retention_admin_guide.md#api-contract)
+  [request/response details](docs/reference/api-contracts.md#api-contract)
 - `/api/admin/review-schemas`: Create/list review forms; per-template endpoints
   manage metadata, draft save/validate/import/export, immutable publish,
   versions, and dependency usage
@@ -457,18 +457,15 @@ artifacts; they are not source folders to commit.
 
 ## Documentation
 
-- [User guide](docs/user_guide.md): app-based instructions for operators and administrators
-- [Technical operations reference](docs/technical_operations_reference.md): IT setup, maintenance, configuration, and task parameters
-- [Architecture reference](docs/design_architecture.md): process boundaries, state, persistence, and safe-change guidance
-- [Config-check troubleshooting](docs/config_check_troubleshooting.md): CLI modes, findings, and recovery guidance
-- [Config-check CLI reference](tools/config_check/README.md) and [finding codes](tools/config_check/examples/ERROR_CODES.md)
-- [Watch-folder administration](docs/watch_folder_admin_reference.md): binding lifecycle, revisions, and health checks
-- [Pipeline retention administration](docs/pipeline_retention_admin_guide.md): archive, cleanup eligibility, API contracts, retained files, SQLite space, and upgrade requirements
-- [Review-form administration](docs/review_schema_admin_guide.md): schema authoring and versioning
-- [LiteParse extraction](docs/liteparse_extract_task.md): local setup, generic fields, review evidence and runtime limits
-- [LiteParse pipeline validation](docs/liteparse_pipeline_validation.md): visual 3+3 invoice results, corrections and verification
-- [Frontend deployment](docs/frontend_deployment.md): asset release and rollback
-- [Standard task creation](tasks/standard_task_creation_guidelines.md): task contract and implementation rules
+Start at the [documentation entrance](docs/README.md) and choose your reading path:
+
+- [Operator](docs/operator/README.md): submit PDFs, monitor results and complete reviews.
+- [Application Admin](docs/admin/README.md): configure pipelines, forms, folders and app settings.
+- [Architecture](docs/design_architecture.md): runtime boundaries, state, persistence and tradeoffs.
+- [Developer](docs/developer/README.md): understand, maintain and extend the code.
+- [IT Support](docs/it-support/README.md): install, operate, upgrade and recover the deployment.
+- [Technical Reference](docs/reference/README.md): exact task parameters, formats and API contracts.
+- [History](docs/history/README.md): dated evidence and the preserved original documents.
 
 ## Development
 
@@ -566,13 +563,13 @@ file. `logging.log_level` applies to all three processes.
 
 ### Getting Help
 
-1. Check the [User Guide](docs/user_guide.md) for detailed instructions
+1. Check the [User Guide](docs/operator/README.md) for detailed instructions
 2. Review [Design Architecture](docs/design_architecture.md) for technical details
-3. Use the [Configuration Checker Troubleshooting Guide](docs/config_check_troubleshooting.md)
+3. Use the [Configuration Checker Troubleshooting Guide](docs/it-support/config-check-troubleshooting.md)
    for config-check findings and stored pipeline validation
-4. Review the [Review Form Administrator Guide](docs/review_schema_admin_guide.md)
+4. Review the [Review Form Administrator Guide](docs/admin/managing-review-forms.md)
    for review-form authoring and versioning
-5. Review the [Frontend Deployment and Rollback Guide](docs/frontend_deployment.md)
+5. Review the [Frontend Deployment and Rollback Guide](docs/it-support/deployment-and-upgrades.md)
    when releasing or reverting browser modules
 6. Examine application logs for error details
 7. Check the repository's issue tracker for known problems
@@ -613,7 +610,7 @@ and distribution terms with the project owner before redistributing the code.
 For support and questions:
 - Create an issue in the repository's issue tracker
 - Check existing documentation in the `docs/` folder
-- Review the [User Guide](docs/user_guide.md) for detailed instructions
+- Review the [User Guide](docs/operator/README.md) for detailed instructions
 
 ---
 
