@@ -20,6 +20,7 @@ class AssignNanoidTask(BaseTask):
     TASK_NAME = "assign_nanoid"
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
+        """Resolve the ID length and reject values outside the supported range."""
         super().__init__(config_manager, **params)
         # Read length parameter from config or params, default to 10
         length_param = params.get("length")
@@ -39,18 +40,22 @@ class AssignNanoidTask(BaseTask):
             )
 
     def on_start(self, context: Dict[str, Any]) -> None:
+        """Initialize shared context containers before generating an ID."""
         self.initialize_context(context)
 
     def validate_required_fields(self, context: Dict[str, Any]) -> None:
+        """Accept any context; ID generation has no input field prerequisites."""
         # No required fields in context for this task
         pass
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate and store a fresh ID in data, replacing any previous nanoid."""
         try:
             # Generate nanoid with specified length using default alphabet
             nanoid_str = generate(size=self.length)
 
-            # Add to context inside the 'data' dictionary
+            # This is business data; workflow document and batch IDs retain
+            # their existing identities. Every invocation generates a new ID.
             if "data" not in context or not isinstance(context["data"], dict):
                 context["data"] = {}
             context["data"]["nanoid"] = nanoid_str

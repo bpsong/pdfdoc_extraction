@@ -108,6 +108,10 @@ class ReviewGateTask(BaseTask):
         fields: list[dict[str, Any]],
         document: dict[str, Any],
     ) -> tuple[list[dict[str, Any]], list[str]]:
+        """Collect all review causes and the top-level fields needing attention."""
+        # Keep every cause for review metadata. Order also matters: run() uses
+        # the first cause as the queue item's primary reason, so do not reorder
+        # these checks solely for convenience.
         reasons: list[dict[str, Any]] = []
         highlight_fields: list[str] = []
 
@@ -121,6 +125,8 @@ class ReviewGateTask(BaseTask):
         schema = self._schema()
         required_schema_fields = self._required_schema_fields(schema)
 
+        # With a schema, check required fields plus explicit threshold overrides;
+        # without one, retain confidence checks for every extracted field.
         for field in fields:
             field_key = str(field["field_key"])
             confidence = field.get("confidence")
@@ -143,6 +149,8 @@ class ReviewGateTask(BaseTask):
                 )
                 highlight_fields.append(field_key)
 
+        # Accept the legacy flag name when review_flags is empty. Structured
+        # flags may highlight fields even when their confidence is acceptable.
         business_flags = context.get("review_flags") or context.get("business_rule_flags") or []
         business_reasons, business_highlights = self._business_rule_reasons(
             business_flags
@@ -163,6 +171,8 @@ class ReviewGateTask(BaseTask):
                 if error.get("path"):
                     highlight_fields.append(str(error["path"]).split(".")[0])
 
+        # Multiple causes can target the same field; the UI needs one stable
+        # highlight per field while metadata retains all individual causes.
         return reasons, sorted(set(highlight_fields))
 
     @classmethod

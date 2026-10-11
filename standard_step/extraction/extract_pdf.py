@@ -260,7 +260,8 @@ class ExtractPdfTask(BaseTask):
                     self.logger.error(error_msg)
                     raise TaskError(error_msg)
 
-                # Calculate exponential backoff delay with jitter
+                # Back off to give the provider time to recover; jitter spreads
+                # retries from concurrent workflows instead of synchronizing them.
                 delay = (2 ** attempt) + random.uniform(0, 1)
                 self.logger.warning(f"Extraction attempt {attempt + 1} failed: {str(e)}. Retrying in {delay:.2f} seconds...")
                 time.sleep(delay)
@@ -658,12 +659,15 @@ class ExtractPdfTask(BaseTask):
         def int_coerce(val: Any) -> int:
             """Custom integer coercion using a float intermediate step for scalar extraction.
 
-            First tries float(value) to handle decimals like "12.0" -> 12.0
-            Then int(that) to get integer. Handles "00123" -> 123 via float stripping zeros.
-            Catches ValueError and logs warning, returns value as-is if strict mode fails.
+            Accept decimal strings such as "12.0" before converting to int.
+            Non-integral values truncate toward zero, and the float intermediate
+            can lose precision for large integers. ValueError and TypeError
+            leave the original value unchanged and emit a warning.
             """
             try:
-                # First try float to handle decimal strings like "12.0"
+                # Extraction can encode integer fields as decimal strings that
+                # int() alone rejects. Keep the truncation/precision tradeoff above
+                # in mind when changing coercion or adding identifier fields.
                 float_val = float(val)
                 result = int(float_val)
                 self.logger.debug(f"Coerced '{val}' to int {result}")

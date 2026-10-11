@@ -240,6 +240,8 @@ class WorkflowLoader:
               pipeline stops after logging and status update; otherwise it continues.
             - Housekeeping: executes a mandatory cleanup task before leaf fan-in.
         """
+        # Validate the pinned definition before constructing a runnable flow;
+        # deployment YAML must not silently replace a missing published version.
         if self.pipeline_version_id is None or not self.cfg:
             self.logger.critical(
                 "Cannot build a workflow without an exact published pipeline definition."
@@ -265,6 +267,8 @@ class WorkflowLoader:
                 current_context["pipeline_version_id"] = self.pipeline_version_id
             if self.pipeline_template_id:
                 current_context["pipeline_template_id"] = self.pipeline_template_id
+            # Consume the resume cursor once so later context reuse does not
+            # accidentally skip tasks in another invocation.
             effective_start_index = int(current_context.pop("start_task_index", start_task_index) or 0)
 
             for task_index, task_key in enumerate(pipeline_config):
@@ -348,6 +352,8 @@ class WorkflowLoader:
                     if task_run_id:
                         current_context["task_run_id"] = task_run_id
 
+                    # Fan-out and review pause hand control to other workflows
+                    # or an operator. Skip remaining tasks and the cleanup block.
                     if current_context.get("pipeline_state") == "fan_out":
                         output_summary = self._context_summary(current_context)
                         current_context.setdefault("fan_out_start_task_index", task_index + 1)
@@ -365,6 +371,8 @@ class WorkflowLoader:
                         self.logger.info("Pipeline paused after task '%s'.", task_name)
                         return current_context
 
+                    # Tasks may return a registered error instead of raising;
+                    # both forms must fail the durable run and honor on_error.
                     if current_context.get("error"):
                         current_context["error"] = _redact_text(str(current_context["error"]))
                         self._ensure_fatal_failure(
@@ -383,6 +391,8 @@ class WorkflowLoader:
                             break
                         else:
                             self.logger.warning(f"Continuing pipeline despite error in task '{task_name}'.")
+                            # Clear transient errors for the next task while
+                            # retaining history for terminal failure reporting.
                             self._continue_after_failure(current_context)
                     else:
                         output_summary = self._context_summary(current_context)
@@ -390,6 +400,8 @@ class WorkflowLoader:
                             state_service.complete_task(task_run_id, output_summary)
 
                 except TaskSetupError as e:
+                    # Invalid/unapproved implementations always stop execution;
+                    # on_error=continue cannot bypass the task approval boundary.
                     self.logger.error("Task '%s' setup failed: %s", task_name, e)
                     current_context["error"] = _redact_text(str(e))
                     current_context["error_step"] = task_name
@@ -478,7 +490,8 @@ class WorkflowLoader:
                     if state_service is not None:
                         state_service.conn.close()
 
-            # Execute mandatory housekeeping task
+            # Track cleanup as an internal run after normal completion or failure.
+            # It must not advance the configured cursor used for recovery.
             self.logger.info("Executing mandatory housekeeping task.")
             final_context = current_context
             cleanup_state_service = None
@@ -530,6 +543,8 @@ class WorkflowLoader:
                         cleanup_task_run_id,
                         self._context_summary(final_context),
                     )
+                # Successful cleanup must not hide an earlier continued failure
+                # or leave recovery pointing at the internal cleanup task.
                 self._restore_task_position(final_context, previous_task_position)
                 self._restore_continued_failure(final_context)
                 self._finalize_leaf(final_context)

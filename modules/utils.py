@@ -288,11 +288,11 @@ def normalize_field_path(field: str, default_root: str = "data", allowed_roots: 
 
     Examples:
         >>> normalize_field_path("purchase_order_number")
-        ("data.purchase_order_number", True)
+        ('data.purchase_order_number', True)
         >>> normalize_field_path("data.purchase_order_number")
-        ("data.purchase_order_number", False)
+        ('data.purchase_order_number', False)
         >>> normalize_field_path("line_items.0.sku")
-        ("data.line_items.0.sku", True)
+        ('line_items.0.sku', False)
     """
     if not isinstance(field, str):
         raise ValueError(f"Field must be a string, got {type(field).__name__}")
@@ -302,7 +302,9 @@ def normalize_field_path(field: str, default_root: str = "data", allowed_roots: 
 
     # If field contains a dot, treat it as an explicit path
     if "." in field:
-        # Optional validation: check if first segment is in allowed_roots
+        # allowed_roots currently has no effect on the result: explicit paths
+        # are always preserved. Callers needing root validation must do it
+        # separately; this check must not be relied on as an access boundary.
         if allowed_roots is not None:
             first_segment = field.split(".")[0]
             if first_segment not in allowed_roots:

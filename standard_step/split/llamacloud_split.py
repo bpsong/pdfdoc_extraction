@@ -102,10 +102,14 @@ class LlamaCloudSplitTask(BaseTask):
                 if document is None:
                     raise TaskError(f"Document not found: {context['document_id']}")
                 if document.get("parent_document_id"):
+                    # Children already represent a split decision; splitting them
+                    # again would recursively create another generation of flows.
                     context.setdefault("data", {})["split_result"] = {"status": "skipped_child"}
                     return context
                 existing_children = documents.list_children(str(document["id"]))
                 if document.get("status") == "split_completed":
+                    # Re-entry must reuse durable children rather than repeat the
+                    # provider call and create duplicate PDFs/document records.
                     if not existing_children:
                         raise TaskError(
                             "Split document is marked complete but has no child documents."
@@ -145,6 +149,8 @@ class LlamaCloudSplitTask(BaseTask):
                 saved = json_loads(document.get("metadata_json"), {}).get(
                     "single_document_splits", {}
                 ).get(task_key, {})
+                # Reuse classification only for the same task, source bytes, and
+                # published version. Recheck policy before continuing downstream.
                 if (
                     not existing_children
                     and saved.get("outcome") == "single_document"
@@ -171,9 +177,13 @@ class LlamaCloudSplitTask(BaseTask):
                     }
                     return context
 
+                # Reject disallowed decisions and invalid pages before creating
+                # child files or changing the document's split outcome.
                 self._validate_split_policy(context, split_result)
                 self._validate_all_segment_pages(str(context["file_path"]), split_result.segments)
                 source_artifact = self._ensure_source_artifact(documents, document, context)
+                # Only an exact, ordered copy of the whole source can keep the
+                # original document identity. Partial/reordered pages need children.
                 if (
                     not existing_children
                     and len(split_result.segments) == 1
@@ -227,6 +237,8 @@ class LlamaCloudSplitTask(BaseTask):
                     document_id=str(document["id"]),
                 )
 
+            # Signal the runner to stop this parent flow; child flows resume
+            # after this split task, using the parent's published pipeline version.
             context["split_children"] = child_ids
             context["split_provider_job_id"] = split_result.provider_job_id
             context["fan_out_start_task_index"] = int(context.get("current_task_index") or 0) + 1

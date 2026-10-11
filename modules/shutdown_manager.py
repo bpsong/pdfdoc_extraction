@@ -3,8 +3,8 @@
 This module implements a thread-safe, process-wide ShutdownManager that acts as a
 central coordinator for graceful application shutdown. Components can register
 cleanup tasks (callables with optional arguments) which will be executed during
-shutdown in the order they were registered. The manager configures its own logger
-and uses locking to ensure thread-safe registration and execution.
+shutdown in the order they were registered. Logging configuration belongs to the
+application; locks serialize callback registration and execution.
 """
 
 import threading
@@ -15,28 +15,10 @@ from typing import Callable, Any
 class ShutdownManager:
     """Thread-safe singleton for coordinating application shutdown.
 
-    This class enforces singleton semantics using double-checked locking in
-    [`ShutdownManager.__new__()`](modules/shutdown_manager.py:10). It defers actual field
-    setup to an internal initializer [`ShutdownManager._init()`](modules/shutdown_manager.py:22), which is
-    invoked exactly once when the singleton instance is first created.
-
-    The manager allows components to register cleanup tasks that will be executed
-    during shutdown. Registration and execution are protected by locks to ensure
-    thread safety. A dedicated logger is initialized with a stream handler and a
-    standard formatter for consistent logging.
-
-    Notes:
-        - Creation is lazy and thread-safe.
-        - Cleanup task execution occurs in registration order.
-        - Logging is performed for registrations, executions, and errors.
-
-    Troubleshooting:
-        - Common Issue: Multiple instances created in multi-threaded environment.
-          Resolution: Verify double-checked locking implementation and thread safety.
-        - Common Issue: Shutdown hooks not triggering.
-          Resolution: Ensure proper atexit and signal handler integration.
-        - Common Issue: Resource leaks during shutdown.
-          Resolution: Implement proper cleanup in shutdown callbacks and verify execution order.
+    Creation is lazy, with double-checked locking in __new__ and one-time setup
+    in _init. Callers own signal/atexit integration and application logging setup.
+    Callbacks run in registration order; ordinary exceptions are logged so later
+    callbacks can still run.
     """
 
     _instance = None
@@ -61,17 +43,8 @@ class ShutdownManager:
     def _init(self):
         """Internal initializer for the singleton instance.
 
-        Initializes internal state, including the cleanup task registry, locks,
-        and logger with a stream handler and a standard formatter.
-
-        Side Effects:
-            - Initializes the cleanup task list and locks.
-            - Configures the `ShutdownManager` logger with handler and format.
-            - Sets logger level to DEBUG.
-
-        Notes:
-            This method is called exactly once during the first construction of
-            the singleton and should not be invoked directly by callers.
+        Called once by __new__; creates the callback registry and lock and obtains
+        a module logger without changing its level, handlers, or formatting.
         """
         self._cleanup_tasks = []
         self._tasks_lock = threading.Lock()
@@ -85,18 +58,8 @@ class ShutdownManager:
             *args: Positional arguments passed to the task when executed.
             **kwargs: Keyword arguments passed to the task when executed.
 
-        Returns:
-            None
-
-        Notes:
-            - Thread-safe: registration is guarded by an internal lock.
-            - Logging: emits a DEBUG log entry upon successful registration.
-
-        Troubleshooting:
-            - Common Issue: Cleanup task not executed during shutdown.
-              Resolution: Verify task was registered before shutdown is initiated.
-            - Common Issue: Task registration fails silently.
-              Resolution: Check logger output for registration confirmation and verify task is callable.
+        Registration takes the same lock as execution, so a registration made
+        during shutdown waits until the current shutdown call finishes.
         """
         with self._tasks_lock:
             self._cleanup_tasks.append((task_function, args, kwargs))
@@ -109,25 +72,13 @@ class ShutdownManager:
         each one. Any exception raised by a task is logged, and execution
         continues with subsequent tasks.
 
-        Returns:
-            None
-
-        Notes:
-            - Thread-safe: execution is guarded by an internal lock.
-            - Logging:
-                - INFO at start and completion.
-                - DEBUG before executing each task.
-                - ERROR if a task raises an exception (processing continues).
-
-        Troubleshooting:
-            - Common Issue: Graceful shutdown fails due to unhandled signals.
-              Resolution: Ensure all signal handlers are registered and atexit integration is properly configured.
-            - Common Issue: Resource leaks during shutdown.
-              Resolution: Verify cleanup tasks complete execution and handle exceptions properly.
-            - Common Issue: Tasks execute out of order.
-              Resolution: Check task registration timing and ensure shutdown() is called only once.
+        The registry is retained, so another call executes the callbacks again.
+        Callbacks must not register callbacks or re-enter shutdown: execution
+        holds the non-reentrant registry lock throughout.
         """
         self.logger.info("Shutdown initiated. Executing cleanup tasks...")
+        # Hold the registry stable while callbacks run. A callback that acquires
+        # this same lock (via registration or shutdown) would deadlock.
         with self._tasks_lock:
             for task_function, args, kwargs in self._cleanup_tasks:
                 try:
