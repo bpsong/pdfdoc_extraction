@@ -40,6 +40,15 @@ sequenceDiagram
     Runner->>DB: Finalize document and batch state
 ```
 
+### Animated document processing flow
+
+![Animated document processing flow](assets/document-processing-flow.gif)
+
+This 36-second loop follows acceptance, version assignment, job leasing, task
+execution and finalization, including keyed upload retries. Job state is separate
+from document state. Source-verified on 2026-10-11 at commit `6a67a26`;
+no live deployment check.
+
 ### Ingestion paths
 
 - **Watch folder:** the serialized coordinator reconciles enabled bindings,
@@ -222,6 +231,15 @@ Review lock acquisition is enforced atomically in SQLite. The current operator
 may renew a lock, an expired lock may be claimed by another operator, and an
 active lock cannot be overwritten by a competing claim.
 
+### Animated review pause and resume
+
+![Animated review pause and resume](assets/review-pause-and-resume.gif)
+
+This 36-second loop shows extraction review, persisted pause, lock ownership,
+validated completion and one-time acquisition of a new downstream flow. Manual
+split re-enters its split task instead. Source-verified on 2026-10-11 at commit
+`6a67a26`; no live deployment check.
+
 ## Split fan-out and fan-in
 
 ```mermaid
@@ -274,6 +292,15 @@ The split-results API preserves child-count meanings and adds
 `extraction_document_id`. The production page links a single-document outcome
 to the original extraction and displays its downstream status separately from
 the split decision. Existing historical children remain unchanged.
+
+### Animated split fan-out and fan-in
+
+![Animated split fan-out and fan-in](assets/split-fan-out-and-fan-in.gif)
+
+This 36-second loop uses synthetic children to show sequential execution,
+review-driven aggregation, mixed outcomes and partial-child compensation. A single
+full ordered segment continues on the original document. Source-verified on
+2026-10-11 at commit `6a67a26`; no live deployment check.
 
 ## Errors, recovery, and observability
 

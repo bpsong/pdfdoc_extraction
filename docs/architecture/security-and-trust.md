@@ -74,6 +74,16 @@ Principal trust boundaries are:
 - Normal pages deny framing; the review workspace fetches same-origin PDF
   responses for its local PDF.js viewer.
 
+### Animated browser security flow
+
+![Animated browser security flow](assets/web-security-flow.gif)
+
+The 40-second animation covers login, session cookies, CSRF, role checks, PDF
+access, response headers, and session revocation. Verified against repository
+code on 2026-10-11 at commit `6a67a26`; no live deployment check. The PDF preview
+endpoint requires authentication and safe paths but has no document-owner
+filter: it provides shared authenticated access, not per-user document isolation.
+
 
 ## Local-provider boundary
 

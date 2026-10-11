@@ -43,11 +43,11 @@
 
 | Decision | Rationale | Consequence to account for |
 | --- | --- | --- |
-| SQLite owns state | Durable local transactions join jobs, reviews, versions and audits | Schema upgrades and local write contention are application concerns |
-| Filesystem owns large artifacts | PDFs and exports remain ordinary files with registered metadata | Database and artifact backups must represent the same recovery point |
-| Exact immutable versions | Accepted work remains reproducible across configuration changes | New publication needs an explicit intake assignment change |
-| One supervised worker | Durable acceptance is separate from execution in a simple local topology | This is not a distributed worker pool or a multi-host queue |
-| Application-managed review resume | Human decisions survive process restarts in the state store | Continuation is reconstructed; some interrupted side effects are ambiguous |
+| [SQLite owns state](workflow-and-state.md#animated-document-processing-flow) | Durable local transactions join jobs, reviews, versions and audits | Schema upgrades and local write contention are application concerns |
+| [Filesystem owns large artifacts](persistence-and-artifacts.md#animated-artifact-storage-lifecycle) | PDFs and exports remain ordinary files with registered metadata | Database and artifact backups must represent the same recovery point |
+| [Exact immutable versions](configuration-and-versioning.md#animated-immutable-version-pinning) | Accepted work remains reproducible across configuration changes | New publication needs an explicit intake assignment change |
+| [One supervised worker](runtime-and-boundaries.md#animated-runtime-startup-and-recovery) | Durable acceptance is separate from execution in a simple local topology | This is not a distributed worker pool or a multi-host queue |
+| [Application-managed review resume](workflow-and-state.md#animated-review-pause-and-resume) | Human decisions survive process restarts in the state store | Continuation is reconstructed; some interrupted side effects are ambiguous |
 | Layered services and repositories | Cross-table invariants have one business owner | Route and repository changes must preserve that ownership |
 
 These rationales explain the current implementation. They do not establish a

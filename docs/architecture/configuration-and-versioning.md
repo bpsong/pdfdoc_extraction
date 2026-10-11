@@ -165,6 +165,16 @@ own SQLite task run but does not move the document's configured pipeline
 cursor. Review pause and split fan-out return before cleanup; resumed and split
 child flows run cleanup when their configured work finishes.
 
+### Animated immutable version pinning
+
+![Animated immutable version pinning](assets/immutable-version-pinning.gif)
+
+This 36-second loop uses synthetic version numbers to follow publication,
+explicit intake assignment and later execution. Existing documents keep their
+exact pipeline and form versions. Deployment YAML snapshots and in-memory secret
+resolution remain separate concerns. Source-verified on 2026-10-11 at commit
+`6a67a26`; no live deployment check.
+
 ## Watch-folder administration
 
 A binding selects an exact eligible pipeline version for future

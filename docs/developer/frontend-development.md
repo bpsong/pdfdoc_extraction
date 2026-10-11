@@ -14,6 +14,9 @@ Production pages are server-rendered with Jinja and page-specific
 JavaScript modules. Browser code calls same-origin APIs; SQLite and services
 remain authoritative, while authenticated routes protect pages and PDF previews.
 
+For login, session cookies, CSRF, role checks, and PDF access boundaries, see the
+[animated browser security flow](../architecture/security-and-trust.md#animated-browser-security-flow).
+
 ### Rendering and data flow
 
 ```mermaid

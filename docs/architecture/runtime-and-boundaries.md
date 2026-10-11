@@ -112,6 +112,16 @@ pinned downstream storage step registers its export without rerunning
 extraction. See the [visual validation report](../history/validation/liteparse-pipeline-2026-10-04.md)
 for the six-invoice run and runtime limitations.
 
+### Animated runtime startup and recovery
+
+![Animated runtime startup and recovery](assets/runtime-startup-and-recovery.gif)
+
+This 42-second loop shows parent-owned migration, child schema verification,
+readiness, durable acceptance and failure shutdown. Expired leases can be
+requeued by a worker after a later runtime launch; the supervisor does not hot
+restart an exited worker. Source-verified on 2026-10-11 at commit `6a67a26`;
+no live deployment check.
+
 ## Component boundaries
 
 | Component | Responsibility | Boundary |

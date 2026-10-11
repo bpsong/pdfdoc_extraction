@@ -132,6 +132,26 @@ exception type; the primary file-operation result remains unchanged.
 SQLite and local filesystem coupling suit a local or modest-volume
 installation. They do not provide a horizontally scaled worker architecture.
 
+### Animated artifact storage lifecycle
+
+![Animated artifact storage lifecycle](assets/artifact-storage-lifecycle.gif)
+
+This 36-second loop separates disk contents from SQLite artifact identities,
+follows output registration and authenticated PDF lookup, and shows registered
+file preservation during task cleanup. Default best-effort registration can
+leave a successful file operation unregistered; a caller-supplied connection
+selects strict registration. Source-verified on 2026-10-11 at commit `6a67a26`;
+no live deployment check.
+
+### Animated processing-history cleanup
+
+![Animated processing-history cleanup](assets/processing-history-cleanup.gif)
+
+This 36-second loop shows eligibility, an actor-bound expiring preview, digest
+revalidation, atomic deletion and receipt tombstones. Physical files, audit
+history and immutable definitions remain; cleanup performs no compaction.
+Source-verified on 2026-10-11 at commit `6a67a26`; no live deployment check.
+
 ## Persistence and revisions
 
 Schema version 7 rebuilds binding constraints to allow nullable assignments and

@@ -1,0 +1,226 @@
+{
+  "verified_on": "2026-10-11",
+  "verified_revision": "6a67a26e03e70034cdadf19a27413eb4702bd22c",
+  "animations": [
+    {
+      "id": "document-processing-flow",
+      "title": "Document processing: intake to outcome",
+      "subtitle": "One PDF moves through acceptance, a durable queue and configured execution",
+      "legend": "Follow the teal connectors. Job status and document status are separate records.",
+      "nodes": {
+        "source": {"box": [55, 215, 340, 135], "title": "PDF intake", "detail": "Browser upload or watch folder"},
+        "intake": {"box": [470, 215, 340, 135], "title": "Validate + assign", "detail": "Eligible exact pipeline version"},
+        "db": {"box": [885, 215, 340, 135], "title": "SQLite acceptance", "detail": "Batch, document, source file and job"},
+        "outcome": {"box": [55, 445, 340, 135], "title": "Document outcome", "detail": "Task history and leaf-derived status"},
+        "tasks": {"box": [470, 445, 340, 135], "title": "Configured tasks", "detail": "Pinned order, parameters and schemas"},
+        "worker": {"box": [885, 445, 340, 135], "title": "One local worker", "detail": "Claims a queued job with a lease"}
+      },
+      "edges": [["source", "intake"], ["intake", "db"], ["db", "worker"], ["worker", "tasks"], ["tasks", "outcome"]],
+      "sources": [
+        {"path": "modules/services/ingestion_assignment_service.py", "symbol": "create_batch"},
+        {"path": "modules/services/watch_folder_coordinator.py", "symbol": "_claim_current"},
+        {"path": "modules/services/processing_worker.py", "symbol": "run_once"},
+        {"path": "modules/workflow_loader.py", "symbol": "dynamic_flow"},
+        {"path": "modules/services/fan_in_service.py", "symbol": "finalize_leaf"},
+        {"path": "modules/services/upload_submission_service.py", "symbol": "submission_fingerprint"}
+      ],
+      "stages": [
+        {"title": "Choose a version before accepting work", "text": "A web upload selects an eligible published version. A watch-folder claim uses its current binding's exact version. Input validation happens before accepted work is queued.", "badge": "ACCEPTANCE BOUNDARY", "note": "Invalid or stale assignments do not create accepted work.", "source": 0, "edges": [["source", "intake"]], "nodes": {"source": {"state": "active"}, "intake": {"state": "active"}}},
+        {"title": "Persist acceptance and the processing job", "text": "Ingestion records the batch, document, source artifact reference and processing job together. The PDF bytes live on disk; SQLite retains the pinned assignment and durable work record.", "badge": "DURABLE ACCEPTANCE", "note": "Filesystem moves are outside SQLite atomicity and need compensation.", "source": 1, "edges": [["intake", "db"]], "nodes": {"intake": {"state": "done"}, "db": {"state": "active", "detail": "Accepted: pinned document + queued job"}}},
+        {"title": "Claim the job, then start the document", "text": "The worker leases one queued job and sets the document to processing. Job queued/running and document progress belong to different lifecycles; neither should be inferred from a UI label.", "badge": "SEPARATE LIFECYCLES", "note": "A workflow may finish its job while its document awaits review.", "source": 2, "edges": [["db", "worker"]], "nodes": {"db": {"state": "done", "detail": "Job: running; document: processing"}, "worker": {"state": "active"}}},
+        {"title": "Execute the immutable configured pipeline", "text": "WorkflowLoader approves task implementations, starts attributed task runs and executes the pinned task order. Tasks persist extraction results and register durable output files as they run.", "badge": "TASK FAILURE", "note": "Stop/continue policy records failures; continued errors remain visible.", "source": 3, "edges": [["worker", "tasks"]], "nodes": {"worker": {"state": "active"}, "tasks": {"state": "active", "detail": "Task runs: running then completed"}}},
+        {"title": "Finalize work without hiding a review pause", "text": "Ordinary completion or failure runs internal cleanup and leaf finalization. Review pause and split fan-out return before that cleanup path. Aggregate state comes from document leaves, not the job label.", "badge": "PERSISTED OUTCOME", "note": "Review continuations and split children finish their own configured work.", "source": 4, "edges": [["tasks", "outcome"]], "nodes": {"tasks": {"state": "done"}, "outcome": {"state": "done", "detail": "Completed, failed or review_required"}}},
+        {"title": "An upload retry can return the same batch", "text": "With an Idempotency-Key, the same user, pipeline and file fingerprint identifies the original submission. Repeating it returns the accepted batch; changed contents conflict. Clients without a key remain non-idempotent.", "badge": "RECEIPT UNCERTAINTY", "note": "An unknown receipt does not prove the original request was cancelled.", "source": 5, "edges": [["source", "intake"], ["intake", "db"]], "nodes": {"source": {"state": "active", "detail": "Retry the same keyed submission"}, "db": {"state": "done", "detail": "Return original accepted batch"}}}
+      ]
+    },
+    {
+      "id": "review-pause-and-resume",
+      "title": "Human review: persisted pause, new flow",
+      "subtitle": "Extraction review preserves state in SQLite and resumes downstream once",
+      "legend": "The original flow returns. Human review is not a suspended Prefect execution.",
+      "nodes": {
+        "extract": {"box": [55, 215, 340, 135], "title": "Extraction", "detail": "Normalized values and field evidence"},
+        "gate": {"box": [470, 215, 340, 135], "title": "Review gate", "detail": "Policy, confidence and required fields"},
+        "review": {"box": [885, 215, 340, 135], "title": "SQLite review item", "detail": "Pinned form and paused task run"},
+        "downstream": {"box": [55, 445, 340, 135], "title": "New downstream flow", "detail": "Next task, then cleanup and fan-in"},
+        "resume": {"box": [470, 445, 340, 135], "title": "ResumeManager", "detail": "Atomic claim and rebuilt context"},
+        "operator": {"box": [885, 445, 340, 135], "title": "Operator review", "detail": "Claim lock, correct and complete"}
+      },
+      "edges": [["extract", "gate"], ["gate", "review"], ["review", "operator"], ["operator", "resume"], ["resume", "downstream"]],
+      "sources": [
+        {"path": "standard_step/review/review_gate.py", "symbol": "run"},
+        {"path": "modules/workflow_loader.py", "symbol": "pipeline_state"},
+        {"path": "modules/services/review_service.py", "symbol": "claim"},
+        {"path": "modules/services/review_service.py", "symbol": "complete"},
+        {"path": "modules/resume_manager.py", "symbol": "resume_document"},
+        {"path": "modules/db/repositories.py", "symbol": "claim_review_resume"}
+      ],
+      "stages": [
+        {"title": "Evaluate persisted extraction results", "text": "The review gate evaluates configured policy, required fields, confidence and structured review flags. When review is needed, it creates a review item linked to the document and exact published form.", "badge": "FORM PINNING", "note": "Later form publication does not change this review item's schema.", "source": 0, "edges": [["extract", "gate"], ["gate", "review"]], "nodes": {"extract": {"state": "done"}, "gate": {"state": "active"}, "review": {"state": "active"}}},
+        {"title": "Persist the pause and return from the flow", "text": "The document becomes review_required and the gate's task run becomes paused. WorkflowLoader returns before downstream tasks and cleanup. SQLite holds the business state while the operator works.", "badge": "NO ENGINE SUSPENSION", "note": "The original flow has returned; it is not kept waiting in memory.", "source": 1, "edges": [["gate", "review"]], "nodes": {"gate": {"state": "warning", "detail": "Task run: paused; flow returns"}, "review": {"state": "warning", "detail": "Document: review_required"}}},
+        {"title": "Claim a time-limited review lock", "text": "ReviewService claims the item atomically and changes the document to in_review. An active competing lock blocks edits; the current owner can renew it, and an expired lock can be reclaimed.", "badge": "CONCURRENT EDITS", "note": "Draft saves and completion require the active lock owner.", "source": 2, "edges": [["review", "operator"]], "nodes": {"review": {"state": "active", "detail": "Document: in_review"}, "operator": {"state": "active", "detail": "Active owner lock + draft edits"}}},
+        {"title": "Validate corrections and commit final values", "text": "Completion validates corrections against the exact stored form, persists final field values, completes the paused task run and marks the document review_completed. Resume then becomes eligible.", "badge": "VALIDATION FAILURE", "note": "Invalid corrections cannot advance the document to resume.", "source": 3, "edges": [["operator", "resume"]], "nodes": {"operator": {"state": "done"}, "review": {"state": "done", "detail": "Document: review_completed"}, "resume": {"state": "active"}}},
+        {"title": "Acquire resume once and reconstruct context", "text": "ResumeManager reloads the pinned pipeline, restores final values and atomically claims review_completed to resuming. It checks existing downstream execution so overlapping requests cannot start the same continuation twice.", "badge": "DUPLICATE REQUEST", "note": "Only one caller acquires the downstream resume transition.", "source": 5, "edges": [["operator", "resume"]], "nodes": {"resume": {"state": "active", "detail": "Document: resuming; context rebuilt"}, "review": {"state": "done"}}},
+        {"title": "Start a new flow after the review gate", "text": "A new flow starts at the next configured task, even if only terminal cleanup remains. It uses the document's pinned version. Manual split is different: its continuation re-enters the split task to apply the decision.", "badge": "MANUAL SPLIT EXCEPTION", "note": "Manual approval and background dispatch have separate recovery limits.", "source": 4, "edges": [["resume", "downstream"]], "nodes": {"resume": {"state": "done"}, "downstream": {"state": "active"}}}
+      ]
+    },
+    {
+      "id": "immutable-version-pinning",
+      "title": "Immutable versions: publish, pin, preserve",
+      "subtitle": "Existing work keeps its execution contract while future intake can change",
+      "legend": "Version 1 and version 2 are synthetic examples of exact stored version identities.",
+      "nodes": {
+        "draft": {"box": [55, 215, 340, 135], "title": "Editable draft", "detail": "Revision-checked pipeline definition"},
+        "v1": {"box": [470, 215, 340, 135], "title": "Published version 1", "detail": "Immutable definition + form A"},
+        "old": {"box": [885, 215, 340, 135], "title": "Existing document", "detail": "Pinned: pipeline v1 and form A"},
+        "yaml": {"box": [55, 445, 340, 135], "title": "Deployment YAML", "detail": "Process infrastructure and secrets"},
+        "v2": {"box": [470, 445, 340, 135], "title": "Published version 2", "detail": "Immutable definition + form B"},
+        "new": {"box": [885, 445, 340, 135], "title": "Future document", "detail": "Explicit intake selection or binding"}
+      },
+      "edges": [["draft", "v1"], ["v1", "old"], ["v1", "v2"], ["v2", "new"], ["yaml", "v2"]],
+      "sources": [
+        {"path": "modules/services/pipeline_template_service.py", "symbol": "publish"},
+        {"path": "modules/services/ingestion_assignment_service.py", "symbol": "resolve_selection"},
+        {"path": "modules/services/pipeline_definition_service.py", "symbol": "load_for_document"},
+        {"path": "modules/services/pipeline_definition_service.py", "symbol": "resolve_secret_references"},
+        {"path": "modules/config_manager.py", "symbol": "ConfigManager"}
+      ],
+      "stages": [
+        {"title": "Validate the draft and its exact dependencies", "text": "Publication validates task definitions, approvals, secret references and exact review-form dependencies. It rechecks the draft revision under a write transaction before creating an immutable published version.", "badge": "STALE OR INVALID DRAFT", "note": "Validation and revision conflicts prevent publication.", "source": 0, "edges": [["draft", "v1"]], "nodes": {"draft": {"state": "active"}, "v1": {"state": "active"}}},
+        {"title": "Pin accepted work to version 1", "text": "Intake selects an eligible exact version before acceptance. The batch and its documents retain matching pipeline identities; review items later retain the exact form version required by that pipeline.", "badge": "EXACT ASSIGNMENT", "note": "No implicit latest-version substitution during execution.", "source": 1, "edges": [["v1", "old"]], "nodes": {"v1": {"state": "done"}, "old": {"state": "active"}}},
+        {"title": "Publish version 2 without rewriting version 1", "text": "An edited draft publishes a new immutable version and dependency set. Version 1 remains available for already-pinned work. The connector represents version history, not a mutation of version 1.", "badge": "IMMUTABLE HISTORY", "note": "Publication alone does not upgrade existing assignments.", "source": 0, "edges": [["v1", "v2"]], "nodes": {"draft": {"state": "done", "detail": "Updated draft: new revision"}, "v1": {"state": "done"}, "v2": {"state": "active"}, "old": {"state": "done"}}},
+        {"title": "Assign version 2 explicitly to future intake", "text": "An upload can select version 2, or an administrator can change a watch-folder binding. Future accepted documents use that selection. Claims already started keep their recorded assignment.", "badge": "FUTURE INTAKE ONLY", "note": "Existing documents still execute pipeline v1 and form A.", "source": 1, "edges": [["v2", "new"], ["v1", "old"]], "nodes": {"old": {"state": "done"}, "v2": {"state": "done"}, "new": {"state": "active", "detail": "Pinned: pipeline v2 and form B"}}},
+        {"title": "Load the recorded version again for resume", "text": "PipelineDefinitionService verifies document and batch assignment, version hashes, approved tasks and exact stored forms. Review resume and split children keep those identities even if the template is later inactive or archived.", "badge": "INVALID STORED IDENTITY", "note": "Missing, mismatched or invalid definitions stop execution.", "source": 2, "edges": [["v1", "old"], ["v2", "new"]], "nodes": {"old": {"state": "active", "detail": "Resume: still pipeline v1 / form A"}, "new": {"state": "active", "detail": "Execute: pipeline v2 / form B"}}},
+        {"title": "Resolve secrets in memory; restart for YAML edits", "text": "Stored definitions retain secret aliases, which execution resolves in memory from deployment configuration. Each process owns its YAML snapshot, so deployment edits need coordinated restart. SQLite settings and publication have separate semantics.", "badge": "CONFIGURATION OWNERSHIP", "note": "Secrets stay outside published definitions and diagram examples.", "source": 3, "edges": [["yaml", "v2"]], "nodes": {"yaml": {"state": "active", "detail": "Per-process snapshot; restart on edit"}, "v2": {"state": "done", "detail": "Stored aliases; resolved only in memory"}}}
+      ]
+    },
+    {
+      "id": "split-fan-out-and-fan-in",
+      "title": "PDF splitting: fan-out and leaf-derived fan-in",
+      "subtitle": "Children run sequentially; aggregate state follows leaf outcomes",
+      "legend": "The three children are synthetic examples. Parent containers are not counted as leaves.",
+      "nodes": {
+        "root": {"box": [45, 330, 260, 140], "title": "Root PDF", "detail": "Pinned pipeline and source pages"},
+        "split": {"box": [350, 330, 250, 140], "title": "Split decision", "detail": "Validate segments and create children"},
+        "a": {"box": [675, 195, 240, 120], "title": "Child A", "detail": "Pending downstream work"},
+        "b": {"box": [675, 335, 240, 120], "title": "Child B", "detail": "Pending downstream work"},
+        "c": {"box": [675, 475, 240, 120], "title": "Child C", "detail": "Pending downstream work"},
+        "aggregate": {"box": [985, 330, 250, 140], "title": "Root + batch", "detail": "Aggregate from leaf documents"}
+      },
+      "edges": [["root", "split"], ["split", "a"], ["split", "b"], ["split", "c"], ["a", "aggregate"], ["b", "aggregate"], ["c", "aggregate"]],
+      "sources": [
+        {"path": "modules/services/split_result_service.py", "symbol": "save_single_document_decision"},
+        {"path": "modules/services/split_execution_service.py", "symbol": "_create_children"},
+        {"path": "modules/workflow_manager.py", "symbol": "_trigger_child_workflows"},
+        {"path": "modules/services/fan_in_service.py", "symbol": "_summarize_leaves"},
+        {"path": "modules/services/split_execution_service.py", "symbol": "_rollback_partial_children"}
+      ],
+      "stages": [
+        {"title": "Check whether splitting is needed at all", "text": "One validated segment covering every source page once in original order keeps the original document, file and pinned version. It records single_document and continues downstream without fan-out. Other segment shapes create children.", "badge": "SINGLE-DOCUMENT PATH", "note": "Full ordered coverage keeps the original document identity.", "source": 0, "edges": [["root", "split"]], "nodes": {"root": {"state": "active"}, "split": {"state": "active", "detail": "Full ordered coverage? Keep original"}}},
+        {"title": "Materialize children and record their identities", "text": "For fan-out, the split materializer creates child PDFs, document relationships, metadata and split_pdf registrations. Children inherit the pinned pipeline. The parent signals fan_out and returns before its normal cleanup path.", "badge": "CHILD CREATION FAILURE", "note": "Partial children require compensation before execution proceeds.", "source": 1, "edges": [["split", "a"], ["split", "b"], ["split", "c"]], "nodes": {"split": {"state": "active", "detail": "Multiple segments: materialize children"}, "a": {"state": "active"}, "b": {"state": "active"}, "c": {"state": "active"}, "root": {"state": "done", "detail": "Container: split_completed"}}},
+        {"title": "Execute downstream work for child A first", "text": "WorkflowManager loads the children's pinned pipeline and starts each child after the split step, sequentially. Child A completes while other leaves are unfinished, so the root and batch remain processing.", "badge": "SEQUENTIAL EXECUTION", "note": "Fan-out does not imply a parallel worker pool.", "source": 2, "edges": [["a", "aggregate"]], "nodes": {"a": {"state": "done", "detail": "Completed downstream work"}, "aggregate": {"state": "active", "detail": "Processing: unfinished leaves"}}},
+        {"title": "A review leaf changes the aggregate", "text": "Child B pauses for review and its flow returns. Child C can then run and fail. Any review leaf makes the aggregate review_required; the container's own split status does not override that result.", "badge": "REVIEW HAS PRIORITY", "note": "A pending human decision prevents a terminal aggregate.", "source": 3, "edges": [["b", "aggregate"], ["c", "aggregate"]], "nodes": {"a": {"state": "done", "detail": "Completed"}, "b": {"state": "warning", "detail": "review_required"}, "c": {"state": "failed", "detail": "Failed downstream work"}, "aggregate": {"state": "warning", "detail": "review_required"}}},
+        {"title": "Resolve review, then recompute from terminal leaves", "text": "After child B's review continuation succeeds, the leaves are two completed and one failed. FanInService produces completed_with_errors. All succeeded would yield completed; all failed would yield failed.", "badge": "NO DOUBLE COUNTING", "note": "Only leaves contribute to root and batch outcome counts.", "source": 3, "edges": [["a", "aggregate"], ["b", "aggregate"], ["c", "aggregate"]], "nodes": {"a": {"state": "done", "detail": "Completed"}, "b": {"state": "done", "detail": "Completed after review"}, "c": {"state": "failed", "detail": "Failed"}, "aggregate": {"state": "warning", "detail": "completed_with_errors"}}},
+        {"title": "Compensate a partially materialized split", "text": "If a later segment fails during creation, the materializer removes earlier partial children and files. If compensation cannot remove them, remaining partial records are marked failed so source and batch can reach a terminal outcome.", "badge": "ALTERNATIVE FAILURE PATH", "note": "This scene precedes child execution; it is not a later retry.", "source": 4, "edges": [["split", "a"], ["split", "b"]], "nodes": {"split": {"state": "failed", "detail": "Later segment creation failed"}, "a": {"state": "warning", "detail": "Partial child compensated"}, "b": {"state": "failed", "detail": "Unremoved partial: failed"}, "c": {"state": "normal", "detail": "Not started"}, "aggregate": {"state": "failed", "detail": "Failure is finalized"}}}
+      ]
+    },
+    {
+      "id": "runtime-startup-and-recovery",
+      "title": "Runtime: startup, supervision and recovery",
+      "subtitle": "A parent process supervises web and worker children sharing SQLite and disk",
+      "legend": "Normal topology: one migration owner, one web process, one local processing worker.",
+      "nodes": {
+        "parent": {"box": [55, 215, 340, 135], "title": "Parent / main.py", "detail": "Migrate, supervise and stop children"},
+        "web": {"box": [470, 215, 340, 135], "title": "Web subprocess", "detail": "Pages, APIs and upload acceptance"},
+        "worker": {"box": [885, 215, 340, 135], "title": "Worker subprocess", "detail": "Lease jobs and execute root workflows"},
+        "watch": {"box": [55, 445, 340, 135], "title": "Watch coordinator", "detail": "Parent thread; enqueue accepted PDFs"},
+        "health": {"box": [470, 445, 340, 135], "title": "Run-scoped health", "detail": "Readiness and component heartbeats"},
+        "db": {"box": [885, 445, 340, 135], "title": "SQLite + filesystem", "detail": "Durable jobs, state and PDF contents"}
+      },
+      "edges": [["parent", "web"], ["parent", "worker"], ["parent", "watch"], ["watch", "health"], ["web", "health"], ["worker", "db"], ["health", "db"], ["web", "db"], ["watch", "db"]],
+      "paths": {
+        "parent->worker": [[225, 215], [225, 197], [1055, 197], [1055, 215]],
+        "web->db": [[640, 350], [640, 400], [1055, 400], [1055, 445]],
+        "watch->db": [[225, 580], [225, 606], [1055, 606], [1055, 580]]
+      },
+      "sources": [
+        {"path": "main.py", "symbol": "run_startup_checks"},
+        {"path": "modules/services/startup_service.py", "symbol": "verify_database_schema"},
+        {"path": "modules/services/runtime_health_service.py", "symbol": "_heartbeat_loop"},
+        {"path": "modules/services/watch_folder_coordinator.py", "symbol": "_claim_current"},
+        {"path": "main.py", "symbol": "terminate_process_tree"},
+        {"path": "modules/db/repositories.py", "symbol": "requeue_expired"},
+        {"path": "modules/services/processing_worker.py", "symbol": "run_once"}
+      ],
+      "stages": [
+        {"title": "Initialize the database in the parent", "text": "main.py resolves deployment configuration and runs startup migration before launching child processes. In the normal supervised topology, the parent alone owns database migration.", "badge": "STARTUP FAILURE", "note": "Migration or validation failure prevents a ready runtime.", "source": 0, "edges": [], "nodes": {"parent": {"state": "active", "detail": "Migration owner: prepare schema"}, "db": {"state": "active"}}},
+        {"title": "Launch children in read-only verification mode", "text": "The parent launches web and worker children. Both verify the exact supported schema and essential tables before accepting work. They share database and filesystem access, while retaining separate process responsibilities.", "badge": "EXACT SCHEMA REQUIRED", "note": "Children do not repair or migrate a mismatched database.", "source": 1, "edges": [["parent", "web"], ["parent", "worker"]], "nodes": {"parent": {"state": "done"}, "web": {"state": "active", "detail": "Verify schema; construct application"}, "worker": {"state": "active", "detail": "Verify schema; construct worker"}}},
+        {"title": "Require readiness for this launch's run ID", "text": "Supervisor, web, worker and watch coordinator must report ready inside a bounded startup window. Worker heartbeat reporting runs independently of OCR, so long provider calls do not silence its heartbeat thread.", "badge": "HEALTH IS SEPARATE", "note": "A bad watch binding can degrade ingestion without losing worker readiness.", "source": 2, "edges": [["web", "health"], ["watch", "health"], ["health", "db"]], "nodes": {"health": {"state": "active", "detail": "Fresh run ID; expected components ready"}, "watch": {"state": "active"}, "worker": {"state": "done"}, "web": {"state": "done"}}},
+        {"title": "Accept durably; execute only in the worker", "text": "The watch coordinator and web upload path persist accepted jobs. The local worker claims them and executes queued root workflows. Producers acknowledge accepted work independently of its eventual processing outcome.", "badge": "LOCAL TOPOLOGY", "note": "One worker; no distributed queue or multi-host coordination.", "source": 3, "edges": [["web", "db"], ["watch", "db"], ["worker", "db"]], "nodes": {"watch": {"state": "active", "detail": "Accept PDFs and enqueue jobs"}, "web": {"state": "active", "detail": "Accept uploads and enqueue jobs"}, "db": {"state": "active", "detail": "Persisted jobs claimed with leases"}, "worker": {"state": "active", "detail": "Execute one queued root job"}}},
+        {"title": "An unexpected child exit stops the runtime", "text": "If the worker or web child exits unexpectedly, supervision fails and stops the remaining process trees. Windows shutdown first requests an orderly stop, then forces termination if the grace period expires.", "badge": "NO HOT WORKER RESTART", "note": "The supervisor exits nonzero; recovery needs a later runtime launch.", "source": 4, "edges": [], "nodes": {"worker": {"state": "failed", "detail": "Unexpected process exit"}, "parent": {"state": "failed", "detail": "Stop remaining trees; exit nonzero"}, "web": {"state": "warning", "detail": "Orderly stop, then forced if needed"}, "watch": {"state": "warning", "detail": "Coordinator stopped"}, "health": {"state": "failed", "detail": "This run is no longer ready"}}},
+        {"title": "After restart, recover expired job leases", "text": "A later worker poll returns expired running leases to queued, then can claim available work. SQLite preserves queue records across process interruption, but does not make external side effects transactional. Queue failure retries have separate limits.", "badge": "RECOVERY LIMIT", "note": "An interrupted task may need idempotency or operator recovery.", "source": 5, "edges": [["worker", "db"]], "nodes": {"parent": {"state": "done", "detail": "Later launch: new run ID"}, "web": {"state": "done", "detail": "Ready after startup checks"}, "worker": {"state": "active", "detail": "Requeue expired lease; claim work"}, "db": {"state": "active", "detail": "Running lease expired -> queued"}, "health": {"state": "done", "detail": "New launch's readiness records"}, "watch": {"state": "done"}}},
+        {"title": "Keep queue retry distinct from task retry", "text": "The worker retries selected startup and input I/O failures within its attempt limit. A flow returning failure or an unclassified exception is terminal at the queue level. Configured task retries are a separate mechanism.", "badge": "NO AUTOMATIC FULL REPLAY", "note": "Durable acceptance does not imply exactly-once provider execution.", "source": 6, "edges": [["worker", "db"]], "nodes": {"worker": {"state": "warning", "detail": "Classify error before queue retry"}, "db": {"state": "warning", "detail": "Retry eligible errors; else failed"}}}
+      ]
+    },
+    {
+      "id": "artifact-storage-lifecycle",
+      "title": "Artifacts: file contents and SQLite identity",
+      "subtitle": "Durable PDFs and exports remain on disk; records explain ownership and access",
+      "legend": "File creation and database registration are separate operations, with explicit failure limits.",
+      "nodes": {
+        "source": {"box": [55, 215, 340, 135], "title": "Original PDF on disk", "detail": "Ingested source bytes"},
+        "task": {"box": [470, 215, 340, 135], "title": "Task creates output", "detail": "Split, archive or export operation"},
+        "files": {"box": [885, 215, 340, 135], "title": "Durable files on disk", "detail": "PDF, CSV and JSON contents"},
+        "preview": {"box": [55, 445, 340, 135], "title": "Authenticated preview", "detail": "Resolve registered PDF under roots"},
+        "records": {"box": [470, 445, 340, 135], "title": "SQLite document_files", "detail": "Document, role, path and metadata"},
+        "cleanup": {"box": [885, 445, 340, 135], "title": "Task housekeeping", "detail": "Delete transient workflow files"}
+      },
+      "edges": [["source", "task"], ["task", "files"], ["task", "records"], ["records", "preview"], ["files", "cleanup"], ["cleanup", "records"]],
+      "sources": [
+        {"path": "modules/services/batch_service.py", "symbol": "source_original"},
+        {"path": "modules/utils.py", "symbol": "reserve_unique_filepath"},
+        {"path": "modules/services/artifact_service.py", "symbol": "register_document_artifact"},
+        {"path": "modules/api_router.py", "symbol": "get_document_pdf_file"},
+        {"path": "standard_step/housekeeping/cleanup_task.py", "symbol": "_cleanup_path"}
+      ],
+      "stages": [
+        {"title": "Keep source bytes separate from operational records", "text": "Ingestion stores the original PDF on disk and registers its source_original role for the document. SQLite records identity and location; it does not contain the PDF bytes. Source artifacts have no producer task key.", "badge": "TWO STORAGE OWNERS", "note": "Recovering a database alone does not restore artifact contents.", "source": 0, "edges": [["source", "task"]], "nodes": {"source": {"state": "active"}, "records": {"state": "active", "detail": "source_original -> original PDF path"}}},
+        {"title": "Reserve an output path before writing", "text": "Built-in split, archive and export operations reserve generated paths with exclusive creation. They write large output contents to the filesystem, keeping concurrent local workflows from selecting the same output path.", "badge": "FILE OPERATION", "note": "File creation is not an atomic database transaction.", "source": 1, "edges": [["task", "files"]], "nodes": {"task": {"state": "active"}, "files": {"state": "active", "detail": "Reserved path, then written content"}}},
+        {"title": "Register artifact identity and producer attribution", "text": "Tasks call register_document_artifact when a document identity is available. The record stores role, resolved path and metadata; producer attribution uses the configured task_key. Existing matching registrations are reused.", "badge": "CANONICAL ROLES", "note": "split_pdf, source_archive and export_pdf/csv/json identify purpose.", "source": 2, "edges": [["task", "records"]], "nodes": {"files": {"state": "done"}, "records": {"state": "active", "detail": "Role + path + producer task_key"}}},
+        {"title": "Resolve a PDF through its document record", "text": "The preview endpoint authenticates the user, reads document file candidates and serves only a safe PDF within configured roots. Registered paths support traceability; this endpoint does not filter documents by owner.", "badge": "SHARED PDF ACCESS", "note": "Authentication and safe paths do not create per-user document isolation.", "source": 3, "edges": [["records", "preview"]], "nodes": {"records": {"state": "done"}, "preview": {"state": "active"}}},
+        {"title": "Preserve registered artifacts during housekeeping", "text": "Task cleanup checks document_files before unlinking a workflow path. Registered artifacts survive this cleanup; transient files can be removed. Processing-history deletion is a different operation and retains physical files.", "badge": "CLEANUP SCOPE", "note": "Task housekeeping is not a general artifact retention policy.", "source": 4, "edges": [["files", "cleanup"], ["cleanup", "records"]], "nodes": {"cleanup": {"state": "active", "detail": "Check registration before unlink"}, "files": {"state": "done", "detail": "Registered durable files preserved"}, "records": {"state": "active"}}},
+        {"title": "Account for registration failure explicitly", "text": "The default helper is best-effort: a registration error warns without replacing the successful file-operation result. A caller-supplied connection selects strict registration in its transaction. Best-effort failure can leave a file without traceability.", "badge": "REGISTRATION GAP", "note": "Disk success alone does not prove the artifact is registered.", "source": 2, "edges": [["task", "records"]], "nodes": {"files": {"state": "done", "detail": "Output file exists on disk"}, "records": {"state": "failed", "detail": "Best-effort registration failed"}, "cleanup": {"state": "warning", "detail": "Protection depends on registration"}}}
+      ]
+    },
+    {
+      "id": "processing-history-cleanup",
+      "title": "History cleanup: preview, verify, delete",
+      "subtitle": "Administrative retention removes eligible records while preserving files and audit history",
+      "legend": "Synthetic records illustrate the transaction boundary; this animation deletes no real data.",
+      "nodes": {
+        "candidate": {"box": [55, 215, 340, 135], "title": "Candidate batches", "detail": "Pipeline identity and UTC cutoff"},
+        "preview": {"box": [470, 215, 340, 135], "title": "Bound preview", "detail": "Actor, digest and 15-minute expiry"},
+        "confirm": {"box": [885, 215, 340, 135], "title": "Confirm + revalidate", "detail": "Name, actor, expiry and fresh digest"},
+        "retained": {"box": [55, 445, 340, 135], "title": "Retained", "detail": "Physical files, audits and versions"},
+        "receipts": {"box": [470, 445, 340, 135], "title": "Upload receipts", "detail": "Tombstone payload; retain identity"},
+        "delete": {"box": [885, 445, 340, 135], "title": "One write transaction", "detail": "Delete selected history and audit it"}
+      },
+      "edges": [["candidate", "preview"], ["preview", "confirm"], ["confirm", "delete"], ["delete", "receipts"], ["receipts", "retained"]],
+      "sources": [
+        {"path": "modules/services/pipeline_cleanup_service.py", "symbol": "_plan"},
+        {"path": "modules/services/pipeline_cleanup_service.py", "symbol": "preview"},
+        {"path": "modules/services/pipeline_cleanup_service.py", "symbol": "cleanup"},
+        {"path": "modules/db/repositories.py", "symbol": "tombstone_selected_receipts"},
+        {"path": "modules/db/repositories.py", "symbol": "ProcessingHistoryRepository"}
+      ],
+      "stages": [
+        {"title": "Select whole batches that are safe to remove", "text": "The cleanup plan excludes active work, pending reviews, live locks, recent activity and inconsistent history. It checks jobs, task runs, decisions and document relationships against an exclusive UTC cutoff.", "badge": "WHOLE-BATCH SELECTION", "note": "Mixed assignments and cross-batch children are excluded.", "source": 0, "edges": [["candidate", "preview"]], "nodes": {"candidate": {"state": "active", "detail": "Terminal, old and internally consistent"}, "preview": {"state": "active"}}},
+        {"title": "Bind the preview to an actor and exact data", "text": "Preview stores a SHA-256 fingerprint of the selected records and plan, with the requesting actor and a 15-minute expiry. It returns counts and exclusions without deleting processing history.", "badge": "PREVIEW ONLY", "note": "Counts describe eligible data at this point in time.", "source": 1, "edges": [["candidate", "preview"]], "nodes": {"preview": {"state": "done", "detail": "Stored digest; expires in 15 minutes"}}},
+        {"title": "Recompute the plan under a write lock", "text": "Confirmation checks preview identity, actor, expiry and pipeline name. Under BEGIN IMMEDIATE it rebuilds the plan and compares its fingerprint. Changed data or an expired preview requires a fresh preview.", "badge": "CONFLICT: DELETE NOTHING", "note": "A stale digest cannot authorize a different record selection.", "source": 2, "edges": [["preview", "confirm"]], "nodes": {"confirm": {"state": "active", "detail": "Fresh digest must equal preview"}, "preview": {"state": "done"}}},
+        {"title": "Delete history and write its audit atomically", "text": "Dependency-ordered record deletion, receipt trimming, preview consumption and the admin audit event commit together. Artifact registrations are removed with selected history. A retained foreign-key reference aborts and rolls back the transaction.", "badge": "ROLLBACK ON FAILURE", "note": "Partial database deletion must not be committed.", "source": 2, "edges": [["confirm", "delete"]], "nodes": {"confirm": {"state": "done"}, "delete": {"state": "active", "detail": "Delete records + consume preview + audit"}}},
+        {"title": "Keep receipt identities after payload trimming", "text": "Upload receipts become minimal tombstones while user, key and fingerprint identities remain. Lookup reports purged, preventing a delayed retry of the old accepted submission from recreating deleted processing work.", "badge": "PURGED RECEIPT", "note": "A new upload requires an explicit new submission.", "source": 3, "edges": [["delete", "receipts"]], "nodes": {"delete": {"state": "done"}, "receipts": {"state": "done", "detail": "purged; original identity retained"}}},
+        {"title": "Retain the files and historical governance record", "text": "Cleanup leaves physical PDFs and exports, audit history and immutable version definitions intact. It removes their selected operational registrations. Freed SQLite pages can be reused; this workflow does not run VACUUM or delete files.", "badge": "RETENTION BOUNDARY", "note": "Database cleanup is separate from filesystem retention and compaction.", "source": 4, "edges": [["receipts", "retained"]], "nodes": {"retained": {"state": "done", "detail": "Files, audits and versions still exist"}, "delete": {"state": "done", "detail": "Selected operational records removed"}, "receipts": {"state": "done"}}}
+      ]
+    }
+  ]
+}
