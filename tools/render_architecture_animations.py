@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import GifImagePlugin, Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "docs" / "architecture" / "assets"
@@ -88,7 +88,7 @@ def edge_points(nodes: dict[str, dict[str, Any]], edge: list[str],
     """Connect facing card edges, keeping paths outside card interiors."""
     custom = (paths or {}).get("->".join(edge))
     if custom:
-        return [tuple(point) for point in custom]
+        return [(x, y) for x, y in custom]
     a, b = (nodes[key] for key in edge)
     ax, ay, aw, ah = a["box"]
     bx, by, bw, bh = b["box"]
@@ -251,6 +251,8 @@ def animate(board: dict[str, Any], revision: str, verified_on: str,
                    comment=provenance)
     total_ms = 0
     with Image.open(target) as decoded:
+        if not isinstance(decoded, GifImagePlugin.GifImageFile):
+            raise ValueError(f"Expected a GIF animation: {target}")
         encoded_frames = decoded.n_frames
         if encoded_frames < len(scenes) * 2 or decoded.info.get("loop") != 0:
             raise ValueError(f"Missing animation or infinite loop: {target}")

@@ -27,6 +27,7 @@ architecture topics. Each audience guide links its own complete page set.
 
 ## Shared authoritative sources
 
+- [Product roadmap](../tasks/roadmap.md): agreed future scope and supporting product research.
 - [Standard task creation guidelines](../tasks/standard_task_creation_guidelines.md)
 - [Config-check CLI reference](../tools/config_check/README.md)
 - [Config-check finding catalog](../tools/config_check/examples/ERROR_CODES.md)

@@ -8,7 +8,7 @@ import json
 from typing import Any
 
 import pytest
-from PIL import Image
+from PIL import GifImagePlugin, Image
 
 from tools.render_architecture_animations import (
     ASSETS,
@@ -48,6 +48,7 @@ def test_published_gif_matches_storyboard_and_plays_all_scenes(
         json.dumps(board, sort_keys=True).encode("utf-8")
     ).hexdigest()
     with Image.open(target) as animation:
+        assert isinstance(animation, GifImagePlugin.GifImageFile)
         assert animation.size == (WIDTH, HEIGHT)
         assert animation.info["loop"] == 0
         provenance = json.loads(animation.info["comment"])

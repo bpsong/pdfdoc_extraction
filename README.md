@@ -467,6 +467,9 @@ Start at the [documentation entrance](docs/README.md) and choose your reading pa
 - [Technical Reference](docs/reference/README.md): exact task parameters, formats and API contracts.
 - [History](docs/history/README.md): dated evidence and the preserved original documents.
 
+See the [product roadmap](tasks/roadmap.md) for agreed future work and the linked
+assessment of comparable extraction products.
+
 ## Development
 
 ### Setting Up Development Environment

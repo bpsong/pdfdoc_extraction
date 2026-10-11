@@ -63,7 +63,7 @@ until verification passes.
   `test/visual/test_schema_review_visual.py`: updated navigation/layout regressions;
   unrelated schema, upload, and editor checks retained.
 - `docs/design_architecture.md`, `docs/user_guide.md`,
-  `tasks/future-multi-document-routing.md`: maintained behavior and operator guidance.
+  `tasks/archive/future-multi-document-routing.md`: maintained behavior and operator guidance.
 
 ## Verification evidence
 

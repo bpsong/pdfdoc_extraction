@@ -161,7 +161,7 @@ class ManualSplitService:
 class ManualSplitReviewService:
     """Validate locked draft/approval writes without touching extracted fields."""
 
-    def __init__(self, conn: sqlite3.Connection, config: ConfigProvider) -> None:
+    def __init__(self, conn: sqlite3.Connection, config: ConfigProvider | None = None) -> None:
         self.conn, self.config = conn, config
         self.decisions = ManualSplitRepository(conn)
         self.review = ReviewService(conn, config)

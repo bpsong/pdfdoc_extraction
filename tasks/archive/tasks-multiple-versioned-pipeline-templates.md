@@ -100,7 +100,7 @@ Keep this list updated throughout implementation.
   target architecture.
 - `tasks/archive/tasks-multiple-versioned-pipeline-templates.md` — this
   completed checklist.
-- `tasks/future-multi-document-routing.md` — original multiple-template
+- `tasks/archive/future-multi-document-routing.md` — original multiple-template
   direction.
 - `tasks/future-mixed-document-routing.md` — explicitly deferred routing
   extension.
@@ -1688,5 +1688,5 @@ Add dated notes here during execution for:
     current stored/portable/read-only CLI documentation and help.
   - `test/tools/config_check/test_cli_help.py`: CLI documentation contract.
   - `tasks/design-multiple-pipeline-templates.md` and
-    `tasks/future-multi-document-routing.md`: implemented status, cross-links,
+    `tasks/archive/future-multi-document-routing.md`: implemented status, cross-links,
     and deferred-scope boundary.

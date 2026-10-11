@@ -16,7 +16,7 @@ This is a future design proposal, not current runtime behavior.
 ## Prerequisite Design
 
 This feature builds on the
-[implemented multiple-pipeline direction](future-multi-document-routing.md).
+[implemented multiple-pipeline direction](archive/future-multi-document-routing.md).
 Multiple named templates, immutable published versions, explicit pipeline
 assignments, and version-aware resume behavior already exist; cross-pipeline
 child routing remains deferred.
@@ -359,7 +359,7 @@ target pipeline definition.
 
 ## Related Future Design
 
-- [Implemented Multiple Pipeline Templates](future-multi-document-routing.md)
+- [Implemented Multiple Pipeline Templates](archive/future-multi-document-routing.md)
   is the current foundation for template identity, publishing, version
   pinning, ingestion selection, and simple target extraction tasks.
 - [Future Design: Lightweight Pipeline Visualization](future-lightweight-pipeline-visualization.md)

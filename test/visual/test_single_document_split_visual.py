@@ -22,7 +22,7 @@ from test.standard_step.split.test_llamacloud_split_task import _write_pdf
 from test.visual.test_schema_review_visual import visual_app
 
 pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import ViewportSize, sync_playwright
 
 EVIDENCE_DIR = Path(__file__).resolve().parents[2] / "output" / "playwright" / "single-document-split"
 
@@ -119,7 +119,7 @@ def split_visual_app(visual_app: dict[str, str], tmp_path_factory: pytest.TempPa
 
 
 @pytest.mark.parametrize("viewport", [{"width": 1440, "height": 900}, {"width": 390, "height": 844}])
-def test_single_document_and_four_child_results_visual(split_visual_app: dict[str, str], viewport: dict[str, int]) -> None:
+def test_single_document_and_four_child_results_visual(split_visual_app: dict[str, str], viewport: ViewportSize) -> None:
     """Check real links, split decisions, PDF preview, and responsive presentation."""
     state = split_visual_app
     with sync_playwright() as playwright:

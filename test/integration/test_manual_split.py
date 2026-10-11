@@ -62,7 +62,9 @@ def manual_case(tmp_path, monkeypatch):
         with connect(config) as conn:
             executable = PipelineDefinitionService(conn, config).load_for_document(document["id"])
         loader = WorkflowLoader(config, definition=executable.definition, pipeline_version_id=executable.version_id, pipeline_template_id=executable.template_id)
-        result = loader.load_workflow()({"id": document["id"], "document_id": document["id"], "batch_id": document["batch_id"], "file_path": str(pdf), "original_filename": pdf.name, "pipeline_version_id": version["id"], "data": {"nanoid": "keep-me"}, "metadata": {}})
+        workflow = loader.load_workflow()
+        assert workflow is not None
+        result = workflow({"id": document["id"], "document_id": document["id"], "batch_id": document["batch_id"], "file_path": str(pdf), "original_filename": pdf.name, "pipeline_version_id": version["id"], "data": {"nanoid": "keep-me"}, "metadata": {}})
         return document, result
 
     return config, start, downstream
@@ -103,7 +105,9 @@ def test_operator_no_split_resumes_original_without_children(manual_case):
     assert downstream[0]["data"]["split_result"]["reason"] == "operator_no_split"
     with connect(config) as conn:
         assert DocumentRepository(conn).list_children(document["id"]) == []
-        assert ReviewRepository(conn).get(result["review_item_id"])["status"] == "completed"
+        review = ReviewRepository(conn).get(result["review_item_id"])
+        assert review is not None
+        assert review["status"] == "completed"
     assert not ResumeManager(config).resume_document(document["id"], "admin")
 
 
@@ -120,7 +124,9 @@ def test_confirmed_split_materializes_correct_children_and_dispatches_once(manua
         assert all(c["pipeline_version_id"] == downstream[0]["pipeline_version_id"] for c in children)
         assert all(c["split_confidence"] is None for c in children)
         assert conn.execute("SELECT COUNT(*) FROM document_files WHERE file_type='split_pdf'").fetchone()[0] == 3
-        assert DocumentRepository(conn).get(document["id"])["status"] == "completed"
+        persisted = DocumentRepository(conn).get(document["id"])
+        assert persisted is not None
+        assert persisted["status"] == "completed"
         assert conn.execute("SELECT phase FROM manual_split_decisions").fetchone()[0] == "applied"
     assert {c["document_id"] for c in downstream} == {c["id"] for c in children}
     assert all(c["data"]["nanoid"] == "keep-me" for c in downstream)
@@ -145,9 +151,12 @@ def test_draft_revision_lock_and_wrong_endpoint_guards(manual_case):
         with pytest.raises(ReviewServiceError, match="manual split decision endpoint"):
             ReviewService(conn, config).complete(review_id, "admin", {})
         detail = ReviewService(conn, config).get_detail(review_id)
+        assert detail is not None
         assert detail["schema"] is None
         assert detail["fields"] == []
         assert detail["manual_split"]["boundaries"] == [2]
+        assert ReviewService(conn).get_detail(review_id) == detail
+        assert ManualSplitReviewService(conn).detail(review_id) == detail["manual_split"]
         assert ReviewService(conn, config).list_items()[0]["lowest_confidence"] is None
 
 
@@ -171,7 +180,9 @@ def test_accepted_decision_recovers_failed_launch_without_reapproval(manual_case
     monkeypatch.setattr(WorkflowLoader, "load_workflow", lambda *args, **kwargs: None)
     assert not ResumeManager(config).resume_document(document["id"], "admin")
     with connect(config) as conn:
-        assert DocumentRepository(conn).get(document["id"])["status"] == "review_completed"
+        persisted = DocumentRepository(conn).get(document["id"])
+        assert persisted is not None
+        assert persisted["status"] == "review_completed"
     monkeypatch.setattr(WorkflowLoader, "load_workflow", original)
     assert recover_manual_split(config, result["review_item_id"], "admin")["resumed"]
     assert len(downstream) == 2
@@ -216,7 +227,9 @@ def test_recovery_cannot_reset_a_claimed_continuation(manual_case):
     with pytest.raises(ReviewServiceError, match="already been claimed"):
         recover_manual_split(config, result["review_item_id"], "admin")
     with connect(config) as conn:
-        assert DocumentRepository(conn).get(document["id"])["status"] == "resuming"
+        persisted = DocumentRepository(conn).get(document["id"])
+        assert persisted is not None
+        assert persisted["status"] == "resuming"
     assert downstream == []
 
 
@@ -235,13 +248,16 @@ def test_successful_recovery_does_not_inherit_the_failed_split_attempt(manual_ca
     monkeypatch.setattr(manual_split_service, "create_split_pdf", unavailable_disk)
     assert ResumeManager(config).resume_document(document["id"], "admin")
     with connect(config) as conn:
-        assert DocumentRepository(conn).get(document["id"])["status"] == "failed"
+        persisted = DocumentRepository(conn).get(document["id"])
+        assert persisted is not None
+        assert persisted["status"] == "failed"
     monkeypatch.setattr(manual_split_service, "create_split_pdf", original)
     assert manual_split_service.recover_manual_split(config, result["review_item_id"], "admin")["resumed"]
     assert len(downstream) == 2
     assert all(not child.get("continued_failures") for child in downstream)
     with connect(config) as conn:
         source = DocumentRepository(conn).get(document["id"])
+        assert source is not None
         assert source["status"] == "completed"
         # Subsequent context reconstruction must also recognize the successful
         # retry while retaining the failed attempt in the audit history.
@@ -286,6 +302,7 @@ def test_recovery_still_rejects_failed_downstream_or_cleanup(manual_case, task_k
     with connect(config) as conn:
         runs = TaskRunRepository(conn)
         source = DocumentRepository(conn).get(document["id"])
+        assert source is not None
         run = runs.create_started(
             batch_id=document["batch_id"], document_id=document["id"],
             task_key=task_key, task_index=1, module_name=module_name,
@@ -323,7 +340,9 @@ def test_recovered_dispatch_records_downstream_preflight_failure(manual_case, mo
     recover_manual_split(config, result["review_item_id"], "admin")
     with connect(config) as conn:
         documents = DocumentRepository(conn)
-        assert documents.get(document["id"])["status"] == "failed"
+        persisted = documents.get(document["id"])
+        assert persisted is not None
+        assert persisted["status"] == "failed"
         assert all(child["status"] == "failed" for child in documents.list_children(document["id"]))
         failures = [run for run in TaskRunRepository(conn).list_by_document(document["id"]) if run["status"] == "failed"]
         assert len(failures) == 1
@@ -416,13 +435,17 @@ def test_split_acknowledgment_precedes_slow_child_workflow(manual_case, monkeypa
             response = json.loads(next(m["body"] for m in messages if m["type"] == "http.response.body"))
             assert response["status"] == "completed" and response["resume_scheduled"]
             with connect(config) as conn:
-                assert ReviewRepository(conn).get(review_id)["status"] == "completed"
+                review = ReviewRepository(conn).get(review_id)
+                assert review is not None
+                assert review["status"] == "completed"
                 assert len(DocumentRepository(conn).list_children(document["id"])) == 2
         finally:
             release.set()
             future.result(timeout=10)
     with connect(config) as conn:
-        assert DocumentRepository(conn).get(document["id"])["status"] == "completed"
+        persisted = DocumentRepository(conn).get(document["id"])
+        assert persisted is not None
+        assert persisted["status"] == "completed"
 
 
 def test_version7_migration_preserves_reviews_as_extraction(manual_case):
@@ -436,7 +459,9 @@ def test_version7_migration_preserves_reviews_as_extraction(manual_case):
     initialize_database(config)
     initialize_database(config)
     with connect(config) as conn:
-        assert ReviewRepository(conn).get(result["review_item_id"])["review_kind"] == "extraction"
+        review = ReviewRepository(conn).get(result["review_item_id"])
+        assert review is not None
+        assert review["review_kind"] == "extraction"
         assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 9
         assert conn.execute("SELECT COUNT(*) FROM manual_split_decisions").fetchone()[0] == 0
 

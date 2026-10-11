@@ -442,6 +442,7 @@ def test_single_document_continuation_requires_exact_source_pages(tmp_path: Path
     assert "fan_out_start_task_index" not in result
     assert result["document_id"] == context["document_id"]
     assert result["file_path"] == str(source)
+    assert root is not None
     assert result["split_category"] == root["document_type"] == "invoice"
     assert result["split_confidence"] == root["split_confidence"] == "high"
     assert result["split_pages"] == pages

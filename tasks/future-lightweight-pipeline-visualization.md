@@ -132,5 +132,5 @@ ordered `pipeline` list.
 
 - [Current architecture](../docs/design_architecture.md)
 - [Archived visual pipeline builder direction](archive/future-design-visual-pipeline-builder.md)
-- [Implemented multiple pipeline direction](future-multi-document-routing.md)
+- [Implemented multiple pipeline direction](archive/future-multi-document-routing.md)
 - [Future mixed-document pipeline routing](future-mixed-document-routing.md)

@@ -9,7 +9,7 @@
 | Status | Implemented through Phase 15; maintained as the authoritative design |
 | Scope | Production application under `main.py`, `modules/`, `standard_step/`, `tools/config_check/`, and `web/` |
 | Prerequisite | Current SQLite-backed batch, document, task-run, review, split, and audit model |
-| Source direction | [Implemented Direction: Multiple Pipeline Templates](future-multi-document-routing.md) |
+| Source direction | [Implemented Direction: Multiple Pipeline Templates](archive/future-multi-document-routing.md) |
 | Deferred extension | [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md) |
 | Retention extension | [Pipeline archive and processing-data cleanup](../docs/pipeline_retention_admin_guide.md), implemented with schema 9 |
 

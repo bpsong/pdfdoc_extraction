@@ -173,6 +173,7 @@ def test_admin_task_guide_covers_the_approved_builtin_catalog() -> None:
         ast.literal_eval(node.value)
         for node in registry_ast.body
         if isinstance(node, ast.AnnAssign)
+        and node.value is not None
         and isinstance(node.target, ast.Name)
         and node.target.id == "BUILTIN_TASKS"
     )

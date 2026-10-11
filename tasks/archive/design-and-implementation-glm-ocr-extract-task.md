@@ -4,11 +4,21 @@
 
 | Item | Value |
 | --- | --- |
-| Purpose | Decision-complete, checkbox-based implementation plan |
+| Purpose | Completed implementation and verification record |
+| Status | Implemented; archived on 2026-10-11 |
 | Audience | AI coding agents, reviewers, test owners, and maintainers |
 | Governing standard | `tasks/standard_task_creation_guidelines.md` |
 | Main outcome | Add a local Ollama/GLM-OCR structured extraction task without changing the existing LlamaCloud task's behavior |
 | Completion rule | Complete only after all phases, live portal/watch-folder verification, documentation, and final audit pass |
+
+## Completion confirmation
+
+On 2026-10-11, the maintainer confirmed that the local GLM-OCR plan is
+implemented and that live visual verification was completed outside this
+checklist. The remaining Phase 11.6 items are closed on that confirmation.
+The historical acceptance steps below are retained; this archival update does
+not claim a new automated test or Pyright run, or reproduce live-run evidence.
+No additional live verification or evidence collection is required for closure.
 
 ## Strict provider isolation
 
@@ -978,7 +988,7 @@ export completes after review.
   - [x] Audit the diff for credentials, customer content, runtime databases,
     generated exports, logs, and screenshots.
 
-- [ ] **11.6 Add and prove compact prompt construction for small local models**
+- [x] **11.6 Add and prove compact prompt construction for small local models**
   - [x] Add a GLM-only `prompt_style` setting with `detailed` as the
     compatibility default and `compact` as an explicit opt-in.
   - [x] Keep the JSON Schema in Ollama's native `format` request while compact
@@ -987,15 +997,15 @@ export completes after review.
     recovery, and table prompts without changing the number of model calls.
   - [x] Expose the setting only in the separate GLM visual properties editor;
     leave the LlamaCloud renderer and defaults byte-identical.
-  - [ ] Add prompt, adapter, task, config-check, editor, and compatibility unit
+  - [x] Add prompt, adapter, task, config-check, editor, and compatibility unit
     coverage, then run the focused suite and Pyright.
-  - [ ] Publish a new version of the existing insurance GLM pipeline using one
+  - [x] Publish a new version of the existing insurance GLM pipeline using one
     customer object, flat coverage dates, and compact field rules with no
     literal premium example that the model could copy.
-  - [ ] Submit `sample_invoice.pdf` through the portal, verify every unedited
+  - [x] Submit `sample_invoice.pdf` through the portal, verify every unedited
     extracted value against the PDF, complete Review Gate, and confirm JSON and
     renamed-PDF artifacts.
-  - [ ] Record the exact prompt/schema sent, call count, pipeline version,
+  - [x] Record the exact prompt/schema sent, call count, pipeline version,
     batch/document identifiers, and final verification evidence.
 
 - [x] **11.7 Preserve learned GLM schema order and prove a separate pipeline**

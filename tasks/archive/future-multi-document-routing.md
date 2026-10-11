@@ -1,5 +1,11 @@
 # Implemented Direction: Multiple Pipeline Templates
 
+## Archive status
+
+Implemented; archived on 2026-10-11. This document records the completed
+multiple-pipeline direction. Current operating guidance lives in the
+[Pipeline administration guide](../../docs/admin/managing-pipelines.md).
+
 ## Purpose
 
 Record the product direction now implemented for supporting multiple published
@@ -9,8 +15,8 @@ version when a document enters the system.
 
 This baseline is current runtime behavior. The implementation-ready design and
 completed work are recorded in
-[Design: Multiple Versioned Pipeline Templates](design-multiple-pipeline-templates.md)
-and [its implementation task plan](archive/tasks-multiple-versioned-pipeline-templates.md).
+[Design: Multiple Versioned Pipeline Templates](../design-multiple-pipeline-templates.md)
+and [its implementation task plan](tasks-multiple-versioned-pipeline-templates.md).
 Classification-driven mixed-document routing remains deferred.
 
 ## Decision
@@ -120,7 +126,7 @@ explicit latest-version upgrades, and retirement. Paused/unbound paths remain
 reserved; retirement preserves history and releases the path. Used bindings
 cannot be permanently deleted. Per-binding scan health, access diagnostics,
 filters, and paginated activity are available without editing pipeline drafts.
-See [the management task plan](tasks-watch-folder-management.md) for verification.
+See [the management task plan](../tasks-watch-folder-management.md) for verification.
 
 Conceptually:
 
@@ -339,18 +345,18 @@ rules across those versions.
 
 That complexity is not part of the multiple-pipeline-template implementation.
 The deferred design is documented in
-[Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md),
+[Future Design: Mixed-Document Pipeline Routing](../future-mixed-document-routing.md),
 which depends on the template and immutable-version model defined here.
 
 ## Related Future Design
 
-- [Design: Multiple Versioned Pipeline Templates](design-multiple-pipeline-templates.md)
+- [Design: Multiple Versioned Pipeline Templates](../design-multiple-pipeline-templates.md)
   is the authoritative detailed design for the implemented baseline.
-- [Implementation task plan](archive/tasks-multiple-versioned-pipeline-templates.md)
+- [Implementation task plan](tasks-multiple-versioned-pipeline-templates.md)
   contains phase-by-phase verification evidence.
-- [Future Design: Mixed-Document Pipeline Routing](future-mixed-document-routing.md)
+- [Future Design: Mixed-Document Pipeline Routing](../future-mixed-document-routing.md)
   extends this model with a split-and-route pipeline after multiple versioned
   pipeline templates are available.
-- [Future Design: Lightweight Pipeline Visualization](future-lightweight-pipeline-visualization.md)
+- [Future Design: Lightweight Pipeline Visualization](../future-lightweight-pipeline-visualization.md)
   records optional split and serial-flow presentation improvements while the
   production list editor remains the accepted authoring experience.

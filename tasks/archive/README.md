@@ -16,6 +16,11 @@ Active future proposals live directly under `tasks/`.
 
 Archive groups:
 
+- [Multiple pipeline templates direction](future-multi-document-routing.md):
+  implemented ingestion selection, immutable versions, and split inheritance.
+- [Local GLM-OCR extraction plan](design-and-implementation-glm-ocr-extract-task.md):
+  completed implementation; live visual verification confirmed by the maintainer
+  on 2026-10-11.
 - `tasks-multiple-versioned-pipeline-templates.md`: completed implementation
   and verification record for immutable SQLite-backed pipelines and review
   schemas.

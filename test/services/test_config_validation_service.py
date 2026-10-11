@@ -109,6 +109,7 @@ def test_validation_redacts_secret_values_in_data_and_findings(tmp_path: Path) -
     assert config["web"]["secret_key"] == "synthetic-signing-secret"
 
     cli_result = ConfigValidator(base_dir=tmp_path, import_checks=False, check_files=False).validate_config_data(config)
+    assert cli_result.data is not None
     assert cli_result.data["web"]["secret_key"] == "synthetic-signing-secret"
 
 

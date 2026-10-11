@@ -53,10 +53,10 @@ def test_early_exit_reports_log_without_echoing_output(tmp_path: Path) -> None:
 
 
 def test_timeout_reaps_the_child(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    processes: list[subprocess.Popen[bytes]] = []
+    processes: list[subprocess.Popen[bytes] | subprocess.Popen[str]] = []
     original_popen = subprocess.Popen
 
-    def record_process(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
+    def record_process(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes] | subprocess.Popen[str]:
         process = original_popen(*args, **kwargs)
         processes.append(process)
         return process

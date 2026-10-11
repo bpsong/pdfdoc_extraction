@@ -107,6 +107,7 @@ def test_versioned_generic_task_persists_reviews_resumes_and_exports_json(
         fields = ExtractionRepository(conn).get_fields(document["id"])
         review = ReviewRepository(conn).find_open_for_document(document["id"])
         files = DocumentRepository(conn).list_files(document["id"])
+    assert result is not None
     assert result["provider"] == "liteparse_ollama"
     assert all(field["confidence"] is None for field in fields)
     assert json_loads(result["data_json"], {})["entries"] == [{"quantity": 2.5}]
@@ -127,5 +128,6 @@ def test_versioned_generic_task_persists_reviews_resumes_and_exports_json(
     assert exported == {"Reference": "REVIEWED" if review_required else "0007",
                         "Entries": [{"quantity": 2.5}]}
     assert len(calls) == 1
+    assert final is not None
     assert final["status"] == "completed"
     assert all(run["pipeline_version_id"] == version["id"] for run in runs)

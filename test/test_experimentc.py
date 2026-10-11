@@ -2,6 +2,7 @@
 
 import base64
 import json
+from typing import Any
 
 import fitz
 import httpx
@@ -39,7 +40,7 @@ def test_cli_pdf_to_invoice(tmp_path, monkeypatch) -> None:
     with fitz.open() as document:
         document.new_page().insert_text((50, 50), "Synthetic invoice")
         document.save(pdf)
-    invoice = {key: None for key in SCHEMA["required"]}
+    invoice: dict[str, Any] = {key: None for key in SCHEMA["required"]}
     invoice["line_items"] = []
     calls = []
 

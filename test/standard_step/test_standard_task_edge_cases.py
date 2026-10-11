@@ -454,7 +454,7 @@ def test_split_child_creation_and_rollback_compensation(tmp_path, monkeypatch):
     monkeypatch.setattr(shared_split, "BatchRepository", lambda _conn: Mock(recompute_counts=Mock()))
     state = Mock()
     monkeypatch.setattr(shared_split, "WorkflowStateService", lambda _conn: state)
-    shared_split.SplitExecutionService(task.config_manager, task.split_dir, "split", Mock())._rollback_partial_children(
+    shared_split.SplitExecutionService(task.config_manager, Path(tmp_path) / "split", "split", Mock())._rollback_partial_children(
         documents=documents, document={"id": "root", "batch_id": "batch"},
         child_ids=["child"], reserved_paths=[tmp_path / "reserved.pdf"],
     )

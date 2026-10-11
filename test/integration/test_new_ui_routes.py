@@ -312,6 +312,7 @@ def test_production_cookies_are_secure_and_refresh_stays_usable(monkeypatch) -> 
     assert login.status_code == 303
     assert all("secure" in header.lower() for header in login.headers.get_list("set-cookie"))
     csrf = client.cookies.get("csrf_token")
+    assert csrf is not None
     refresh = client.post("/api/session/refresh", headers={"X-CSRF-Token": csrf})
     assert refresh.status_code == 200
     assert "secure" in refresh.headers["set-cookie"].lower()

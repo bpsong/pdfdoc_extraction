@@ -11,7 +11,7 @@ import math
 from pathlib import Path
 import re
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
@@ -201,7 +201,11 @@ class LiteParseOllamaAdapter:
 
     def _parse(self, pdf: Path) -> Any:
         try:
-            from liteparse import LiteParse, ParseError
+            if TYPE_CHECKING:
+                from liteparse.parser import LiteParse
+                from liteparse.types import ParseError
+            else:
+                from liteparse import LiteParse, ParseError
         except ImportError as error:
             raise LiteParseExtractionError("LiteParse is not installed; install runtime requirements.") from error
         try:

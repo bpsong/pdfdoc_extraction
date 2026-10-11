@@ -238,6 +238,7 @@ def test_review_queue_active_ownership_and_history(tmp_path, monkeypatch) -> Non
     assert query("others")["total"] == 0
     assert query("unclaimed")["total"] == 0
     app = client.app
+    assert isinstance(app, FastAPI)
     app.dependency_overrides[api_router.get_current_user] = lambda: "another_operator"
     assert query("others")["total"] == 1
     assert query("mine")["total"] == 0

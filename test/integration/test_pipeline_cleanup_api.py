@@ -51,6 +51,23 @@ def test_lifecycle_actions_require_admin(tmp_path: Path, monkeypatch: pytest.Mon
     assert result.status_code == 403
 
 
+@pytest.mark.parametrize("payload", [{}, {"cutoff_date": None}, {"cutoff_date": 20260101},
+                                     {"cutoff_date": True}, {"cutoff_date": []}, {"cutoff_date": {}}])
+def test_cleanup_preview_rejects_non_text_cutoff(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: dict,
+) -> None:
+    client, config = _admin_client(tmp_path, monkeypatch)
+    with connect(config) as conn:
+        template_id = conn.execute(
+            "SELECT template_id FROM pipeline_versions WHERE id=?", (config.pipeline_version_id,),
+        ).fetchone()[0]
+    response = client.post(f"/api/admin/pipeline-templates/{template_id}/cleanup-preview", json=payload)
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Choose a valid cutoff date (YYYY-MM-DD)."
+    with connect(config) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM pipeline_cleanup_previews").fetchone()[0] == 0
+
+
 def test_cleanup_rechecks_claimed_work_and_keeps_every_record(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     client, config = _admin_client(tmp_path, monkeypatch)
     with connect(config) as conn:

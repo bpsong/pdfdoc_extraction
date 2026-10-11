@@ -127,10 +127,12 @@ def test_single_document_decision_rolls_back_when_audit_fails(
     with connect(config) as conn:
         documents = DocumentRepository(conn)
         root = documents.get(created["document"]["id"])
+        assert root is not None
         original_metadata = json_loads(root["metadata_json"], {})
         decision = {**original_metadata["split_result"], "category": "receipt"}
         with pytest.raises(RuntimeError, match="Synthetic audit"):
             save_single_document_decision(conn, root, decision)
         persisted = documents.get(root["id"])
+        assert persisted is not None
         assert persisted["document_type"] == "invoice"
         assert json_loads(persisted["metadata_json"], {}) == original_metadata

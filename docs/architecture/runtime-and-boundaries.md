@@ -100,7 +100,7 @@ boundary: tasks normalize results into the shared top-level `context["data"]`
 contract and persist provider-neutral results. Provider-specific configuration,
 chunking, retries, and supported field shapes belong with provider task
 documentation and implementation, not this architecture boundary reference; see
-the [GLM-OCR task design](../../tasks/design-and-implementation-glm-ocr-extract-task.md)
+the [GLM-OCR task design](../../tasks/archive/design-and-implementation-glm-ocr-extract-task.md)
 and [LiteParse task guide](../reference/tasks/liteparse-extraction.md).
 
 LiteParse/Ollama persists typed values and diagnostic parser-derived sources

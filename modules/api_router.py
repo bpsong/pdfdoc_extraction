@@ -1649,8 +1649,11 @@ def build_router() -> APIRouter:
         payload = await _json_body(request)
         try:
             with managed_connect(config) as conn:
+                cutoff_date = payload.get("cutoff_date")
+                if not isinstance(cutoff_date, str):
+                    raise ValueError("Choose a valid cutoff date (YYYY-MM-DD).")
                 return PipelineCleanupService(conn).preview(
-                    template_id, cutoff_date=payload.get("cutoff_date"), user=user,
+                    template_id, cutoff_date=cutoff_date, user=user,
                 )
         except (KeyError, ValueError) as exc:
             _raise_versioned_error(exc)

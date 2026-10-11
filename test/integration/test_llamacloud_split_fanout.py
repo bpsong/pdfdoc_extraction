@@ -435,6 +435,8 @@ def test_single_document_split_continues_original_workflow(tmp_path: Path, monke
         root = DocumentRepository(conn).get(created["document"]["id"])
         batch = BatchService(conn).get_batch(created["batch"]["id"])
     expected = "failed" if downstream_failure else "completed"
+    assert root is not None
+    assert batch is not None
     assert root["status"] == expected
     assert batch["status"] == expected
     assert source.is_file()

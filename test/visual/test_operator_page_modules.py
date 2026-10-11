@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _run_module(path: str, expression: str) -> object:
+def _run_module(path: str, expression: str) -> Any:
     module_path = (ROOT / "web/static/js" / path).as_posix()
     script = f"""
         const fs = require('node:fs');
