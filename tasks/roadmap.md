@@ -5,7 +5,7 @@
 | Audience | Product owners, maintainers, developers and IT support |
 | Owner | Application maintainers |
 | Status | Eight agreed roadmap items; implementation not started under this roadmap |
-| Updated | 2026-10-11 |
+| Updated | 2026-10-12 |
 | Basis | Maintainer direction and repository/source review; no new live checks |
 
 ## Business aim
@@ -20,8 +20,9 @@ are existing capabilities rather than new roadmap items.
 
 This roadmap contains exactly eight agreed items. Their numbering identifies
 them; it does not establish delivery order, release dates, or capacity promises.
-R7 and R8 have lower priority than the existing R1-R6 items; no delivery order
-among R1-R6 or between R7 and R8 has been agreed.
+R7 and R8 have lower priority than the existing R1-R6 items. The recommended
+implementation sequence below records the planning discussion of 2026-10-12;
+item IDs remain stable and do not indicate implementation order.
 Research recommendations require a separate product decision before becoming
 additional roadmap commitments.
 
@@ -35,6 +36,74 @@ additional roadmap commitments.
 | R6 | Named users and role-based access | Planned; detailed design required | Give each person an account with appropriate permissions and attributable review/audit actions |
 | R7 | Local scan-quality checks | Planned; lower priority; detailed design required | Warn about poor page quality before costly extraction and support operator rescan/review decisions |
 | R8 | Azure Document Intelligence integration | Planned; lower priority; detailed design required | Optionally analyze documents through Azure, including checkbox states and signature-presence fields |
+
+## Recommended implementation sequence and dependencies
+
+### Planning assumptions
+
+The current planning parameter is **one human user using the application at a
+time**. PostgreSQL remains a firm roadmap commitment for future deployment
+options and concurrent use. Implement its support early while retaining SQLite
+for the current deployment; completing R1 does not require immediately migrating
+that deployment to PostgreSQL.
+
+The recommended sequence is **R1 -> R4 -> R3 -> R2 -> R5 -> R6 -> R7 -> R8**.
+It establishes persistence first, then validation and enrichment, document
+routing and delivery, and finally team use and the lower-priority additions.
+This is implementation guidance, not a release schedule or a claim that every
+preceding item is a mandatory technical prerequisite.
+
+| Order | Item | Reason for this position |
+| --- | --- | --- |
+| 1 | R1 - PostgreSQL alternative | Establish persistence boundaries, migrations, and transaction guarantees before validation history, routing, delivery tracking, and users add more database structures. Subsequent features can be developed and tested against both supported backends. |
+| 2 | R4 - Dynamic business validation | Establish consistent findings, warnings, blocking errors, overrides, revalidation, and release checks. Improve review immediately and provide conventions that reference matching and later signature checks can reuse. |
+| 3 | R3 - CSV lookup and enrichment | Add reference values and destination identifiers, using established review conventions for missing or ambiguous matches. Together with R4, produce more complete and validated data for delivery. |
+| 4 | R2 - Mixed-document routing | Settle how children are processed, reviewed, and completed across pipelines before finalizing external-delivery behavior. Decide whether each child is delivered independently or delivery waits for the source's children. |
+| 5 | R5 - Reliable n8n delivery | Build payload revisions, retries, duplicate prevention, and acknowledgements around the accepted-data lifecycle and document boundaries established above. Deliver business value for the current single-user deployment. |
+| 6 | R6 - Named users and roles | Expand the established workflow to individual users on the R1 persistence foundation. Verify simultaneous actions, review ownership, permissions, and audit attribution across the complete workflow, including delivery retries. |
+| 7 | R7 - Local scan-quality checks | Add the agreed lower-priority input-quality feature using established warning/review conventions. Its implementation can follow the core workflow even though its checks run before extraction. |
+| 8 | R8 - Azure Document Intelligence integration | Add optional analysis through established extraction, validation, review, and output contracts. Allow time to collect representative examples and evaluate trained signature models. |
+
+### Technical dependencies versus recommended sequencing
+
+| Relationship | Dependency assessment |
+| --- | --- |
+| R1 before R6 | Recommended preparation for concurrent deployment, not a functional requirement for named accounts. R6 must still support SQLite; PostgreSQL availability does not replace concurrency acceptance tests. |
+| R1 before R2-R5 | Reduces later database conversion work. These features can technically run on SQLite; shared persistence contracts are the design foundation. |
+| R4 before R3 | Enables consistent review findings and resolution behavior. CSV lookup itself can exist without the validation plugin; agree shared field/revision contracts before implementation. |
+| R3/R4 before R5 | Conditional on the configured workflow's release policy. Required matching and validation must finish before handoff. Basic delivery can use existing review without requiring every pipeline to use R3/R4. |
+| R2 before R5 | Recommended to settle per-child versus whole-source delivery, partial failures, and accepted revisions. Delivery is technically possible without mixed routing; existing document IDs and lineage must remain stable. |
+| Existing pipeline versioning before R2 | A functional prerequisite already implemented: named templates, immutable published versions, and explicit assignments. Routing extends that foundation. |
+| R4/R5 before R8 | Reuse validation and delivery contracts where configured. Azure analysis does not inherently require the plugins or n8n; its results can use existing review and file outputs. |
+| R7 before R8 | A priority choice, not a dependency. Neither requires the other; a pipeline that enables quality preflight runs it before analysis regardless of feature implementation dates. |
+
+### Concurrency and the PostgreSQL tradeoff
+
+SQLite permits one write transaction at a time per database file, which does
+not limit the application to one human user. Short writes can take turns;
+PostgreSQL is suited to greater concurrent writing. No workload benchmark in
+this planning discussion establishes a current SQLite performance bottleneck.
+See [SQLite's database-selection guidance](https://www.sqlite.org/whentouse.html).
+
+Even with one human user, the app's web, background ingestion, and processing
+components can access the database concurrently. The current runtime has one
+worker for queued root workflows and sequential split-child execution.
+PostgreSQL support alone does not increase OCR throughput or establish a worker
+pool. See [current runtime boundaries](../docs/architecture/runtime-and-boundaries.md).
+
+Before expanding supported concurrent use through R6, define a representative
+workload and acceptance limits for latency, contention, and errors. Exercise
+simultaneous review claims/edits/completion, ingestion, processing updates, and
+delivery callbacks/retries. Check permissions, audit identities, filesystem
+operations, and shared CSV access as well as database transactions. A database
+change alone does not resolve conflicting edits or coordinate external files.
+
+Implementing R1 first delays visible business features and adds testing and
+maintenance for two databases. The recommendation accepts that cost because
+PostgreSQL is already part of the product direction and later items add
+persistence work. If that commitment changes or immediate single-user delivery
+becomes the overriding goal, reassess R1's position rather than treating it as
+an unavoidable blocker for all other work.
 
 ## R1: Optional PostgreSQL persistence alongside SQLite
 
