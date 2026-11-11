@@ -1,0 +1,1086 @@
+{
+    "version": "1.1.414",
+    "time": "1793413436817",
+    "generalDiagnostics": [
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 39,
+                    "character": 41
+                },
+                "end": {
+                    "line": 39,
+                    "character": 53
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"assert_called\" for class \"MethodType\"\n  Attribute \"assert_called\" is unknown",
+            "range": {
+                "start": {
+                    "line": 46,
+                    "character": 25
+                },
+                "end": {
+                    "line": 46,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 64,
+                    "character": 36
+                },
+                "end": {
+                    "line": 64,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 71,
+                    "character": 36
+                },
+                "end": {
+                    "line": 71,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 76,
+                    "character": 36
+                },
+                "end": {
+                    "line": 76,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 85,
+                    "character": 25
+                },
+                "end": {
+                    "line": 85,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 93,
+                    "character": 25
+                },
+                "end": {
+                    "line": 93,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 97,
+                    "character": 43
+                },
+                "end": {
+                    "line": 97,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 124,
+                    "character": 26
+                },
+                "end": {
+                    "line": 124,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 127,
+                    "character": 26
+                },
+                "end": {
+                    "line": 127,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 128,
+                    "character": 23
+                },
+                "end": {
+                    "line": 128,
+                    "character": 35
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 140,
+                    "character": 41
+                },
+                "end": {
+                    "line": 140,
+                    "character": 53
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 151,
+                    "character": 41
+                },
+                "end": {
+                    "line": 151,
+                    "character": 53
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 162,
+                    "character": 41
+                },
+                "end": {
+                    "line": 162,
+                    "character": 52
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 43,
+                    "character": 46
+                },
+                "end": {
+                    "line": 43,
+                    "character": 58
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 46,
+                    "character": 46
+                },
+                "end": {
+                    "line": 46,
+                    "character": 58
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 57,
+                    "character": 36
+                },
+                "end": {
+                    "line": 57,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 66,
+                    "character": 25
+                },
+                "end": {
+                    "line": 66,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 70,
+                    "character": 25
+                },
+                "end": {
+                    "line": 70,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 108,
+                    "character": 26
+                },
+                "end": {
+                    "line": 108,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 112,
+                    "character": 26
+                },
+                "end": {
+                    "line": 112,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 113,
+                    "character": 23
+                },
+                "end": {
+                    "line": 113,
+                    "character": 35
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 34,
+                    "character": 24
+                },
+                "end": {
+                    "line": 34,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 42,
+                    "character": 24
+                },
+                "end": {
+                    "line": 42,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 43,
+                    "character": 26
+                },
+                "end": {
+                    "line": 43,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 44,
+                    "character": 42
+                },
+                "end": {
+                    "line": 44,
+                    "character": 54
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 45,
+                    "character": 35
+                },
+                "end": {
+                    "line": 45,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 46,
+                    "character": 29
+                },
+                "end": {
+                    "line": 46,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 51,
+                    "character": 43
+                },
+                "end": {
+                    "line": 51,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 54,
+                    "character": 43
+                },
+                "end": {
+                    "line": 54,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 57,
+                    "character": 43
+                },
+                "end": {
+                    "line": 57,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 58,
+                    "character": 26
+                },
+                "end": {
+                    "line": 58,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 61,
+                    "character": 26
+                },
+                "end": {
+                    "line": 61,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 62,
+                    "character": 26
+                },
+                "end": {
+                    "line": 62,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 66,
+                    "character": 26
+                },
+                "end": {
+                    "line": 66,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 67,
+                    "character": 26
+                },
+                "end": {
+                    "line": 67,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 70,
+                    "character": 26
+                },
+                "end": {
+                    "line": 70,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 71,
+                    "character": 25
+                },
+                "end": {
+                    "line": 71,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 75,
+                    "character": 25
+                },
+                "end": {
+                    "line": 75,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 81,
+                    "character": 39
+                },
+                "end": {
+                    "line": 81,
+                    "character": 51
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 91,
+                    "character": 25
+                },
+                "end": {
+                    "line": 91,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 96,
+                    "character": 26
+                },
+                "end": {
+                    "line": 96,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 99,
+                    "character": 26
+                },
+                "end": {
+                    "line": 99,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 100,
+                    "character": 29
+                },
+                "end": {
+                    "line": 100,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 155,
+                    "character": 26
+                },
+                "end": {
+                    "line": 155,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 160,
+                    "character": 26
+                },
+                "end": {
+                    "line": 160,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 162,
+                    "character": 26
+                },
+                "end": {
+                    "line": 162,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 164,
+                    "character": 26
+                },
+                "end": {
+                    "line": 164,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"assert_called_once\" for class \"MethodType\"\n  Attribute \"assert_called_once\" is unknown",
+            "range": {
+                "start": {
+                    "line": 166,
+                    "character": 37
+                },
+                "end": {
+                    "line": 166,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 169,
+                    "character": 24
+                },
+                "end": {
+                    "line": 169,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 172,
+                    "character": 24
+                },
+                "end": {
+                    "line": 172,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 176,
+                    "character": 29
+                },
+                "end": {
+                    "line": 176,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 180,
+                    "character": 29
+                },
+                "end": {
+                    "line": 180,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 183,
+                    "character": 29
+                },
+                "end": {
+                    "line": 183,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"assert_called_with\" for class \"MethodType\"\n  Attribute \"assert_called_with\" is unknown",
+            "range": {
+                "start": {
+                    "line": 185,
+                    "character": 32
+                },
+                "end": {
+                    "line": 185,
+                    "character": 50
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 191,
+                    "character": 35
+                },
+                "end": {
+                    "line": 191,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 198,
+                    "character": 31
+                },
+                "end": {
+                    "line": 198,
+                    "character": 43
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 209,
+                    "character": 26
+                },
+                "end": {
+                    "line": 209,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 210,
+                    "character": 35
+                },
+                "end": {
+                    "line": 210,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 214,
+                    "character": 29
+                },
+                "end": {
+                    "line": 214,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 218,
+                    "character": 35
+                },
+                "end": {
+                    "line": 218,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__new__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 384,
+                    "character": 22
+                },
+                "end": {
+                    "line": 384,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__init__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 384,
+                    "character": 22
+                },
+                "end": {
+                    "line": 384,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__new__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 418,
+                    "character": 22
+                },
+                "end": {
+                    "line": 418,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__init__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 418,
+                    "character": 22
+                },
+                "end": {
+                    "line": 418,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\tools\\config_check\\test_stored_validator_complete.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 278,
+                    "character": 27
+                },
+                "end": {
+                    "line": 278,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "c:\\Users\\bpson\\AppData\\Local\\Temp\\r4-types-head-6gdwepbt\\test\\tools\\config_check\\test_stored_validator_complete.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 279,
+                    "character": 27
+                },
+                "end": {
+                    "line": 279,
+                    "character": 39
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 304,
+        "errorCount": 67,
+        "warningCount": 0,
+        "informationCount": 0,
+        "timeInSec": 31.307
+    }
+}
+

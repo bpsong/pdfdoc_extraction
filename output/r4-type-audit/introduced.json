@@ -1,0 +1,345 @@
+[
+  {
+    "file": "modules/services/business_validation_schema.py",
+    "line": 99,
+    "rule": "reportArgumentType",
+    "message": "Argument of type \"Mapping[Unknown, Unknown] | dict[str, Unknown] | None\" cannot be assigned to parameter \"root\" of type \"Mapping[str, Any]\" in function \"_resolve_field\"\n\u00a0\u00a0Type \"Mapping[Unknown, Unknown] | dict[str, Unknown] | None\" is not assignable to type \"Mapping[str, Any]\"\n\u00a0\u00a0\u00a0\u00a0\"None\" is not assignable to \"Mapping[str, Any]\"",
+    "severity": "error"
+  },
+  {
+    "file": "modules/services/review_service.py",
+    "line": 487,
+    "rule": "reportArgumentType",
+    "message": "Argument of type \"dict[str, Any] | None\" cannot be assigned to parameter \"schema\" of type \"Mapping[str, Any]\" in function \"require_business_rule_capability\"\n\u00a0\u00a0Type \"dict[str, Any] | None\" is not assignable to type \"Mapping[str, Any]\"\n\u00a0\u00a0\u00a0\u00a0\"None\" is not assignable to \"Mapping[str, Any]\"",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 37,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 38,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 40,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 42,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 43,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 43,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 48,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 49,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 51,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 53,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 53,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 55,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 56,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 80,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 83,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 83,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 106,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 107,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 109,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 125,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 128,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 130,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 131,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 151,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 158,
+    "rule": "reportReturnType",
+    "message": "Type \"dict[str, Any] | None\" is not assignable to return type \"dict[Unknown, Unknown]\"\n\u00a0\u00a0Type \"dict[str, Any] | None\" is not assignable to type \"dict[Unknown, Unknown]\"\n\u00a0\u00a0\u00a0\u00a0\"None\" is not assignable to \"dict[Unknown, Unknown]\"",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 197,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/integration/test_business_validation_acceptance.py",
+    "line": 202,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation.py",
+    "line": 246,
+    "rule": "reportAttributeAccessIssue",
+    "message": "Cannot access attribute \"tolerance\" for class \"Rule\"\n\u00a0\u00a0Attribute \"tolerance\" is unknown",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation.py",
+    "line": 262,
+    "rule": "reportArgumentType",
+    "message": "Argument of type \"list[Any]\" cannot be assigned to parameter \"values\" of type \"Mapping[str, Any]\" in function \"evaluate_business_rules\"\n\u00a0\u00a0\"list[Any]\" is not assignable to \"Mapping[str, Any]\"",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation_extensions.py",
+    "line": 75,
+    "rule": "reportAttributeAccessIssue",
+    "message": "Cannot access attribute \"equals\" for class \"Rule\"\n\u00a0\u00a0Attribute \"equals\" is unknown",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation_extensions.py",
+    "line": 118,
+    "rule": "reportArgumentType",
+    "message": "Argument of type \"(values: dict[str, Any], rule: SupplierRule) -> list[Any]\" cannot be assigned to parameter \"evaluate\" of type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\" in function \"__init__\"\n\u00a0\u00a0Type \"(values: dict[str, Any], rule: SupplierRule) -> list[Any]\" is not assignable to type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\"\n\u00a0\u00a0\u00a0\u00a0Parameter 1: type \"Mapping[str, Any]\" is incompatible with type \"dict[str, Any]\"\n\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\"Mapping[str, Any]\" is not assignable to \"dict[str, Any]\"",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation_extensions.py",
+    "line": 128,
+    "rule": "reportIndexIssue",
+    "message": "\"__setitem__\" method not defined on type \"Mapping[str, BusinessValidatorPlugin]\"",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation_extensions.py",
+    "line": 147,
+    "rule": "reportArgumentType",
+    "message": "Argument of type \"(values: dict[str, Any], rule: SupplierRuleV2) -> list[Any]\" cannot be assigned to parameter \"evaluate\" of type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\" in function \"__init__\"\n\u00a0\u00a0Type \"(values: dict[str, Any], rule: SupplierRuleV2) -> list[Any]\" is not assignable to type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\"\n\u00a0\u00a0\u00a0\u00a0Parameter 1: type \"Mapping[str, Any]\" is incompatible with type \"dict[str, Any]\"\n\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\"Mapping[str, Any]\" is not assignable to \"dict[str, Any]\"",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_business_validation_schema.py",
+    "line": 90,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 56,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 138,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 181,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 182,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 246,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 293,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/services/test_review_business_validation.py",
+    "line": 323,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/visual/test_business_validation_acceptance_visual.py",
+    "line": 141,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/visual/test_business_validation_acceptance_visual.py",
+    "line": 146,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/visual/test_review_validation_visual.py",
+    "line": 253,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/visual/test_review_validation_visual.py",
+    "line": 257,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/visual/test_review_validation_visual.py",
+    "line": 257,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  },
+  {
+    "file": "test/visual/test_review_validation_visual.py",
+    "line": 295,
+    "rule": "reportOptionalSubscript",
+    "message": "Object of type \"None\" is not subscriptable",
+    "severity": "error"
+  }
+]

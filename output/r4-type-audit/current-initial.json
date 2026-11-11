@@ -1,0 +1,1870 @@
+{
+    "version": "1.1.414",
+    "time": "1793413438417",
+    "generalDiagnostics": [
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\modules\\services\\business_validation_schema.py",
+            "severity": "error",
+            "message": "Argument of type \"Mapping[Unknown, Unknown] | dict[str, Unknown] | None\" cannot be assigned to parameter \"root\" of type \"Mapping[str, Any]\" in function \"_resolve_field\"\n  Type \"Mapping[Unknown, Unknown] | dict[str, Unknown] | None\" is not assignable to type \"Mapping[str, Any]\"\n    \"None\" is not assignable to \"Mapping[str, Any]\"",
+            "range": {
+                "start": {
+                    "line": 98,
+                    "character": 39
+                },
+                "end": {
+                    "line": 98,
+                    "character": 44
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\modules\\services\\review_service.py",
+            "severity": "error",
+            "message": "Argument of type \"dict[str, Any] | None\" cannot be assigned to parameter \"schema\" of type \"Mapping[str, Any]\" in function \"require_business_rule_capability\"\n  Type \"dict[str, Any] | None\" is not assignable to type \"Mapping[str, Any]\"\n    \"None\" is not assignable to \"Mapping[str, Any]\"",
+            "range": {
+                "start": {
+                    "line": 486,
+                    "character": 49
+                },
+                "end": {
+                    "line": 486,
+                    "character": 55
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 36,
+                    "character": 26
+                },
+                "end": {
+                    "line": 36,
+                    "character": 32
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 37,
+                    "character": 40
+                },
+                "end": {
+                    "line": 37,
+                    "character": 46
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 39,
+                    "character": 53
+                },
+                "end": {
+                    "line": 39,
+                    "character": 59
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 41,
+                    "character": 23
+                },
+                "end": {
+                    "line": 41,
+                    "character": 29
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 42,
+                    "character": 31
+                },
+                "end": {
+                    "line": 42,
+                    "character": 37
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 42,
+                    "character": 92
+                },
+                "end": {
+                    "line": 42,
+                    "character": 98
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 47,
+                    "character": 42
+                },
+                "end": {
+                    "line": 47,
+                    "character": 48
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 48,
+                    "character": 19
+                },
+                "end": {
+                    "line": 48,
+                    "character": 27
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 50,
+                    "character": 68
+                },
+                "end": {
+                    "line": 50,
+                    "character": 76
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 52,
+                    "character": 37
+                },
+                "end": {
+                    "line": 52,
+                    "character": 43
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 52,
+                    "character": 96
+                },
+                "end": {
+                    "line": 52,
+                    "character": 104
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 54,
+                    "character": 40
+                },
+                "end": {
+                    "line": 54,
+                    "character": 46
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 55,
+                    "character": 58
+                },
+                "end": {
+                    "line": 55,
+                    "character": 66
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 79,
+                    "character": 15
+                },
+                "end": {
+                    "line": 79,
+                    "character": 67
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 82,
+                    "character": 19
+                },
+                "end": {
+                    "line": 82,
+                    "character": 71
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 82,
+                    "character": 58
+                },
+                "end": {
+                    "line": 82,
+                    "character": 64
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 105,
+                    "character": 19
+                },
+                "end": {
+                    "line": 105,
+                    "character": 25
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 106,
+                    "character": 19
+                },
+                "end": {
+                    "line": 106,
+                    "character": 25
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 108,
+                    "character": 47
+                },
+                "end": {
+                    "line": 108,
+                    "character": 53
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 124,
+                    "character": 49
+                },
+                "end": {
+                    "line": 124,
+                    "character": 55
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 127,
+                    "character": 59
+                },
+                "end": {
+                    "line": 127,
+                    "character": 65
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 129,
+                    "character": 96
+                },
+                "end": {
+                    "line": 129,
+                    "character": 102
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 130,
+                    "character": 19
+                },
+                "end": {
+                    "line": 130,
+                    "character": 71
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 150,
+                    "character": 23
+                },
+                "end": {
+                    "line": 150,
+                    "character": 67
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Type \"dict[str, Any] | None\" is not assignable to return type \"dict[Unknown, Unknown]\"\n  Type \"dict[str, Any] | None\" is not assignable to type \"dict[Unknown, Unknown]\"\n    \"None\" is not assignable to \"dict[Unknown, Unknown]\"",
+            "range": {
+                "start": {
+                    "line": 157,
+                    "character": 19
+                },
+                "end": {
+                    "line": 157,
+                    "character": 25
+                }
+            },
+            "rule": "reportReturnType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 196,
+                    "character": 19
+                },
+                "end": {
+                    "line": 196,
+                    "character": 63
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\integration\\test_business_validation_acceptance.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 201,
+                    "character": 23
+                },
+                "end": {
+                    "line": 201,
+                    "character": 67
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"tolerance\" for class \"Rule\"\n  Attribute \"tolerance\" is unknown",
+            "range": {
+                "start": {
+                    "line": 245,
+                    "character": 27
+                },
+                "end": {
+                    "line": 245,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation.py",
+            "severity": "error",
+            "message": "Argument of type \"list[Any]\" cannot be assigned to parameter \"values\" of type \"Mapping[str, Any]\" in function \"evaluate_business_rules\"\n  \"list[Any]\" is not assignable to \"Mapping[str, Any]\"",
+            "range": {
+                "start": {
+                    "line": 261,
+                    "character": 32
+                },
+                "end": {
+                    "line": 261,
+                    "character": 34
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_extensions.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"equals\" for class \"Rule\"\n  Attribute \"equals\" is unknown",
+            "range": {
+                "start": {
+                    "line": 74,
+                    "character": 29
+                },
+                "end": {
+                    "line": 74,
+                    "character": 35
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_extensions.py",
+            "severity": "error",
+            "message": "Argument of type \"(values: dict[str, Any], rule: SupplierRule) -> list[Any]\" cannot be assigned to parameter \"evaluate\" of type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\" in function \"__init__\"\n  Type \"(values: dict[str, Any], rule: SupplierRule) -> list[Any]\" is not assignable to type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\"\n    Parameter 1: type \"Mapping[str, Any]\" is incompatible with type \"dict[str, Any]\"\n      \"Mapping[str, Any]\" is not assignable to \"dict[str, Any]\"",
+            "range": {
+                "start": {
+                    "line": 117,
+                    "character": 67
+                },
+                "end": {
+                    "line": 117,
+                    "character": 81
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_extensions.py",
+            "severity": "error",
+            "message": "\"__setitem__\" method not defined on type \"Mapping[str, BusinessValidatorPlugin]\"",
+            "range": {
+                "start": {
+                    "line": 127,
+                    "character": 8
+                },
+                "end": {
+                    "line": 127,
+                    "character": 16
+                }
+            },
+            "rule": "reportIndexIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_extensions.py",
+            "severity": "error",
+            "message": "Argument of type \"(values: dict[str, Any], rule: SupplierRuleV2) -> list[Any]\" cannot be assigned to parameter \"evaluate\" of type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\" in function \"__init__\"\n  Type \"(values: dict[str, Any], rule: SupplierRuleV2) -> list[Any]\" is not assignable to type \"(Mapping[str, Any], Any) -> list[ValidationCheck]\"\n    Parameter 1: type \"Mapping[str, Any]\" is incompatible with type \"dict[str, Any]\"\n      \"Mapping[str, Any]\" is not assignable to \"dict[str, Any]\"",
+            "range": {
+                "start": {
+                    "line": 146,
+                    "character": 72
+                },
+                "end": {
+                    "line": 146,
+                    "character": 81
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_schema.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 89,
+                    "character": 11
+                },
+                "end": {
+                    "line": 89,
+                    "character": 21
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 39,
+                    "character": 41
+                },
+                "end": {
+                    "line": 39,
+                    "character": 53
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"assert_called\" for class \"MethodType\"\n  Attribute \"assert_called\" is unknown",
+            "range": {
+                "start": {
+                    "line": 46,
+                    "character": 25
+                },
+                "end": {
+                    "line": 46,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 64,
+                    "character": 36
+                },
+                "end": {
+                    "line": 64,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 71,
+                    "character": 36
+                },
+                "end": {
+                    "line": 71,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 76,
+                    "character": 36
+                },
+                "end": {
+                    "line": 76,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 85,
+                    "character": 25
+                },
+                "end": {
+                    "line": 85,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 93,
+                    "character": 25
+                },
+                "end": {
+                    "line": 93,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 97,
+                    "character": 43
+                },
+                "end": {
+                    "line": 97,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 124,
+                    "character": 26
+                },
+                "end": {
+                    "line": 124,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 127,
+                    "character": 26
+                },
+                "end": {
+                    "line": 127,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 128,
+                    "character": 23
+                },
+                "end": {
+                    "line": 128,
+                    "character": 35
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 140,
+                    "character": 41
+                },
+                "end": {
+                    "line": 140,
+                    "character": 53
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 151,
+                    "character": 41
+                },
+                "end": {
+                    "line": 151,
+                    "character": 53
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_pipeline_template_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 162,
+                    "character": 41
+                },
+                "end": {
+                    "line": 162,
+                    "character": 52
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 55,
+                    "character": 22
+                },
+                "end": {
+                    "line": 55,
+                    "character": 25
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 137,
+                    "character": 11
+                },
+                "end": {
+                    "line": 137,
+                    "character": 61
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 180,
+                    "character": 19
+                },
+                "end": {
+                    "line": 180,
+                    "character": 60
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 181,
+                    "character": 34
+                },
+                "end": {
+                    "line": 181,
+                    "character": 75
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 245,
+                    "character": 26
+                },
+                "end": {
+                    "line": 245,
+                    "character": 88
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 292,
+                    "character": 57
+                },
+                "end": {
+                    "line": 292,
+                    "character": 61
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_business_validation.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 322,
+                    "character": 28
+                },
+                "end": {
+                    "line": 322,
+                    "character": 79
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 43,
+                    "character": 46
+                },
+                "end": {
+                    "line": 43,
+                    "character": 58
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 46,
+                    "character": 46
+                },
+                "end": {
+                    "line": 46,
+                    "character": 58
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 57,
+                    "character": 36
+                },
+                "end": {
+                    "line": 57,
+                    "character": 48
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 66,
+                    "character": 25
+                },
+                "end": {
+                    "line": 66,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 70,
+                    "character": 25
+                },
+                "end": {
+                    "line": 70,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 108,
+                    "character": 26
+                },
+                "end": {
+                    "line": 108,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 112,
+                    "character": 26
+                },
+                "end": {
+                    "line": 112,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_schema_version_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 113,
+                    "character": 23
+                },
+                "end": {
+                    "line": 113,
+                    "character": 35
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 40,
+                    "character": 24
+                },
+                "end": {
+                    "line": 40,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 48,
+                    "character": 24
+                },
+                "end": {
+                    "line": 48,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 49,
+                    "character": 26
+                },
+                "end": {
+                    "line": 49,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 50,
+                    "character": 42
+                },
+                "end": {
+                    "line": 50,
+                    "character": 54
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 51,
+                    "character": 35
+                },
+                "end": {
+                    "line": 51,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 52,
+                    "character": 29
+                },
+                "end": {
+                    "line": 52,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 57,
+                    "character": 43
+                },
+                "end": {
+                    "line": 57,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 60,
+                    "character": 43
+                },
+                "end": {
+                    "line": 60,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 63,
+                    "character": 43
+                },
+                "end": {
+                    "line": 63,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 64,
+                    "character": 26
+                },
+                "end": {
+                    "line": 64,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 67,
+                    "character": 26
+                },
+                "end": {
+                    "line": 67,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 68,
+                    "character": 26
+                },
+                "end": {
+                    "line": 68,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 72,
+                    "character": 26
+                },
+                "end": {
+                    "line": 72,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 73,
+                    "character": 26
+                },
+                "end": {
+                    "line": 73,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 76,
+                    "character": 26
+                },
+                "end": {
+                    "line": 76,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 77,
+                    "character": 25
+                },
+                "end": {
+                    "line": 77,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 81,
+                    "character": 25
+                },
+                "end": {
+                    "line": 81,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 87,
+                    "character": 39
+                },
+                "end": {
+                    "line": 87,
+                    "character": 51
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 97,
+                    "character": 25
+                },
+                "end": {
+                    "line": 97,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 102,
+                    "character": 26
+                },
+                "end": {
+                    "line": 102,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 105,
+                    "character": 26
+                },
+                "end": {
+                    "line": 105,
+                    "character": 37
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 106,
+                    "character": 29
+                },
+                "end": {
+                    "line": 106,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 162,
+                    "character": 26
+                },
+                "end": {
+                    "line": 162,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 167,
+                    "character": 26
+                },
+                "end": {
+                    "line": 167,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 169,
+                    "character": 26
+                },
+                "end": {
+                    "line": 169,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 171,
+                    "character": 26
+                },
+                "end": {
+                    "line": 171,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"assert_called_once\" for class \"MethodType\"\n  Attribute \"assert_called_once\" is unknown",
+            "range": {
+                "start": {
+                    "line": 173,
+                    "character": 37
+                },
+                "end": {
+                    "line": 173,
+                    "character": 55
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 176,
+                    "character": 24
+                },
+                "end": {
+                    "line": 176,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 179,
+                    "character": 24
+                },
+                "end": {
+                    "line": 179,
+                    "character": 36
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 183,
+                    "character": 29
+                },
+                "end": {
+                    "line": 183,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 187,
+                    "character": 29
+                },
+                "end": {
+                    "line": 187,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 190,
+                    "character": 29
+                },
+                "end": {
+                    "line": 190,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot access attribute \"assert_called_with\" for class \"MethodType\"\n  Attribute \"assert_called_with\" is unknown",
+            "range": {
+                "start": {
+                    "line": 192,
+                    "character": 32
+                },
+                "end": {
+                    "line": 192,
+                    "character": 50
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 198,
+                    "character": 35
+                },
+                "end": {
+                    "line": 198,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 205,
+                    "character": 31
+                },
+                "end": {
+                    "line": 205,
+                    "character": 43
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 216,
+                    "character": 26
+                },
+                "end": {
+                    "line": 216,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 217,
+                    "character": 35
+                },
+                "end": {
+                    "line": 217,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 221,
+                    "character": 29
+                },
+                "end": {
+                    "line": 221,
+                    "character": 41
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 225,
+                    "character": 35
+                },
+                "end": {
+                    "line": 225,
+                    "character": 47
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__new__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 384,
+                    "character": 22
+                },
+                "end": {
+                    "line": 384,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__init__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 384,
+                    "character": 22
+                },
+                "end": {
+                    "line": 384,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__new__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 418,
+                    "character": 22
+                },
+                "end": {
+                    "line": 418,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_upload_receiver.py",
+            "severity": "error",
+            "message": "Argument of type \"Unknown | None\" cannot be assigned to parameter \"args\" of type \"StrPath\" in function \"__init__\"\n  Type \"Unknown | None\" is not assignable to type \"StrPath\"\n    Type \"None\" is not assignable to type \"StrPath\"\n      \"None\" is not assignable to \"str\"\n      \"None\" is incompatible with protocol \"PathLike[str]\"\n        \"__fspath__\" is not present",
+            "range": {
+                "start": {
+                    "line": 418,
+                    "character": 22
+                },
+                "end": {
+                    "line": 418,
+                    "character": 63
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\tools\\config_check\\test_stored_validator_complete.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"side_effect\" for class \"MethodType\"\n  Attribute \"side_effect\" is unknown",
+            "range": {
+                "start": {
+                    "line": 278,
+                    "character": 27
+                },
+                "end": {
+                    "line": 278,
+                    "character": 38
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\tools\\config_check\\test_stored_validator_complete.py",
+            "severity": "error",
+            "message": "Cannot assign to attribute \"return_value\" for class \"MethodType\"\n  Attribute \"return_value\" is unknown",
+            "range": {
+                "start": {
+                    "line": 279,
+                    "character": 27
+                },
+                "end": {
+                    "line": 279,
+                    "character": 39
+                }
+            },
+            "rule": "reportAttributeAccessIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\visual\\test_business_validation_acceptance_visual.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 140,
+                    "character": 15
+                },
+                "end": {
+                    "line": 140,
+                    "character": 67
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\visual\\test_business_validation_acceptance_visual.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 145,
+                    "character": 17
+                },
+                "end": {
+                    "line": 145,
+                    "character": 77
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\visual\\test_review_validation_visual.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 252,
+                    "character": 21
+                },
+                "end": {
+                    "line": 252,
+                    "character": 65
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\visual\\test_review_validation_visual.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 256,
+                    "character": 19
+                },
+                "end": {
+                    "line": 256,
+                    "character": 74
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\visual\\test_review_validation_visual.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 256,
+                    "character": 83
+                },
+                "end": {
+                    "line": 256,
+                    "character": 127
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\visual\\test_review_validation_visual.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 294,
+                    "character": 23
+                },
+                "end": {
+                    "line": 294,
+                    "character": 48
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 323,
+        "errorCount": 116,
+        "warningCount": 0,
+        "informationCount": 0,
+        "timeInSec": 33.053
+    }
+}
+

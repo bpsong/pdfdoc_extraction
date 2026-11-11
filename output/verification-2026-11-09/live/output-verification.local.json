@@ -1,0 +1,23 @@
+{
+  "before_fix_and_after_fix": [
+    {
+      "document_id": "5cb6a14d-5edf-4dd8-a074-fe4affc38daf",
+      "status": "completed",
+      "filename": "unknown_8.json",
+      "filename_correct": false,
+      "values_match_accepted_fields": true,
+      "source_hash_matches": true,
+      "printed_amounts_match": true
+    },
+    {
+      "document_id": "a6b21b8c-566d-4509-82ab-43f7e7eae767",
+      "status": "completed",
+      "filename": "a6b21b8c-566d-4509-82ab-43f7e7eae767.json",
+      "filename_correct": true,
+      "values_match_accepted_fields": true,
+      "source_hash_matches": true,
+      "printed_amounts_match": true
+    }
+  ],
+  "both_documents_preserved": true
+}

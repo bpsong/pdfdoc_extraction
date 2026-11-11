@@ -1,0 +1,94 @@
+{
+    "version": "1.1.414",
+    "time": "1793413808321",
+    "generalDiagnostics": [
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_extensions.py",
+            "severity": "error",
+            "message": "No overloads for \"setitem\" match the provided arguments",
+            "range": {
+                "start": {
+                    "line": 130,
+                    "character": 8
+                },
+                "end": {
+                    "line": 130,
+                    "character": 40
+                }
+            },
+            "rule": "reportCallIssue"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_business_validation_extensions.py",
+            "severity": "error",
+            "message": "Argument of type \"Mapping[str, BusinessValidatorPlugin]\" cannot be assigned to parameter \"a\" of type \"MutableMapping[_K@setitem, _V@setitem]\" in function \"setitem\"\n  \"Mapping[str, BusinessValidatorPlugin]\" is not assignable to \"MutableMapping[str, BusinessValidatorPlugin]\"",
+            "range": {
+                "start": {
+                    "line": 130,
+                    "character": 16
+                },
+                "end": {
+                    "line": 130,
+                    "character": 24
+                }
+            },
+            "rule": "reportArgumentType"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 212,
+                    "character": 11
+                },
+                "end": {
+                    "line": 212,
+                    "character": 46
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 233,
+                    "character": 11
+                },
+                "end": {
+                    "line": 233,
+                    "character": 51
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        },
+        {
+            "file": "d:\\python_code\\pdfdoc_extraction\\test\\services\\test_review_service_branches.py",
+            "severity": "error",
+            "message": "Object of type \"None\" is not subscriptable",
+            "range": {
+                "start": {
+                    "line": 240,
+                    "character": 11
+                },
+                "end": {
+                    "line": 240,
+                    "character": 56
+                }
+            },
+            "rule": "reportOptionalSubscript"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 324,
+        "errorCount": 5,
+        "warningCount": 0,
+        "informationCount": 0,
+        "timeInSec": 30.084
+    }
+}
+
