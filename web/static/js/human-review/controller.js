@@ -1,7 +1,9 @@
-import { createHumanReviewModel } from "./model.js?v=controller-modularization-6a";
-import { createHumanReviewApi } from "./api.js?v=controller-modularization-6a";
-import { createHumanReviewFieldView } from "./field-view.js?v=controller-modularization-6a";
-import { createHumanReviewView } from "./view.js?v=controller-modularization-6a";
+import { createHumanReviewModel } from "./model.js?v=r4-phase5";
+import { createHumanReviewApi } from "./api.js?v=r4-phase5";
+import { createHumanReviewFieldView } from "./field-view.js?v=r4-phase5";
+import { createHumanReviewView } from "./view.js?v=r4-phase5";
+import { createReviewValidation } from './validation.js?v=r4-phase5';
+import { createReviewValidationView } from './validation-view.js?v=r4-phase5';
 
 (function () {
     "use strict";
@@ -25,6 +27,7 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
         panePercent: 52,
         preferredPanePercent: 52,
         completionPending: false,
+        savingDraft: false,
     };
 
     const elements = {};
@@ -54,6 +57,12 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
         elements.diffBody = document.getElementById("review-diff-body");
         elements.diffCloseButton = document.getElementById("review-diff-close-button");
         elements.paneDivider = document.getElementById("review-pane-divider");
+        elements.revalidateButton = document.getElementById('review-revalidate-button');
+        elements.validationPanel = document.getElementById('review-validation-panel');
+        elements.validationStatus = document.getElementById('review-validation-status');
+        elements.validationSummary = document.getElementById('review-validation-summary');
+        elements.validationDetails = document.getElementById('review-validation-details');
+        elements.validationList = document.getElementById('review-validation-list');
     }
 
     const model = createHumanReviewModel(state);
@@ -68,17 +77,31 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
     let renderDiff;
     let renderEditor;
     let api;
+    let validationView;
+    const validation = createReviewValidation(state, model, renderValidation);
 
-    function applyPayload(payload) {
+    function renderValidation() {
+        validationView?.render();
+        if (validation.current().enabled && validation.current().conflict) {
+            elements.saveButton.disabled = true;
+            elements.completeButton.disabled = true;
+        }
+    }
+
+    function applyPayload(payload, preservedValues = null) {
+        state.reviewRevision = payload.review_revision || null;
         state.reviewItem = payload.review_item || {};
         state.metadata = payload.metadata || state.reviewItem.metadata || {};
         state.document = payload.document || null;
         state.extraction = payload.extraction || null;
         state.lock = payload.lock || null;
         initializeValues(payload);
+        if (preservedValues) state.values = preservedValues;
         renderHeader();
         renderLockState();
         renderEditor();
+        validation.load(payload);
+        if (preservedValues) validation.changed();
     }
 
     async function loadReviewItem() {
@@ -117,14 +140,35 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
     }
 
     async function saveDraft() {
-        elements.saveButton.disabled = true;
+        if (state.savingDraft || state.completionPending) return;
+        state.savingDraft = true;
+        renderLockState();
+        const savedValues = model.cloneValue(state.values);
+        const ticket = validation.capture();
         try {
             const payload = await api.saveDraft(collectCorrections());
-            applyPayload(payload);
+            const preservedValues = JSON.stringify(savedValues) === JSON.stringify(state.values)
+                ? null : model.cloneValue(state.values);
+            applyPayload(payload, preservedValues);
             window.DocFlow.showToast("Draft saved", "success");
         } catch (error) {
-            elements.saveButton.disabled = false;
+            validation.fail(ticket, error);
             window.DocFlow.showToast(error.message || "Unable to save draft", "error");
+        } finally {
+            state.savingDraft = false;
+            renderLockState();
+            renderValidation();
+        }
+    }
+
+    async function revalidate() {
+        if (!validation.canCheck()) return;
+        const ticket = validation.capture(true);
+        try {
+            const payload = await api.revalidate(collectCorrections(), ticket.id);
+            validation.accept(ticket, payload);
+        } catch (error) {
+            validation.fail(ticket, error);
         }
     }
 
@@ -141,10 +185,11 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
     }
 
     async function completeReview() {
-        if (state.completionPending) {
+        if (state.completionPending || state.savingDraft) {
             return;
         }
         setCompletionPending(true);
+        const ticket = validation.capture();
         try {
             await api.complete(collectCorrections());
             window.DocFlow.showToast("Review completed", "success");
@@ -152,7 +197,13 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
         } catch (error) {
             setCompletionPending(false);
             renderLockState();
-            elements.completeButton.disabled = false;
+            validation.completionFailure(ticket, error);
+            renderValidation();
+            if (validation.current().enabled) {
+                validationView.scrollToSummary();
+                elements.validationStatus.tabIndex = -1;
+                elements.validationStatus.focus({preventScroll: true});
+            }
             window.DocFlow.showToast(error.message || "Unable to complete review", "error");
         }
     }
@@ -163,6 +214,7 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
         elements.saveButton.addEventListener("click", saveDraft);
         elements.diffButton.addEventListener("click", previewDiff);
         elements.completeButton.addEventListener("click", completeReview);
+        elements.revalidateButton.addEventListener('click', revalidate);
         elements.diffCloseButton.addEventListener("click", () => elements.diffPanel.classList.add("hidden"));
         if (elements.sourceModeSelect) {
             elements.sourceModeSelect.addEventListener("change", () => setSourceValueMode(elements.sourceModeSelect.value));
@@ -183,12 +235,15 @@ import { createHumanReviewView } from "./view.js?v=controller-modularization-6a"
         const view = createHumanReviewView(state, elements, model,
             { renderEditor: () => fieldView.renderEditor() },
             window.DocFlow, window.DocFlowPdfViewer);
-        fieldView = createHumanReviewFieldView(state, elements, model, view);
+        validationView = createReviewValidationView(elements, model, validation);
+        fieldView = createHumanReviewFieldView(state, elements, model, view, {
+            changed: () => validation.changed(), rendered: renderValidation,
+        });
         ({ initializeSourceValueMode, setSourceValueMode, renderHeader,
             renderLockState, setCompletionPending, initializePaneDivider, renderDiff } = view);
         ({ renderEditor } = fieldView);
         initializeSourceValueMode();
-        api = createHumanReviewApi(window.DocFlow, state.reviewItemId);
+        api = createHumanReviewApi(window.DocFlow, state.reviewItemId, () => state.reviewRevision);
         bindEvents();
         initializePaneDivider();
         loadReviewItem();

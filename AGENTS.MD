@@ -191,10 +191,11 @@ Additional rules:
   .\.venv\Scripts\python.exe -m playwright install chromium
   ```
 
-- `pyrightconfig.json` is the current type-checker configuration, but Pyright is
-  not pinned in the dependency files. Run `pyright` only when it is available or
-  the task explicitly adds it to the supported toolchain; report honestly when
-  it was not run.
+- Pyright is pinned in `requirements-dev.txt`; `pyrightconfig.json` is the
+  current type-checker configuration. Run it with the repository interpreter:
+  `.\.venv\Scripts\python.exe -m pyright --project pyrightconfig.json --pythonpath .\.venv\Scripts\python.exe`.
+  Report honestly when it was not run. See
+  `docs/developer/testing-and-verification.md` for scope and baseline guidance.
 - Ruff is not currently a project dependency. Do not claim or require Ruff
   checks without first adding and documenting the tooling. Pytest-cov is pinned
   in `requirements-dev.txt` for explicit coverage runs.

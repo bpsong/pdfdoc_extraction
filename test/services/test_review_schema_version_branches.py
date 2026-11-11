@@ -9,6 +9,8 @@ from unittest.mock import Mock
 
 import pytest
 
+from test.helpers_assertions import require_mock
+
 import modules.services.review_schema_version_service as schema_module
 from modules.services.review_schema_version_service import (
     ReviewSchemaConflictError,
@@ -41,10 +43,10 @@ def test_schema_draft_validation_and_publish_preconditions(monkeypatch) -> None:
     with pytest.raises(ReviewSchemaConflictError, match="stale"):
         service.publish("t1", expected_revision=2, user="alice")
 
-    service.validation.validate_review_schema.return_value = {"valid": True, "findings": []}
+    require_mock(service.validation.validate_review_schema).return_value = {"valid": True, "findings": []}
     service.audit.append = Mock()
     assert service.validate_draft("t1", user="alice")["valid"] is True
-    service.validation.validate_review_schema.return_value = {"valid": False, "findings": [{"code": "bad"}]}
+    require_mock(service.validation.validate_review_schema).return_value = {"valid": False, "findings": [{"code": "bad"}]}
     service._require_draft.return_value = {"revision": 3, "schema_json": json.dumps({"fields": {}}), "base_version_id": None}
     with pytest.raises(Exception):
         service.publish("t1", expected_revision=3, user="alice")
@@ -55,7 +57,7 @@ def test_schema_update_load_and_export_error_paths(monkeypatch) -> None:
     monkeypatch.setattr(schema_module, "immediate_transaction", lambda _conn: nullcontext())
     current = {"id": "t1", "schema_key": "invoice", "name": "Invoice", "description": "", "status": "inactive"}
     service._require_template = Mock(return_value=current)
-    service.versions.list_for_owner.return_value = []
+    require_mock(service.versions.list_for_owner).return_value = []
     with pytest.raises(ValueError, match="Unsupported"):
         service.update_template("t1", status="bad", user="alice")
     current["status"] = "archived"
@@ -64,11 +66,11 @@ def test_schema_update_load_and_export_error_paths(monkeypatch) -> None:
     current["status"] = "inactive"
     with pytest.raises(ReviewSchemaConflictError, match="published"):
         service.update_template("t1", status="active", user="alice")
-    service.versions.get.return_value = None
+    require_mock(service.versions.get).return_value = None
     with pytest.raises(KeyError, match="version"):
         service.load_version("missing")
     version = {"id": "v1", "schema_json": json.dumps({"fields": {}}), "format_version": 99, "content_hash": content_hash({"fields": {}})}
-    service.versions.get.return_value = version
+    require_mock(service.versions.get).return_value = version
     with pytest.raises(RuntimeError, match="format"):
         service.load_version("v1")
     version["format_version"] = 1
@@ -106,12 +108,12 @@ def test_schema_export_draft_import_document_and_required_objects() -> None:
     with pytest.raises(ValueError, match="object"):
         ReviewSchemaVersionService.import_document("schema: []")
     service._require_template = ReviewSchemaVersionService._require_template.__get__(service)
-    service.templates.get.return_value = None
+    require_mock(service.templates.get).return_value = None
     with pytest.raises(KeyError, match="template"):
         service._require_template("t1")
     service._require_draft = ReviewSchemaVersionService._require_draft.__get__(service)
-    service.templates.get.return_value = {"id": "t1"}
-    service.drafts.get.return_value = None
+    require_mock(service.templates.get).return_value = {"id": "t1"}
+    require_mock(service.drafts.get).return_value = None
     with pytest.raises(KeyError, match="draft"):
         service._require_draft("t1")
     assert _NullConfig().get("missing", "fallback") == "fallback"

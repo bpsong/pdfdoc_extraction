@@ -18,6 +18,7 @@ from modules.services.versioned_config_contracts import (
     PIPELINE_DEFINITION_SCHEMA_VERSION,
     PORTABLE_PIPELINE_BUNDLE_FORMAT_VERSION,
     REVIEW_SCHEMA_FORMAT_VERSION,
+    SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS,
     ReviewSchemaCoordinate,
     ValidationSource,
     content_hash,
@@ -584,7 +585,7 @@ def portable_contract_schema(kind: str) -> dict[str, Any]:
             "additionalProperties": True,
             "properties": {
                 "kind": {"enum": ["review-schema", "review-schema-draft"]},
-                "format_version": {"const": REVIEW_SCHEMA_FORMAT_VERSION},
+                "format_version": {"enum": sorted(SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS)},
                 "schema_key": {"type": "string"},
                 "schema": {"type": "object"},
             },

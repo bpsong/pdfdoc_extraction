@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Mapping
 
 from modules.config_protocol import ConfigProvider
 from modules.services.pipeline_validation_service import PipelineValidationService
 from modules.services.schema_service import SchemaService
+from modules.services.business_validation_schema import (
+    require_business_rule_capability, validate_business_validation_schema,
+)
 from modules.services.versioned_config_contracts import (
     PIPELINE_DEFINITION_SCHEMA_VERSION,
     REVIEW_SCHEMA_FORMAT_VERSION,
+    SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS,
     CanonicalizationError,
     ValidationSource,
     canonicalize_json,
@@ -99,7 +104,7 @@ class ValidationFacade:
                 source,
                 [self._finding("error", "$", str(exc), "review-schema-not-json")],
             )
-        if format_version != REVIEW_SCHEMA_FORMAT_VERSION:
+        if type(format_version) is not int or format_version not in SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS:
             findings.append(
                 self._finding(
                     "error",
@@ -164,6 +169,31 @@ class ValidationFacade:
                         "review-gate-schema-version-mismatch",
                     )
                 )
+            schema = dependency.get("schema")
+            if schema is None and "schema_json" in dependency:
+                try:
+                    schema = json.loads(dependency["schema_json"])
+                except (ValueError, TypeError):
+                    schema = None
+                    findings.append(ValidationFacade._finding(
+                        "error", f"tasks.{task_key}.params.schema_version_id",
+                        "Stored review schema could not be read.",
+                        "review-gate-schema-invalid",
+                    ))
+            if isinstance(schema, Mapping):
+                if "business_validation" in schema:
+                    try:
+                        require_business_rule_capability(schema, dependency.get("format_version"))
+                    except ValueError as exc:
+                        findings.append(ValidationFacade._finding(
+                            "error", f"tasks.{task_key}.params.schema_version_id",
+                            str(exc), "review-gate-capability-required",
+                        ))
+                for issue in validate_business_validation_schema(schema):
+                    findings.append(ValidationFacade._finding(
+                        "error", f"tasks.{task_key}.schema.{issue['path']}",
+                        issue["message"], "review-gate-business-rules-invalid",
+                    ))
         return findings
 
     @staticmethod

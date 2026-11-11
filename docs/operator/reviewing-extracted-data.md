@@ -5,7 +5,7 @@
 | Audience | Operators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-30 — repository/source review; no live deployment check; isolated synthetic tests; no live provider check |
 | Applies to | Current application screens |
 
 Review compares the machine's extracted information with the source PDF and
@@ -71,6 +71,39 @@ items and avoid editing the same document in several tabs or computers.
 6. **Save Draft** for unfinished work, or **Complete Review** only when the
    required checks are complete. Follow any validation/error message.
 
+### Check business relationships
+
+Forms with configured rules show **Business checks** above the fields. Checks run
+when the form loads, including restored draft values. The summary distinguishes
+passed checks, failed checks, inputs that **Cannot evaluate**, evaluator errors,
+and disabled rules. Expand **Rules and findings** for each rule's outcome and use
+**Go to** to reach an affected field. Findings also appear beside scalar/nested
+fields and below the affected invoice row; row numbers start at 1.
+For very large reports the first 100 findings are listed and annotated, with a
+notice showing the full count. Correct those values and revalidate to refresh
+the remaining findings. Summary counts always include the entire report.
+
+For amount checks, compare **Expected**, **Actual**, and **Difference** with the
+printed document. A line check compares quantity multiplied by unit price with
+the entered line amount. A subtotal check independently sums entered line amounts
+and compares them with the configured subtotal. Neither check changes values.
+Extraction confidence remains visible separately.
+
+Changing a value, adding a row, or removing a row marks the findings as needing
+revalidation and clears the old annotations. After correcting the values, select
+**Revalidate** while you hold the claim. This checks your current unsaved edits
+without saving, rerunning extraction, or continuing the workflow. The edits and
+current source-display choice stay in place. A delayed result for older edits
+is ignored. **Save Draft** remains available when findings exist; reopening the
+draft checks the restored values.
+
+Warnings allow completion. Blocking failed/inconclusive checks and evaluator
+errors prevent completion. **Complete Review** always checks the submitted values
+again, even if an earlier result passed. A rejected completion retains your edits
+and shows the current findings. If checks are unavailable, retry Revalidate; if
+the review or claim changed, keep a copy of your unsaved corrections before
+reloading. Completed reviews display their accepted report and are read only.
+
 ### Enter the right kind of value
 
 | Control | What to check |
@@ -124,6 +157,15 @@ their values still need checking. Do not treat **Missing confidence** as zero
 accuracy or as a reason to skip the item.
 
 ## Save progress, complete or hand over
+
+Configured date checks compare calendar dates, for example that a due date is
+on or after the invoice date. Use the date picker or your browser's displayed
+date order; saved dates use `YYYY-MM-DD`. Conditional checks
+can require a purchase order number when the corresponding indicator is True.
+**Not applicable** means that condition does not match the current values;
+**Disabled** means the administrator turned the rule off. **Cannot evaluate**
+means an input is missing or invalid. None of these statuses corrects a value.
+Check the PDF, supply only supported facts, and **Revalidate** after changes.
 
 | Action | Result |
 | --- | --- |

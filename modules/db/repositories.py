@@ -1081,11 +1081,14 @@ class ExtractionRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def apply_corrections(self, document_id: str, corrections: dict[str, Any]) -> None:
+    def apply_corrections(
+        self, document_id: str, corrections: dict[str, Any], *, create_missing: bool = False,
+    ) -> None:
+        """Persist corrections, optionally materializing validated missing form fields."""
         now = utc_now()
         with transaction(self.conn):
             for field_key, corrected_value in corrections.items():
-                self.conn.execute(
+                cursor = self.conn.execute(
                     """
                     UPDATE extracted_fields
                     SET corrected_value_json = ?, final_value_json = ?,
@@ -1094,6 +1097,20 @@ class ExtractionRepository:
                     """,
                     (json_value_dumps(corrected_value), json_value_dumps(corrected_value), now, document_id, field_key),
                 )
+                if create_missing and cursor.rowcount == 0:
+                    latest = self.get_latest_result(document_id)
+                    self.conn.execute(
+                        """
+                        INSERT INTO extracted_fields(
+                            id, document_id, extraction_result_id, field_key,
+                            extracted_value_json, corrected_value_json, final_value_json,
+                            requires_review, review_status, source_json, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, 'null', ?, ?, 1, 'corrected', ?, ?, ?)
+                        """,
+                        (_new_id(), document_id, latest["id"] if latest else None, field_key,
+                         json_value_dumps(corrected_value), json_value_dumps(corrected_value),
+                         json_dumps({"review_added": True}), now, now),
+                    )
 
     def set_review_requirements(self, document_id: str, required_field_keys: list[str]) -> None:
         """Mark which extracted fields require human review for the current gate run."""

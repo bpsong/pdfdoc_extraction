@@ -31,10 +31,12 @@ def test_migration_owner_runs_checks_in_order(monkeypatch, tmp_path):
         "validate_startup_task_registry",
         lambda cfg: events.append("registry"),
     )
+    monkeypatch.setattr(startup_service, "verify_business_validation_compatibility",
+                        lambda cfg: events.append("rules"))
 
     startup_service.run_startup_checks(config, migration_mode="migrate")
 
-    assert events == ["migrate", "verify", "registry"]
+    assert events == ["migrate", "verify", "rules", "registry"]
 
 
 def test_verify_mode_never_runs_migrations(monkeypatch, tmp_path):
@@ -42,15 +44,18 @@ def test_verify_mode_never_runs_migrations(monkeypatch, tmp_path):
     migration = Mock()
     verify = Mock()
     registry = Mock()
+    rules = Mock()
     monkeypatch.setattr(startup_service, "initialize_database", migration)
     monkeypatch.setattr(startup_service, "verify_database_schema", verify)
     monkeypatch.setattr(startup_service, "validate_startup_task_registry", registry)
+    monkeypatch.setattr(startup_service, "verify_business_validation_compatibility", rules)
 
     startup_service.run_startup_checks(config, migration_mode="verify")
 
     migration.assert_not_called()
     verify.assert_called_once_with(config)
     registry.assert_called_once_with(config)
+    rules.assert_called_once_with(config)
 
 
 def test_disabled_migrations_still_require_schema_verification(monkeypatch, tmp_path):
@@ -63,6 +68,7 @@ def test_disabled_migrations_still_require_schema_verification(monkeypatch, tmp_
     monkeypatch.setattr(startup_service, "initialize_database", migration)
     monkeypatch.setattr(startup_service, "verify_database_schema", verify)
     monkeypatch.setattr(startup_service, "validate_startup_task_registry", Mock())
+    monkeypatch.setattr(startup_service, "verify_business_validation_compatibility", Mock())
 
     startup_service.run_startup_checks(config, migration_mode="migrate")
 

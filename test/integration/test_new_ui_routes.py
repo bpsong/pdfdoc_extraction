@@ -491,7 +491,7 @@ def test_review_pages_include_task_19_assets(monkeypatch) -> None:
     assert review.status_code == 200
     assert 'id="human-review-workspace"' in review.text
     assert "/static/js/pdf_viewer.js" in review.text
-    assert "/static/js/human-review/index.js?v=controller-modularization-6a" in review.text
+    assert "/static/js/human-review/index.js?v=r4-phase5" in review.text
 
 
 def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
@@ -502,7 +502,7 @@ def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert 'id="schema-editor-workspace"' in response.text
-    assert "/static/js/schema-editor/index.js?v=controller-modularization-5d" in response.text
+    assert "/static/js/schema-editor/index.js?v=r4-audit1" in response.text
 
 
 def test_config_validation_page_includes_task_23_assets(monkeypatch) -> None:

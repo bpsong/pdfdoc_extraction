@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-30 — repository/source review; no live deployment check; isolated synthetic tests; no live provider check |
 | Applies to | Production application; SQLite schema 9 |
 
 Start with the [architecture overview](../design_architecture.md), then set up
@@ -24,5 +24,6 @@ Read in this order, or choose the task you need:
 7. [Develop database migrations](database-migrations.md)
 8. [Test and verify changes](testing-and-verification.md)
 9. [Measure performance](performance.md)
+10. [Develop approved business validators](business-validation-plugins.md)
 
 [All documentation](../README.md)

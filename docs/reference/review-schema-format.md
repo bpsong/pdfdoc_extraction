@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 Routine form authoring belongs in the [Admin guide](../admin/managing-review-forms.md).
@@ -61,7 +61,8 @@ changing the legacy schema search roots.
    `.json` extension.
 6. Open the configured application address and go to `/app/schemas`; choose
    **Import** and target an editable draft. Import files must be no larger than
-   1 MiB. If `format_version` is present, it must be `1`.
+   1 MiB. If `format_version` is present, it must be `1` or `2`. Published forms
+   containing business rules use outer format `2`; the rules' own format remains `1`.
 7. Validate and correct every blocking finding.
 8. Publish the schema version, select it in the pipeline draft, and publish the
    pipeline version.
@@ -119,8 +120,141 @@ fields:
 | `description` | Recommended | Short explanation of when the form is used |
 | `version` | Optional in portable files | Descriptive source label; SQLite assigns the authoritative immutable version number |
 | `fields` | Yes | Collection of fields displayed on the review form |
+| `business_validation` | Optional | Versioned deterministic rules enforced at the gate and review completion |
 
 The Review Form Editor displays authoritative version history. An exported draft includes its revision, not a published version number. A version label inside imported content does not select or overwrite an SQLite version. Field keys and settings are not comprehensively allowlisted by server validation; unknown or misspelled settings may be carried through without being applied.
+
+### Business validation configuration
+
+The published review-schema record uses outer format version 2 when it contains
+business rules. The nested `business_validation.format_version` remains 1 and
+versions the rule configuration independently. These values describe different
+contracts. Business reports expose the enclosing version as
+`schema_format_version`; their own `format_version` versions the report contract.
+
+Published rules run against persisted extracted fields at the review gate and
+against the actual submitted values before review completion. Existing confidence,
+legacy review flags, and field/schema checks still apply. The detail API evaluates
+the displayed values including saved drafts; the revalidation API evaluates unsaved
+corrections without saving or resuming. The review screen displays independent
+rule outcomes, inline field/row findings, decimal evidence, and a Revalidate
+action. Editing values or rows invalidates the current annotations; responses
+are applied only when the local edits, request tag, source revision, and pinned
+form/hash still match. Completed reviews show their stored accepted report.
+
+```yaml
+business_validation:
+  format_version: 1
+  rules:
+    - id: item_amount
+      validator: line_amount:v1
+      collection: /items
+      quantity: /quantity
+      unit_price: /unit_price
+      line_total: /line_total
+      severity: warning
+      tolerance: "0.01"
+    - id: invoice_subtotal
+      validator: sum_equals:v1
+      collection: /items
+      item_value: /line_total
+      target: /subtotal_before_discount
+      severity: blocking
+      tolerance: "0.01"
+```
+
+`collection` must resolve to an existing array of objects. Row bindings are
+JSON Pointers relative to an item; `target` is relative to the document. Bind
+numeric `number`, `float`, or `integer` fields. Nested objects and explicitly
+indexed array members are supported; `~0` escapes a tilde and `~1` a slash.
+Wildcards, expression strings, and import/module paths are not supported.
+
+Each rule needs a unique ID and an available, explicit `validator` version.
+Common settings default to `enabled: true`, `require_review: true`, and
+`severity: warning`. The two arithmetic templates also default to
+`tolerance: "0.01"`, `decimal_places: 2`, and `rounding: ROUND_HALF_UP`.
+`ROUND_HALF_EVEN` is also supported. Decimal places
+must be an integer from 0 to 8; tolerance must be a bounded finite nonnegative
+decimal. `message` is optional plain text, at most 500 characters. The evaluator
+rounds expected and observed amounts before comparing against inclusive tolerance;
+the subtotal sums entered amounts and rounds once. Missing inputs are inconclusive.
+
+Two additional templates use document-relative pointers:
+
+```yaml
+business_validation:
+  format_version: 1
+  rules:
+    - id: invoice_dates
+      validator: date_order:v1
+      earlier: /invoice_date
+      later: /due_date
+      allow_equal: true
+      severity: blocking
+    - id: purchase_order
+      validator: required_if:v1
+      when: /has_purchase_order
+      equals: true
+      required: [/purchase_order_number, /supplier/name]
+      severity: warning
+```
+
+`date_order:v1` binds two `date` fields. Values must be real calendar dates in
+`YYYY-MM-DD` format; date-times, localized strings, and surrounding whitespace
+are invalid. It checks `earlier <= later`, or strict `<` with `allow_equal: false`.
+Missing/invalid dates cannot be evaluated. It does not guess time zones or formats.
+
+`required_if:v1` compares a scalar `when` field with a typed JSON `equals`
+constant. Boolean `true`, number `1`, and text `"1"` are different; numeric
+`1` and `1.0` match. The constant must fit the selected field's type and enum
+choices, if defined. Select 1–20 unique existing document fields in `required`.
+When the condition matches, null, blank text, empty arrays, and empty objects
+are missing; `false` and `0` are present. A nonmatching condition is **Not
+applicable**, distinct from a disabled rule. A missing condition key cannot be
+evaluated. An explicitly present null can match `equals: null`; null does not
+match an absent key. Neither template accepts arithmetic settings.
+
+Enum bindings honor both `choices` and the compatible `enum` field setting.
+For choice objects, compare with `value`, falling back to `label` only when
+`value` is absent. Numeric `1` and `1.0` are equivalent here too; booleans remain
+distinct from numbers. A non-null constant outside the offered values is an
+error in the editor, publication, portable validation, and exact-version checks.
+
+Specialized validators use the reviewed, source-controlled
+[plugin contract](../developer/business-validation-plugins.md). Forms cannot
+upload code or select Python modules. Exact identifiers such as `name:v1`
+remain supported while a changed implementation is added as `name:v2`.
+
+Each collection check supports at most 1,000 rows. Numeric inputs have at most
+128 characters, 28 significant digits, and adjusted exponent from -28 to 28.
+Checks reject nonfinite/localized values and booleans as amounts. Validator
+failures become blocking error findings; another independent rule still runs.
+
+At most 50 rules are allowed. Unknown properties/versions, duplicate IDs,
+malformed pointers, and missing/incompatible field bindings prevent publication,
+including for disabled rules. Rule definitions are preserved without injecting
+defaults into stored content. A rule change changes the form's content hash.
+Forms without the section remain unchanged; an explicitly malformed/null section
+is an error. Portable/stored config checks and pipeline dependency validation
+use the same binding validator. Startup and exact-version loading reject
+unsupported published rules; retain old implementations needed by published forms.
+
+Business-rule forms require outer publication format `2`. Older loaders reject
+that format instead of silently ignoring required rules. Previously authored
+format-1 rule forms remain inspectable but cannot execute: republish the draft
+as format 2, select the new form version in a pipeline draft, and publish the
+pipeline. Existing assignments remain immutable. Forms without rules continue
+to publish as format 1. No database migration changes existing form records.
+
+Blocking failed/inconclusive findings and evaluator errors prevent completion.
+Nonblocking warnings may be accepted. Accepted corrections, report, review/task
+state, and audit summary commit together before workflow resume. Reports carry
+exact form/hash/validator, document/extraction/source, and value revision identities.
+Read/revalidation reports are ephemeral; gate and final accepted reports are
+durable. Audits contain identities/counts rather than raw rule evidence or amounts.
+
+See the [phased R4 plan](../../tasks/tasks-r4-business-validation.md) for integration
+status, numeric bounds, and verification evidence.
 
 ### Field settings
 

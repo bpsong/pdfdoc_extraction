@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
 | Applies to | Current application screens |
 
 A review form controls what operators see, correct and confirm after extraction.
@@ -83,6 +83,63 @@ toolbar, add a field and change its **Type** list.
 | **Default** | A starting value when the form creates a value. Leave blank for facts that must come from the PDF; an invented default can disguise missing information. |
 | **Move up / Move down** | Put related checks together. Moves apply among fields at the same level. |
 | **Delete field** | Confirm removal from the draft. This does not remove the field from extraction or old published versions. |
+
+### Configure business rules
+
+The **Business validation** section below the fields stores multiple checks
+with the form. Published checks run at the review gate and before completion.
+Existing required/type/range checks still apply. Operators see the independent
+rule outcomes beside affected fields/rows, including expected/actual amounts,
+and can use **Revalidate** to check current unsaved edits. Changed values or rows
+mark old findings stale. Draft saving remains possible with findings; completion
+independently checks the actual submitted values and enforces blocking policy.
+
+1. Create an **Array** with **Object** items and numeric quantity, unit-price,
+   and line-total child fields. Add a numeric invoice subtotal field.
+2. Select **Add line amount check**. Choose the item collection and its quantity,
+   unit-price, and line-total fields.
+3. Select **Add subtotal check**. Choose the same collection, its line amount to
+   sum, and the invoice subtotal **before discount and tax**.
+4. Give each rule a unique ID. Set **Allowed difference** (default `0.01`),
+   **Decimal places**, **Rounding**, **Severity**, **Enabled**, and the warning's
+   review requirement. A blocking finding always requires review and prevents
+   completion until resolved. An optional mismatch message is plain text.
+5. Use **Move up/down** to change display order, or **Delete** to remove a rule.
+   Disabling a rule keeps its configuration; its field bindings must remain valid.
+6. Save, validate, and publish through the normal draft/version workflow.
+
+Use **Add date order check** to select an earlier and later `date` field, such
+as invoice date and due date. **Allow same day** controls whether equality is
+valid. Extract dates as `YYYY-MM-DD`; the rule does not interpret local formats.
+
+Use **Add conditional requirement** when other fields become mandatory under a
+condition. Choose the scalar **Condition field**, its **Condition value type**
+and **Equals value**, then select one or more **Required fields** (Ctrl/Cmd-click
+for multiple selections). For example, `has_purchase_order` equals Boolean
+True requires `purchase_order_number`. Boolean false and numeric zero count
+as supplied values. A nonmatching condition shows **Not applicable**; a missing
+condition cannot be evaluated. **Null** matches an explicitly stored null,
+not an absent key. Date/conditional rules share severity and review policy with
+the arithmetic rules. They do not use tolerance or rounding.
+
+For an enum condition, enter the choice's saved value rather than its display
+label. If the definition supplies a label without a separate value, that label
+is the saved value. The editor flags values outside the offered choices before
+saving or publishing. Portable definitions may use either `choices` or `enum`.
+
+For specialized checks, ask a maintainer to add an approved, versioned validator
+and its editor controls through the
+[developer extension process](../developer/business-validation-plugins.md).
+
+Changing a field label preserves its bindings. Renaming/deleting a key or
+changing its type can break a rule; repair the marked selection before publishing.
+The editor retains the old binding to make the problem visible. Remove the last
+rule, or use **Remove all rules**, to return to a form without business checks.
+Import/export and published versions retain the rules and their exact validator
+versions. Publishing a newer form does not change older assigned versions.
+Forms containing rules now publish using format 2. Republish rules authored
+under format 1, then select that new form version and publish the pipeline before
+processing documents. The upgrade does not modify old versions or assignments.
 
 ### Choose the control and its limits
 

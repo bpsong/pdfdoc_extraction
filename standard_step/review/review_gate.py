@@ -12,6 +12,7 @@ from modules.exceptions import TaskError
 from modules.services.review_service import ReviewService
 from modules.services.schema_service import SchemaService
 from modules.services.workflow_state_service import WorkflowStateService
+from modules.services.review_business_validation import business_review_reasons
 
 
 class ReviewGateTask(BaseTask):
@@ -44,6 +45,10 @@ class ReviewGateTask(BaseTask):
         document_id = context.get("document_id")
         batch_id = context.get("batch_id")
         if not document_id or not batch_id:
+            if "business_validation" in (self._schema() or {}):
+                error = TaskError("Business validation requires a persisted document and batch.")
+                self.register_error(context, error)
+                raise error
             context["review_required"] = False
             context["review_gate_status"] = "passed"
             return context
@@ -60,6 +65,21 @@ class ReviewGateTask(BaseTask):
             fields = extraction_repository.get_fields(str(document_id))
             document = document_repository.get(str(document_id)) or {}
             reasons, highlight_fields = self._review_reasons(context, fields, document)
+            try:
+                report = review_service.evaluate_gate_rules(
+                    str(document_id), schema_version_id=self.schema_version_id,
+                    schema=self._schema() or {}, schema_hash=self.review_schema_hash,
+                    task_run_id=context.get("task_run_id"),
+                )
+            except (ValueError, RuntimeError, KeyError):
+                error = TaskError("Business-validation form is unavailable or incompatible; verify its published version.")
+                self.register_error(context, error)
+                raise error from None
+            if report is not None:
+                context["business_validation"] = report
+                rule_reasons, rule_highlights = business_review_reasons(report)
+                reasons.extend(rule_reasons)
+                highlight_fields = sorted(set(highlight_fields) | set(rule_highlights))
             extraction_repository.set_review_requirements(str(document_id), highlight_fields)
 
             if not reasons:
@@ -68,6 +88,14 @@ class ReviewGateTask(BaseTask):
                 return context
 
             metadata = self._review_metadata(context, fields, reasons, highlight_fields, document)
+            if report is not None:
+                metadata["business_validation"] = {"gate": report}
+                schema_fields = (self._schema() or {}).get("fields", {})
+                candidates = (schema_fields if self.allow_edit_high_confidence or self.review_scope == "document"
+                              else highlight_fields)
+                metadata["editable_fields"] = sorted(set(metadata["editable_fields"]) | {
+                    key for key in candidates if not schema_fields.get(key, {}).get("readonly")
+                })
             review_item = review_service.create_review_item(
                 batch_id=str(batch_id),
                 document_id=str(document_id),

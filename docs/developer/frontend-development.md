@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-09 — repository/source review; no live deployment check; focused regressions and local Superstore walkthrough |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Frontend and UI architecture
@@ -41,6 +41,14 @@ Navigation performs full-page transitions. There is no production client
 router, component framework, or central client store. Processing pages poll
 for state changes; the processing overview currently refreshes about every
 three seconds.
+
+Review completion redirects to the queue after the API response. Browser tests
+must wait for that navigation before reopening a completed item. For narrow
+review layouts, test with native scrollbar space and compare document
+`scrollWidth` against `clientWidth`, rather than `innerWidth`. Keep header badges
+within their panel while allowing the line-item table to scroll independently.
+Generic badge selectors using `:not(#id)` have ID specificity; check that they do
+not override a page's badge sizing and truncation rules.
 
 ### Frontend layers
 

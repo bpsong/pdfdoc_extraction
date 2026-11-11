@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sqlite3
 from typing import Any, Iterator
+from uuid import uuid4
 
 from modules.config_protocol import ConfigProvider
 from modules.config_paths import resolve_config_path
@@ -79,6 +80,28 @@ def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
         if not nested:
             conn.rollback()
         raise
+
+
+@contextmanager
+def atomic_transaction(conn: sqlite3.Connection, *, immediate: bool = False) -> Iterator[sqlite3.Connection]:
+    """Provide a real snapshot and rollback scope, including inside a caller transaction."""
+    nested = conn.in_transaction
+    name = f"atomic_{uuid4().hex}"
+    conn.execute(f"SAVEPOINT {name}" if nested else ("BEGIN IMMEDIATE" if immediate else "BEGIN"))
+    try:
+        yield conn
+    except Exception:
+        if nested:
+            conn.execute(f"ROLLBACK TO {name}")
+            conn.execute(f"RELEASE {name}")
+        else:
+            conn.rollback()
+        raise
+    else:
+        if nested:
+            conn.execute(f"RELEASE {name}")
+        else:
+            conn.commit()
 
 
 @contextmanager

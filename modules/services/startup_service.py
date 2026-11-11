@@ -1,8 +1,10 @@
-"""Process startup checks for database schema and task trust configuration."""
+"""Process startup checks for database schema, published rules, and task trust."""
 
 from __future__ import annotations
 
+from contextlib import closing
 from pathlib import Path
+import json
 import sqlite3
 from typing import Literal
 
@@ -11,6 +13,8 @@ from modules.db.connection import get_db_path
 from modules.services.startup_migration_service import initialize_database
 from modules.db.schema_version import SCHEMA_VERSION
 from modules.services.task_registry_service import validate_startup_task_registry
+from modules.services.business_validation_schema import validate_business_validation_schema
+from modules.services.versioned_config_contracts import SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS
 
 
 MigrationMode = Literal["migrate", "verify"]
@@ -85,6 +89,25 @@ def verify_database_schema(config: ConfigProvider) -> None:
         )
 
 
+def verify_business_validation_compatibility(config: ConfigProvider) -> None:
+    """Fail startup if published rules require an unavailable implementation."""
+    try:
+        with closing(sqlite3.connect(
+            _read_only_database_uri(get_db_path(config)), uri=True,
+        )) as conn:
+            for row in conn.execute("SELECT schema_json, format_version FROM review_schema_versions"):
+                schema = json.loads(row[0])
+                if (row[1] not in SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS
+                        or not isinstance(schema, dict) or validate_business_validation_schema(schema)):
+                    raise StartupReadinessError(
+                        "Published business-validation rules are unsupported or invalid."
+                    )
+    except (sqlite3.Error, ValueError, TypeError) as exc:
+        raise StartupReadinessError(
+            "Published review-rule compatibility could not be verified."
+        ) from exc
+
+
 def run_startup_checks(
     config: ConfigProvider,
     *,
@@ -98,4 +121,5 @@ def run_startup_checks(
     ):
         initialize_database(config)
     verify_database_schema(config)
+    verify_business_validation_compatibility(config)
     validate_startup_task_registry(config)

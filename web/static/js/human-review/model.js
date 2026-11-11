@@ -51,6 +51,9 @@ export function createHumanReviewModel(state) {
     }
 
     function fieldFinalValue(field) {
+        if (field.has_correction === true || typeof field.corrected_value_json === "string") {
+            return valueFromField(field, "corrected_value");
+        }
         const corrected = valueFromField(field, "corrected_value");
         if (corrected !== null && corrected !== undefined) {
             return corrected;

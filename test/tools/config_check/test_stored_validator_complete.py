@@ -9,6 +9,8 @@ import sys
 from unittest.mock import Mock
 
 import pytest
+
+from test.helpers_assertions import require_mock
 import yaml
 
 from tools.config_check.stored_validator import (
@@ -276,8 +278,8 @@ def test_stored_validator_remaining_success_paths(tmp_path: Path, monkeypatch) -
         "schema_json": json.dumps(schema), "version_number": 1,
         "content_hash": content_hash(schema), "schema_key": "invoice",
     }
-    validator.conn.execute.side_effect = None
-    validator.conn.execute.return_value = schema_cursor
+    require_mock(validator.conn.execute).side_effect = None
+    require_mock(validator.conn.execute).return_value = schema_cursor
     validator.facade.validate_review_schema = Mock(return_value={"findings": []})
     assert validator.validate_review_schema("invoice", version_number=1).is_valid
 

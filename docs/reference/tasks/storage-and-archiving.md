@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-09 — repository/source review; no live deployment check; focused regressions and local Superstore walkthrough |
 | Applies to | Production application; SQLite schema 9 |
 
 ## storage.store_metadata_as_csv
@@ -64,6 +64,13 @@ pipeline:
     workflow data keys produced by that pipeline version, preventing unrelated
     columns or aliases from another workflow from leaking into the export.
   - Generates a unique filename to avoid overwrites.
+
+For JSON filename templates, `{id}` is reserved for the workflow document
+identity: `context.document_id`, falling back to the legacy `context.id`.
+An extracted field named `id` cannot replace that filename binding; it remains
+unchanged in the JSON payload. Use `{invoice_number}_{id}` to distinguish
+documents that share an invoice reference. Files are still reserved uniquely
+and registered against their document before downstream use.
 
 **YAML configuration example:**
 

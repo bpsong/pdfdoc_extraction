@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-30 — repository/source review; no live deployment check; isolated synthetic tests; no live provider check |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Choose the owning layer
@@ -22,6 +22,11 @@ semantics, and catch specific exceptions with useful safe context.
 
 ## Preserve contracts
 
+For form-level rules, follow the
+[approved business-validator contract](business-validation-plugins.md). It covers
+strict configuration, field bindings, result limits, pure evaluation, version
+retention, and safe failure. Keep rule execution out of routes and pipeline tasks.
+
 Use exact recorded pipeline/form versions for execution and resume. Do not
 infer workflow state from filenames, status text files, `StatusManager` or the
 compatibility `/api/files` and `/api/status/{file_id}` response shapes.
@@ -33,6 +38,24 @@ role checks, cookie/CSRF behaviour, security headers and same-origin PDF
 preview restrictions. Test denied access as well as the successful path.
 
 ## Safe-change workflow
+
+### SQLite transaction scopes
+
+`atomic_transaction(conn, immediate=True)` starts `BEGIN IMMEDIATE` when the
+connection has no active transaction. This reserves the SQLite write lock before
+the protected reads and writes. Inside an existing transaction the helper uses
+a savepoint for rollback isolation; it does not upgrade that transaction or
+independently reserve a write lock. Releasing a nested savepoint does not commit
+the caller's transaction.
+
+Callers that require reservation before reading must own the outer immediate
+transaction. A surrounding `with conn:` alone does not start a transaction;
+check the operations already performed on that connection. Preserve the caller's
+commit/rollback ownership when adding nested scopes. See the
+[connection helpers](../../modules/db/connection.py) and
+[audit follow-up plan](../../tasks/tasks-r4-audit-follow-up.md).
+
+### Verification and documentation
 
 Update this architecture reference when a change alters process ownership,
 state transitions, persistence boundaries, or trust contracts. For a new task,

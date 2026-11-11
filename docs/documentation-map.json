@@ -118,6 +118,11 @@
       "audience": "Developers and maintainers"
     },
     {
+      "path": "developer/business-validation-plugins.md",
+      "title": "Develop approved business validators",
+      "audience": "Developers and maintainers"
+    },
+    {
       "path": "developer/codebase-map.md",
       "title": "Codebase map and ownership",
       "audience": "Developers and maintainers"

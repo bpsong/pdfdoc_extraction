@@ -124,9 +124,10 @@ def test_schema_entry_loads_all_modules_with_matching_asset_version() -> None:
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
     entry = (MODULE_ROOT / "index.js").read_text(encoding="utf-8")
     controller = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
-    assert "/static/js/schema-editor/index.js?v=controller-modularization-5d" in template
-    assert 'import "./controller.js?v=controller-modularization-5d"' in entry
-    assert controller.count("controller-modularization-5d") == 3
+    assert "/static/js/schema-editor/index.js?v=r4-audit1" in template
+    assert 'import "./controller.js?v=r4-audit1"' in entry
+    assert controller.count("?v=r4-audit1") == 4
+    assert './business-rules.js?v=r4-audit1' in controller
     assert "fetch(" not in controller
     assert "window.DocFlow.apiGet(" not in controller
     assert "window.DocFlow.apiPost(" not in controller

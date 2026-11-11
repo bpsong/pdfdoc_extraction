@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 import json
 import re
 import regex
@@ -14,6 +15,7 @@ import yaml
 from modules.config_paths import config_directory, resolve_config_path
 
 from modules.config_protocol import ConfigProvider as ConfigManager
+from modules.services.business_validation_schema import validate_business_validation_schema
 
 
 SUPPORTED_FIELD_TYPES = {
@@ -156,6 +158,8 @@ class SchemaService:
             "version": schema.get("version") or schema.get("schema_version") or self.schema_hash(schema_name),
             "hash": self.schema_hash(schema_name),
             "fields": self._normalize_fields(schema.get("fields", {})),
+            **({"business_validation": deepcopy(schema["business_validation"])}
+               if "business_validation" in schema else {}),
         }
 
     def validate_schema(self, schema: dict[str, Any]) -> list[dict[str, str]]:
@@ -166,6 +170,7 @@ class SchemaService:
             return [{"path": "fields", "message": "Schema fields must be a mapping."}]
         for field_key, field_config in fields.items():
             findings.extend(self._validate_field_config(str(field_key), field_config))
+        findings.extend(validate_business_validation_schema(schema))
         return findings
 
     def validate_payload(

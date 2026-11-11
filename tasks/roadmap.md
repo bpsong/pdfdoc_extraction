@@ -4,9 +4,9 @@
 | --- | --- |
 | Audience | Product owners, maintainers, developers and IT support |
 | Owner | Application maintainers |
-| Status | Eight agreed roadmap items; implementation not started under this roadmap |
-| Updated | 2026-10-12 |
-| Basis | Maintainer direction and repository/source review; no new live checks |
+| Status | Eight agreed roadmap items; R4 complete |
+| Updated | 2026-10-31 |
+| Basis | Maintainer direction, repository/source review and synthetic acceptance; no live provider checks |
 
 ## Business aim
 
@@ -21,7 +21,7 @@ are existing capabilities rather than new roadmap items.
 This roadmap contains exactly eight agreed items. Their numbering identifies
 them; it does not establish delivery order, release dates, or capacity promises.
 R7 and R8 have lower priority than the existing R1-R6 items. The recommended
-implementation sequence below records the planning discussion of 2026-10-12;
+implementation sequence below incorporates the decision to start R4 first;
 item IDs remain stable and do not indicate implementation order.
 Research recommendations require a separate product decision before becoming
 additional roadmap commitments.
@@ -31,7 +31,7 @@ additional roadmap commitments.
 | R1 | Optional PostgreSQL persistence alongside SQLite | Planned; detailed design required | IT support chooses the database appropriate to the deployment |
 | R2 | Mixed-document pipeline routing | Planned; existing proposal to refine | Different document types within one PDF use their own downstream pipelines |
 | R3 | CSV reference lookup and enrichment | Planned; detailed design required | Return matched reference values into document data for downstream outputs |
-| R4 | Dynamic business-logic plugins for review forms | Planned; detailed design required | Check relationships between extracted values and show actionable operator findings |
+| R4 | Dynamic business-logic plugins for review forms | Complete — all five phases verified on 2026-10-30 | Check relationships between extracted values and show actionable operator findings |
 | R5 | Reliable webhook delivery with n8n task integration | Planned; detailed design required | Hand approved values to n8n for delivery to receiving systems with traceable outcomes |
 | R6 | Named users and role-based access | Planned; detailed design required | Give each person an account with appropriate permissions and attributable review/audit actions |
 | R7 | Local scan-quality checks | Planned; lower priority; detailed design required | Warn about poor page quality before costly extraction and support operator rescan/review decisions |
@@ -43,20 +43,20 @@ additional roadmap commitments.
 
 The current planning parameter is **one human user using the application at a
 time**. PostgreSQL remains a firm roadmap commitment for future deployment
-options and concurrent use. Implement its support early while retaining SQLite
-for the current deployment; completing R1 does not require immediately migrating
-that deployment to PostgreSQL.
+options and concurrent use. R4 is complete on SQLite. Implement R1 next while
+retaining SQLite for the current deployment; completing R1 does not require
+immediately migrating that deployment to PostgreSQL.
 
-The recommended sequence is **R1 -> R4 -> R3 -> R2 -> R5 -> R6 -> R7 -> R8**.
-It establishes persistence first, then validation and enrichment, document
+The recommended sequence is **R4 -> R1 -> R3 -> R2 -> R5 -> R6 -> R7 -> R8**.
+It delivers validation first, then persistence and enrichment, document
 routing and delivery, and finally team use and the lower-priority additions.
 This is implementation guidance, not a release schedule or a claim that every
 preceding item is a mandatory technical prerequisite.
 
 | Order | Item | Reason for this position |
 | --- | --- | --- |
-| 1 | R1 - PostgreSQL alternative | Establish persistence boundaries, migrations, and transaction guarantees before validation history, routing, delivery tracking, and users add more database structures. Subsequent features can be developed and tested against both supported backends. |
-| 2 | R4 - Dynamic business validation | Establish consistent findings, warnings, blocking errors, overrides, revalidation, and release checks. Improve review immediately and provide conventions that reference matching and later signature checks can reuse. |
+| 1 | R4 - Dynamic business validation | Deliver useful validation on the current single-user SQLite deployment; establish findings, revalidation, and release checks before enrichment and delivery. Keep persistence behind existing service/repository boundaries for later migration. |
+| 2 | R1 - PostgreSQL alternative | Establish dual-backend persistence, migrations, and transaction guarantees next. Include any R4 persistence in the migration, then develop later features against both supported backends. |
 | 3 | R3 - CSV lookup and enrichment | Add reference values and destination identifiers, using established review conventions for missing or ambiguous matches. Together with R4, produce more complete and validated data for delivery. |
 | 4 | R2 - Mixed-document routing | Settle how children are processed, reviewed, and completed across pipelines before finalizing external-delivery behavior. Decide whether each child is delivered independently or delivery waits for the source's children. |
 | 5 | R5 - Reliable n8n delivery | Build payload revisions, retries, duplicate prevention, and acknowledgements around the accepted-data lifecycle and document boundaries established above. Deliver business value for the current single-user deployment. |
@@ -69,7 +69,7 @@ preceding item is a mandatory technical prerequisite.
 | Relationship | Dependency assessment |
 | --- | --- |
 | R1 before R6 | Recommended preparation for concurrent deployment, not a functional requirement for named accounts. R6 must still support SQLite; PostgreSQL availability does not replace concurrency acceptance tests. |
-| R1 before R2-R5 | Reduces later database conversion work. These features can technically run on SQLite; shared persistence contracts are the design foundation. |
+| R1 before R2/R3/R5 | Reduces later database conversion work. These features can technically run on SQLite. R4 now starts first and must keep any persistence migratable through the existing boundaries. |
 | R4 before R3 | Enables consistent review findings and resolution behavior. CSV lookup itself can exist without the validation plugin; agree shared field/revision contracts before implementation. |
 | R3/R4 before R5 | Conditional on the configured workflow's release policy. Required matching and validation must finish before handoff. Basic delivery can use existing review without requiring every pipeline to use R3/R4. |
 | R2 before R5 | Recommended to settle per-child versus whole-source delivery, partial failures, and accepted revisions. Delivery is technically possible without mixed routing; existing document IDs and lineage must remain stable. |
@@ -98,12 +98,11 @@ delivery callbacks/retries. Check permissions, audit identities, filesystem
 operations, and shared CSV access as well as database transactions. A database
 change alone does not resolve conflicting edits or coordinate external files.
 
-Implementing R1 first delays visible business features and adds testing and
-maintenance for two databases. The recommendation accepts that cost because
-PostgreSQL is already part of the product direction and later items add
-persistence work. If that commitment changes or immediate single-user delivery
-becomes the overriding goal, reassess R1's position rather than treating it as
-an unavoidable blocker for all other work.
+Starting R4 first delivers visible single-user value sooner, accepting that R1
+may later adapt its persistence. R1 still precedes the remaining persistence-heavy
+items and concurrent-user expansion. Supporting two databases adds testing and
+maintenance; reassess its position if deployment priorities change rather than
+treating PostgreSQL as an unavoidable blocker for all other work.
 
 ## R1: Optional PostgreSQL persistence alongside SQLite
 
@@ -259,6 +258,26 @@ Current reference: [CSV reference updates](../docs/reference/tasks/rules-context
 
 ## R4: Dynamic business-logic plugins for review forms
 
+Phased implementation: [R4 business validation plan](tasks-r4-business-validation.md).
+Phases 1-2 completed the shared multi-rule evaluator, versioned rule authoring,
+publication validation, and production form-editor controls on 2026-10-29.
+Phase 3 adds authoritative gate/review evaluation, unsaved-value revalidation API,
+atomic completion enforcement, and mandatory form-format compatibility. Desktop/
+mobile review smoke checks cover the changed contracts. Phase 4 completed inline
+operator findings, the Revalidate button, stale-response guards, and desktop/mobile
+acceptance. Phase 5 adds date-order and conditional-required-field templates,
+an approved specialized-validator registry, and real extraction-to-review-to-
+JSON/CSV/renamed-PDF acceptance. Focused tests and desktop/mobile checks pass.
+R4 is complete as of 2026-10-30. The full run passed 1,941 tests with four skips and one Chromium-launch setup
+error. The affected browser module passed all four tests on an isolated retry;
+all 1,942 non-skipped collected cases passed across those runs. The verification
+record distinguishes that retry from a clean single-run full-suite pass.
+
+The 2026-10-31 post-implementation audit cleared all configured Pyright errors
+and corrected conditional enum-choice validation, with backend and affected UI
+regressions passing. Commands and evidence are in the
+[R4 audit record](tasks-r4-business-validation.md#post-implementation-type-and-regression-audit--2026-10-31).
+
 ### Outcome
 
 Attach configurable runtime business checks to versioned review forms. Evaluate
@@ -309,7 +328,8 @@ A synthetic invoice row with quantity 3, unit price 10.00, and line total 300.00
 shows a warning on load identifying the expected 30.00. Correcting the total
 and clicking **Revalidate** clears the current finding; completion independently
 evaluates the submitted values. Configured blocking rules prevent release until
-resolved or explicitly overridden under policy.
+resolved. This release has no blocking override; any future permitted override
+requires an audited reason.
 
 This extends existing field/schema validation. Runtime evaluation executes
 configured rules, not unrestricted code supplied through a form. A generic

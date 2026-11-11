@@ -6,6 +6,7 @@
     <button class="btn btn-outline btn-sm" id="review-claim-button" type="button">Claim</button>
     <button class="btn btn-outline btn-sm" id="review-release-button" type="button" disabled>Release</button>
     <button class="btn btn-outline btn-sm" id="review-save-button" type="button" disabled>Save Draft</button>
+    <button class="btn btn-outline btn-sm" id="review-revalidate-button" type="button" aria-describedby="review-validation-status" hidden disabled>Revalidate</button>
     <span class="review-action-status hidden" id="review-action-status" role="status" aria-live="polite"></span>
     <button class="btn btn-primary btn-sm" id="review-complete-button" type="button" disabled>Complete Review</button>
 </div>
@@ -64,6 +65,17 @@
         <div class="review-lock-banner hidden" id="review-lock-banner"></div>
 
         <div class="review-editor-scroll">
+            <section class="review-business-panel" id="review-validation-panel" aria-labelledby="review-validation-title" hidden>
+                <div class="review-business-heading">
+                    <h3 id="review-validation-title">Business checks</h3>
+                    <span id="review-validation-status" role="status" aria-live="polite" aria-atomic="true"></span>
+                </div>
+                <p id="review-validation-summary"></p>
+                <details id="review-validation-details">
+                    <summary>Rules and findings</summary>
+                    <ul id="review-validation-list"></ul>
+                </details>
+            </section>
             <div id="review-fields-container" class="review-fields-container">
                 <div class="empty-panel">No fields loaded</div>
             </div>
@@ -82,5 +94,5 @@
 
 {% block scripts %}
 <script src="/static/js/pdf_viewer.js?v=pdf-evidence-4" defer></script>
-<script type="module" src="/static/js/human-review/index.js?v=controller-modularization-6a"></script>
+<script type="module" src="/static/js/human-review/index.js?v=r4-phase5"></script>
 {% endblock %}

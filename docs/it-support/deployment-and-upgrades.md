@@ -5,7 +5,7 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Prepare a compatible release
@@ -60,6 +60,45 @@ mobile archive blockers, archived visibility/read-only controls, preview counts,
 name confirmation, stale-preview recovery, and success results. See the
 [retention guide](../admin/archiving-and-retention.md) and
 [verification record](../../tasks/tasks-pipeline-archive-cleanup.md).
+
+## Business-rule runtime compatibility
+
+R4 adds gate/review-completion enforcement, operator findings, arithmetic,
+date-order, and conditional requirements without a database schema migration.
+Deploy the matching backend and registry. Human-review assets retain
+`r4-phase5`; schema-editor assets use `r4-audit1` for the conditional enum-choice
+fix. The shared `app.css` query is
+`r4-business-validation-5`. The rebuilt vendor CSS uses
+`tailwind-3.4.17-daisyui-4.12.10-r4-phase5` on the app and login pages. Rebuild committed CSS when
+preparing the release.
+
+Startup verifies that every published form's business rules have compatible
+validator versions and field bindings. Keep implementations required by older
+published forms in the release; publishing a replacement form does not remove
+that requirement. The same check runs when loading an exact form version.
+Do not bypass it or alter immutable stored versions to force startup.
+Conditional enum validation now covers both `choices` and `enum`, including
+label-only choices and equivalent numeric values. Preflight stored definitions
+with `--all-stored` before upgrading. Previously accepted invalid enum constants
+can now block exact loading/startup; publishing a replacement alone does not
+remove invalid historical versions. If preflight finds one, keep the previous
+release and backups until the maintainer has prepared a migration/recovery plan.
+Do not rewrite published rows or assume processing-data cleanup removes forms.
+An older release that understands format 2 but lacks a referenced date,
+conditional, or specialized validator also refuses that version. Keep reviewed
+validator code and frontend authoring adapters together in the release. There
+is no runtime plugin upload or module-path configuration.
+
+Business-rule forms now publish with mandatory outer format 2, which older
+loaders reject. Existing format-1 rule forms remain available for inspection
+and republishing, but execution refuses them. Republish each required form,
+select the resulting version in a pipeline draft, and publish the pipeline.
+Existing versions and in-flight assignments are not silently upgraded. Resolve
+old assignments operationally before processing/resuming them with rules.
+Forms without rules retain format 1. Do not downgrade to a release that cannot
+load published format-2 forms. Test using isolated state and synthetic documents.
+Operators can inspect field/row findings and revalidate unsaved edits. Verify
+stale-result handling, saved drafts, and warning/blocking completion after upgrade.
 
 ## Rollback
 

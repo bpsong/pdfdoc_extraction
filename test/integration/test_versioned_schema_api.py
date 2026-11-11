@@ -1,6 +1,9 @@
 """API coverage for SQLite-backed versioned review schemas."""
 
 from typing import cast
+from pathlib import Path
+
+import pytest
 
 from fastapi import FastAPI
 
@@ -8,6 +11,7 @@ import modules.api_router as api_router
 from modules.db.connection import connect
 from modules.db.repositories import UserRepository
 from test.integration.test_batch_upload_api import build_client
+from test.helpers_business_validation import invoice_review_schema
 
 
 def _admin_client(tmp_path, monkeypatch):
@@ -20,6 +24,54 @@ def _admin_client(tmp_path, monkeypatch):
         api_router.get_current_user
     ] = lambda: "admin"
     return client, config
+
+
+def test_business_rules_round_trip_and_publication_rejects_invalid_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, _ = _admin_client(tmp_path, monkeypatch)
+    schema = invoice_review_schema()
+    created = client.post("/api/admin/review-schemas", json={
+        "schema_key": "business-invoice", "name": "Business invoice",
+    }).json()
+    url = f"/api/admin/review-schemas/{created['template']['id']}"
+    assert client.put(f"{url}/draft", json={"expected_revision": 1, "schema": schema}).status_code == 200
+    published = client.post(f"{url}/publish", json={"expected_revision": 2})
+    assert published.status_code == 200
+    assert published.json()["version"]["schema"] == schema
+    loaded = client.get(url).json()
+    assert loaded["draft"]["schema"]["business_validation"] == schema["business_validation"]
+    schema["business_validation"]["rules"][1]["target"] = "/missing"
+    assert client.put(f"{url}/draft", json={"expected_revision": 3, "schema": schema}).status_code == 200
+    result = client.post(f"{url}/draft/validate", json={}).json()
+    assert result["valid"] is False
+    assert any(finding["path"].endswith("business_validation.rules.1.target") for finding in result["findings"])
+    assert client.post(f"{url}/publish", json={"expected_revision": 4}).status_code == 422
+
+
+@pytest.mark.parametrize('alias', ['choices', 'enum'])
+def test_conditional_enum_rule_rejects_unoffered_value_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, alias: str,
+) -> None:
+    client, _ = _admin_client(tmp_path, monkeypatch)
+    schema = {'fields': {'status': {'type': 'enum', alias: [{'label': 'Approved'}]},
+                         'reference': {'type': 'string'}},
+              'business_validation': {'format_version': 1, 'rules': [{
+                  'id': 'approved_reference', 'validator': 'required_if:v1',
+                  'when': '/status', 'equals': 'rejected', 'required': ['/reference'],
+              }]}}
+    created = client.post('/api/admin/review-schemas', json={
+        'schema_key': 'enum-rule', 'name': 'Conditional enum',
+    }).json()
+    url = f"/api/admin/review-schemas/{created['template']['id']}"
+    assert client.put(f'{url}/draft', json={'expected_revision': 1, 'schema': schema}).status_code == 200
+    rejected = client.post(f'{url}/publish', json={'expected_revision': 2})
+    assert rejected.status_code == 422
+    schema['business_validation']['rules'][0]['equals'] = 'Approved'
+    assert client.put(f'{url}/draft', json={'expected_revision': 2, 'schema': schema}).status_code == 200
+    accepted = client.post(f'{url}/publish', json={'expected_revision': 3})
+    assert accepted.status_code == 200
+    assert accepted.json()['version']['schema'] == schema
 
 
 def test_schema_template_draft_publish_history_usage_and_conflict(

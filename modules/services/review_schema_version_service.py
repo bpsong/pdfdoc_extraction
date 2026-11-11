@@ -16,8 +16,12 @@ from modules.db.repositories import (
 )
 from modules.services.validation_facade import ValidationFacade
 from modules.services.schema_service import SchemaService
+from modules.services.business_validation_schema import (
+    review_schema_format, validate_business_validation_schema,
+)
 from modules.services.versioned_config_contracts import (
     REVIEW_SCHEMA_FORMAT_VERSION,
+    SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS,
     ValidationSource,
     canonical_json_text,
     canonicalize_json,
@@ -182,14 +186,15 @@ class ReviewSchemaVersionService:
                 raise ReviewSchemaValidationError(validation)
             if draft["base_version_id"]:
                 base = self.versions.get(draft["base_version_id"])
-                if base and base["content_hash"] == draft["content_hash"]:
+                if (base and base["content_hash"] == draft["content_hash"]
+                        and base["format_version"] == review_schema_format(schema)):
                     raise ReviewSchemaConflictError(
                         "Draft has no changes from its published base."
                     )
             version = self.versions.create(
                 template_id=template_id,
                 version_number=self.versions.next_version_number(template_id),
-                format_version=REVIEW_SCHEMA_FORMAT_VERSION,
+                format_version=review_schema_format(schema),
                 schema_json=draft["schema_json"],
                 content_hash=draft["content_hash"],
                 validation_summary_json=json_dumps(validation),
@@ -271,10 +276,12 @@ class ReviewSchemaVersionService:
         if version is None:
             raise KeyError(f"Unknown review schema version: {version_id}")
         schema = json_loads(version["schema_json"], {})
-        if int(version["format_version"]) != REVIEW_SCHEMA_FORMAT_VERSION:
+        if int(version["format_version"]) not in SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS:
             raise RuntimeError("Unsupported published review schema format version.")
         if content_hash(schema) != version["content_hash"]:
             raise RuntimeError("Published review schema content hash mismatch.")
+        if validate_business_validation_schema(schema):
+            raise RuntimeError("Published business-validation rules are unsupported or invalid.")
         return self._decode_version(version)
 
     def list_selectable_versions(self) -> list[dict[str, Any]]:
@@ -357,7 +364,7 @@ class ReviewSchemaVersionService:
         draft = self._decode_draft(self._require_draft(template_id))
         document = {
             "kind": "review-schema-draft",
-            "format_version": REVIEW_SCHEMA_FORMAT_VERSION,
+            "format_version": review_schema_format(draft["schema"]),
             "schema_key": template["schema_key"],
             "revision": draft["revision"],
             "content_hash": draft["content_hash"],
@@ -401,7 +408,7 @@ class ReviewSchemaVersionService:
         format_version = document.get("format_version")
         if (
             format_version is not None
-            and format_version != REVIEW_SCHEMA_FORMAT_VERSION
+            and (type(format_version) is not int or format_version not in SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS)
         ):
             raise ValueError("Unsupported review schema import format version.")
         schema = document.get("schema", document)

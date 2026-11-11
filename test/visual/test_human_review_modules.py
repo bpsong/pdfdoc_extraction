@@ -135,10 +135,38 @@ def test_review_entry_uses_matching_asset_version_and_no_controller_transport() 
     entry = (MODULE_ROOT / "index.js").read_text(encoding="utf-8")
     controller = (MODULE_ROOT / "controller.js").read_text(encoding="utf-8")
     model = (MODULE_ROOT / "model.js").read_text(encoding="utf-8")
-    assert "human-review/index.js?v=controller-modularization-6a" in template
-    assert 'import "./controller.js?v=controller-modularization-6a"' in entry
-    assert controller.count("controller-modularization-6a") == 4
+    assert "human-review/index.js?v=r4-phase5" in template
+    assert 'import "./controller.js?v=r4-phase5"' in entry
+    assert controller.count("r4-phase5") == 6
     assert "window.DocFlow.apiGet" not in controller
     assert "window.DocFlow.apiPost" not in controller
     assert "window." not in model
     assert "document." not in model
+
+
+def test_review_api_sends_current_revision_and_revalidation_edit_tag() -> None:
+    result = _run_module("api.js", """
+        const calls = [];
+        let revision = 'loaded';
+        const api = module.createHumanReviewApi({apiPost: async (url, body) => calls.push({url, body})},
+            'review', () => revision);
+        await api.saveDraft({subtotal: 30});
+        revision = 'after-save';
+        await api.complete({subtotal: 30});
+        await api.revalidate({subtotal: 31}, 7);
+        return calls;
+    """)
+    assert result[0]["body"]["expected_revision"] == "loaded"
+    assert result[1]["body"]["expected_revision"] == "after-save"
+    assert result[2]["body"] == {"expected_revision": "after-save", "corrections": {"subtotal": 31}, "request_revision": 7}
+
+
+def test_review_model_retains_explicit_null_correction() -> None:
+    result = _run_module("model.js", """
+        const state = {metadata: {}, originalValues: {}, values: {}, schemaFields: [], fieldsByKey: new Map()};
+        const model = module.createHumanReviewModel(state);
+        model.initializeValues({fields: [{field_key: 'value', extracted_value: 300,
+            corrected_value: null, final_value: null, has_correction: true}], schema: {fields: []}});
+        return state.originalValues;
+    """)
+    assert result == {"value": None}

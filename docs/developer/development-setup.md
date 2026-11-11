@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 Work from the repository root in PowerShell. Python 3.13 and the repository
@@ -26,6 +26,17 @@ npm ci
 Use `.\.venv\Scripts\python.exe` for every Python command. Shell activation
 does not persist reliably between tool invocations. Node/npm is needed to
 rebuild assets; deployments can run the committed assets without it.
+
+Pyright is also pinned in `requirements-dev.txt`. Run it against the repository
+environment after installation:
+
+```powershell
+.\.venv\Scripts\python.exe -m pyright --project pyrightconfig.json --pythonpath .\.venv\Scripts\python.exe
+```
+
+Use the configured basic-mode check for the whole Python source/test tree.
+See [static type checking](testing-and-verification.md#static-type-checking) for
+scope, mock typing, and handling intentionally invalid test inputs.
 
 ## Prepare an isolated local deployment
 

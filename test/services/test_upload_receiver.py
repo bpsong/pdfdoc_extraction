@@ -5,6 +5,8 @@ import asyncio
 from concurrent.futures import CancelledError as FutureCancelledError
 import pytest
 
+from test.helpers_assertions import require_present
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
@@ -382,7 +384,7 @@ def test_startup_reconciliation_removes_only_unreferenced_upload_files(
 ) -> None:
     config = Config(tmp_path)
     initialize_database(config)
-    processing = Path(config.get("watch_folder.processing_dir"))
+    processing = Path(require_present(config.get("watch_folder.processing_dir")))
     staging = processing / ".upload_staging"
     staging.mkdir(parents=True)
     abandoned = staging / "abandoned.upload"
@@ -416,7 +418,7 @@ def test_reconciliation_preserves_files_when_database_cannot_be_checked(
     tmp_path: Path,
 ) -> None:
     config = Config(tmp_path)
-    processing = Path(config.get("watch_folder.processing_dir"))
+    processing = Path(require_present(config.get("watch_folder.processing_dir")))
     staging = processing / ".upload_staging"
     staging.mkdir(parents=True)
     abandoned = staging / "abandoned.upload"

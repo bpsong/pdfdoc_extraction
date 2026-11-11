@@ -1,6 +1,7 @@
-import { createSchemaModel, emptySchema } from "./model.js?v=controller-modularization-5d";
-import { createSchemaEditorApi } from "./api.js?v=controller-modularization-5d";
-import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d";
+import { createSchemaModel, emptySchema } from "./model.js?v=r4-audit1";
+import { createSchemaEditorApi } from "./api.js?v=r4-audit1";
+import { createSchemaEditorView } from "./view.js?v=r4-audit1";
+import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.js?v=r4-audit1";
 
 (function () {
     "use strict";
@@ -20,6 +21,8 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
     const titleInput = document.getElementById("schema-title-input");
     const descriptionInput = document.getElementById("schema-description-input");
     const fieldTree = document.getElementById("schema-field-tree");
+    const businessRules = document.getElementById("schema-business-rules");
+    const businessModel = createBusinessRulesModel(() => draft);
     const fieldNavigation = document.getElementById("schema-field-navigation");
     const fieldOutline = document.getElementById("schema-field-outline");
     const fieldSearchInput = document.getElementById("schema-field-search");
@@ -167,11 +170,20 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
 
 
     function collectClientFindings() {
-        return schemaModel.collectClientFindings(nameInput.value, titleInput.value);
+        return [...schemaModel.collectClientFindings(nameInput.value, titleInput.value),
+            ...businessModel.findings()];
     }
 
 
     function focusFinding(path) {
+        if (path.includes("business_validation")) {
+            const localPath = path.slice(path.indexOf("business_validation"));
+            const control = Array.from(businessRules.querySelectorAll("[data-rule-path]"))
+                .find((input) => input.dataset.rulePath === localPath);
+            (control || businessRules).scrollIntoView({behavior: "smooth", block: "center"});
+            (control || businessRules).focus();
+            return;
+        }
         if (path === "name" || path === "title") {
             const input = path === "name" ? nameInput : titleInput;
             input.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -257,6 +269,13 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
         renderFieldOutline();
         renderActionState();
         renderValidationSummary();
+        const editable = Boolean(currentId) && currentTemplate?.status !== "archived";
+        renderBusinessRules(businessRules, businessModel, combinedFindings(), editable);
+        document.querySelectorAll("[data-add-business-rule]").forEach((button) => {
+            button.disabled = !editable || businessModel.rules().length >= 50;
+        });
+        document.getElementById("schema-remove-business-rules").disabled =
+            !editable || !Object.hasOwn(draft, "business_validation");
     }
 
 
@@ -328,7 +347,7 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
             validationState = "invalid";
             render();
             validationResults.focus();
-            return;
+            return false;
         }
         if (!currentId) {
             throw new Error("Create a review form template before saving.");
@@ -345,6 +364,7 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
         if (window.DocFlow) {
             window.DocFlow.showToast("Review form draft saved", "success");
         }
+        return true;
     }
 
     async function validateSchema() {
@@ -358,7 +378,7 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
             return;
         }
         if (dirty) {
-            await saveSchema();
+            if (!(await saveSchema())) return;
         }
         const result = await api.validateDraft(currentId);
         serverFindings = result.findings || [];
@@ -531,6 +551,51 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
         });
     });
 
+    document.querySelectorAll("[data-add-business-rule]").forEach((button) => {
+        button.addEventListener("click", () => {
+            try {
+                if (!businessModel.add(button.dataset.addBusinessRule)) return;
+                markDirty();
+                businessRules.querySelector(`[data-rule-index="${businessModel.rules().length - 1}"][data-rule-prop="id"]`)?.focus();
+            } catch (error) {
+                setBox(errorBox, error.message);
+            }
+        });
+    });
+    document.getElementById("schema-remove-business-rules").addEventListener("click", () => {
+        if (!window.confirm("Remove all business rules from this draft?")) return;
+        delete draft.business_validation;
+        markDirty();
+    });
+    businessRules.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-rule-action]");
+        if (!button) return;
+        const index = Number(button.dataset.ruleIndex);
+        const action = button.dataset.ruleAction;
+        if (action === "delete") {
+            if (!window.confirm(`Delete business rule ${index + 1} from this draft?`)) return;
+            businessModel.remove(index);
+        } else {
+            businessModel.move(index, action === "up" ? -1 : 1);
+        }
+        markDirty();
+        const next = action === "delete" ? Math.min(index, businessModel.rules().length - 1)
+            : index + (action === "up" ? -1 : 1);
+        const focus = businessRules.querySelector(`[data-rule-index="${next}"][data-rule-prop="id"]`);
+        (focus || document.querySelector("[data-add-business-rule]")).focus();
+    });
+    function updateBusinessRule(event) {
+        const input = event.target.closest("[data-rule-prop]");
+        if (!input) return;
+        if (event.type === "input" && (input.tagName === "SELECT" || input.type === "checkbox")) return;
+        if (event.type === "change" && input.tagName !== "SELECT" && input.type !== "checkbox") return;
+        businessModel.update(Number(input.dataset.ruleIndex), input.dataset.ruleProp,
+            input.type === "checkbox" ? input.checked : input.multiple ? Array.from(input.selectedOptions, (option) => option.value) : input.value);
+        markDirty();
+    }
+    businessRules.addEventListener("input", updateBusinessRule);
+    businessRules.addEventListener("change", updateBusinessRule);
+
     nameInput.addEventListener("input", () => {
         dirty = true;
         serverFindings = [];
@@ -591,12 +656,20 @@ import { createSchemaEditorView } from "./view.js?v=controller-modularization-5d
             return;
         }
         try {
-            if (dirty) await saveSchema();
+            if (dirty && !(await saveSchema())) return;
             const result = await api.publishDraft(currentId, currentRevision);
             currentRevision = result.draft.revision;
             await loadSchemas();
             window.DocFlow.showToast("Immutable review form version published", "success");
         } catch (error) {
+            if (Array.isArray(error.detail?.findings)) {
+                serverFindings = error.detail.findings;
+                validationState = "invalid";
+                render();
+                setBox(errorBox, "Publication blocked. Resolve the validation findings.");
+                validationResults.focus();
+                return;
+            }
             const conflict = window.DocFlowVersionedAdmin.conflictMessage(error);
             setBox(errorBox, `${conflict.message}${conflict.reloadRequired ? " Reload before continuing." : ""}`);
         }

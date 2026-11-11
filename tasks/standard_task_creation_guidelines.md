@@ -170,6 +170,10 @@ authoritative store for durable workflow state.
     policy allowed later tasks to execute; tasks must preserve it unchanged.
   - control-flow keys such as `pipeline_state`, `review_item_id`,
     `split_children`, and `fan_out_start_task_index`.
+- Keep workflow identity separate from extracted business identifiers. JSON
+  storage reserves the filename placeholder `{id}` for `document_id` (falling
+  back to legacy context `id`); an extracted `data.id` remains business data and
+  must not replace that binding or be modified during filename preparation.
 - Ensure that the context is passed unchanged if the task is skipped or
   encounters a non-critical condition.
 - A task that intentionally pauses review sets `pipeline_state` to `paused`.
@@ -214,6 +218,43 @@ to be reviewed. Never invent a numeric score to activate threshold logic. A
 consumer review gate must combine structured field keys with its other review
 conditions and preserve document-wide editing when `review_scope` is
 `document`. Downstream execution without a review gate must remain valid.
+
+### Pinned business validation at the review gate
+
+Business-rule forms require a published format-2 form pinned by the pipeline's
+schema dependency. Load the exact schema, content hash, and capability through
+the pipeline definition service; never enable rules from a mutable YAML file or
+silently substitute the latest form. Legacy format-1 rule forms must be explicitly
+republished and the pipeline repinned before execution. No-rules forms retain
+their existing behavior.
+
+The review gate evaluates authoritative SQLite final extracted fields, not
+unpersisted `context["data"]`. Extraction/enrichment tasks must persist changed
+values before this gate. It combines business findings with confidence, schema,
+and structured/legacy flags. Blocking/inconclusive findings require review;
+nonblocking findings respect their review policy; evaluator failure blocks release.
+
+The gate sets `context["business_validation"]` to the report and stores the latest
+gate report in document metadata through repositories. Reports contain business
+data: do not log their values/messages or place them in audit events. Audit only
+rule/form identities and outcome counts. The final accepted report is retained
+with the review and completed gate task output. Read/revalidation requests do not
+create report history or rerun extraction.
+
+Review completion must independently evaluate the submitted values and recheck
+the source revision and live lock owner before atomically committing corrections,
+report, task/review/document state, and audit summary. Resume only after commit,
+so a downstream task sees the accepted values. A UI report or prior passing draft
+is not authorization to skip completion-time checks.
+
+Approved specialized checks belong in the business validator registry, separate
+from pipeline task imports. Supply a strict frozen configuration, exact version
+identifier, field-binding metadata, and a pure bounded evaluator. Do not perform
+network/disk/database I/O or mutate the submitted snapshot from a validator.
+The engine isolates each rule, checks result contracts, and turns exceptions or
+invalid results into blocking findings while continuing independent rules.
+Retain old implementations for published forms. See the
+[validator development contract](../docs/developer/business-validation-plugins.md).
 
 ---
 

@@ -92,6 +92,19 @@
         <div id="schema-field-tree" class="schema-field-tree">
             <div class="empty-panel">No fields</div>
         </div>
+        <section class="schema-business-validation" aria-labelledby="schema-business-title">
+            <h3 id="schema-business-title">Business validation</h3>
+            <p class="text-sm text-base-content/60">Check each item amount or compare the sum of line amounts with an invoice subtotal.</p>
+            <p class="text-sm text-base-content/70">Published checks run at the review gate and before review completion.</p>
+            <div class="business-rule-actions">
+                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="line_amount:v1" disabled>Add line amount check</button>
+                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="sum_equals:v1" disabled>Add subtotal check</button>
+                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="date_order:v1" disabled>Add date order check</button>
+                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="required_if:v1" disabled>Add conditional requirement</button>
+                <button class="btn btn-ghost btn-sm" id="schema-remove-business-rules" type="button" disabled>Remove all rules</button>
+            </div>
+            <div id="schema-business-rules" tabindex="-1"></div>
+        </section>
     </section>
 
     <section class="admin-panel schema-preview-panel">
@@ -140,5 +153,5 @@
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script type="module" src="/static/js/schema-editor/index.js?v=controller-modularization-5d"></script>
+<script type="module" src="/static/js/schema-editor/index.js?v=r4-audit1"></script>
 {% endblock %}

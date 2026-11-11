@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-30 — repository/source review; no live deployment check; isolated synthetic tests; no live provider check |
 | Applies to | Production application; SQLite schema 9 |
 
 ## review.review_gate
@@ -41,6 +41,21 @@
 - **Locking:** Review claims use `review.lock_timeout_minutes`, defaulting to 60 minutes. Claims are atomic: the current operator can renew a claim, another operator can take over an expired claim, and an active claim cannot be overwritten.
 
 For schema-driven review field types, validation behavior, and LlamaCloud date-format guidance, see the [review schema administrator guide](../../admin/managing-review-forms.md).
+
+Published forms containing `business_validation` use mandatory format 2. The
+gate evaluates independent rules against persisted final extracted fields,
+regardless of confidence, while preserving existing reasons/flags. Blocking or
+inconclusive checks force review; warning findings respect `require_review`.
+The latest gate report is stored in document metadata and returned as
+`context["business_validation"]`, including when no review is needed. Reports
+carry business data and must not be logged. Exact form/source identities and
+value revisions prevent a report for old values being accepted for new ones.
+
+Review completion reevaluates submitted values and rejects blocking findings,
+stale data, or lost ownership. Corrections and the accepted report commit with
+review/task/document state before resuming. Legacy format-1 rule forms require
+explicit republishing and pipeline repinning; they cannot run rules implicitly.
+See [review APIs](../api-contracts.md#business-validation-on-extraction-reviews).
 
 **YAML configuration example:**
 

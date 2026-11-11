@@ -107,7 +107,7 @@ export function createHumanReviewView(state, elements, model, callbacks, docFlow
         if (isComplete()) {
             elements.reasonSummary.textContent = "Original extraction confidence is retained for reference.";
         } else if (reasons.length) {
-            elements.reasonSummary.textContent = reasons.map((reason) => titleCase(reason.reason)).join(", ");
+            elements.reasonSummary.textContent = [...new Set(reasons.map((reason) => titleCase(reason.reason)))].join(", ");
         } else {
             elements.reasonSummary.textContent = titleCase(state.reviewItem && state.reviewItem.reason);
         }
@@ -140,13 +140,14 @@ export function createHumanReviewView(state, elements, model, callbacks, docFlow
                 : "";
         }
 
-        const claimDisabled = completed || Boolean(state.lock) || state.completionPending;
+        const busy = state.completionPending || state.savingDraft;
+        const claimDisabled = completed || Boolean(state.lock) || busy;
         elements.claimButton.disabled = claimDisabled;
         elements.claimButton.classList.toggle("hidden", claimDisabled);
-        elements.releaseButton.disabled = completed || !ownsLock || state.completionPending;
-        elements.saveButton.disabled = completed || !ownsLock || state.completionPending;
-        elements.completeButton.disabled = completed || !ownsLock || state.completionPending;
-        elements.diffButton.disabled = completed || !ownsLock || state.completionPending;
+        elements.releaseButton.disabled = completed || !ownsLock || busy;
+        elements.saveButton.disabled = completed || !ownsLock || busy;
+        elements.completeButton.disabled = completed || !ownsLock || busy;
+        elements.diffButton.disabled = completed || !ownsLock || busy;
         if (!state.completionPending) {
             elements.completeButton.innerHTML = "Complete Review";
             elements.completeButton.removeAttribute("aria-busy");
@@ -155,6 +156,7 @@ export function createHumanReviewView(state, elements, model, callbacks, docFlow
 
     function setCompletionPending(pending) {
         state.completionPending = pending;
+        elements.fieldsContainer.inert = pending;
         elements.workspace.classList.toggle("is-completing", pending);
         if (elements.actionStatus) {
             elements.actionStatus.classList.toggle("hidden", !pending);
@@ -200,6 +202,14 @@ export function createHumanReviewView(state, elements, model, callbacks, docFlow
         const saved = Number(storageGet("docflow.review.pdfPanePercent"));
         state.preferredPanePercent = Number.isFinite(saved) && saved ? saved : 52;
         setPanePercent(state.preferredPanePercent, false);
+        const header = elements.workspace.closest('main')?.querySelector(':scope > header');
+        const refreshScrollOffset = () => {
+            const sticky = header && window.getComputedStyle(header).position === 'sticky';
+            const offset = sticky ? header.getBoundingClientRect().height + 12 : 12;
+            elements.workspace.style.setProperty('--review-scroll-offset', `${offset}px`);
+        };
+        refreshScrollOffset();
+        if (header) new ResizeObserver(refreshScrollOffset).observe(header);
 
         elements.paneDivider.addEventListener("pointerdown", (event) => {
             if (window.matchMedia("(max-width: 900px)").matches) {
@@ -236,7 +246,10 @@ export function createHumanReviewView(state, elements, model, callbacks, docFlow
                 setPanePercent(70);
             }
         });
-        const refreshPaneSize = () => setPanePercent(state.preferredPanePercent, false);
+        const refreshPaneSize = () => {
+            setPanePercent(state.preferredPanePercent, false);
+            refreshScrollOffset();
+        };
         window.addEventListener("resize", refreshPaneSize);
         new ResizeObserver(refreshPaneSize).observe(elements.workspace);
     }

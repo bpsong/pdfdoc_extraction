@@ -5,7 +5,7 @@
 | Audience | Developers and IT support |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Discovery, authentication and request safety
@@ -35,6 +35,41 @@ distinct; inspect the endpoint model before treating an error as retryable.
 Follow [execution walkthroughs](../developer/execution-walkthroughs.md) for
 request-to-service ownership. OpenAPI/source models are authoritative for
 endpoints not expanded below; this page is not a substitute for those models.
+
+## Business validation on extraction reviews
+
+`GET /api/review/items/{id}` includes `review_revision` and a
+`business_validation` report for current displayed values, including saved drafts.
+Completed items return the durable accepted report. Report identities include
+the exact form version/hash/format, validator versions, document, extraction,
+source artifacts, and values revision. Forms without rules return a null report.
+
+`POST /api/review/items/{id}/revalidate` accepts `corrections` (a JSON object),
+`expected_revision` (from detail), and optional `request_revision` (string or
+integer, at most 128 characters). It returns `review_revision`, the echoed
+`request_revision`, `business_validation`, and `schema_errors`. Corrections are
+top-level replacements, using the same merge/defaults as completion; include all
+current edits, including restored draft values. This operation requires a live
+claim owned by the authenticated user, preserves CSRF protection, and rejects
+manual-split/closed reviews. It does not save, extend a lock, audit each read,
+rerun OCR, or resume the workflow.
+
+The production review screen applies replies only when the request tag, local
+edit generation/value snapshot, review revision, and exact form ID/hash still
+match. Value and row changes clear stale annotations. Revalidation leaves the
+inputs in place; draft saving retains any newer edits made during the save.
+Completion remains an independent server check regardless of browser findings.
+
+`/draft` and `/complete` also accept `expected_revision`. It is mandatory for
+business-rule forms and optional for legacy forms; a supplied stale token always
+fails. Missing/stale revisions return HTTP 409 with a structured `detail` containing
+`message`, `code` (`review_revision_required` or `stale_review`), and
+`current_revision`. Reload before retrying. Completion independently evaluates the
+submitted values and returns HTTP 422 with `business_validation` for blocking or
+schema findings. Incompatible or structurally invalid pinned forms return HTTP
+422 with `code: review_schema_unavailable`. Other ownership/state conflicts
+retain the existing 409 contract. Accepted corrections/report, task/review/
+document state, and audit summary commit atomically before resume.
 
 ## Manual split decisions
 

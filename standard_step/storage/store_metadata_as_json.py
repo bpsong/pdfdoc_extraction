@@ -204,7 +204,10 @@ class StoreMetadataAsJson(BaseTask):
 
             # Prepare filename
             try:
-                base_filename = self._build_safe_filename(data)
+                filename_data = {
+                    **data, "id": str(context.get("document_id") or unique_id),
+                }
+                base_filename = self._build_safe_filename(filename_data)
             except Exception as e:
                 raise TaskError(f"Failed to generate filename: {e}")
 

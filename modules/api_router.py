@@ -2630,8 +2630,11 @@ def build_router() -> APIRouter:
     def get_review_item(review_item_id: str, user: str = Depends(get_current_user)):
         """Return review item detail."""
         config, _, _, _, _ = get_dependencies()
-        with managed_connect(config) as conn:
-            detail = ReviewService(conn, config).get_detail(review_item_id)
+        try:
+            with managed_connect(config) as conn:
+                detail = ReviewService(conn, config).get_detail(review_item_id)
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=getattr(exc, "status_code", 409), detail=getattr(exc, "detail", str(exc)))
         if detail is None:
             raise HTTPException(status_code=404, detail="Review item not found")
         return detail
@@ -2667,12 +2670,31 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         payload = await _json_body(request)
         operator = user
-        corrections = cast(dict[str, Any], payload.get("corrections") or {})
+        corrections = cast(dict[str, Any], payload.get("corrections", {}))
         try:
             with managed_connect(config) as conn:
-                return ReviewService(conn, config).save_draft(review_item_id, operator, corrections)
+                return ReviewService(conn, config).save_draft(
+                    review_item_id, operator, corrections, expected_revision=payload.get("expected_revision"),
+                )
         except ReviewServiceError as exc:
-            raise HTTPException(status_code=409, detail=str(exc))
+            raise HTTPException(status_code=getattr(exc, "status_code", 409), detail=getattr(exc, "detail", str(exc)))
+
+    @router.post("/api/review/items/{review_item_id}/revalidate")
+    async def revalidate_review_item(
+        review_item_id: str, request: Request, user: str = Depends(get_current_user),
+    ) -> dict[str, Any]:
+        """Evaluate unsaved corrections without accepting or resuming a review."""
+        config, _, _, _, _ = get_dependencies()
+        payload = await _json_body(request)
+        try:
+            with managed_connect(config) as conn:
+                return ReviewService(conn, config).revalidate(
+                    review_item_id, user, payload.get("corrections", {}),
+                    expected_revision=payload.get("expected_revision"),
+                    request_revision=payload.get("request_revision"),
+                )
+        except ReviewServiceError as exc:
+            raise HTTPException(status_code=getattr(exc, "status_code", 409), detail=getattr(exc, "detail", str(exc)))
 
     @router.post("/api/review/items/{review_item_id}/diff")
     async def preview_review_diff(review_item_id: str, request: Request, user: str = Depends(get_current_user)):
@@ -2689,12 +2711,14 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         payload = await _json_body(request)
         operator = user
-        corrections = cast(dict[str, Any], payload.get("corrections") or {})
+        corrections = cast(dict[str, Any], payload.get("corrections", {}))
         try:
             with managed_connect(config) as conn:
-                return ReviewService(conn, config).complete(review_item_id, operator, corrections)
+                return ReviewService(conn, config).complete(
+                    review_item_id, operator, corrections, expected_revision=payload.get("expected_revision"),
+                )
         except ReviewServiceError as exc:
-            raise HTTPException(status_code=409, detail=str(exc))
+            raise HTTPException(status_code=getattr(exc, "status_code", 409), detail=getattr(exc, "detail", str(exc)))
 
     @router.post("/api/review/items/{review_item_id}/split/draft")
     async def save_manual_split_draft(review_item_id: str, request: Request, user: str = Depends(get_current_user)) -> dict[str, Any]:

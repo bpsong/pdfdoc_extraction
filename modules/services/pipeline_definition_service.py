@@ -11,6 +11,7 @@ from modules.config_protocol import ConfigProvider
 from modules.db.repositories import BatchRepository, DocumentRepository
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
+from modules.services.business_validation_schema import require_business_rule_capability
 from modules.services.task_registry_service import ApprovedTaskRegistry, TaskApprovalError
 from modules.services.versioned_config_contracts import (
     PIPELINE_DEFINITION_SCHEMA_VERSION,
@@ -138,8 +139,10 @@ class PipelineDefinitionService:
                     "Pinned review dependency identity does not match task JSON."
                 )
             schema_version = schemas.load_version(schema_version_id)
+            require_business_rule_capability(schema_version["schema"], schema_version["format_version"])
             params["_review_schema"] = deepcopy(schema_version["schema"])
             params["_review_schema_hash"] = schema_version["content_hash"]
+            params["_review_schema_format_version"] = schema_version["format_version"]
 
     def _verify_task_approvals(self, definition: Mapping[str, Any]) -> None:
         tasks = definition.get("tasks")

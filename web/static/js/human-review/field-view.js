@@ -1,6 +1,8 @@
 /** DOM rendering for scalar, object, and array review fields. */
 
-export function createHumanReviewFieldView(state, elements, model, view) {
+import { reviewPointer } from './validation.js?v=r4-phase5';
+
+export function createHumanReviewFieldView(state, elements, model, view, callbacks = {}) {
     const { escapeHtml, titleCase, defaultValueForField, getByPath, setByPath, pathString, formatValue, optionItems, encodedOptionValue, decodedOptionValue, numberStep, formatInputValue, scalarTextValue, fieldLabel, fieldHelpText, isComplete, canEditPath, isHighlighted, shouldShowSourceValue, fieldForPath, confidenceInfoForPath, parseInputValue, defaultObjectArrayRow } = model;
     const { selectPdfField } = view;
 
@@ -163,12 +165,14 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         }
 
         input.dataset.fieldPath = pathString(pathParts);
+        input.setAttribute('aria-label', `${fieldLabel(field)}${pathParts.some((part) => typeof part === 'number') ? ` · Row ${pathParts.find((part) => typeof part === 'number') + 1}` : ''}`);
         applyInputConstraints(input, field);
         input.disabled = !editable;
         const eventName = input.tagName === "SELECT" ? "change" : "input";
         input.addEventListener(eventName, () => {
             setByPath(state.values, pathParts, parseInputValue(input, field));
             setConstraintState(input, wrapper);
+            callbacks.changed?.();
         });
         if (!wrapper.children.length) {
             wrapper.appendChild(input);
@@ -185,6 +189,7 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         const editable = canEditPath(pathParts);
         const row = createElement("div", "review-field-row");
         row.dataset.fieldPath = pathString(pathParts);
+        row.dataset.validationPath = reviewPointer(pathParts);
         row.classList.toggle("highlight", !isComplete() && isHighlighted(pathParts));
         row.classList.toggle("locked", !editable);
         row.addEventListener("click", () => selectPdfField(pathParts, field));
@@ -223,11 +228,8 @@ export function createHumanReviewFieldView(state, elements, model, view) {
     }
 
     function renderObjectField(field, pathParts, container) {
-        const value = getByPath(state.values, pathParts);
-        if (!value || typeof value !== "object" || Array.isArray(value)) {
-            setByPath(state.values, pathParts, {});
-        }
         const group = createElement("div", "review-nested-group");
+        group.dataset.validationPath = reviewPointer(pathParts);
         const header = createElement("div", "review-nested-header");
         const title = createElement("div", "review-label-line");
         appendFieldLabelContent(title, field);
@@ -244,6 +246,8 @@ export function createHumanReviewFieldView(state, elements, model, view) {
             textarea.value = JSON.stringify(getByPath(state.values, pathParts) || {}, null, 2);
             textarea.disabled = !canEditPath(pathParts);
             textarea.classList.add("review-json-editor");
+            textarea.dataset.fieldPath = pathString(pathParts);
+            textarea.setAttribute('aria-label', fieldLabel(field));
             textarea.addEventListener("focus", () => selectPdfField(pathParts, field));
             textarea.addEventListener("input", () => {
                 try {
@@ -253,6 +257,7 @@ export function createHumanReviewFieldView(state, elements, model, view) {
                     setByPath(state.values, pathParts, textarea.value);
                     textarea.classList.add("textarea-error");
                 }
+                callbacks.changed?.();
             });
             body.appendChild(textarea);
         } else {
@@ -266,9 +271,9 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         let value = getByPath(state.values, pathParts);
         if (!Array.isArray(value)) {
             value = [];
-            setByPath(state.values, pathParts, value);
         }
         const group = createElement("div", "review-nested-group");
+        group.dataset.validationPath = reviewPointer(pathParts);
         const header = createElement("div", "review-nested-header flex items-center justify-between gap-2");
         const titleWrap = createElement("div", "");
         const title = createElement("div", "review-label-line");
@@ -281,6 +286,8 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         addButton.disabled = !canEditPath(pathParts);
         addButton.addEventListener("click", () => {
             value.push(defaultValueForField(field.item_schema || { type: "string" }));
+            setByPath(state.values, pathParts, value);
+            callbacks.changed?.();
             renderEditor();
         });
         header.appendChild(addButton);
@@ -292,6 +299,7 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         }
         value.forEach((item, index) => {
             const row = createElement("div", "review-array-row");
+            row.dataset.validationPath = reviewPointer([...pathParts, index]);
             const itemField = { ...(field.item_schema || { type: "string" }), key: String(index), label: `${field.label || field.key} ${index + 1}` };
             row.classList.toggle("highlight", !isComplete() && isHighlighted([...pathParts, index]));
             appendConfidenceBadge(row, confidenceInfoForPath([...pathParts, index]));
@@ -301,6 +309,8 @@ export function createHumanReviewFieldView(state, elements, model, view) {
             removeButton.disabled = !canEditPath(pathParts);
             removeButton.addEventListener("click", () => {
                 value.splice(index, 1);
+                setByPath(state.values, pathParts, value);
+                callbacks.changed?.();
                 renderEditor();
             });
             row.appendChild(removeButton);
@@ -314,10 +324,10 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         let value = getByPath(state.values, pathParts);
         if (!Array.isArray(value)) {
             value = [];
-            setByPath(state.values, pathParts, value);
         }
         const itemFields = field.item_schema && Array.isArray(field.item_schema.fields) ? field.item_schema.fields : [];
         const group = createElement("div", "review-nested-group");
+        group.dataset.validationPath = reviewPointer(pathParts);
         const header = createElement("div", "review-nested-header flex items-center justify-between gap-2");
         const titleWrap = createElement("div", "");
         const title = createElement("div", "review-label-line");
@@ -330,6 +340,8 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         addButton.disabled = !canEditPath(pathParts);
         addButton.addEventListener("click", () => {
             value.push(defaultObjectArrayRow(itemFields));
+            setByPath(state.values, pathParts, value);
+            callbacks.changed?.();
             renderEditor();
         });
         header.appendChild(addButton);
@@ -360,9 +372,12 @@ export function createHumanReviewFieldView(state, elements, model, view) {
             }
             value.forEach((item, index) => {
                 const row = createElement("tr");
+                row.dataset.validationPath = reviewPointer([...pathParts, index]);
+                row.dataset.validationRow = 'true';
                 itemFields.forEach((itemField) => {
                     const cell = createElement("td");
                     const itemPath = [...pathParts, index, itemField.key];
+                    cell.dataset.validationPath = reviewPointer(itemPath);
                     cell.classList.toggle("highlight", !isComplete() && isHighlighted(itemPath));
                     appendConfidenceBadge(cell, confidenceInfoForPath(itemPath), "review-cell-confidence");
                     cell.appendChild(renderScalarInput(itemField, itemPath, item ? item[itemField.key] : "", canEditPath(pathParts) && !itemField.readonly));
@@ -374,6 +389,8 @@ export function createHumanReviewFieldView(state, elements, model, view) {
                 removeButton.disabled = !canEditPath(pathParts);
                 removeButton.addEventListener("click", () => {
                     value.splice(index, 1);
+                    setByPath(state.values, pathParts, value);
+                    callbacks.changed?.();
                     renderEditor();
                 });
                 actionCell.appendChild(removeButton);
@@ -415,6 +432,7 @@ export function createHumanReviewFieldView(state, elements, model, view) {
         if (preferredField) {
             selectPdfField([preferredField.key], preferredField);
         }
+        callbacks.rendered?.();
     }
 
     return { renderEditor };

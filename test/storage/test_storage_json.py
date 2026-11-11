@@ -61,6 +61,31 @@ def config_manager(basic_fields_config):
     return DummyConfigManager(tasks_conf)
 
 
+@pytest.mark.parametrize("document_id,expected", [("document-123", "document-123"), (None, "legacy-123")])
+def test_filename_id_uses_workflow_identity_without_changing_payload(
+    tmp_path: Path, config_manager: DummyConfigManager,
+    monkeypatch: pytest.MonkeyPatch, document_id: str | None, expected: str,
+) -> None:
+    """Extracted IDs must not replace the document identity in filenames."""
+    monkeypatch.setattr(
+        "standard_step.storage.store_metadata_as_json.register_document_artifact",
+        lambda *args, **kwargs: None,
+    )
+    task = StoreMetadataAsJson(
+        config_manager, data_dir=str(tmp_path), filename="{invoice_number}_{id}",
+    )
+    data = {"invoice_number": "INV-REPEATED", "id": "extracted-id"}
+    context: dict[str, Any] = {"id": "legacy-123", "data": data}
+    if document_id is not None:
+        context["document_id"] = document_id
+    result = task.run(context)
+    assert "error" not in result
+    output = Path(result["output_path"])
+    assert output.name == f"INV-REPEATED_{expected}.json"
+    assert json.loads(output.read_text(encoding="utf-8")) == data
+    assert data == {"invoice_number": "INV-REPEATED", "id": "extracted-id"}
+
+
 def read_json_file(path: Path) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as fh:
         return json.load(fh)

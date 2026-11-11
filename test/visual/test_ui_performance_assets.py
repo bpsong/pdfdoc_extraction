@@ -54,7 +54,7 @@ def test_named_schema_route_resolves_to_versioned_template_identity() -> None:
     assert "function initialSchemaName()" in source
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
     assert "api.getTemplate(templateId)" in source
-    assert "schema-editor/index.js?v=controller-modularization-5d" in template
+    assert "schema-editor/index.js?v=r4-audit1" in template
 
 
 def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:
