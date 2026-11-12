@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
+| Last verified | 2026-11-11 — repository/source review; no live deployment check; generic descriptors, test-only plugin rendering/evaluation, and synthetic regressions |
 | Applies to | Production application; SQLite schema 9; format-2 rule forms |
 
 Business validators check a snapshot and produce findings. Keep orchestration,
@@ -50,9 +50,10 @@ document binding such as `ValidatorBinding('supplier', types=frozenset({'string'
 For an item validator, declare the collection property and row-relative bindings.
 Use `many=True` for a configuration property containing multiple pointers. The
 schema binder checks these pointers/types before publication and exact loading.
-Add the corresponding reviewed authoring adapter and controls in
-`web/static/js/schema-editor/business-rules.js`; an installed server descriptor
-alone does not add a new editor template. Preserve unavailable bindings visibly.
+Add validated `ValidatorEditor` metadata for generic authoring as described below.
+No frontend validator-ID branch is needed for supported widgets. A plugin without
+editor metadata remains executable but is excluded from the authoring catalog;
+its existing configuration remains visible and preserved.
 
 Configuration inherits frozen/extra-forbidden behavior. The registry rejects
 duplicate IDs or mismatched literal configuration types and exposes an immutable
@@ -60,6 +61,63 @@ mapping. Forms resolve exact identifiers only. Keep `supplier_code:v1` unchanged
 when adding a new `supplier_code:v2`; published versions and reports retain their
 old implementation identities. Startup refuses unavailable IDs. Do not alias an
 old name to changed behavior or edit immutable form records.
+
+## Describe generic editor controls
+
+The registry owns both evaluation approval and reviewed display descriptors.
+For the supplier example, attach metadata such as:
+
+```python
+from modules.services.business_validation_metadata import ValidatorControl, ValidatorEditor
+from modules.services.business_validation_registry import BusinessValidatorPlugin, ValidatorBinding
+
+supplier_plugin = BusinessValidatorPlugin(
+    'supplier_code:v1', SupplierRule, check_supplier,
+    bindings=(ValidatorBinding('supplier', types=frozenset({'string'})),),
+    editor=ValidatorEditor(
+        title='Supplier code prefix',
+        description='Check the supplier reference against the approved prefix.',
+        category='Requirements',
+        controls=(ValidatorControl(
+            'supplier', 'Supplier field', 'field', types=frozenset({'string'}),
+        ),),
+    ),
+)
+```
+
+Add the descriptor to the reviewed registry construction. It validates names
+against strict Pydantic model paths (including nested operands), binding types
+and scopes, literal choices/defaults, visibility paths, and bounds at startup.
+Editor metadata lives outside canonical rule content and accepted reports.
+The catalog service projects JSON-safe controls for the authenticated admin
+endpoint; a separate identifier/title map serves operator findings without
+granting catalog access. Escape all display text in browser rendering.
+
+Supported `kind` values are `field`, `collection`, `choice`, `boolean`, `text`,
+`decimal`, `integer`, `typed`, and `operand`. A field may declare `types`,
+document/row `scope`, or `many`; a typed literal may declare `condition_field`.
+Choice entries contain literal `(value, label)` pairs. Controls can declare
+defaults, requiredness, bounds, and `visible_when` tuples of
+`(model_path, (allowed_literal_values, ...))`. Every condition is a literal
+comparison, never executable code. Visibility controls rendering; the strict
+model still enforces the complete configuration contract.
+
+An operand widget supports a field's explicit document/current-row scope and,
+with `allow_constant=True`, a numeric constant. Pair it with nested bindings
+such as `ValidatorBinding('right.field', types=NUMBERS,
+scope_field='right.scope', when=('right.kind', ('field',)))`. A conditional
+collection uses `collection_when=('scope', ('rows',))`; the model must forbid
+row operands in document mode. See `compare_number:v1` in the registry and
+[schema reference](../reference/review-schema-format.md#business-validation-configuration)
+for the exact contract. Keep comparisons pure and bounded.
+
+The browser builds the searchable picker and controls from descriptors. It does
+not auto-bind a repeating group. Loading/retrying a catalog never rewrites a
+draft. Unknown versions retain their original JSON and show an unavailable
+message. If a new validator needs an unsupported interaction, extend and test
+the reusable widget protocol and update `catalog_version` when incompatible;
+do not add a document-type-specific branch. Cover a test-only descriptor in the
+generic renderer to prove this boundary.
 
 ## Preserve bounded, independent evaluation
 

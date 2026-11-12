@@ -129,6 +129,63 @@ class DateOrderRule(BusinessRule):
     allow_equal: StrictBool = True
 
 
+class NumericFieldOperand(BaseModel):
+    """Explicit document or current-row binding for a numeric comparison."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["field"]
+    scope: Literal["document", "row"] = "document"
+    field: Pointer
+
+
+class NumericConstantOperand(BaseModel):
+    """Bounded decimal literal, preserving decimal strings across JSON transport."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    kind: Literal["constant"]
+    value: Decimal
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def validate_value(cls, value: Any) -> Decimal:
+        return _decimal(value)
+
+
+class CompareNumberRule(BusinessRule):
+    """Compare numeric fields or a field and constant without implicit rounding."""
+
+    validator: Literal["compare_number:v1"]
+    scope: Literal["document", "rows"] = "document"
+    collection: Pointer | None = None
+    left: NumericFieldOperand
+    operator: Literal["eq", "ne", "lt", "lte", "gt", "gte"]
+    right: Annotated[NumericFieldOperand | NumericConstantOperand, Field(discriminator="kind")]
+    tolerance: Decimal | None = None
+
+    @field_validator("tolerance", mode="before")
+    @classmethod
+    def validate_tolerance(cls, value: Any) -> Decimal:
+        number = _decimal(value)
+        if number < 0:
+            raise ValueError("Allowed difference cannot be negative.")
+        return number
+
+    @model_validator(mode="after")
+    def validate_scope_and_options(self) -> CompareNumberRule:
+        if self.scope == "rows" and self.collection is None:
+            raise ValueError("Select a repeating group for row comparisons.")
+        if self.scope == "document" and "collection" in self.model_fields_set:
+            raise ValueError("A document comparison cannot select a repeating group.")
+        if self.scope == "document" and any(
+            isinstance(operand, NumericFieldOperand) and operand.scope == "row"
+            for operand in (self.left, self.right)
+        ):
+            raise ValueError("Row operands require a repeating-row comparison.")
+        if self.operator not in {"eq", "ne"} and "tolerance" in self.model_fields_set:
+            raise ValueError("Allowed difference applies only to equal and not equal.")
+        return self
+
+
 def _literal(value: Any) -> Any:
     if isinstance(value, str) and len(value) > 500:
         raise ValueError("Condition text must contain at most 500 characters.")
@@ -159,7 +216,7 @@ class RequiredIfRule(BusinessRule):
 def _parse_rule(value: Any) -> BusinessRule:
     from modules.services.business_validation_registry import get_validator
 
-    raw = value.model_dump() if isinstance(value, BusinessRule) else value
+    raw = value.model_dump(exclude_unset=True) if isinstance(value, BusinessRule) else value
     identifier = raw.get("validator") if isinstance(raw, Mapping) else None
     plugin = get_validator(identifier) if isinstance(identifier, str) else None
     if plugin is None:
@@ -404,6 +461,46 @@ def _evaluate_date_order(values: Mapping[str, Any], rule: DateOrderRule) -> list
     )]
 
 
+def _evaluate_compare_number(values: Mapping[str, Any], rule: CompareNumberRule) -> list[ValidationCheck]:
+    """Keep row failures independent and return absolute paths for both operands."""
+    symbols = {"eq": "=", "ne": "≠", "lt": "<", "lte": "≤", "gt": ">", "gte": "≥"}
+    indexes: list[int | None] = (
+        list(range(len(_read(values, rule.collection or "")))) if rule.scope == "rows" else [None]
+    )
+    checks: list[ValidationCheck] = []
+    for index in indexes:
+        paths: list[str] = []
+        try:
+            numbers: list[Decimal] = []
+            for operand in (rule.left, rule.right):
+                if isinstance(operand, NumericConstantOperand):
+                    numbers.append(operand.value)
+                else:
+                    pointer = (f"{rule.collection}/{index}{operand.field}"
+                               if operand.scope == "row" else operand.field)
+                    paths.append(pointer)
+                    numbers.append(_number(values, pointer))
+            left, right = numbers
+            difference = left - right
+            tolerance = rule.tolerance or Decimal(0)
+            passed = {
+                "eq": abs(difference) <= tolerance, "ne": abs(difference) > tolerance,
+                "lt": left < right, "lte": left <= right, "gt": left > right, "gte": left >= right,
+            }[rule.operator]
+            checks.append(_check(
+                rule, "passed" if passed else "failed",
+                "comparison_matched" if passed else "comparison_mismatch",
+                "The numeric comparison is satisfied." if passed else "Check the compared numeric values.",
+                tuple(dict.fromkeys(paths)), index,
+                expected=f"{symbols[rule.operator]} {format(right, 'f')}",
+                actual=format(left, "f"), difference=format(difference, "f"),
+            ))
+        except _InputProblem as exc:
+            checks.append(_check(rule, "not_evaluated", exc.code,
+                                 "Check the missing or invalid input.", (exc.path,), index))
+    return checks
+
+
 def _scalar_equal(left: Any, right: Any) -> bool:
     if type(left) in {int, float} and type(right) in {int, float}:
         return _decimal(left) == _decimal(right)
@@ -441,7 +538,9 @@ def _evaluate_rule(values: Mapping[str, Any], rule: BusinessRule) -> list[Valida
     plugin = get_validator(rule.validator)
     if plugin is None:
         raise ValueError("Validator is unavailable.")
-    if plugin.collection:
+    from modules.services.business_validation_metadata import condition_matches
+
+    if plugin.collection and (plugin.collection_when is None or condition_matches(rule, plugin.collection_when)):
         pointer = getattr(rule, plugin.collection)
         rows = _read(values, pointer)
         if not isinstance(rows, list):

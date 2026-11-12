@@ -134,7 +134,7 @@ def test_multiple_rules_stale_async_rows_blocking_warning_drafts_and_mobile(
             expect(revalidate).to_be_disabled()
             expect(summary).to_contain_text('2 failed')
             expect(page.locator('.review-business-row-findings')).to_contain_text('Expected: 30.00')
-            expect(page.locator('.review-field-row[data-field-path="subtotal"] .review-business-inline')).to_contain_text('Subtotal (subtotal)')
+            expect(page.locator('.review-field-row[data-field-path="subtotal"] .review-business-inline')).to_contain_text('Sum rows against a field (subtotal)')
             page.locator('#review-validation-details').evaluate('element => element.open = true')
             page.screenshot(path=str(evidence / 'two-rules-desktop.png'))
             page.locator('#review-claim-button').click()
@@ -285,7 +285,7 @@ def test_multiple_rules_stale_async_rows_blocking_warning_drafts_and_mobile(
             page.set_viewport_size({'width': 390, 'height': 844})
             offset = require_present(page.locator('main > header').bounding_box())['height'] + 12
             expect(page.locator('#human-review-workspace')).to_have_css('--review-scroll-offset', f'{offset:g}px')
-            scroll_to = "element => import('/static/js/human-review/validation-view.js?v=r4-phase5').then(module => module.scrollReviewTarget(element, 'start'))"
+            scroll_to = "element => import('/static/js/human-review/validation-view.js?v=generic-rules-1').then(module => module.scrollReviewTarget(element, 'start'))"
             page.locator('#review-validation-panel').evaluate(scroll_to)
             assert require_present(page.locator('#review-validation-title').bounding_box())['y'] >= require_present(page.locator('main > header').bounding_box())['height']
             page.screenshot(path=str(evidence / 'warning-mobile-summary.png'))
@@ -333,7 +333,7 @@ def test_nested_findings_and_no_rules_compatibility(validation_app: dict[str, An
                 checked(page)
                 expect(page.locator('#review-validation-summary')).to_contain_text('2 passed')
             elif panel.is_visible():
-                expect(page.locator('.review-field-row[data-field-path="totals.subtotal"] .review-business-inline')).to_contain_text('Subtotal (subtotal)')
+                expect(page.locator('.review-field-row[data-field-path="totals.subtotal"] .review-business-inline')).to_contain_text('Sum rows against a field (subtotal)')
                 page.locator('#review-claim-button').click()
                 page.locator('input[data-field-path="totals.subtotal"]').fill('300')
                 checked(page)

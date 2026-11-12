@@ -5,7 +5,7 @@
 | Audience | Developers and IT support |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
+| Last verified | 2026-11-11 — repository/source review; no live deployment check; catalog permissions, separate review labels, and isolated API/browser regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Discovery, authentication and request safety
@@ -36,6 +36,18 @@ Follow [execution walkthroughs](../developer/execution-walkthroughs.md) for
 request-to-service ownership. OpenAPI/source models are authoritative for
 endpoints not expanded below; this page is not a substitute for those models.
 
+## Approved business-rule catalog
+
+`GET /api/admin/business-validators` requires authentication and the admin role
+(unauthenticated: 401; operator: 403). It returns `catalog_version: 1`,
+`common_controls`, and `validators`. Each validator has an exact `id`, neutral
+`title`, `description`, `category`, optional collection/condition metadata, and
+`controls`. Controls describe supported widget kinds, names, defaults, field
+types/scopes, choices, bounds, and literal visibility conditions. This read-only
+projection contains no Python module paths, executable expressions, or user data.
+It does not publish forms or change saved rule content. See the
+[descriptor contract](../developer/business-validation-plugins.md#describe-generic-editor-controls).
+
 ## Business validation on extraction reviews
 
 `GET /api/review/items/{id}` includes `review_revision` and a
@@ -43,6 +55,11 @@ endpoints not expanded below; this page is not a substitute for those models.
 Completed items return the durable accepted report. Report identities include
 the exact form version/hash/format, validator versions, document, extraction,
 source artifacts, and values revision. Forms without rules return a null report.
+Extraction detail and revalidation responses also include top-level
+`business_validation_labels`, an identifier-to-title map for operator display.
+It is separate from the report and is never included in accepted report evidence,
+form hashes, or saved rules. Operators need no access to the admin catalog.
+Clients fall back to an identifier when its label is absent.
 
 `POST /api/review/items/{id}/revalidate` accepts `corrections` (a JSON object),
 `expected_revision` (from detail), and optional `request_revision` (string or

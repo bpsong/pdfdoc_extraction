@@ -25,6 +25,7 @@ from modules.services.review_business_validation import (
     build_business_report, business_report_summary, snapshot_hash,
 )
 from modules.services.business_validation_schema import require_business_rule_capability
+from modules.services.business_validation_catalog_service import business_validator_labels
 from modules.services.versioned_config_contracts import canonicalize_json, content_hash
 
 
@@ -201,6 +202,7 @@ class ReviewService:
             ),
             "review_revision": snapshot["revision"],
             "business_validation": report,
+            "business_validation_labels": business_validator_labels(),
         }
 
     def create_review_item(
@@ -383,6 +385,7 @@ class ReviewService:
         return {
             "review_revision": snapshot["revision"], "request_revision": request_revision,
             "business_validation": self._business_report(snapshot, values),
+            "business_validation_labels": business_validator_labels(),
             "schema_errors": self._schema_errors(snapshot, values),
         }
 

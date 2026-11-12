@@ -106,6 +106,7 @@ from .services.review_schema_version_service import (
     ReviewSchemaVersionService,
 )
 from .services.task_catalog_service import TaskCatalogService
+from .services.business_validation_catalog_service import business_validator_catalog
 from .services.workflow_state_service import WorkflowStateService
 from .services.user_service import UserService, UserServiceError
 from .services.versioned_admin_service import VersionedAdminService
@@ -1345,6 +1346,12 @@ def build_router() -> APIRouter:
         return {"summary": summary, "tasks": tasks}
 
     # Versioned review-schema administration
+
+    @router.get("/api/admin/business-validators")
+    def get_business_validator_catalog(user: str = Depends(get_current_user)) -> dict[str, Any]:
+        config, _, _, _, _ = get_dependencies()
+        require_admin_user(user, config)
+        return business_validator_catalog()
 
     @router.get("/api/admin/review-schemas")
     def list_versioned_review_schemas(

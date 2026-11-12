@@ -13,7 +13,7 @@ def test_conditional_enum_literals_match_supported_field_choices(alias: str) -> 
     result = _run_module('business-rules.js', f'''
         const draft = {{fields:{{status:{{type:'enum', {alias}:[{{label:'Approved', value:'approved'}}]}},
             po_number:{{type:'string'}}}}}};
-        const model = module.createBusinessRulesModel(()=>draft);
+        const model = module.createBusinessRulesModel(()=>draft, catalog);
         model.add('required_if:v1'); model.update(0,'when','/status');
         model.update(0,'required',['/po_number']); model.update(0,'equals','rejected');
         const rejected = model.findings();
@@ -40,10 +40,10 @@ def test_rule_authoring_preserves_fields_and_unrelated_metadata() -> None:
         const draft = {json.dumps(schema)};
         const original = JSON.stringify(draft.fields);
         draft.custom_note = 'keep this';
-        const model = module.createBusinessRulesModel(() => draft);
-        model.add('line_amount:v1');
+        const model = module.createBusinessRulesModel(() => draft, catalog);
+        model.add('line_amount:v1'); model.update(0, 'collection', '/items');
         for (const [prop, value] of Object.entries({{quantity:'/quantity',unit_price:'/unit_price',line_total:'/line_total'}})) model.update(0, prop, value);
-        model.add('sum_equals:v1');
+        model.add('sum_equals:v1'); model.update(1, 'collection', '/items');
         model.update(1, 'item_value', '/line_total');
         model.update(1, 'target', '/subtotal');
         model.update(1, 'severity', 'blocking');
@@ -53,7 +53,7 @@ def test_rule_authoring_preserves_fields_and_unrelated_metadata() -> None:
         const fieldsWereUnchanged = original === JSON.stringify(draft.fields);
         draft.fields.items.items.properties.quantity.label = 'Changed quantity';
         const saved = JSON.parse(JSON.stringify(draft));
-        const restored = module.createBusinessRulesModel(() => saved);
+        const restored = module.createBusinessRulesModel(() => saved, catalog);
         return {{draft, findings, restored:restored.rules(), ids:model.rules().map(rule=>rule.id),
             fieldsWereUnchanged}};
     """)
@@ -68,7 +68,7 @@ def test_rule_authoring_preserves_fields_and_unrelated_metadata() -> None:
 def test_broken_renamed_or_deleted_bindings_are_retained_and_flagged() -> None:
     result = _run_module("business-rules.js", f"""
         const draft = {json.dumps(invoice_review_schema())};
-        const model = module.createBusinessRulesModel(() => draft);
+        const model = module.createBusinessRulesModel(() => draft, catalog);
         delete draft.fields.items.items.properties.quantity;
         draft.fields.subtotal.type = 'string';
         return {{findings:model.findings(), rules:model.rules()}};
@@ -83,7 +83,7 @@ def test_broken_renamed_or_deleted_bindings_are_retained_and_flagged() -> None:
 def test_rule_deletion_type_switch_and_duplicate_ids() -> None:
     result = _run_module("business-rules.js", f"""
         const draft = {json.dumps(invoice_review_schema())};
-        const model = module.createBusinessRulesModel(() => draft);
+        const model = module.createBusinessRulesModel(() => draft, catalog);
         model.update(0, 'id', 'subtotal');
         const duplicates = model.findings();
         model.update(0, 'validator', 'sum_equals:v1');
@@ -100,10 +100,10 @@ def test_rule_deletion_type_switch_and_duplicate_ids() -> None:
 def test_no_rules_do_not_change_existing_forms_and_bad_sections_are_not_erased() -> None:
     result = _run_module("business-rules.js", """
         const legacy = {fields:{}};
-        const model = module.createBusinessRulesModel(() => legacy);
+        const model = module.createBusinessRulesModel(() => legacy, catalog);
         model.rules(); model.findings();
         const invalid = {fields:{},business_validation:{format_version:99,rules:[]}};
-        const bad = module.createBusinessRulesModel(() => invalid);
+        const bad = module.createBusinessRulesModel(() => invalid, catalog);
         let rejected=false; try {bad.add('line_amount:v1');} catch(error) {rejected=true;}
         return {legacy,invalid,rejected,findings:bad.findings(),unknown:model.add('toString')};
     """)
@@ -115,7 +115,7 @@ def test_no_rules_do_not_change_existing_forms_and_bad_sections_are_not_erased()
 def test_omitted_optional_defaults_match_backend_without_rewriting_on_load() -> None:
     result = _run_module("business-rules.js", """
         const draft={fields:{},business_validation:{}};
-        const model=module.createBusinessRulesModel(()=>draft);
+        const model=module.createBusinessRulesModel(()=>draft, catalog);
         const findings=model.findings();
         const before=JSON.stringify(draft);
         model.add('line_amount:v1');
@@ -130,7 +130,7 @@ def test_omitted_optional_defaults_match_backend_without_rewriting_on_load() -> 
 def test_date_and_conditional_rules_author_typed_values_and_survive_type_switches() -> None:
     result = _run_module('business-rules.js', '''
         const draft = {fields:{issued:{type:'date'},due:{type:'date'},has_po:{type:'boolean'},po_number:{type:'string'}}};
-        const model = module.createBusinessRulesModel(()=>draft);
+        const model = module.createBusinessRulesModel(()=>draft, catalog);
         model.add('date_order:v1');
         model.update(0,'earlier','/issued'); model.update(0,'later','/due');
         model.update(0,'allow_equal',false);
@@ -160,7 +160,7 @@ def test_rule_controls_escape_imported_values_and_expose_actionable_errors() -> 
     result = _run_module("business-rules.js", f"""
         global.document = {{activeElement:null}};
         const draft = {json.dumps(schema)};
-        const model = module.createBusinessRulesModel(() => draft);
+        const model = module.createBusinessRulesModel(() => draft, catalog);
         const element={{contains:()=>false,innerHTML:''}};
         module.renderBusinessRules(element, model, model.findings(), false);
         return element.innerHTML;
@@ -179,9 +179,9 @@ def test_nested_and_escaped_dropdown_paths_use_semantic_numeric_fields() -> None
             rows:{type:'array',items:{type:'object',properties:{
                 'unit/price':{type:'number'},description:{type:'string'}}}},
             sum:{type:'number'}}}}};
-        const model=module.createBusinessRulesModel(()=>draft);
-        const rule={collection:'/a~1b~0/rows'};
-        return {collections:model.choices(rule,'collection'), numbers:model.choices(rule,'unit_price'), target:model.choices(rule,'target')};
+        const model=module.createBusinessRulesModel(()=>draft, catalog);
+        const rule={validator:'line_amount:v1',collection:'/a~1b~0/rows'};
+        return {collections:model.choices(rule,'collection'), numbers:model.choices(rule,'unit_price'), target:model.choices({...rule,validator:'sum_equals:v1'},'target')};
     """)
     assert result["collections"][0]["value"] == "/a~1b~0/rows"
     assert result["numbers"] == [{"value": "/unit~1price", "label": "unit/price (/unit~1price)"}]

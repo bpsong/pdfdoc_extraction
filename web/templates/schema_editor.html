@@ -94,16 +94,26 @@
         </div>
         <section class="schema-business-validation" aria-labelledby="schema-business-title">
             <h3 id="schema-business-title">Business validation</h3>
-            <p class="text-sm text-base-content/60">Check each item amount or compare the sum of line amounts with an invoice subtotal.</p>
+            <p class="text-sm text-base-content/60">Choose reusable checks and bind them to fields in this form.</p>
             <p class="text-sm text-base-content/70">Published checks run at the review gate and before review completion.</p>
             <div class="business-rule-actions">
-                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="line_amount:v1" disabled>Add line amount check</button>
-                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="sum_equals:v1" disabled>Add subtotal check</button>
-                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="date_order:v1" disabled>Add date order check</button>
-                <button class="btn btn-outline btn-sm" type="button" data-add-business-rule="required_if:v1" disabled>Add conditional requirement</button>
+                <button class="btn btn-outline btn-sm" type="button" id="schema-add-business-rule" disabled>Add rule</button>
+                <button class="btn btn-outline btn-sm hidden" type="button" id="schema-retry-business-catalog">Retry rule catalog</button>
                 <button class="btn btn-ghost btn-sm" id="schema-remove-business-rules" type="button" disabled>Remove all rules</button>
             </div>
+            <p id="schema-business-catalog-status" role="status">Loading rule patterns…</p>
             <div id="schema-business-rules" tabindex="-1"></div>
+            <dialog class="modal" id="schema-business-picker" aria-labelledby="schema-business-picker-title">
+                <div class="modal-box">
+                    <h3 id="schema-business-picker-title" class="font-semibold">Choose a rule pattern</h3>
+                    <label class="form-control"><span class="label-text">Find a rule pattern</span>
+                        <input class="input input-bordered" id="schema-business-pattern-search" type="search" autocomplete="off" />
+                    </label>
+                    <div id="schema-business-pattern-list" class="business-pattern-list"></div>
+                    <form method="dialog" class="modal-action"><button class="btn" type="submit">Close</button></form>
+                </div>
+                <form method="dialog" class="modal-backdrop"><button type="submit" aria-label="Close rule picker">Close</button></form>
+            </dialog>
         </section>
     </section>
 
@@ -153,5 +163,5 @@
 
 {% block scripts %}
 <script src="/static/js/versioned_admin_view_models.js?v=1" defer></script>
-<script type="module" src="/static/js/schema-editor/index.js?v=r4-audit1"></script>
+<script type="module" src="/static/js/schema-editor/index.js?v=generic-rules-1"></script>
 {% endblock %}

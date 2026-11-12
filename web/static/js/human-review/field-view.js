@@ -1,6 +1,6 @@
 /** DOM rendering for scalar, object, and array review fields. */
 
-import { reviewPointer } from './validation.js?v=r4-phase5';
+import { reviewPointer } from './validation.js?v=generic-rules-1';
 
 export function createHumanReviewFieldView(state, elements, model, view, callbacks = {}) {
     const { escapeHtml, titleCase, defaultValueForField, getByPath, setByPath, pathString, formatValue, optionItems, encodedOptionValue, decodedOptionValue, numberStep, formatInputValue, scalarTextValue, fieldLabel, fieldHelpText, isComplete, canEditPath, isHighlighted, shouldShowSourceValue, fieldForPath, confidenceInfoForPath, parseInputValue, defaultObjectArrayRow } = model;

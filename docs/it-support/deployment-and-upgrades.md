@@ -64,12 +64,11 @@ name confirmation, stale-preview recovery, and success results. See the
 ## Business-rule runtime compatibility
 
 R4 adds gate/review-completion enforcement, operator findings, arithmetic,
-date-order, and conditional requirements without a database schema migration.
-Deploy the matching backend and registry. Human-review assets retain
-`r4-phase5`; schema-editor assets use `r4-audit1` for the conditional enum-choice
-fix. The shared `app.css` query is
-`r4-business-validation-5`. The rebuilt vendor CSS uses
-`tailwind-3.4.17-daisyui-4.12.10-r4-phase5` on the app and login pages. Rebuild committed CSS when
+date-order, conditional requirements, and numeric comparison without a database
+schema migration. Deploy the matching backend and registry. Human-review and
+schema-editor assets and the shared `app.css` query use `generic-rules-1`.
+The rebuilt vendor CSS uses
+`tailwind-3.4.17-daisyui-4.12.10-generic-rules-1` on the app and login pages. Rebuild committed CSS when
 preparing the release.
 
 Startup verifies that every published form's business rules have compatible
@@ -85,9 +84,14 @@ remove invalid historical versions. If preflight finds one, keep the previous
 release and backups until the maintainer has prepared a migration/recovery plan.
 Do not rewrite published rows or assume processing-data cleanup removes forms.
 An older release that understands format 2 but lacks a referenced date,
-conditional, or specialized validator also refuses that version. Keep reviewed
-validator code and frontend authoring adapters together in the release. There
-is no runtime plugin upload or module-path configuration.
+conditional, comparison, or specialized validator also refuses that version.
+Keep reviewed validator code, catalog metadata, and compatible generic frontend
+widgets together in the release. The generic catalog does not migrate existing
+forms or hashes. Once a published form references `compare_number:v1`, do not
+downgrade to a release without it. There is no runtime plugin upload or module-path
+configuration. After upgrade, verify that an administrator can load **Add rule**
+and that operators see neutral rule titles; operators cannot access the admin
+catalog. Catalog retries must retain existing drafts unchanged.
 
 Business-rule forms now publish with mandatory outer format 2, which older
 loaders reject. Existing format-1 rule forms remain available for inspection

@@ -16,7 +16,7 @@ from modules.services.review_schema_version_service import ReviewSchemaVersionSe
 from modules.services.startup_migration_service import initialize_database
 from test.helpers_business_validation import invoice_review_schema
 from test.helpers_sqlite import TempConfig, initialize_test_users
-from test.helpers_visual import running_visual_server
+from test.helpers_visual import add_business_rule, running_visual_server
 
 
 @pytest.fixture
@@ -82,7 +82,7 @@ def test_conditional_enum_choice_feedback_and_publication(
             page.get_by_role('button', name='Login', exact=True).click()
             page.wait_for_url('**/app/upload')
             page.goto(rules_app['url'] + '/app/schemas')
-            page.get_by_role('button', name='Add conditional requirement', exact=True).click()
+            add_business_rule(page, 'required_if:v1')
             page.get_by_label('Rule 1: Condition field', exact=True).select_option('/approval')
             page.get_by_label('Rule 1: Required fields', exact=True).select_option(['/subtotal'])
             equals = page.get_by_label('Rule 1: Equals value', exact=True)
@@ -127,13 +127,15 @@ def test_author_repair_publish_reload_and_mobile_rules(
             page.get_by_role("button", name="Login", exact=True).click()
             page.wait_for_url("**/app/upload")
             page.goto(f"{rules_app['url']}/app/schemas")
-            page.get_by_role("button", name="Add line amount check").click()
-            for label, field in (("Quantity field", "/quantity"), ("Unit price field", "/unit_price"),
-                                 ("Line total field", "/line_total")):
+            add_business_rule(page, 'line_amount:v1')
+            page.get_by_label('Rule 1: Repeating group', exact=True).select_option('/items')
+            for label, field in (("First value field", "/quantity"), ("Second value field", "/unit_price"),
+                                 ("Result field", "/line_total")):
                 page.get_by_label(f"Rule 1: {label}", exact=True).select_option(field)
-            page.get_by_role("button", name="Add subtotal check").click()
-            page.get_by_label("Rule 2: Line amount to sum", exact=True).select_option("/line_total")
-            page.get_by_label("Rule 2: Invoice subtotal field", exact=True).select_option("/subtotal")
+            add_business_rule(page, 'sum_equals:v1')
+            page.get_by_label('Rule 2: Repeating group', exact=True).select_option('/items')
+            page.get_by_label("Rule 2: Value to sum", exact=True).select_option("/line_total")
+            page.get_by_label("Rule 2: Target field", exact=True).select_option("/subtotal")
             page.get_by_label("Rule 2: Severity", exact=True).select_option("blocking")
             page.get_by_role("button", name="Move rule 2 up", exact=True).click()
             page.get_by_label("Rule 2: Enabled", exact=True).uncheck()
@@ -178,13 +180,13 @@ def test_author_repair_publish_reload_and_mobile_rules(
             key.evaluate("element => { for (let node=element.parentElement; node; node=node.parentElement) if(node.tagName==='DETAILS') node.open=true; }")
             key.fill("qty")
             key.press("Tab")
-            expect(page.get_by_label("Rule 2: Quantity field", exact=True)).to_have_attribute("aria-invalid", "true")
+            expect(page.get_by_label("Rule 2: First value field", exact=True)).to_have_attribute("aria-invalid", "true")
             renamed = page.locator('[data-field-path="items.qty"][data-field-prop="key"]')
             renamed.evaluate("element => { for (let node=element.parentElement; node; node=node.parentElement) if(node.tagName==='DETAILS') node.open=true; }")
             renamed.fill("quantity")
             renamed.press("Tab")
-            expect(page.get_by_label("Rule 2: Quantity field", exact=True)).not_to_have_attribute("aria-invalid", "true")
-            page.get_by_role("button", name="Add subtotal check").click()
+            expect(page.get_by_label("Rule 2: First value field", exact=True)).not_to_have_attribute("aria-invalid", "true")
+            add_business_rule(page, 'sum_equals:v1')
             page.get_by_role("button", name="Delete rule 3", exact=True).click()
             expect(page.locator(".business-rule-card")).to_have_count(2)
 

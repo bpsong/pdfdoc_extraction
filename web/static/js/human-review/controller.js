@@ -1,9 +1,9 @@
-import { createHumanReviewModel } from "./model.js?v=r4-phase5";
-import { createHumanReviewApi } from "./api.js?v=r4-phase5";
-import { createHumanReviewFieldView } from "./field-view.js?v=r4-phase5";
-import { createHumanReviewView } from "./view.js?v=r4-phase5";
-import { createReviewValidation } from './validation.js?v=r4-phase5';
-import { createReviewValidationView } from './validation-view.js?v=r4-phase5';
+import { createHumanReviewModel } from "./model.js?v=generic-rules-1";
+import { createHumanReviewApi } from "./api.js?v=generic-rules-1";
+import { createHumanReviewFieldView } from "./field-view.js?v=generic-rules-1";
+import { createHumanReviewView } from "./view.js?v=generic-rules-1";
+import { createReviewValidation } from './validation.js?v=generic-rules-1';
+import { createReviewValidationView } from './validation-view.js?v=generic-rules-1';
 
 (function () {
     "use strict";

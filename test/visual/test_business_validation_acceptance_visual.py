@@ -23,7 +23,7 @@ from test.helpers_business_validation_workflow import (
     create_invoice_workflow, offline_invoice_workflows, run_invoice_workflow,
 )
 from test.helpers_sqlite import TempConfig, initialize_test_users
-from test.helpers_visual import running_visual_server
+from test.helpers_visual import add_business_rule, running_visual_server
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ def test_four_rule_templates_correct_save_accept_resume_and_export(
             expect(summary).to_contain_text('1 passed')
             page.locator('#review-validation-details').evaluate('element => element.open = true')
             expect(page.locator('#review-validation-details')).to_contain_text('Date order')
-            expect(page.locator('#review-validation-details')).to_contain_text('Conditional requirement')
+            expect(page.locator('#review-validation-details')).to_contain_text('Require fields when a condition matches')
             page.screenshot(path=str(evidence / 'integrated-failures-desktop.png'))
             page.locator('#review-claim-button').click()
             page.locator('input[data-field-path="invoice_number"]').fill('INV-OK')
@@ -169,11 +169,11 @@ def test_author_date_and_typed_conditional_rules_publish_and_reopen(
             page.wait_for_url('**/app/upload')
             page.goto(app['base'] + '/app/schemas')
             expect(page.locator('.business-rule-card')).to_have_count(4)
-            page.get_by_role('button', name='Add date order check', exact=True).click()
+            add_business_rule(page, 'date_order:v1')
             page.get_by_label('Rule 5: Earlier date field', exact=True).select_option('/issued')
             page.get_by_label('Rule 5: Later date field', exact=True).select_option('/due')
             page.get_by_label('Rule 5: Allow same day', exact=True).uncheck()
-            page.get_by_role('button', name='Add conditional requirement', exact=True).click()
+            add_business_rule(page, 'required_if:v1')
             page.get_by_label('Rule 6: Condition field', exact=True).select_option('/has_po')
             page.get_by_label('Rule 6: Equals value', exact=True).select_option('true')
             page.get_by_label('Rule 6: Required fields', exact=True).select_option(['/po_number', '/invoice_number'])

@@ -1,5 +1,14 @@
 # R4: Dynamic business validation implementation plan
 
+The subsequent [generic rule-authoring delivery](design-generic-business-rule-authoring.md)
+adds a server-owned catalog, neutral reusable editor controls, and
+`compare_number:v1`. It preserves the four original validator identities and
+accepted-report contracts. Its checklist and verification record track that
+delivery separately from the historical phase records below.
+Its final verification passed 2,051 tests with four expected skips, Pyright with
+zero errors/warnings, and four new real-browser scenarios covering generic rules
+and forms without rules (including catalog unavailability).
+
 | Item | Value |
 | --- | --- |
 | Status | Complete — all five phases implemented and verified |

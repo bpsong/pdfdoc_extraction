@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
+| Last verified | 2026-11-11 — repository/source review; no live deployment check; comparison operands/scopes, publication/bindings, and synthetic regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 Routine form authoring belongs in the [Admin guide](../admin/managing-review-forms.md).
@@ -219,6 +219,58 @@ For choice objects, compare with `value`, falling back to `label` only when
 `value` is absent. Numeric `1` and `1.0` are equivalent here too; booleans remain
 distinct from numbers. A non-null constant outside the offered values is an
 error in the editor, publication, portable validation, and exact-version checks.
+
+The general numeric comparison pattern supports document or independent row
+checks without invoice-specific keys:
+
+```yaml
+business_validation:
+  format_version: 1
+  rules:
+    - id: delivered_within_order
+      validator: compare_number:v1
+      scope: rows
+      collection: /packages
+      left: {kind: field, scope: row, field: /delivered}
+      operator: lte
+      right: {kind: field, scope: row, field: /ordered}
+      severity: blocking
+    - id: coverage_limit
+      validator: compare_number:v1
+      scope: document
+      left: {kind: field, scope: document, field: /covered}
+      operator: lte
+      right: {kind: constant, value: "100000.00"}
+      severity: blocking
+```
+
+`compare_number:v1` requires `left`, `operator`, and `right`. Its `scope` is
+`document` (default) or `rows`. `left` must be a field operand. `right` is either a field operand
+or a finite decimal constant. A field operand contains exactly `kind: field`,
+`scope: document|row` (default document), and `field`. A constant contains
+`kind: constant` and `value`; it accepts a bounded numeric value or decimal string,
+never a boolean. Operand field bindings must be numeric. A document check forbids
+`collection` (including null) and row operands. A rows check requires an
+array-of-objects `collection`; either operand may reference document scope or
+the current row. There are no joins or cross-row references. Evidence uses
+absolute paths, including the row index.
+
+Operators are `eq`, `ne`, `lt`, `lte`, `gt`, and `gte`. Ordering compares exact
+Decimal values without quantization or rounding. Only `eq`/`ne` accept
+`tolerance`, a bounded nonnegative decimal defaulting to zero. Equality passes
+when the absolute difference is at most tolerance; inequality passes when it is
+greater. Ordering rejects an explicitly supplied tolerance, including null.
+There are no rounding/decimal-place options for comparisons. Missing, null,
+blank, malformed, or nonfinite inputs are inconclusive; an empty/invalid
+collection is inconclusive and an oversized collection produces a blocking
+error. Row checks remain independent when another row has invalid inputs.
+
+The editor obtains display metadata from the approved catalog; titles and widget
+defaults are not inserted into existing stored configurations merely by opening
+the editor. Existing identifiers `line_amount:v1`, `sum_equals:v1`,
+`date_order:v1`, and `required_if:v1` retain their keys and evaluation semantics.
+Their display titles describe reusable operations; this does not migrate hashes,
+rewrite old forms, or change accepted reports.
 
 Specialized validators use the reviewed, source-controlled
 [plugin contract](../developer/business-validation-plugins.md). Forms cannot

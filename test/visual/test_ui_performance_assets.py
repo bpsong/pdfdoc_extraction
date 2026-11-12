@@ -21,6 +21,9 @@ def test_failure_notifications_are_cached_between_page_navigations() -> None:
     assert "writeFailureNotificationCache(count)" in app_source
     assert "refreshFailureNotifications({ force: true })" in processing_source
     assert "app.js?v=review-status-vocabulary" in base_template
+    assert 'vendor.css?v=tailwind-3.4.17-daisyui-4.12.10-generic-rules-1' in base_template
+    login = (ROOT / 'web/templates/login.html').read_text(encoding='utf-8')
+    assert 'vendor.css?v=tailwind-3.4.17-daisyui-4.12.10-generic-rules-1' in login
 
 
 def test_admin_dashboard_renders_independent_requests_as_they_complete() -> None:
@@ -54,7 +57,7 @@ def test_named_schema_route_resolves_to_versioned_template_identity() -> None:
     assert "function initialSchemaName()" in source
     assert "schemaStem(rememberedName) === schemaStem(routeName)" in source
     assert "api.getTemplate(templateId)" in source
-    assert "schema-editor/index.js?v=r4-audit1" in template
+    assert "schema-editor/index.js?v=generic-rules-1" in template
 
 
 def test_processing_review_and_upload_feedback_surfaces_are_present() -> None:

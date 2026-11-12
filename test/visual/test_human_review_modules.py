@@ -135,9 +135,9 @@ def test_review_entry_uses_matching_asset_version_and_no_controller_transport() 
     entry = (MODULE_ROOT / "index.js").read_text(encoding="utf-8")
     controller = (MODULE_ROOT / "controller.js").read_text(encoding="utf-8")
     model = (MODULE_ROOT / "model.js").read_text(encoding="utf-8")
-    assert "human-review/index.js?v=r4-phase5" in template
-    assert 'import "./controller.js?v=r4-phase5"' in entry
-    assert controller.count("r4-phase5") == 6
+    assert "human-review/index.js?v=generic-rules-1" in template
+    assert 'import "./controller.js?v=generic-rules-1"' in entry
+    assert controller.count("generic-rules-1") == 6
     assert "window.DocFlow.apiGet" not in controller
     assert "window.DocFlow.apiPost" not in controller
     assert "window." not in model

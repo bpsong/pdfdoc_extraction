@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from modules.services.business_validation import BusinessValidationConfig, RequiredIfRule
 from modules.services.business_validation_registry import NUMBERS, get_validator
+from modules.services.business_validation_metadata import condition_matches, rule_value
 from modules.services.versioned_config_contracts import (
     BUSINESS_RULE_SCHEMA_FORMAT_VERSION, REVIEW_SCHEMA_FORMAT_VERSION,
     SUPPORTED_REVIEW_SCHEMA_FORMAT_VERSIONS,
@@ -49,6 +50,34 @@ def _resolve_field(root: Mapping[str, Any], pointer: str) -> Mapping[str, Any] |
     return current
 
 
+def _error_location(schema: Mapping[str, Any], location: tuple[Any, ...]) -> list[str]:
+    """Remove Pydantic union tags so findings address actual editor parameters."""
+    result = [str(part) for part in location]
+    section = schema.get('business_validation')
+    rules = section.get('rules') if isinstance(section, Mapping) else None
+    if (len(location) < 3 or location[0] != 'rules' or type(location[1]) is not int
+            or not isinstance(rules, (list, tuple)) or not 0 <= location[1] < len(rules)):
+        return result
+    rule = rules[location[1]]
+    identifier = rule.get('validator') if isinstance(rule, Mapping) else None
+    plugin = get_validator(identifier) if isinstance(identifier, str) else None
+    if plugin is None:
+        return result
+    definition = plugin.configuration.model_json_schema()
+    current = definition
+    result = result[:2]
+    for part in location[2:]:
+        if '$ref' in current:
+            current = definition.get('$defs', {}).get(current['$ref'].rsplit('/', 1)[-1], {})
+        mapping = current.get('discriminator', {}).get('mapping', {})
+        if part in mapping:
+            current = {'$ref': mapping[part]}
+            continue
+        result.append(str(part))
+        current = current.get('properties', {}).get(part, {})
+    return result
+
+
 def validate_business_validation_schema(schema: Mapping[str, Any]) -> list[dict[str, str]]:
     """Return safe findings for optional rules, including disabled rule bindings.
 
@@ -62,13 +91,11 @@ def validate_business_validation_schema(schema: Mapping[str, Any]) -> list[dict[
     except ValidationError as exc:
         findings = []
         for error in exc.errors(include_input=False, include_url=False, include_context=False):
-            location = [str(part) for part in error["loc"] if part not in {
-                "line_amount:v1", "sum_equals:v1",
-            }]
+            location = _error_location(schema, error['loc'])
             findings.append({
                 "path": ".".join(["business_validation", *location]),
                 "message": (
-                    "Select an available validator version."
+                    "Select a supported value for this parameter."
                     if error["type"] in {"union_tag_invalid", "union_tag_not_found"}
                     else error["msg"]
                 ),
@@ -84,7 +111,7 @@ def validate_business_validation_schema(schema: Mapping[str, Any]) -> list[dict[
             findings.append({'path': f'{prefix}.validator', 'message': 'Select an available validator version.'})
             continue
         items = None
-        if plugin.collection:
+        if plugin.collection and (plugin.collection_when is None or condition_matches(rule, plugin.collection_when)):
             collection = _resolve_field(root, getattr(rule, plugin.collection))
             items = collection.get('items') if collection else None
             if (not collection or collection.get('type') != 'array'
@@ -93,12 +120,15 @@ def validate_business_validation_schema(schema: Mapping[str, Any]) -> list[dict[
                                  'message': 'Select an existing array of objects for the item collection.'})
                 continue
         for binding in plugin.bindings:
-            scope = items if binding.scope == 'row' else root
+            if binding.when is not None and not condition_matches(rule, binding.when):
+                continue
+            binding_scope = rule_value(rule, binding.scope_field) if binding.scope_field else binding.scope
+            scope = items if binding_scope == 'row' else root
             if scope is None:
                 findings.append({'path': f'{prefix}.{binding.name}',
                                  'message': 'Select an existing field in the indicated scope.'})
                 continue
-            pointers = getattr(rule, binding.name)
+            pointers = rule_value(rule, binding.name)
             for number, pointer in enumerate(pointers if binding.many else (pointers,)):
                 field = _resolve_field(scope, pointer)
                 if not field or binding.types is not None and field.get('type', 'string') not in binding.types:

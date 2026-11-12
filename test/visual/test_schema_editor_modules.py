@@ -6,6 +6,7 @@ import json
 import subprocess
 from pathlib import Path
 from typing import Any
+from modules.services.business_validation_catalog_service import business_validator_catalog
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -15,6 +16,7 @@ MODULE_ROOT = ROOT / "web/static/js/schema-editor"
 def _run_module(module_name: str, expression: str) -> Any:
     module_path = (MODULE_ROOT / module_name).as_posix()
     script = f"""
+        const catalog = {json.dumps(business_validator_catalog())};
         const fs = require('node:fs');
         const source = fs.readFileSync({json.dumps(module_path)}, 'utf8');
         const url = 'data:text/javascript;base64,' + Buffer.from(source).toString('base64');
@@ -124,10 +126,10 @@ def test_schema_entry_loads_all_modules_with_matching_asset_version() -> None:
     template = (ROOT / "web/templates/schema_editor.html").read_text(encoding="utf-8")
     entry = (MODULE_ROOT / "index.js").read_text(encoding="utf-8")
     controller = (ROOT / "web/static/js/schema-editor/controller.js").read_text(encoding="utf-8")
-    assert "/static/js/schema-editor/index.js?v=r4-audit1" in template
-    assert 'import "./controller.js?v=r4-audit1"' in entry
-    assert controller.count("?v=r4-audit1") == 4
-    assert './business-rules.js?v=r4-audit1' in controller
+    assert "/static/js/schema-editor/index.js?v=generic-rules-1" in template
+    assert 'import "./controller.js?v=generic-rules-1"' in entry
+    assert controller.count("?v=generic-rules-1") == 4
+    assert './business-rules.js?v=generic-rules-1' in controller
     assert "fetch(" not in controller
     assert "window.DocFlow.apiGet(" not in controller
     assert "window.DocFlow.apiPost(" not in controller

@@ -5,7 +5,7 @@
 | Audience | Operators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-30 — repository/source review; no live deployment check; isolated synthetic tests; no live provider check |
+| Last verified | 2026-11-11 — repository/source review; no live deployment check; neutral findings, isolated desktop/mobile corrections/exports; no live provider check |
 | Applies to | Current application screens |
 
 Review compares the machine's extracted information with the source PDF and
@@ -73,21 +73,34 @@ items and avoid editing the same document in several tabs or computers.
 
 ### Check business relationships
 
+Forms without business rules use the normal review workflow and hide Business
+checks and Revalidate. Required fields and other field validation still apply;
+you can correct values, save a draft, and complete review as usual.
+
 Forms with configured rules show **Business checks** above the fields. Checks run
 when the form loads, including restored draft values. The summary distinguishes
 passed checks, failed checks, inputs that **Cannot evaluate**, evaluator errors,
 and disabled rules. Expand **Rules and findings** for each rule's outcome and use
 **Go to** to reach an affected field. Findings also appear beside scalar/nested
-fields and below the affected invoice row; row numbers start at 1.
+fields and below the affected repeating row; row numbers start at 1.
 For very large reports the first 100 findings are listed and annotated, with a
 notice showing the full count. Correct those values and revalidate to refresh
 the remaining findings. Summary counts always include the entire report.
 
-For amount checks, compare **Expected**, **Actual**, and **Difference** with the
-printed document. A line check compares quantity multiplied by unit price with
-the entered line amount. A subtotal check independently sums entered line amounts
-and compares them with the configured subtotal. Neither check changes values.
-Extraction confidence remains visible separately.
+Rule names describe reusable operations: **Compare numbers**, **Multiply two row
+fields**, **Sum rows against a field**, **Date order**, and **Require fields when
+a condition matches**. Follow the actual field labels and row references in the
+finding. For example, a shipping check may compare delivered and ordered counts,
+while an insurance check compares coverage and policy limit. Unknown display
+names fall back to the exact validator identifier.
+
+For numeric checks, compare **Expected**, **Actual**, and **Difference** with the
+printed document. Comparisons can use another field or a configured constant;
+ordering uses exact decimal values. Equality may allow a configured difference.
+Multiplication checks compare the product of two row values with a result field;
+sum checks independently total entered row values against a document field.
+Missing or invalid inputs show **Cannot evaluate**. No check supplies replacement
+values or converts units. Extraction confidence remains visible separately.
 
 Changing a value, adding a row, or removing a row marks the findings as needing
 revalidation and clears the old annotations. After correcting the values, select

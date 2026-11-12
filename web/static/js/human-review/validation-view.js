@@ -1,6 +1,6 @@
 /** Accessible business-check summary and annotations, independent of source mode. */
 
-import { pointerParts } from './validation.js?v=r4-phase5';
+import { pointerParts } from './validation.js?v=generic-rules-1';
 
 const OUTCOMES = {passed: 'Passed', failed: 'Check failed', not_evaluated: 'Cannot evaluate', error: 'Validation error', skipped: 'Skipped', disabled: 'Disabled', not_applicable: 'Not applicable'};
 const outcomeKey = (check) => check.status === 'skipped' ? check.code === 'disabled' ? 'disabled' : 'not_applicable' : check.status;
@@ -30,9 +30,7 @@ export function createReviewValidationView(elements, model, validation) {
     }
 
     function checkTitle(check) {
-        const name = check.validator === 'line_amount:v1' ? 'Line amount'
-            : check.validator === 'sum_equals:v1' ? 'Subtotal' : check.validator === 'date_order:v1' ? 'Date order'
-                : check.validator === 'required_if:v1' ? 'Conditional requirement' : 'Business check';
+        const name = validation.current().labels?.[check.validator] || check.validator || 'Business check';
         return `${name} (${check.rule_id})${check.row_index !== null && check.row_index !== undefined ? ` · Row ${check.row_index + 1}` : ''}`;
     }
 

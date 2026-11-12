@@ -1,7 +1,7 @@
-import { createSchemaModel, emptySchema } from "./model.js?v=r4-audit1";
-import { createSchemaEditorApi } from "./api.js?v=r4-audit1";
-import { createSchemaEditorView } from "./view.js?v=r4-audit1";
-import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.js?v=r4-audit1";
+import { createSchemaModel, emptySchema } from "./model.js?v=generic-rules-1";
+import { createSchemaEditorApi } from "./api.js?v=generic-rules-1";
+import { createSchemaEditorView } from "./view.js?v=generic-rules-1";
+import { createBusinessRulesModel, renderBusinessRules, renderBusinessRulePicker } from "./business-rules.js?v=generic-rules-1";
 
 (function () {
     "use strict";
@@ -23,6 +23,13 @@ import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.
     const fieldTree = document.getElementById("schema-field-tree");
     const businessRules = document.getElementById("schema-business-rules");
     const businessModel = createBusinessRulesModel(() => draft);
+    const businessPicker = document.getElementById('schema-business-picker');
+    const businessSearch = document.getElementById('schema-business-pattern-search');
+    const businessPatternList = document.getElementById('schema-business-pattern-list');
+    const addBusinessRuleButton = document.getElementById('schema-add-business-rule');
+    const retryBusinessCatalogButton = document.getElementById('schema-retry-business-catalog');
+    const businessCatalogStatus = document.getElementById('schema-business-catalog-status');
+    let catalogError = '';
     const fieldNavigation = document.getElementById("schema-field-navigation");
     const fieldOutline = document.getElementById("schema-field-outline");
     const fieldSearchInput = document.getElementById("schema-field-search");
@@ -180,6 +187,8 @@ import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.
             const localPath = path.slice(path.indexOf("business_validation"));
             const control = Array.from(businessRules.querySelectorAll("[data-rule-path]"))
                 .find((input) => input.dataset.rulePath === localPath);
+            const advanced = control?.closest('details');
+            if (advanced) advanced.open = true;
             (control || businessRules).scrollIntoView({behavior: "smooth", block: "center"});
             (control || businessRules).focus();
             return;
@@ -271,9 +280,11 @@ import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.
         renderValidationSummary();
         const editable = Boolean(currentId) && currentTemplate?.status !== "archived";
         renderBusinessRules(businessRules, businessModel, combinedFindings(), editable);
-        document.querySelectorAll("[data-add-business-rule]").forEach((button) => {
-            button.disabled = !editable || businessModel.rules().length >= 50;
-        });
+        addBusinessRuleButton.disabled = !editable || !businessModel.catalogReady() || businessModel.rules().length >= 50;
+        businessCatalogStatus.textContent = catalogError || (businessModel.catalogReady()
+            ? `${businessModel.definitions().length} reusable rule patterns available.` : 'Loading rule patterns…');
+        retryBusinessCatalogButton.classList.toggle('hidden', !catalogError);
+        renderBusinessRulePicker(businessPatternList, businessModel, businessSearch.value);
         document.getElementById("schema-remove-business-rules").disabled =
             !editable || !Object.hasOwn(draft, "business_validation");
     }
@@ -551,16 +562,37 @@ import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.
         });
     });
 
-    document.querySelectorAll("[data-add-business-rule]").forEach((button) => {
-        button.addEventListener("click", () => {
-            try {
-                if (!businessModel.add(button.dataset.addBusinessRule)) return;
-                markDirty();
-                businessRules.querySelector(`[data-rule-index="${businessModel.rules().length - 1}"][data-rule-prop="id"]`)?.focus();
-            } catch (error) {
-                setBox(errorBox, error.message);
-            }
-        });
+    async function loadBusinessCatalog() {
+        try {
+            catalogError = '';
+            retryBusinessCatalogButton.disabled = true;
+            businessModel.setCatalog(await api.businessValidatorCatalog());
+        } catch (_error) {
+            catalogError = 'Rule patterns could not be loaded. Existing configuration is retained. Retry the catalog.';
+        } finally {
+            retryBusinessCatalogButton.disabled = false;
+            render();
+        }
+    }
+    retryBusinessCatalogButton.addEventListener('click', loadBusinessCatalog);
+    addBusinessRuleButton.addEventListener('click', () => {
+        businessSearch.value = '';
+        renderBusinessRulePicker(businessPatternList, businessModel);
+        businessPicker.showModal();
+        businessSearch.focus();
+    });
+    businessSearch.addEventListener('input', () => renderBusinessRulePicker(businessPatternList, businessModel, businessSearch.value));
+    businessPatternList.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-add-business-rule]');
+        if (!button || button.disabled) return;
+        try {
+            if (!businessModel.add(button.dataset.addBusinessRule)) return;
+            businessPicker.close();
+            markDirty();
+            businessRules.querySelector(`[data-rule-index="${businessModel.rules().length - 1}"][data-rule-prop="validator"]`)?.focus();
+        } catch (error) {
+            setBox(errorBox, error.message);
+        }
     });
     document.getElementById("schema-remove-business-rules").addEventListener("click", () => {
         if (!window.confirm("Remove all business rules from this draft?")) return;
@@ -582,7 +614,8 @@ import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.
         const next = action === "delete" ? Math.min(index, businessModel.rules().length - 1)
             : index + (action === "up" ? -1 : 1);
         const focus = businessRules.querySelector(`[data-rule-index="${next}"][data-rule-prop="id"]`);
-        (focus || document.querySelector("[data-add-business-rule]")).focus();
+        if (focus?.closest('details')) focus.closest('details').open = true;
+        (focus || addBusinessRuleButton).focus();
     });
     function updateBusinessRule(event) {
         const input = event.target.closest("[data-rule-prop]");
@@ -753,5 +786,6 @@ import { createBusinessRulesModel, renderBusinessRules } from "./business-rules.
         }
     });
 
+    loadBusinessCatalog();
     loadSchemas().catch((error) => setBox(errorBox, error.message));
 })();

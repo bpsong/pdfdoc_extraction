@@ -8,6 +8,13 @@ import socket
 import subprocess
 import time
 from typing import Iterator, Mapping
+from playwright.sync_api import Page
+
+
+def add_business_rule(page: Page, identifier: str) -> None:
+    """Choose an approved pattern through the visible catalog picker."""
+    page.get_by_role('button', name='Add rule', exact=True).click()
+    page.locator(f'[data-add-business-rule="{identifier}"]').click()
 
 
 def _stop_process(process: subprocess.Popen[bytes]) -> None:

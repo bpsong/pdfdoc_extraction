@@ -35,7 +35,7 @@ export function createReviewValidation(state, model, onChange = () => {}) {
         const enabled = Boolean(payload.schema?.business_validation || payload.business_validation);
         const accepted = Boolean(model.isComplete());
         const report = payload.business_validation;
-        result = {enabled, phase: enabled ? 'current' : 'none', report: null,
+        result = {enabled, phase: enabled ? 'current' : 'none', report: null, labels: payload.business_validation_labels || {},
             schemaErrors: [], pending: false, accepted, conflict: false, message: ''};
         if (enabled) {
             if (matches(report, state.reviewRevision, accepted)) result.report = report;
@@ -76,6 +76,7 @@ export function createReviewValidation(state, model, onChange = () => {}) {
                 message: 'The check response does not match the current review. Revalidate or reload.'};
         } else {
             result = {...result, phase: 'current', pending: false, report: payload.business_validation,
+                labels: payload.business_validation_labels || result.labels || {},
                 schemaErrors: payload.schema_errors || [], message: ''};
         }
         onChange();

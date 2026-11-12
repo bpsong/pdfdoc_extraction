@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
+| Last verified | 2026-11-11 — repository/source review; no live deployment check; generic authoring, isolated desktop/mobile workflows, and synthetic gate/exports |
 | Applies to | Current application screens |
 
 A review form controls what operators see, correct and confirm after extraction.
@@ -86,6 +86,11 @@ toolbar, add a field and change its **Type** list.
 
 ### Configure business rules
 
+Business rules are optional. A form with no rules still supports normal field
+validation, claims, corrections, saved drafts, completion, and downstream outputs.
+It shows no Business checks panel to operators. A catalog loading failure does
+not prevent publishing a form that has no business-validation section.
+
 The **Business validation** section below the fields stores multiple checks
 with the form. Published checks run at the review gate and before completion.
 Existing required/type/range checks still apply. Operators see the independent
@@ -94,26 +99,39 @@ and can use **Revalidate** to check current unsaved edits. Changed values or row
 mark old findings stale. Draft saving remains possible with findings; completion
 independently checks the actual submitted values and enforces blocking policy.
 
-1. Create an **Array** with **Object** items and numeric quantity, unit-price,
-   and line-total child fields. Add a numeric invoice subtotal field.
-2. Select **Add line amount check**. Choose the item collection and its quantity,
-   unit-price, and line-total fields.
-3. Select **Add subtotal check**. Choose the same collection, its line amount to
-   sum, and the invoice subtotal **before discount and tax**.
-4. Give each rule a unique ID. Set **Allowed difference** (default `0.01`),
-   **Decimal places**, **Rounding**, **Severity**, **Enabled**, and the warning's
-   review requirement. A blocking finding always requires review and prevents
-   completion until resolved. An optional mismatch message is plain text.
+1. Define the fields the rule will check. A repeated table needs an **Array**
+   with **Object** items. Use numeric fields for amounts, counts, and measurements.
+2. Select **Add rule**, search the approved patterns, and select one. The picker
+   explains missing prerequisites. Select fields explicitly; adding a rule does
+   not silently choose the first repeating group.
+3. Configure the operation using the table below. Field lists show your form's
+   labels and paths, so the same patterns work for shipping, insurance, invoices,
+   or other document types with compatible fields.
+4. Set **Severity**, **Enabled**, and **Require review on warning**. A blocking
+   finding always requires review and prevents completion until resolved. Under
+   **Advanced settings**, set a unique rule ID and optional plain-text mismatch
+   message. Calculation patterns also offer allowed difference and rounding.
 5. Use **Move up/down** to change display order, or **Delete** to remove a rule.
    Disabling a rule keeps its configuration; its field bindings must remain valid.
-6. Save, validate, and publish through the normal draft/version workflow.
+6. Save, validate, and publish through the normal draft/version workflow. Bind
+   that exact form version in a published pipeline before processing documents.
 
-Use **Add date order check** to select an earlier and later `date` field, such
-as invoice date and due date. **Allow same day** controls whether equality is
-valid. Extract dates as `YYYY-MM-DD`; the rule does not interpret local formats.
+| Pattern | Configure and example |
+| --- | --- |
+| **Compare numbers** | Choose **Apply to** document or rows, the left numeric field, operator, and a right field or constant. For rows, select the repeating group; each field operand explicitly selects document or current-row scope. Example: each package's delivered count must be less than or equal to its ordered count. |
+| **Multiply two row fields** | Select a repeating group, **First value field**, **Second value field**, and **Result field**. Example: package count × weight each = row weight; invoice quantity × unit price = line amount. |
+| **Sum rows against a field** | Select a repeating group, **Value to sum**, and document **Target field**. Example: row weights = shipment total weight; invoice line amounts = subtotal before discount and tax. |
+| **Date order** | Select earlier and later `date` fields, such as policy effective/expiry dates. **Allow same day** controls equality. Values must use `YYYY-MM-DD`. |
+| **Require fields when a condition matches** | Select a typed condition and required document fields. Example: a hazardous shipment requires a UN number; a policy with an endorsement requires its reference. |
 
-Use **Add conditional requirement** when other fields become mandatory under a
-condition. Choose the scalar **Condition field**, its **Condition value type**
+Numeric ordering (`<`, `≤`, `>`, `≥`) compares exact decimal values without
+rounding. Equality/inequality offer **Allowed difference**, default `0`; equality
+includes the boundary and inequality requires a difference beyond it. This
+comparison pattern does not convert units/currencies or calculate replacements.
+Missing, blank, or invalid inputs cannot count as a pass. Multiplication and sum
+patterns retain their separate rounding settings and default `0.01` tolerance.
+
+For a conditional requirement, choose the scalar **Condition field**, its **Condition value type**
 and **Equals value**, then select one or more **Required fields** (Ctrl/Cmd-click
 for multiple selections). For example, `has_purchase_order` equals Boolean
 True requires `purchase_order_number`. Boolean false and numeric zero count
@@ -127,8 +145,13 @@ label. If the definition supplies a label without a separate value, that label
 is the saved value. The editor flags values outside the offered choices before
 saving or publishing. Portable definitions may use either `choices` or `enum`.
 
+If the catalog cannot load, existing rule JSON stays intact and **Add rule** is
+disabled. Use **Retry rule catalog**; retrying does not save or rewrite the draft.
+Unavailable validator versions remain visible for diagnosis. Ask a maintainer
+to restore the implementation before editing or publishing that configuration.
+
 For specialized checks, ask a maintainer to add an approved, versioned validator
-and its editor controls through the
+and its supported control metadata through the
 [developer extension process](../developer/business-validation-plugins.md).
 
 Changing a field label preserves its bindings. Renaming/deleting a key or

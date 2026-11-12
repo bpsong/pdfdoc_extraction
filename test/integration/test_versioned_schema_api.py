@@ -26,6 +26,18 @@ def _admin_client(tmp_path, monkeypatch):
     return client, config
 
 
+def test_business_validator_catalog_requires_admin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    client, _ = _admin_client(tmp_path, monkeypatch)
+    response = client.get('/api/admin/business-validators')
+    assert response.status_code == 200
+    assert response.json()['catalog_version'] == 1
+    assert len(response.json()['validators']) == 5
+    cast(FastAPI, client.app).dependency_overrides[api_router.get_current_user] = lambda: 'operator'
+    assert client.get('/api/admin/business-validators').status_code == 403
+    cast(FastAPI, client.app).dependency_overrides.clear()
+    assert client.get('/api/admin/business-validators').status_code == 401
+
+
 def test_business_rules_round_trip_and_publication_rejects_invalid_binding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

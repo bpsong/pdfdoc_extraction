@@ -24,6 +24,7 @@ export function createSchemaEditorApi(docFlow, fetchImpl = globalThis.fetch) {
     }
 
     return {
+        businessValidatorCatalog: () => docFlow.apiGet('/api/admin/business-validators'),
         listTemplates: () => docFlow.apiGet(`${base}?include_archived=true`),
         getTemplate: (id) => docFlow.apiGet(templateUrl(id)),
         createTemplate: (key, name, schema) => docFlow.apiPost(base, {
