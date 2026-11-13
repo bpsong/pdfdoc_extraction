@@ -5,14 +5,14 @@
 | Audience | IT support and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 | Item | Value |
 | --- | --- |
 | Purpose | Operator troubleshooting for the `tools.config_check` CLI |
 | Verified against | `config-check` 0.1.0 |
-| Last verified | 2026-09-27 |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Maintainer | Config-check maintainers; refresh when CLI options or finding behavior changes |
 
 This guide helps identify the validation mode, interpret findings, and choose a
@@ -40,13 +40,11 @@ than matching prose.
 - **Stored draft/version:** `validate --pipeline KEY --draft` or
   `validate --review-schema KEY --version N` selects one stored object. These
   commands need a configured database and never publish or mutate it.
-- **Portable file:** `validate-file` checks a standalone runtime or review
-  schema file. The current CLI accepts `--kind pipeline`, but its pipeline
-  validator expects a `pipeline-bundle` wrapper and returns an error. Do not
-  rely on that path for pipeline bundles; validate through the admin draft
-  validation flow or select the stored draft after import.
+- **Portable file:** `validate-file` checks a standalone runtime, review schema,
+  or exported pipeline bundle. Use `--kind pipeline` for file content whose
+  serialized `kind` is `pipeline-bundle`. These names serve different contracts.
 
-The exhaustive finding catalog is maintained in
+The curated core finding catalog is maintained in
 [`ERROR_CODES.md`](../../tools/config_check/examples/ERROR_CODES.md). In JSON,
 `code`, `severity`, `path`, and `message` are authoritative; this guide lists
 common codes for navigation rather than duplicating the catalog.
@@ -125,13 +123,14 @@ resolved value.
 ## Portable Definition Findings
 
 Portable files are not active configuration: import updates a draft only, and
-an explicit publish is still required. The current `validate-file --kind
-pipeline` path fails because the command passes `pipeline` to a validator that
-requires `pipeline-bundle`, while the CLI does not accept `pipeline-bundle` for
-`validate-file`. For now, validate a pipeline in its admin draft before
-publishing. `validate-file --kind review-schema` remains available. Stable keys
-and version metadata are portable; database UUIDs and resolved secret values
-are not.
+an explicit publish is still required. Validate an app-generated export with
+`validate-file --file pipeline.json --kind pipeline`. The file must contain the
+`pipeline-bundle` wrapper, not just `tasks` and `pipeline`. Offline validation
+requires embedded review-schema definitions with matching hashes; unresolved
+coordinates fail. Alternatively supply `--config` for a read-only database lookup
+of the exact key/version/hash. No import, migration or publication occurs.
+Stable keys and version metadata are portable; local database UUIDs and resolved
+secret values are not. `--kind review-schema` checks a form file separately.
 
 ## Missing Directories Or Files
 
@@ -749,9 +748,12 @@ failure handling and diagnostic citation behavior.
 ```
 
 **Fixes**
-- Ensure at least one extraction task runs before any storage or archive steps, so tokens resolve correctly.
+- Put extraction before metadata storage and any output whose filename needs
+  extracted values. Archive PDF can precede extraction/splitting when preserving
+  the complete incoming bundle; it does not use extracted filename tokens.
 - Schedule a metadata-producing extraction task, such as `extract_document_data`, ahead of metadata storage tasks that expect extraction field metadata.
-- Insert a context initializer task (for example `standard_step.context.generate_ids`) before referencing `{nanoid}` or other context-scoped tokens.
+- Insert `standard_step.context.assign_nanoid.AssignNanoidTask` before referencing
+  `{nanoid}`. Existing workflow identity tokens such as `{id}` do not need it.
 - Expose table columns that need to appear in filenames as scalar extraction fields, or adjust the filename template to avoid table tokens.
 - Create the missing extraction field (preferably scalar) or remove the unknown placeholder if the value is not needed.
 

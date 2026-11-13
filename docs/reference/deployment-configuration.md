@@ -5,13 +5,14 @@
 | Audience | IT support and developers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 This reference describes deployment infrastructure. Pipeline and review-form
 definitions are separate SQLite-backed objects. Runtime YAML is selected by
-`--config-path`, `CONFIG_PATH`, then repository-root `config.yaml`; relative
-paths resolve beside the selected file. YAML changes need coordinated restart.
+`--config-path`, `CONFIG_PATH`, then repository-root `config.yaml`.
+YAML changes need coordinated restart. See [path resolution](#path-resolution)
+before placing the YAML outside the repository.
 
 ## High-level Structure
 
@@ -24,7 +25,7 @@ logging:
 
 watch_folder:
   dir: "watch_folder"                 # Startup-compatibility path (must pre-exist; not a pipeline binding)
-  validate_pdf_header: true           # Validate %PDF header before processing
+  validate_pdf_header: true           # Legacy switch; primary intake always checks %PDF-
   processing_dir: "processing"        # Folder where files are moved with UUID name (auto-created if missing)
 
 web:
@@ -76,7 +77,8 @@ review:
   gates.
 - Task output directories are owned by the exact pipeline version's parameters,
   such as `data_dir`, `files_dir`, `archive_dir`, and `split_dir`. Standard
-  tasks create these when they execute. `watch_folder.processing_dir` remains a
+  storage/split/archive execution creates destinations when needed if permitted.
+  `watch_folder.processing_dir` remains a
   deployment setting shared across workflows.
 
 For normal browser use, where users open the web application directly from the same FastAPI server, keep `web.cors_allowed_origins` as an empty list:
@@ -135,8 +137,10 @@ Created automatically when needed:
 - Any deployment `config.yaml` key that ends with `_dir` — the ConfigManager
   attempts to create it. This startup scan does not read task parameters from
   SQLite pipeline versions.
-- Standard storage, split, and archive tasks create their configured output
-  directories when they execute. The application account still needs permission
+- Standard storage and split tasks create their configured output
+  directories when needed at execution. Archive execution also creates its
+  destination through the shared reservation helper, although its standalone
+  validation hook requires an existing directory. The application account needs permission
   to create and write them; create them in advance when the parent directory is
   controlled or when early permission verification is required.
 
@@ -148,7 +152,8 @@ Summary table:
 | SQLite watch-folder binding path | Actual incoming folder for one exact pipeline version | Administrator creates the folder first; binding rejects missing, duplicate, or nested paths |
 | `web.upload_dir` | Web upload staging directory | Must pre-exist; startup fails if missing |
 | `watch_folder.processing_dir` | Files moved here prior to processing (UUID names) | Auto-created at startup if missing |
-| Pipeline task `files_dir`, `data_dir`, `split_dir`, or `archive_dir` | Durable or intermediate task output | Stored in the immutable pipeline version; standard task creates it at execution when permitted |
+| Pipeline task `files_dir`, `data_dir`, or `split_dir` | Durable or intermediate task output | Stored in the immutable pipeline version; task creates it at execution when permitted |
+| Pipeline task `archive_dir` | Archived copy of the current PDF | Normal execution creates it when permitted; the standalone validation hook requires it to exist |
 | Pipeline task `reference_file` | Existing reference file used by a rule task | Create and permission-test before publishing/processing |
 
 Notes and recommendations:
@@ -157,12 +162,11 @@ Notes and recommendations:
   and exits. A standard task that cannot create its SQLite-configured output
   directory fails that task at runtime. Pre-create important destinations and
   verify permissions to catch either condition early.
-- To pre-create directories on Windows, use File Explorer or a Command Prompt:
+- To pre-create directories from the repository root in PowerShell:
+```powershell
+New-Item -ItemType Directory -Force -Path watch_folder, processing, web_upload, files, data, archive_folder
 ```
-mkdir watch_folder processing web_upload files data archive_folder
-```
-- Relative deployment paths resolve beside `config.yaml`, independent of the
-  service's working directory. Absolute paths are also supported.
+- Use the path rules below when choosing relative or absolute paths.
 - Restart the supervisor, web, and worker together after editing deployment
   YAML. Each process holds its own configuration snapshot; editing one process's
   in-memory settings does not synchronize the others. Operational settings
@@ -173,6 +177,24 @@ For a bound watch folder, **Test access** confirms that the directory exists
 and can be listed; it does not prove that the application can move or delete a
 file. Test with a representative PDF before enabling production intake.
 
+
+## Path resolution
+
+`ConfigManager` validates paths relative to the YAML directory and expands
+environment variables and `~`, but returns the original strings to consumers.
+Database and schema lookup use the shared resolver; logging resolves relative
+paths beside the YAML. Binding administration also normalizes relative incoming
+folder paths beside the YAML and stores absolute paths. Upload staging/locks,
+processing paths, `FileProcessor`, and task file operations commonly use
+`Path(...)` or `os` directly, so their relative
+paths resolve from the process working directory. Task parameters are not
+rebased to the YAML directory. Shared expansion is not applied by every consumer.
+
+Run from the repository root as required; supervised children also start there.
+When the YAML is elsewhere, use explicit absolute paths for watch/upload roots,
+the processing directory, and task output/reference destinations. Otherwise
+startup validation can inspect a different folder from the one used at runtime.
+The checker's `--base-dir` changes validation only, not runtime resolution.
 
 ## Credentials and validation
 

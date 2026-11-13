@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Current application screens |
 
 A task is one processing operation. This guide covers every currently approved
@@ -95,9 +95,10 @@ confirmed split sends each child PDF through the following tasks; the parent
 records the split outcome. One-page PDFs continue automatically. Test both
 no-split and split cases, including which child PDFs and exports appear.
 
-The split folder stores working child PDFs. If they must remain available as
-business records, configure appropriate PDF output/archive steps and confirm
-the resulting files with IT. Do not equate a working directory with a backup.
+The split folder stores registered child PDFs that normal working-file cleanup
+preserves. Configure PDF output/archive steps when you need additional copies
+or business filenames, and confirm retained paths/backups with IT. A split folder
+is not a backup.
 
 ### Llama Cloud Split
 
@@ -170,8 +171,9 @@ for your documents. JSON retains grouped values and repeated objects and is
 often a better fit for a system expecting that structure. Neither task validates
 the receiver's business rules or calculates missing amounts.
 
-**Use nested storage overrides** and **CSV extraction-field override** support
-advanced/older definitions. They are not prerequisites for basic export. Do
+The CSV controls **Use nested storage overrides** and **CSV extraction-field
+override** support advanced/older definitions. JSON uses its ordinary destination
+and filename settings. These controls are not prerequisites for basic export. Do
 not turn them on just to fix a wrong key in extraction or review.
 
 ### Copy a PDF with a meaningful filename
@@ -196,8 +198,8 @@ same generated value appears in the PDF and data filenames if they should pair.
 
 ### Archive the source PDF
 
-Add **Archive Pdf** and set **Archive directory** to an existing approved
-folder. It copies the PDF being processed at that step with a safe, unique name
+Add **Archive Pdf** and set **Archive directory** to an approved writable
+folder. Arrange for IT to create and permission-test it before routine use. It copies the PDF being processed at that step with a safe, unique name
 and leaves the source file in place. After a split, that is the child PDF; it
 does not automatically go back and archive the original bundle. Put Archive Pdf
 before splitting if you need a copy of the whole incoming bundle, and verify

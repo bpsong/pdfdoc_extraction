@@ -5,13 +5,16 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Select the intended deployment
 
 Runtime YAML is selected by `--config-path`, then `CONFIG_PATH`, then the
-repository-root `config.yaml`. Resolve relative paths beside that file. Confirm
+repository-root `config.yaml`. Startup validation resolves relative paths beside
+that file, but intake/task consumers can use the working directory. Use absolute
+intake, upload, processing and task paths for YAML outside the repository; see
+[path resolution](../reference/deployment-configuration.md#path-resolution). Confirm
 the actual database, log, upload and processing paths before making changes.
 YAML edits require coordinated parent/web/worker restart. SQLite-backed app
 settings and publication have separate behaviour.

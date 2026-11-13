@@ -1,69 +1,19 @@
-"""
-Main entry point for the PDF Processing Application.
+r"""Supervise the local PDF-processing runtime.
 
-This module handles:
-- Command-line argument parsing for configuration and server options.
-- Configuration loading and validation via ConfigManager.
-- Logging setup based on configuration.
-- Initialization of core components: ShutdownManager, WatchFolderCoordinator, WorkflowManager, FileProcessor.
-- Starting the web server (Uvicorn) as a subprocess with configured host, port, and reload options.
-- Starting the watch folder monitor to process incoming files.
-- Graceful shutdown handling on keyboard interrupt, including stopping the monitor and terminating the web server.
-- Invoking ShutdownManager shutdown and exiting cleanly.
+Resolve deployment YAML, run parent-owned startup migration/checks, and start the
+web and durable worker subprocesses plus the watch-folder coordinator thread.
+Watch-folder intake enqueues assigned SQLite jobs; the worker runs queued root
+flows. Unexpected component exit stops the remaining runtime and exits nonzero.
+Role-specific logs and run-scoped heartbeats support diagnosis.
 
-Usage:
-    python main.py [--config-path PATH] [--no-web]
+From the repository root in PowerShell::
 
-Arguments:
-    --config-path: Optional path to a custom configuration YAML file.
-    --no-web: Flag to disable starting the web server.
+    .\.venv\Scripts\python.exe main.py [--config-path PATH] [--no-web]
 
-Notes:
- - Logging is configured with console and rotating file handlers.
- - The watch folder monitor uses a callback to process files via FileProcessor.
- - The web server runs asynchronously in a subprocess.
- - The main thread supervises the web server and handles shutdown signals.
-
-Example configuration:
-web:
-  host: "127.0.0.1"
-  port: 8000
-  secret_key: "your_secret_key"
-  upload_dir: "web_upload"
-
-watch_folder:
-  dir: "watch_folder"
-  validate_pdf_header: true
-  processing_dir: "processing"
-
-authentication:
-  username: "admin"
-  password_hash: "$2b$12$example_hash_for_secure_password"
-
-logging:
-  log_file: "app.log"
-  log_level: "INFO"
-  
-
-tasks:
-  extract_document_data:
-    module: standard_step.extraction.extract_pdf
-    class: ExtractPdfTask
-    params:
-      api_key: "your_llama_cloud_api_key"
-      configuration_id: "your_extract_v2_configuration_id"
-      fields:
-        supplier_name:
-          alias: "Supplier name"
-          type: "str"
-        invoice_amount:
-          alias: "Invoice Amount"
-          type: "float"
-    on_error: stop
-
-pipeline:
-  - extract_document_data
-"""
+Configuration is selected by --config-path, CONFIG_PATH, then repository-root
+config.yaml. Pipelines and review forms are published SQLite versions; deployment
+YAML owns infrastructure and secret aliases. See docs/it-support/ for setup,
+account provisioning, path rules, startup and bounded shutdown behavior."""
 import argparse
 import os
 import logging

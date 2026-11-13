@@ -1,21 +1,11 @@
-"""
-Write extracted metadata to CSV with row-per-item expansion for table fields.
+"""Export workflow data as CSV with one expanded table.
 
-This implements the canonical CSV storage task with array-of-objects support.
-It supports:
-- Backwards-compatible scalar-only behavior (single-row CSV).
-- Table-field expansion: when a field is marked is_table: true in extraction
-  configuration, it will create one CSV row per item in that table, repeating
-  top-level scalar fields and prefixing item columns with 'item_'.
-- Aliases from extraction config are used for CSV headers where available.
-
-Behavior:
-- Reads configuration (data_dir, filename template) from ConfigManager.
-- Registers the generated CSV as an ``export_csv`` document artifact when
-  SQLite document context is available.
-- Cleans strings for CSV (newlines -> spaces).
-- Ensures unique filenames by appending _1, _2, ... if necessary.
-"""
+Constructor parameters own data_dir/filename, optional nested storage overrides,
+and optional extraction.fields aliases. A marked table takes precedence;
+otherwise the first nonempty list of objects is expanded. Other document values
+repeat per row and item columns use item_. Missing tables produce a single row.
+Output paths are reserved uniquely and registered as export_csv artifacts.
+Deployment YAML/extraction tasks do not supply this task's alias mapping."""
 
 from __future__ import annotations
 
@@ -38,22 +28,10 @@ from modules.utils import (
 )
 
 class StoreMetadataAsCsv(BaseTask):
-    """
-    Task to store extraction metadata as CSV.
-
-    Expects context["data"] to be a dict keyed by workflow field names. Table
-    fields (arrays of objects) are expanded when the extraction configuration
-    marks them with is_table: true.
-    """
+    """Write context.data as CSV with task-specific aliases and table detection."""
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
-        """
-        Initialize task and read configuration.
-
-        Args:
-            config_manager: ConfigManager singleton instance.
-            **params: Task parameters provided by workflow loader.
-        """
+        """Capture task-owned storage settings and optional extraction-field aliases."""
         super().__init__(config_manager=config_manager, **params)
         logging.getLogger(__name__)  # ensure logging config has been applied
         self.logger = logging.getLogger(__name__)
@@ -109,12 +87,11 @@ class StoreMetadataAsCsv(BaseTask):
         context: Dict[str, Any],
         extraction_fields: Optional[Dict[str, Any]] = None,
     ) -> Optional[str]:
-        """
-        Detect the table field key from extraction_fields config.
+        """Find an explicitly marked table or the first nonempty list of objects.
 
-        Returns:
-            Field key in context["data"] marked as is_table: true, or None if none found.
-        """
+        Task-specific extraction metadata takes precedence. Without a marked table,
+        inspect context.data in iteration order. Empty lists alone do not identify a
+        table, and only one table is expanded."""
         # extraction_fields is expected to map workflow field keys to metadata
         # dicts. Default to the instance mapping for compatibility with callers
         # that use this helper directly.

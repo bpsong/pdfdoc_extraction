@@ -1,7 +1,11 @@
-"""Initialize the fixed admin and operator users in SQLite.
+r"""Provision or reset the fixed admin/operator users in SQLite.
 
-Run with: C:\\Python313\\python.exe tools\\setup_users.py --config config.yaml
-"""
+From the repository root in PowerShell:
+    .\.venv\Scripts\python.exe tools\setup_users.py --config config.yaml
+
+Interactive prompts enforce the application password policy. --legacy-config
+imports an existing administrator hash; --reset replaces both fixed accounts.
+Use Admin Users for routine password changes. See docs/it-support/account-recovery.md."""
 
 from __future__ import annotations
 

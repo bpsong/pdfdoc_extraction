@@ -5,7 +5,7 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Persistence and artifacts
@@ -17,9 +17,10 @@ and services coordinate cross-table invariants.
 | Domain | SQLite tables |
 | --- | --- |
 | Identity | `users` |
-| Processing | `batches`, `documents`, `task_runs` |
+| Processing | `batches`, `documents`, `task_runs`, `processing_jobs` |
+| Upload receipts | `upload_submissions` |
 | Extraction | `extraction_results`, `extracted_fields` |
-| Review | `review_items`, `review_locks` |
+| Review | `review_items`, `review_locks`, `manual_split_decisions` |
 | Artifacts | `document_files` |
 | Governance | `audit_events`, `app_settings`, `config_versions`, `pipeline_cleanup_previews` |
 | Versioned pipelines | `pipeline_templates`, `pipeline_drafts`, `pipeline_versions`, `pipeline_version_schema_dependencies` |
@@ -128,6 +129,10 @@ Registration is currently best-effort, so an unregistered successful file
 operation remains a traceability risk. Database exceptions during registration
 produce a warning containing only the document identifier, artifact role, and
 exception type; the primary file-operation result remains unchanged.
+Callers supplying a transaction connection use strict registration instead.
+Task cleanup checks registrations for the current document only, and cannot
+preserve them if the lookup fails; context paths are not confined by
+`processing_dir`. See the [cleanup contract](../reference/tasks/rules-context-housekeeping.md#housekeepingcleanup).
 
 SQLite and local filesystem coupling suit a local or modest-volume
 installation. They do not provide a horizontally scaled worker architecture.

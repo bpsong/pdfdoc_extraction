@@ -5,7 +5,7 @@
 | Audience | All documentation readers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 | Term | Meaning |
@@ -24,7 +24,10 @@
 | Watch-folder binding | Saved incoming-folder assignment to an exact pipeline version |
 | Artifact | A retained source, split PDF, archive or export recorded for a document |
 | Claim | Temporary ownership of an item being reviewed |
-| Cleanup | Removal of eligible processing history; physical files are retained |
+| Processing-history cleanup | Admin removal of eligible finished history; physical files are retained |
+| Working-file cleanup | Internal task removal of transient files after terminal workflow execution |
+| Business rule | Versioned form check that reports field relationships without changing values |
+| Revalidate | Check the current unsaved review values without saving or continuing processing |
 
 ## Technical terms
 

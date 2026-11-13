@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## extraction
@@ -204,12 +204,13 @@ metadata are required.
 - **Column naming**: Scalar and item columns use task-specific configured
   aliases when present. Item columns are prefixed with `item_` (e.g.,
   `item_description`, `item_quantity`).
-- **Fallback**: If no table field is configured or the list is empty, falls back to single-row format.
+- **Fallback**: Without an explicit table, CSV detects the first nonempty list
+  of dictionaries. If no table is detected or it is empty, it writes one row.
 - **Example CSV output**:
   ```csv
   supplier_name,invoice_amount,item_description,item_quantity
-  ALLIGATOR SINGAPORE PTE LTD,44.62,ELECTRODE G-300 3.2MM 5KG,4.0 PKT
-  ALLIGATOR SINGAPORE PTE LTD,44.62,QUICK COUPLER SOCKET,2.0 PCS
+  Example Supplier,30.00,Example item A,1
+  Example Supplier,30.00,Example item B,2
   ```
 
 ### Migration Guide

@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## rules.update_reference
@@ -30,7 +30,8 @@
   - Saves the CSV, creating a backup if enabled.
 - **Notes:**
   - Use workflow field keys in `from_context` (for example, `purchase_order_number`). Use CSV `column` names to match the external reference file headers.
-  - If a field value is not found in context (e.g., missing purchase_order_number), the task does not throw an error but simply does not match any rows, logging the issue and continuing with on_error: continue.
+  - If a comparison value is absent, no rows match; this is not itself a task
+    failure, regardless of `on_error`.
 
 **YAML configuration example:**
 
@@ -72,6 +73,9 @@ pipeline:
   - Validates `length` is an integer within 5–21; initialization fails with a configuration error otherwise.
   - Writes the generated ID to `context["data"]["nanoid"]`.
   - Downstream tasks can reference `{nanoid}` in their filename/rename templates.
+  - Each invocation generates a new value, replacing any existing `data.nanoid`.
+    It does not change workflow document/batch identity or provide a stable
+    idempotency key across retries.
 
 **YAML configuration example:**
 ```yaml
@@ -100,12 +104,19 @@ pipeline:
 
 - **Current module/class:** `standard_step.housekeeping.cleanup_task` / `CleanupTask`
 - **type:** `"housekeeping.cleanup"`
-- **Purpose:** Performs final cleanup after workflow execution by deleting the processed PDF from the processing directory so the folder does not accumulate UUID-named files.
+- **Purpose:** Removes workflow-owned transient paths at terminal cleanup.
 - **params:**
-  - `processing_dir`: string (optional). Directory containing processed files. Defaults to "processing".
+  - `processing_dir`: string (optional), default `processing`. Retained for
+    compatibility; it does not confine deletion to that directory.
 - **Behavior:**
-  - Deletes the processed file referenced in the context if it exists in `processing_dir`.
-  - Logs successes and warnings for missing files and preserves registered business artifacts.
+  - Uses nonempty `context["cleanup_paths"]` when supplied, otherwise
+    `context["file_path"]`. It deletes existing paths directly, without checking
+    that they are beneath `processing_dir`; producers must supply only owned
+    transient files.
+  - Preserves paths registered in the current document's `document_files`
+    records when the lookup succeeds. Without `document_id`, or if lookup fails,
+    that protection is unavailable. It does not check all documents' artifacts.
+  - Logs successes and warnings for missing files.
   - Raises exceptions on critical delete failures.
   - Executes after configured tasks finish or stop on an ordinary failure. Review pause and split fan-out return before cleanup.
   - Records a completed or failed internal task run under the reserved `cleanup_task` key without changing the document's configured pipeline cursor.
@@ -113,7 +124,7 @@ pipeline:
   - This task is automatically invoked by the WorkflowLoader when a flow reaches its cleanup phase.
   - It does not require definition in the portable `tasks` registry or
     inclusion in the `pipeline` list.
-  - Ensures the processing directory remains clean by removing only the processed PDF.
+  - This is not a directory sweep or a retention policy.
 
 ## Validation and Failure Behavior
 
@@ -130,7 +141,8 @@ pipeline:
   - Validates that `watch_folder.dir` exists and is a directory; if missing/invalid, logs CRITICAL and exits. This path is NOT auto-created.
   - Pre-creates directories for deployment YAML keys ending with `_dir` when
     possible, excluding `watch_folder.dir`. SQLite task output paths are
-    validated with the draft and created by their standard task at execution.
+    validated with the draft; storage/split/archive execution creates destinations
+    when needed if permissions allow.
   - Validates all `_dir` paths exist and are directories; all `_file` paths exist and are files; exits on critical failure.
 - At runtime, tasks validate their own required parameters.
 - On validation failure or error:
@@ -141,7 +153,9 @@ pipeline:
 ## Housekeeping and the Processing Folder
 
 - The `processing_dir` contains temporary working files during processing. Workflow state is stored in SQLite.
-- The workflow attempts the housekeeping cleanup task after the configured pipeline, including after ordinary task failures. It deletes the processed PDF from `processing_dir` and does not remove durable registered artifacts.
+- The workflow attempts housekeeping after the configured pipeline, including
+  ordinary failures. It uses the context paths and current-document artifact
+  checks described above; `processing_dir` is not a deletion boundary.
 - An interrupted process or cleanup error can leave a working file behind. Check document state and logs before removing it manually.
 - Any old text status files are legacy diagnostics only and are not required for current workflow state.
 

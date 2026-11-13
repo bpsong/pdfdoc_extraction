@@ -5,7 +5,7 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Key architectural decisions
@@ -67,7 +67,7 @@ new target architecture or promise unimplemented recovery behaviour.
 | Capacity | No measured or supported documents-per-day capacity target |
 | Review | New-flow resume rather than durable engine suspension |
 | Compatibility | Legacy SQLite response shapes remain; filesystem status is removed |
-| Frontend | Large controllers and implicit DOM/API contracts |
+| Frontend | Feature modules retain some large controllers and implicit DOM/API contracts |
 | Secrets | Provider credentials may reside in local runtime YAML |
 | Storage | Artifact availability assumes shared local filesystem access |
 
@@ -75,8 +75,10 @@ These are current constraints, not an approved target-state plan.
 
 Task cleanup handles workflow-owned temporary files, and upload reconciliation
 removes upload-owned orphans after interrupted submissions. This document does
-not define an automatic retention period, orphan scan for all artifact roles, or
-log rotation policy. Explicit admin processing-history cleanup is separate from
+not define an automatic artifact retention period or orphan scan for all roles.
+Role log handlers rotate at 10 MiB with five backups; captured child stdout/stderr
+has a separate rotation caveat in [logging guidance](../it-support/monitoring-and-logs.md).
+Explicit admin processing-history cleanup is separate from
 task housekeeping and retains physical files; neither performs compaction.
 
 

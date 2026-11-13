@@ -5,7 +5,7 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Distinguish liveness and readiness
@@ -37,7 +37,9 @@ provider, retry, and artifact failures.
   - Invalid YAML syntax (check your config file with a YAML validator).
   - A missing, incomplete, older, or newer SQLite schema.
   - Missing folders (create required folders like `watch_folder`, `web_upload` before starting).
-  - Missing or invalid provider credentials, such as a LlamaCloud `api_key`.
+  - Unavailable secret aliases or incompatible published business validators.
+    Startup checks stored contracts, not live provider authentication/inference;
+    rejected provider credentials usually surface when a task runs.
   - Permission errors (ensure the system user has read/write access to all configured directories).
 - Performance considerations for large files:
   - Larger PDFs require more disk, memory, network, split, and provider processing time.
@@ -65,8 +67,11 @@ provider, retry, and artifact failures.
 Check free disk space for the database, working files, artifacts and backups;
 check memory, provider availability/quotas, and the oldest queued/review items.
 Use [incident runbooks](incident-runbooks.md) when observations stop changing.
-No automatic application-wide log rotation or all-artifact retention policy is
-defined by this implementation. Establish deployment-specific monitoring and
+Each Python role file handler rotates at 10 MiB and keeps five backups. Uvicorn
+stdout/stderr is also redirected to an append-open web log handle; those direct
+writes do not pass through the rotating handler. This is not coordinated rotation
+for every output stream. No automatic all-artifact retention policy is defined.
+Establish deployment-specific monitoring and
 maintenance with the operational owner.
 
 Share identifiers, times, roles and safe diagnostic messages. Review logs and

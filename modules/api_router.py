@@ -1,27 +1,15 @@
-"""API router setup for authentication, file upload, and status retrieval endpoints.
+"""Compose authenticated JSON APIs and compatibility endpoints.
 
-This module defines the FastAPI router and related dependencies for the web API.
-It exposes the following endpoints:
+The router handles upload acceptance, processing and extraction views, review and
+split decisions, reports/failures, and versioned administration. Services own
+business operations and SQLite state. Cookie-authenticated writes use the shared
+CSRF dependency; administrative routes enforce the fixed admin role.
 
-- POST /login: Obtain an OAuth2 bearer token using username and password.
-- POST /upload: Legacy upload endpoint; redirects to the app processing page.
-- GET /api/files: Legacy compatibility list backed by SQLite documents.
-- GET /api/status/{file_id}: Legacy compatibility status backed by SQLite documents.
-
-Dependencies:
-- ConfigManager: Loads and provides access to application configuration (e.g., folders, auth settings).
-- AuthUtils: Handles authentication (login, token generation/validation).
-- SQLite-backed workflow services: Provide authoritative document and task state.
-- WorkflowManager: Coordinates processing workflows used by file operations.
-- FileProcessor: Handles web upload processing and integration with workflows.
-- utils.retry_with_cleanup (optional): Retry wrapper used by FileProcessor if available.
-
-All functions are documented using Google-style docstrings.
-
-Architecture Reference:
-    For detailed system architecture, API design patterns, and endpoint integration
-    with the overall system, refer to docs/design_architecture.md.
-"""
+POST /api/login authenticates API clients; the browser login form is implemented
+in web/server.py. POST /upload returns 410 Gone. GET /api/files and
+GET /api/status/{file_id} retain read-only SQLite-backed compatibility shapes.
+Use POST /api/batches/upload for durable, explicitly assigned ingestion.
+See docs/reference/api-contracts.md and docs/design_architecture.md."""
 
 from typing import AsyncIterator, List, Dict, Any, Optional, Tuple, cast
 import csv
@@ -153,10 +141,10 @@ class CookieOrHeaderTokenBearer:
     
     async def __call__(self, request: Request) -> Optional[str]:
         """Extract token from Authorization header or access_token cookie.
-        
+
         Args:
             request: The FastAPI request object
-            
+
         Returns:
             The token string if found, None otherwise
         """

@@ -35,31 +35,11 @@ from modules.utils import windows_long_path
 
 
 class StoreFileToLocaldrive(BaseTask):
-    """Task that writes the processed PDF to a local directory with a safe name.
+    """Copy the current PDF to a uniquely reserved output path.
 
-    Responsibilities:
-        - Validate target directory and filename pattern parameters.
-        - Render a filename from a filename pattern using context/extracted data.
-        - Ensure a .pdf extension and resolve a unique output path.
-        - Copy the file to the destination and update task status.
-
-    Integration:
-        Works as part of the storage step in the pipeline. Parameters are
-        provided via BaseTask.params and can refer to fields extracted earlier.
-
-    Args:
-        config_manager (ConfigManager): Project configuration manager.
-        **params: Required 'files_dir' (str) and 'filename' (str).
-            Optionally leverages extracted 'fields' config for formatting.
-
-    Notes:
-        - Side effects: Filesystem copy to the target directory and status updates.
-        - Raises TaskError on parameter, formatting, or I/O failures.
-
-    Performance Considerations:
-        - File copying operations may involve heavy I/O; consider batching for large volumes to avoid rate limits (e.g., 5 files/sec).
-        - Large file operations (>100MB) may cause noticeable delays in synchronous processing.
-    """
+    Constructor parameters own files_dir, filename and optional extraction metadata.
+    Synchronous copying preserves the current PDF content and registers export_pdf.
+    There is no file-I/O rate limiter. Split children store their own current PDF."""
 
     def __init__(self, config_manager: ConfigManager, **params):
         """Initialize the task and capture required parameters.
@@ -125,32 +105,12 @@ class StoreFileToLocaldrive(BaseTask):
         # No need to validate extraction_fields_config as it's optional for basic functionality
 
     def run(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        """Store the current file into the configured local directory.
+        """Copy the current PDF using a filename built from context and data.
 
-        Constructs a destination filename using the filename pattern and context
-        data, ensures uniqueness, and copies the source PDF to that location.
-
-        Args:
-            context (Dict[str, Any]): Pipeline context containing:
-                - file_path (str): Source file to store.
-                - id (str): Unique identifier for status logging.
-                - original_filename (str): Original name for formatting.
-                - data (dict): Extracted fields used in filename formatting.
-
-        Returns:
-            Dict[str, Any]: The unmodified context.
-
-        Raises:
-            TaskError: If required context keys are missing, the format fails,
-                or the copy operation fails.
-
-        Notes:
-            - Side effects: Filesystem copy and SQLite artifact registration.
-
-        Performance Considerations:
-            - This method performs synchronous file I/O operations, which may block for large files (>10MB).
-            - Rate limiting: File operations are throttled to prevent system overload; use async variants for high throughput scenarios.
-        """
+        Missing file_path, id or original_filename skips storage. Otherwise format the
+        filename, reserve a unique path, copy synchronously, register export_pdf, and set
+        context.output_path. Missing template keys and copy errors raise TaskError.
+        The PDF content and extracted values are not changed."""
         file_path = context.get("file_path")
         unique_id = context.get("id")
         original_filename = context.get("original_filename")

@@ -5,7 +5,7 @@
 | Audience | Operators, administrators, architects, developers and IT support |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 Choose the reading path that matches your work. **Operator** and **admin** are
@@ -33,6 +33,10 @@ architecture topics. Each audience guide links its own complete page set.
 - [Config-check finding catalog](../tools/config_check/examples/ERROR_CODES.md)
 
 ## Maintain the documentation
+
+The [2026-11-13 implementation audit](../tasks/tasks-documentation-current-implementation-audit.md)
+records reviewed areas, corrected contracts and exact offline verification
+commands. Dated snapshots and original validation evidence retain their scope.
 
 Keep screen procedures with their audience and exact technical contracts in
 Reference. Link shared definitions rather than copying them into each guide.

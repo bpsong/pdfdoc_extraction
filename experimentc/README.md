@@ -1,5 +1,13 @@
 # PaddleOCR-VL-1.6 invoice experiment
 
+These are standalone experiments, separate from the production extraction tasks.
+Installation versions, hardware observations and results below record their
+original runs; they do not describe the current contents of `.venv`. No provider
+run was repeated for the 2026-11-13 documentation audit. The default PDFs and raw
+outputs are local, ignored files and are not shipped; on a fresh checkout supply
+an explicit synthetic PDF path. Use the repository interpreter for commands and
+install optional experiment dependencies only when working on that experiment.
+
 ## Qianfan-OCR via Ollama
 
 `extract_invoice_qianfan.py` is standalone and uses the local Ollama API with
@@ -50,7 +58,7 @@ and does not perform named invoice-field extraction.
 .\.venv\Scripts\python.exe experimentc\extract_invoice_teleocr.py
 ```
 
-Installed in the repository environment: torch 2.8.0+cu126, torchvision
+At the recorded TeleOCR run, the repository environment used torch 2.8.0+cu126, torchvision
 0.23.0+cu126, Transformers 4.57.1 and Accelerate 1.14.0. This replaced CPU-only
 torch 2.13.0, torchvision 0.28.0 and Transformers 5.15.0; huggingface-hub was
 changed from 1.27.0 to 0.36.2. `pip check` passed afterward.
@@ -88,7 +96,7 @@ with cross-page table merging and page concatenation enabled. It uses neither
 Ollama nor Qwen. Its JSON contains document blocks and tables, not a named
 invoice-field schema.
 
-The optional pipeline packages were installed in the repository environment
+At the recorded pipeline run, optional packages were installed in the repository environment
 (PaddleOCR 3.7.0, PaddleX 3.7.2, PaddlePaddle GPU 3.2.2). PaddlePaddle's GPU
 self-check passed on the RTX 2060 SUPER, and `pip check` reported no broken
 requirements. The following commands describe installation on a fresh environment.
@@ -158,7 +166,8 @@ The default input is the existing SuperStore invoice
 `sample stock invoices from internet/invoice_Aaron Bergman_36258.pdf`.
 It is referenced, not copied. When moving this folder elsewhere, supply a PDF
 path explicitly. The folder's requirements.txt documents its standalone
-dependencies; these packages are already present in the repository environment.
+dependencies; install them explicitly rather than assuming the current
+repository environment already contains the experiment extras.
 Ollama must be running with the OCR model installed; the JSON stage also needs
 the extraction model (override with `--extract-model`).
 

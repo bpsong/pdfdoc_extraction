@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 Work from the repository root in PowerShell. Python 3.13 and the repository
@@ -68,3 +68,5 @@ npm run build
 
 Return to the repository root for Python tests. See [testing](testing-and-verification.md)
 and [frontend development](frontend-development.md) before changing those surfaces.
+The [prototype README](../../pipeline_visual_editor_prototype/README.md) explains
+its unshipped sample YAML, local file APIs and static-preview limitations.

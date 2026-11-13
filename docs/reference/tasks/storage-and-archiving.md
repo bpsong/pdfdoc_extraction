@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-09 — repository/source review; no live deployment check; focused regressions and local Superstore walkthrough |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## storage.store_metadata_as_csv
@@ -26,6 +26,8 @@
     extracted data (or an explicit task-specific `extraction.fields` mapping);
     deployment-level YAML field mappings are not inherited.
   - If one extraction field has `is_table: true`, writes one row per item and repeats the document-level values.
+  - Without an explicitly marked table, detects the first nonempty list of
+    dictionaries in workflow data. An empty list alone does not identify a table.
   - Prefixes item columns with `item_` and falls back to one row when no table data is present.
   - Sanitizes values and generates a unique filename to avoid overwrites.
 
@@ -55,6 +57,9 @@ pipeline:
   - Optional task-specific `extraction.fields`: mapping used only when this JSON
     task should emit aliases or retain explicit table metadata. It is not
     inherited from another pipeline or deployment YAML.
+  - JSON reads top-level `data_dir` and `filename`; unlike CSV, it does not apply
+    nested `storage` overrides. The shared parameter checker accepts that block,
+    so validation alone does not prove JSON will use it.
 - **Behavior:**
   - Reads `context["data"]` (dict).
   - Writes a JSON file with keys transformed to aliases when a task-specific
@@ -88,7 +93,9 @@ pipeline:
   - store_metadata_json
 ```
 
-These canonical CSV and JSON classes support both scalar fields and one configured array-of-objects table field.
+CSV expands one detected table. JSON preserves nested objects and arrays from
+workflow data without requiring `is_table` metadata. Extraction's one-table
+constraint is separate from JSON serialization.
 
 ## storage.store_file_to_localdrive
 
@@ -131,7 +138,11 @@ pipeline:
   - Creates a unique filename to avoid overwrites using the original filename as a base.
   - Preserves file metadata during the copy operation.
 
-The archive directory must already exist and be accessible to the application.
+Normal archive execution creates a missing destination through
+`reserve_unique_filepath` if permissions allow. The separate
+`validate_required_fields` hook rejects a missing directory, but neither
+`on_start` nor `run` calls it and the runner does not invoke it automatically.
+Pre-create and permission-test important destinations before routine intake.
 For screen instructions, see [Admin output and archiving](../../admin/task-guide.md#configure-output-files).
 
 **YAML configuration example:**

@@ -10,9 +10,15 @@ structural, path, parameter, and dependency checks used by the service.
 1. Use the repository Python 3.13 virtual environment.
 2. Install the tool and its dependencies:
    ```powershell
+   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
    .\.venv\Scripts\python.exe -m pip install -e .
    ```
    The editable install registers a `config-check` console script and makes the `tools.config_check` package importable.
+
+Run from the repository root. `pyproject.toml` packages the CLI only, while its
+stored-definition checks also import application modules. An editable CLI
+install alone does not install the full runtime dependency set. Runtime-only
+deployments can use `requirements.txt` instead of the development manifest.
 
 ## Quick Start
 
@@ -20,30 +26,30 @@ Validate a configuration using the exact paths you expect to deploy:
 
 ```powershell
 # Validate default ./config.yaml
-config-check validate
+.\.venv\Scripts\python.exe -m tools.config_check validate
 
 # Validate an explicit file and show JSON output
-config-check validate --config .\config\production.yaml --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config\production.yaml --format json
 
 # Run with strict mode and a custom base directory for relative paths
-config-check validate --config ..\configs\staging.yaml --base-dir ..\configs --strict
+.\.venv\Scripts\python.exe -m tools.config_check validate --config ..\configs\staging.yaml --base-dir ..\configs --strict
 
 # Perform import checks to ensure task modules/classes resolve
-config-check validate --config .\config\tasks.yaml --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config\tasks.yaml --import-checks
 
 # Validate one stored pipeline draft or immutable version
-config-check validate --config .\config.yaml --pipeline invoice --draft
-config-check validate --config .\config.yaml --pipeline invoice --version 3
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --pipeline invoice --draft
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --pipeline invoice --version 3
 
 # Validate all stored drafts, versions, schema definitions, and bindings
-config-check validate --config .\config.yaml --all-stored
+.\.venv\Scripts\python.exe -m tools.config_check validate --config .\config.yaml --all-stored
 
 # Validate a portable file without importing it
-config-check validate-file --file .\exports\invoice-pipeline.yaml --kind pipeline
-config-check validate-file --file .\exports\invoice-schema.yaml --kind review-schema
+.\.venv\Scripts\python.exe -m tools.config_check validate-file --file .\exports\invoice-pipeline.yaml --kind pipeline
+.\.venv\Scripts\python.exe -m tools.config_check validate-file --file .\exports\invoice-schema.yaml --kind review-schema
 
 # Print the JSON schema describing the configuration contract
-config-check schema --format json
+.\.venv\Scripts\python.exe -m tools.config_check schema --format json
 ```
 
 All commands are also available through
@@ -80,6 +86,16 @@ it. Required `--kind` values are `runtime`, `pipeline`, or `review-schema`.
 The `schema` command can print the `runtime`, `pipeline`, `review-schema`, or
 `pipeline-bundle` JSON contract. Import/export itself is performed through the
 administrator UI/API, not this CLI.
+
+For `--kind pipeline`, file content must use `kind: pipeline-bundle` as produced
+by Export. Offline dependencies need embedded review schemas and matching
+hashes, or `--config` resolves exact key/version/hash coordinates from SQLite
+read-only. Bare task fragments are not bundles. The selector `pipeline` and
+serialized kind `pipeline-bundle` intentionally have different names.
+
+Parameter validation accepts nested `storage` overrides for metadata tasks, but
+the JSON runtime reads top-level `data_dir`/`filename` only. CSV applies nested
+overrides. See [storage contracts](../../docs/reference/tasks/storage-and-archiving.md).
 
 ## UI Validation
 
@@ -160,7 +176,8 @@ non-empty `model`. `dpi`, `num_ctx`, and `num_predict` must be positive integers
 non-empty `resolver_model`, positive resolver context/prediction settings, and
 `resolver_max_attempts` from 1 through 5. `resolver_max_dimension` bounds the
 longest scalar/object resolver image edge and must be from 256 through 4096;
-tables use structured GLM-OCR row evidence instead of resolver images.
+  tables use bounded structured GLM-OCR row evidence plus the corresponding
+  source-page images.
 LlamaCloud-only parameters are rejected.
 For example:
 
@@ -295,7 +312,7 @@ definitions already receive the shared task-approval check; this optional flag
 does not add another import-analysis pass over those sources.
 
 ```powershell
-config-check validate --config config.yaml --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --import-checks
 ```
 
 This validates:
@@ -307,13 +324,13 @@ This validates:
 
 ```powershell
 # Basic validation without import checks
-config-check validate --config config.yaml
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml
 
 # Full validation including import verification
-config-check validate --config config.yaml --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --import-checks
 
 # Import validation with JSON output for automation
-config-check validate --config config.yaml --import-checks --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --import-checks --format json
 ```
 
 ### Import Error Types
@@ -333,10 +350,10 @@ Validates that reference CSV files can be opened and parsed:
 
 ```powershell
 # Basic validation (structural checks only)
-config-check validate --config config.yaml
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml
 
 # Full validation including CSV file checks
-config-check validate --config config.yaml --check-files
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --check-files
 ```
 
 **Validation checks:**
@@ -530,7 +547,7 @@ Analyzes extraction tasks for performance impact based on field count and comple
 
 ```powershell
 # Enable performance analysis
-config-check validate --config config.yaml --performance-analysis
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --performance-analysis
 ```
 
 **Performance analyzer thresholds:**
@@ -568,16 +585,16 @@ a threshold finding.
 
 ```powershell
 # Basic validation without performance analysis
-config-check validate --config config.yaml
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml
 
 # Performance analysis with text output
-config-check validate --config config.yaml --performance-analysis
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --performance-analysis
 
 # Performance analysis with JSON output for automation
-config-check validate --config config.yaml --performance-analysis --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --performance-analysis --format json
 
 # Combined analysis with other validation modes
-config-check validate --config config.yaml --performance-analysis --import-checks --check-files
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --performance-analysis --import-checks --check-files
 ```
 
 ### Performance Issue Types
@@ -668,7 +685,7 @@ Identifies dangerous path patterns that could lead to path traversal attacks:
 
 ```powershell
 # Enable security analysis
-config-check validate --config config.yaml --security-analysis
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --security-analysis
 ```
 
 **Dangerous patterns detected:**
@@ -700,16 +717,16 @@ Validates directory configurations for security issues:
 
 ```powershell
 # Basic validation without security analysis
-config-check validate --config config.yaml
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml
 
 # Security analysis with text output
-config-check validate --config config.yaml --security-analysis
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --security-analysis
 
 # Security analysis with JSON output for automation
-config-check validate --config config.yaml --security-analysis --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --security-analysis --format json
 
 # Combined security and performance analysis
-config-check validate --config config.yaml --security-analysis --performance-analysis
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --security-analysis --performance-analysis
 ```
 
 ### Security Issue Types
@@ -822,7 +839,7 @@ Verifies that all referenced files exist and are accessible:
 
 ```powershell
 # Enable runtime file validation
-config-check validate --config config.yaml --check-files
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --check-files
 ```
 
 **Validation checks:**
@@ -849,13 +866,13 @@ config-check validate --config config.yaml --check-files
 
 ```powershell
 # Basic structural validation (fast)
-config-check validate --config config.yaml
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml
 
 # Full validation including file system checks (slower)
-config-check validate --config config.yaml --check-files
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --check-files
 
 # Runtime validation with JSON output
-config-check validate --config config.yaml --check-files --format json
+.\.venv\Scripts\python.exe -m tools.config_check validate --config config.yaml --check-files --format json
 ```
 
 ### Runtime File Error Codes
@@ -866,16 +883,13 @@ config-check validate --config config.yaml --check-files --format json
 
 ## Sample Configurations
 
-The maintained samples under `tools/config_check/examples/` are:
-
-- `minimal_config.yaml` - Minimal SQLite-backed deployment YAML.
-- `complete_config.yaml` - Expanded SQLite-backed deployment settings.
-- `valid_config.yaml` - Legacy deployment-schema fixture.
-- `invalid_missing_paths.yaml` - Intentional path/dependency failures.
-- `rules_task_examples.yaml` - Valid and invalid rules-task fragments.
-
-Start new deployments from the minimal or complete sample. Treat the legacy and
-invalid files as validator fixtures, not production templates.
+Tracked examples include the [inline deployment sample](examples/README.md),
+synthetic CSVs, and the curated [finding reference](examples/ERROR_CODES.md).
+Local YAML files such as `minimal_config.yaml`, `complete_config.yaml`,
+`valid_config.yaml`, `invalid_missing_paths.yaml`, and `rules_task_examples.yaml`
+are ignored and are not shipped in a fresh checkout. Create your own ignored
+file from the inline sample. Negative automated cases live under
+`test/tools/config_check/`; an example filename is not a validation guarantee.
 
 ## Troubleshooting
 

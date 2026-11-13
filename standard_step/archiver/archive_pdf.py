@@ -1,18 +1,11 @@
-"""Archive original PDFs into a designated archive directory.
+"""Archive the current workflow PDF into a task-owned directory.
 
-This module defines the ArchivePdfTask, a pipeline task responsible for
-copying the original input PDF into a configured archive directory with a
-sanitized and uniqueness-safe filename. It participates in the PDF processing
-pipeline after input ingestion and before/after extraction depending on the
-workflow configuration.
-
-Notes:
-    - Reads configuration via ConfigManager for the 'archive_dir' setting.
-    - Registers the archived copy as a ``source_archive`` document artifact
-      when SQLite document context is available.
-    - Performs filesystem copy operations and may create a new unique filename.
-    - No behavioral changes should be introduced by documentation updates.
-"""
+ArchivePdfTask reads archive_dir only from constructor parameters. Normal run
+reserves a unique sanitized path, creating the destination directory if permitted,
+and copies context.file_path. The standalone validation hook instead requires an
+existing directory; on_start/run do not call it. Register source_archive when
+document context exists. After splitting the current PDF is a child; place the
+task before splitting to archive the incoming bundle."""
 
 import os
 import shutil
@@ -32,46 +25,17 @@ from modules.utils import (
 
 
 class ArchivePdfTask(BaseTask):
-    """Task that archives the original PDF to a configured directory.
+    """Copy the current PDF and register its source_archive artifact.
 
-    Responsibilities:
-        - Validate that an archive directory is provided and exists.
-        - Copy the original file to the archive directory using a sanitized,
-          uniqueness-safe filename.
-        - Register the archived copy in SQLite when document context exists.
-
-    Integration:
-        This class is a standard step in the pipeline and uses BaseTask
-        facilities for context handling and error registration.
-
-    Args:
-        config_manager (ConfigManager): Project configuration manager.
-        **params: Optional parameters overriding configuration, including
-            'archive_dir' for destination directory.
-
-    Notes:
-        - Side effects include filesystem writes (copy) and SQLite artifact
-          registration.
-        - Errors are reported as TaskError and registered into the task context.
-    """
+    Normal execution creates missing destination directories through the shared path
+    reservation helper. validate_required_fields checks for an existing directory
+    only when explicitly called. Errors handled by run are registered in context."""
 
     def __init__(self, config_manager: ConfigManager, **params):
-        """Initialize the ArchivePdfTask.
+        """Capture archive_dir from task parameters without filesystem writes.
 
-        Resolves the target archive directory from params or configuration and
-        prepares logging.
-
-        Args:
-            config_manager (ConfigManager): Configuration manager for the app.
-            **params: Optional overrides. Supports 'archive_dir'.
-
-        Raises:
-            TaskError: Not raised here, but later in validation if archive_dir
-                is missing or invalid.
-
-        Notes:
-            Converts paths to Windows long path format for robustness.
-        """
+        Published settings do not fall back to deployment YAML. The standalone validation
+        hook and normal execution have different directory-creation behavior."""
         super().__init__(config_manager, **params)
         # Pipeline-owned settings must come from the immutable published
         # definition supplied as task params, never from deployment YAML.

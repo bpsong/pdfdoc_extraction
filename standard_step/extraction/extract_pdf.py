@@ -1,24 +1,10 @@
-"""PDF extraction task with structured-object support for LlamaCloud Extract v2.
+"""Extract configured PDF fields through LlamaCloud Extract v2.
 
-This module provides ExtractPdfTask, an enhanced pipeline step that handles
-scalar fields, flat objects, and table fields (arrays of objects) from
-LlamaCloud Extract responses.
-
-Key Features:
-    - Extracts scalar fields with type conversion and normalization
-    - Handles flat object fields with typed child-property mapping
-    - Handles table fields as arrays of objects with subfield mapping
-    - Preserves extraction metadata including field citations and usage stats
-    - Supports dynamic field configuration via ConfigManager
-    - Maintains the existing scalar extraction context structure
-
-Notes:
-    - Configuration is loaded from 'tasks.extract_document_data.params' section in config.yaml
-    - Supports only one table field per extraction (PRD limitation)
-    - Uses LlamaCloud Extract v2 for PDF processing
-    - Stores extracted values under workflow field keys from configuration
-    - Filters None values from lists when applicable
-"""
+The workflow loader injects parameters from the document's exact published
+pipeline version, with secret aliases resolved in memory. The task normalizes
+scalars, primitive lists, flat objects and one table into stable workflow keys,
+persists extraction results/field evidence in SQLite, and preserves nullable
+provider confidence. It does not reload a fixed tasks.* deployment-YAML path."""
 
 import logging
 import re
@@ -48,60 +34,13 @@ from standard_step.extraction.llama_cloud_v2 import (
 
 
 class ExtractPdfTask(BaseTask):
-    """PDF extraction task with array-of-objects support.
+    """Normalize and persist LlamaCloud fields for one workflow document.
 
-    This task extends the scalar extraction workflow to handle table fields
-    containing arrays of objects. It processes LlamaCloud Extract responses that
-    include both scalar fields and structured table data.
-
-    The task follows the standard task creation guidelines with proper
-    initialization, error handling, and logging.
-
-    Attributes:
-        config_manager (ConfigManager): Central configuration manager instance.
-        api_key (str): LlamaCloud API key for authentication.
-        configuration_id (Optional[str]): Saved LlamaCloud Extract v2 configuration identifier.
-        fields (Dict[str, Any]): Scalar, object, and table field configuration.
-        table_field_key (Optional[str]): Key of the table field (marked with is_table: true).
-        item_fields (Dict[str, Any]): Subfield configuration for the table field.
-    Configuration:
-        The workflow loader injects the configured task parameters, including:
-        - api_key: LlamaCloud API authentication key
-        - configuration_id: Optional saved LlamaCloud Extract v2 configuration identifier
-        - tier: Optional Extract v2 tier used for inline configuration
-        - parse_tier: Optional Parse tier used for inline configuration
-        - fields: Field definitions with types, aliases, and table config
-
-    Example:
-        Configuration in config.yaml:
-        tasks:
-          extract_document_data:
-            params:
-              api_key: "your_llama_cloud_api_key"
-              configuration_id: "your_configuration_id"
-              fields:
-                supplier_name:
-                  alias: "Supplier name"
-                  type: "str"
-                summary:
-                  alias: "Summary"
-                  type: "Dict[str, Any]"
-                  object_fields:
-                    invoice_count:
-                      alias: "Invoice count"
-                      type: "int"
-                items:
-                  alias: "Items"
-                  type: "List[Any]"
-                  is_table: true
-                  item_fields:
-                    description:
-                      alias: "Description"
-                      type: "str"
-                    quantity:
-                      alias: "Quantity"
-                      type: "str"
-    """
+    Parameters include resolved api_key, optional configuration_id, inline provider
+    settings and fields with aliases/types. Saved configurations own their provider
+    options; local field definitions map returned keys/aliases to workflow keys.
+    Use $secret aliases in stored definitions. See
+    docs/reference/tasks/llamacloud-extraction.md for the supported field shapes."""
 
     def __init__(self, config_manager: ConfigManager, **params):
         """Initialize ExtractPdfTask with configuration and parameters.

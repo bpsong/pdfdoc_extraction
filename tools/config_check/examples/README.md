@@ -1,101 +1,67 @@
-# Configuration Examples
+# Configuration examples
 
-This directory contains deployment-YAML samples, legacy fixtures, illustrative
-rules-task documents, and the error-code reference. Pipeline and review-form
-definitions are normally authored and published in SQLite through the admin UI.
+This directory ships synthetic CSV fixtures and the curated
+[finding catalog](ERROR_CODES.md). Deployment YAML, exported definitions and
+local test documents are ignored by Git. Historical local filenames such as
+`minimal_config.yaml`, `complete_config.yaml`, `valid_config.yaml`,
+`invalid_missing_paths.yaml`, and `rules_task_examples.yaml` are not bundled.
 
-## Valid Configuration Examples
+## Create a local deployment sample
 
-### `complete_config.yaml`
+Copy this structure into an ignored local YAML file, replace the secret locally,
+and create the two required roots. It has no active pipeline or account setup.
+Use absolute upload/watch/processing paths when the file is outside the
+repository; see [path resolution](../../../docs/reference/deployment-configuration.md#path-resolution).
 
-An expanded deployment-settings sample covering database, review, validation,
-UI, and authentication options. Despite its historical filename, it is not an
-inventory of every `config.yaml` setting and intentionally contains no workflow
-`tasks` or `pipeline`.
-
-### `minimal_config.yaml`
-
-A compact structural sample for SQLite-backed deployment settings. It is useful
-for `validate-file --kind runtime`, but it is not by itself a runnable
-application configuration: a real deployment must also provide its required
-folders/web settings and point at an initialized database.
-
-### `valid_config.yaml` (Legacy)
-The original deployment-schema fixture, retained for backward compatibility.
-
-## Invalid Configuration Examples
-
-`invalid_missing_paths.yaml` is a legacy-named fixture. Its current content is a
-deployment-settings mapping and no longer guarantees a validation failure. For
-stable automated negative cases, use the focused fixtures under
-`test/tools/config_check/`; do not depend on a human example's filename.
-
-## Testing Examples
-
-You can test these examples with the config-check tool:
-
-```powershell
-# From the repository root, validate deployment-file structure without opening SQLite
-.\.venv\Scripts\python.exe -m tools.config_check validate-file --file tools\config_check\examples\complete_config.yaml --kind runtime
-.\.venv\Scripts\python.exe -m tools.config_check validate-file --file tools\config_check\examples\minimal_config.yaml --kind runtime
+```yaml
+web:
+  host: 127.0.0.1
+  port: 8000
+  upload_dir: web_upload
+  secret_key: REPLACE-LOCALLY-WITH-A-UNIQUE-RANDOM-SECRET
+watch_folder:
+  dir: watch_folder
+  processing_dir: processing
+database:
+  path: data/app_state.sqlite3
+  run_migrations_on_startup: true
 ```
 
-Use `validate --config <real-config> --all-stored` for an initialized deployment
-whose database, folders, published versions, and bindings should also be checked.
+From the repository root in PowerShell:
 
-## Rules Task Validation Examples
+```powershell
+.\.venv\Scripts\python.exe -m tools.config_check validate-file --file local-example.yaml --kind runtime
+```
 
-### `rules_task_examples.yaml`
+Runtime-file validation checks structure/paths without opening SQLite. Full
+`validate --config local-example.yaml --all-stored` additionally needs an
+initialized database and checks stored configuration read-only. Follow
+[installation and provider setup](../../../docs/it-support/installation-and-provider-setup.md)
+for startup, fixed accounts, models and a usable published pipeline. Production
+also requires the [access settings](../../../docs/it-support/configuration-and-access.md).
 
-A multi-document illustration of rules-task validation scenarios:
+## Pipeline and form examples
 
-- **Valid Rules Task**: Properly configured rules task with all required fields
-- **Rules Task with Issues**: Examples of common validation errors and warnings
-- **Semantic Issues**: Type mismatches and unrealistic field references
-- **Corrected Configuration**: Fixed versions of problematic configurations
-- **Complex Rules Task**: Advanced scenarios with extraction and rules tasks
+Create drafts in the production editors and export them for portable validation.
+Import updates a draft only; publish explicitly after validation. Pipeline
+content uses `kind: pipeline-bundle`, selected by `validate-file --kind pipeline`.
+See the [CLI reference](../README.md) and
+[task parameter examples](../../../docs/reference/tasks/README.md).
 
-### Sample Reference Files (`sample_reference_files/`)
+For CSV updates, use the
+[Update Reference definition](../../../docs/reference/tasks/rules-context-housekeeping.md#rulesupdate_reference)
+and a temporary copy of a synthetic CSV. The task changes existing matching rows;
+it does not append records. Do not validate against or update customer CSVs for
+routine development checks.
 
-Synthetic CSV fixtures are bundled for rules validation:
+## Bundled CSV cases
 
-- `suppliers.csv`: readable CSV with headers and data;
-- `empty_suppliers.csv`: empty-file case; and
-- `invalid_format.csv`: malformed-input case.
+- `sample_reference_files/suppliers.csv`: readable headers and synthetic rows.
+- `sample_reference_files/empty_suppliers.csv`: empty-file case.
+- `sample_reference_files/invalid_format.csv`: malformed-input case.
 
-### Testing Rules Task Validation
-
-The file is documentation, not one runnable runtime configuration: it contains
-several YAML documents and references example CSV paths that are not bundled in
-this directory. Copy one scenario into a temporary, ignored portable pipeline
-definition, replace credentials with `$secret` references, and supply your own
-synthetic CSV before validating it. Automated rules validation is covered by
-`test/tools/config_check/`.
-
-For detailed troubleshooting of rules task validation issues, see the main troubleshooting guide at [`docs/it-support/config-check-troubleshooting.md`](../../../docs/it-support/config-check-troubleshooting.md).
-
-## Error Code Reference
-
-See `ERROR_CODES.md` for the operator-facing validation codes and corrective
-actions. Machine-readable output remains authoritative for a particular run.
-
-## Using Examples as Templates
-
-These examples can serve as templates for creating your own configurations:
-
-1. Start with `minimal_config.yaml` for deployment-setting structure.
-2. Consult `complete_config.yaml` for the additional settings it demonstrates.
-3. Create and publish workflow definitions in the Pipeline and Review Form
-   editors; do not add them back to deployment YAML.
-4. Use `ERROR_CODES.md` and JSON findings to troubleshoot validation errors.
-
-## Configuration Best Practices
-
-Based on these examples, follow these best practices:
-
-1. **Always specify required fields** explicitly rather than relying on defaults
-2. Use meaningful task keys in portable or stored pipeline definitions.
-3. Include appropriate `on_error` behavior in each configured task.
-4. Validate import paths using `--import-checks` before publication/deployment.
-5. Run `--all-stored` against an initialized deployment before operations.
-6. Document non-obvious settings without including credentials or customer data.
+Automated positive/negative cases live under `test/tools/config_check/`. Run them
+from the repository root with the repository interpreter. For a particular
+validation run, JSON findings and the exit code are authoritative: 0 is clean,
+1 has errors, 2 has only warnings, and 64 indicates invalid usage. The finding
+catalog is curated rather than an exhaustive list of every optional analysis.

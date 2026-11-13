@@ -54,7 +54,7 @@ A sophisticated PDF document processing system that leverages AI-powered extract
 - **FastAPI Backend**: High-performance REST API
 - **Operator App**: `/app/upload`, `/app/processing`, `/app/review`, `/app/failures`, and `/app/reports`
 - **Admin App**: `/app/admin`, `/app/admin/users`, `/app/admin/pipeline`,
-  `/app/schemas`, `/app/admin/tasks`, `/app/settings/validation`, and
+  `/app/schemas`, `/app/admin/watch-folders`, `/app/admin/tasks`, `/app/settings/validation`, and
   `/app/admin/audit`
 - **Review Workflows**: Human review queues for low-confidence or policy-triggered extracted fields
 - **Citation-Aware PDF Review**: Local PDF.js source viewing with provider-specific page and bounding-box navigation
@@ -103,10 +103,14 @@ A sophisticated PDF document processing system that leverages AI-powered extract
    application when those committed assets are already present.
 
 3. **Configure the system**
-   Open the ignored local `config.yaml` and set deployment paths, web/auth
+   Create an ignored local `config.yaml` using the configuration example below
+   and the [deployment reference](docs/reference/deployment-configuration.md).
+   Set deployment paths, web/auth
    settings, and provider secret aliases. Do not place new `tasks` or
    `pipeline` blocks there. Create folders required by `watch_folder.dir` and
-   `web.upload_dir` before startup.
+   `web.upload_dir` before startup. Use absolute intake, upload, processing,
+   and task-output paths when the YAML lives outside the repository; see
+   [path resolution limits](docs/reference/deployment-configuration.md#path-resolution).
 
 4. **Run the application**
    ```powershell
@@ -222,9 +226,10 @@ guarantee of unlimited size or better accuracy. See the
 
 Output folders are task-owned in the exact SQLite pipeline version. CSV/JSON
 tasks use `data_dir`, local PDF storage uses `files_dir`, archive tasks use
-`archive_dir`, and split tasks use `split_dir`. CSV/JSON/local-PDF/split tasks
-create their output directory when execution begins if permissions allow;
-`ArchivePdfTask` requires its configured archive directory to exist.
+`archive_dir`, and split tasks use `split_dir`.
+CSV/JSON/local-PDF/split/archive execution creates output
+directories when needed if permissions allow. Archive PDF's separate validation
+hook requires an existing directory; normal execution does not invoke that hook.
 Deployment `_dir` keys are the paths that `ConfigManager` creates at startup,
 except `watch_folder.dir`.
 
@@ -314,13 +319,15 @@ After a successful import, remove the legacy `authentication` block. Passwords m
 5. **Inspect Results**: Use `/app/documents/{document_id}/extraction` for extracted fields and source PDF access
 6. **Inspect Batch History**: Use `/app/reports` and click a recent batch row to view document task timelines and task-run details
 7. **Administer Configuration**: Admin users create/version pipelines in
-   `/app/admin/pipeline`, review forms in `/app/schemas`, inspect tasks and
-   validation, manage users, and view the `admin_` audit subset
+   `/app/admin/pipeline`, review forms in `/app/schemas`, manage incoming folders
+   in `/app/admin/watch-folders`, inspect tasks and validation, manage users,
+   and view administrative and `watch_binding.*` audit events
 
 ### Watch Folder
 
-1. **Create a binding**: In the bottom of `/app/admin/pipeline`, publish and
-   activate the pipeline, then bind an existing, non-overlapping incoming
+1. **Create a binding**: Publish and activate the pipeline in
+   `/app/admin/pipeline`, then open **Watch folders** at
+   `/app/admin/watch-folders` and bind an existing, non-overlapping incoming
    folder to one exact published version
 2. **Drop PDFs** into that bound directory; `watch_folder.dir` alone is only a
    required startup-compatibility path and does not assign a workflow
@@ -507,29 +514,35 @@ assessment of comparable extraction products.
 ### Running Tests
 
 ```powershell
-# Run all tests
-.\.venv\Scripts\python.exe -m pytest -v
+# Run all tests except opt-in live provider checks
+$env:RUN_LLAMACLOUD_SPLIT_SMOKE = '0'
+.\.venv\Scripts\python.exe -m pytest -v --ignore=test/third_party/llamacloud_connection_test.py
 
 # Run specific test file
 .\.venv\Scripts\python.exe -m pytest -v test/core/test_config_manager.py
 
-# Run static type checking when Pyright is installed (it is not pinned in requirements.txt)
-pyright
+# Run Pyright, pinned in requirements-dev.txt
+.\.venv\Scripts\python.exe -m pyright --project pyrightconfig.json --pythonpath .\.venv\Scripts\python.exe
 ```
 
 Example focused validation for SQLite-backed ingestion and operator state:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -v test\integration\test_sqlite_only_workflow_state.py test\integration\test_batch_upload_api.py test\integration\test_reports_api.py test\integration\test_settings_api.py
+.\.venv\Scripts\python.exe -m pytest -v test\integration\test_sqlite_only_workflow_state.py test\integration\test_batch_upload_api.py test\integration\test_reports_api.py test\services\test_admin_settings_service.py
 ```
 
 Run the full suite before handing off broad or cross-cutting changes.
 
-The end-to-end workflow fixture config also passes config-check:
+Tests create isolated synthetic configuration/database fixtures. The ignored
+`test/data/config.yaml` is not shipped. Validate your own local deployment with:
 
 ```powershell
-.\.venv\Scripts\python.exe -m tools.config_check validate --config test\data\config.yaml --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config path\to\config.yaml --import-checks
 ```
+
+Live LlamaCloud checks require an explicit request and credentials. See
+[testing and verification](docs/developer/testing-and-verification.md) for
+collection isolation, browser setup and verification scope.
 
 ### Test Categories
 

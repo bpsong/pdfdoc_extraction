@@ -1,14 +1,11 @@
-"""Workflow coordination utilities for launching Prefect flows for individual files.
+"""Run pinned root, split-child and resumed Prefect workflows.
 
-This module is responsible for:
-- Loading the workflow function via WorkflowLoader.
-- Triggering the Prefect flow asynchronously for the file.
-- Updating SQLite document state on trigger failures when document context exists.
-
-Architecture Reference:
-    For detailed system architecture, component interactions, and workflow orchestration
-    patterns, refer to docs/design_architecture.md.
-"""
+Load the document's exact published SQLite pipeline through
+PipelineDefinitionService and invoke WorkflowLoader synchronously. Split children
+run sequentially. Review continuation dispatch is owned by the caller; the manager
+does not enqueue a new background flow by itself. Record load/trigger failures
+and distinguish retryable pre-flow startup errors from terminal execution errors.
+See docs/architecture/workflow-and-state.md."""
 import errno
 import logging
 import sqlite3

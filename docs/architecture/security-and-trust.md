@@ -5,7 +5,7 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## API, authentication, and trust boundaries
@@ -94,6 +94,13 @@ still a separate egress decision. Preserve provider-specific restrictions when
 changing adapters. See [LiteParse](../reference/tasks/liteparse-extraction.md).
 
 ## Review and split decisions
+
+Business validators use a separate source-controlled approval registry. Form
+content cannot select Python modules or upload executable code. Approved code
+runs in-process with bounded contracts and copied values, without process-level
+isolation/timeouts. The authoring catalog is admin-only; operators receive a
+separate identifier/title map. See the
+[validator development contract](../developer/business-validation-plugins.md).
 
 Claims and revision checks protect concurrent edits. A manual split decision
 commits before continuation is dispatched. Continuation is an in-process

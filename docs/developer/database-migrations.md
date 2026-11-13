@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Migration development workflow
@@ -19,6 +19,12 @@ There is no general downgrade chain. For a migration change, use a temporary
 database, verify the exact supported version and required tables, run startup a
 second time to prove idempotency, and exercise legacy-import compensation when
 the change touches YAML cutover.
+
+Ordinary portable import is draft-only. The legacy startup cutover can publish
+and activate the migrated default pipeline and referenced forms, rewrite secret
+aliases into deployment YAML, and backfill compatible historical assignments.
+It is guarded by schema/cutover state and is not rerun as a live YAML reload.
+Test database rollback and YAML compensation together when changing that path.
 
 The [safe-change workflow](backend-development.md#safe-change-workflow) is the canonical checklist
 for extensions too. For tasks, also follow the [standard task guidelines](../../tasks/standard_task_creation_guidelines.md).

@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 `standard_step.extraction.liteparse_extract.LiteParseExtractTask` is an approved
@@ -89,8 +89,9 @@ For larger documents, use the selection criteria below before increasing
 context/input/output allowances. Selecting relevant pages can reduce input when
 excluded pages contain no required fields or items. Splitting mixed-document
 bundles is a separate pipeline responsibility. Output amounts remain what was printed;
-arithmetic calculations should be configured as a separate business task rather
-than replacing extracted values.
+arithmetic checks can be configured as business rules on the pinned review form.
+Those rules report findings without replacing extracted values. See the
+[review-form rule contract](../review-schema-format.md#business-validation-configuration).
 
 Larger context settings can move model layers from GPU to CPU and slow inference
 substantially. Use a smaller context that still fits complete evidence when the

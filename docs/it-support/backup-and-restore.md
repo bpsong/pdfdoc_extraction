@@ -5,7 +5,7 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Backup and Recovery
@@ -15,6 +15,9 @@ For a complete operational backup, include:
 - the SQLite database file configured at `database.path` (including templates,
   drafts, immutable versions, dependencies, and ingress bindings)
 - task-owned output folders such as `files/`, `data/`, `archive_folder/`, and any split task `split_dir` used by configured tasks
+- all registered `source_original` PDFs and working files needed by accepted or
+  paused work, including the configured upload/processing locations; these
+  sources need not be in a task output directory
 - reference CSVs, deployment configuration, and any portable configuration
   exports retained by your organization
 
@@ -29,9 +32,11 @@ database is restored without the files, the UI may show registered artifacts
 whose paths no longer exist. If files are restored without the database,
 batch/task/review history and the exact executable versions needed for resume
 will be incomplete. Do not reconstruct an interrupted run from the newest
-draft or version. A legacy deployment YAML can be imported as a draft during
-migration, but import never publishes and never replaces an already pinned
-definition.
+draft or version. Ordinary UI imports update drafts without publishing. The
+one-time legacy startup cutover is different: it can publish/activate the migrated
+default pipeline and referenced forms, then backfill compatible legacy
+assignments. That cutover is not a way to reconstruct missing modern pinned
+versions; restore those from a consistent database backup.
 
 
 ## Backup procedure

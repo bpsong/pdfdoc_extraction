@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Representative request traces
@@ -16,10 +16,10 @@ layers, but the ownership boundaries should remain stable.
 ```text
 POST /api/batches/upload
  → api_router.py
- → UploadReceiver
- → UploadSubmissionService
- → repositories
- → processing_jobs
+ → upload_receiver.receive_multipart_upload
+ → submission_fingerprint / existing receipt lookup
+ → IngestionAssignmentService.create_batch
+ → BatchService / repositories / processing_jobs
  → ProcessingWorker
  → FileProcessor
  → WorkflowManager
@@ -31,7 +31,7 @@ POST /api/batches/upload
 Review completion
  → review UI / api_router.py
  → ReviewService
- → review item and document transaction
+ → schema/business validation and review item/document transaction
  → ResumeManager
  → WorkflowManager
  → next configured task
@@ -41,10 +41,10 @@ Review completion
 ```text
 Admin pipeline publication
  → api_router.py
- → PipelineConfigService
- → PipelineValidationService
- → PipelineDefinitionService dependencies
- → immutable pipeline_versions row
+ → PipelineTemplateService.publish
+ → exact ReviewSchemaVersionService dependencies
+ → ValidationFacade / PipelineValidationService
+ → immutable pipeline_versions row and dependency rows
 ```
 
 For a representative upload, the same identifiers connect each persistence

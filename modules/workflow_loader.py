@@ -1,11 +1,8 @@
-"""Workflow loader module.
+"""Build Prefect flows from explicit approved task definitions.
 
-This module is responsible for:
-- Dynamically loading task classes defined in configuration.
-- Constructing a Prefect flow that orchestrates execution of configured steps.
-- Managing execution lifecycle with robust error handling and SQLite task runs.
-- Ensuring a mandatory housekeeping step executes at the end of the pipeline.
-"""
+Execute the pinned task order, persist SQLite task runs, and apply stop/continue
+failure policy. Review pauses and split fan-out return before terminal cleanup;
+finished or ordinarily failed flows run internal cleanup before finalization."""
 
 import importlib
 import logging
@@ -36,19 +33,13 @@ INTERNAL_CLEANUP_CLASS = "CleanupTask"
 
 
 class WorkflowLoader:
-    """Dynamically builds and runs a Prefect-based workflow from configuration.
+    """Execute one explicit definition with approved dynamic task imports.
 
-    This loader depends on external managers for configuration, shutdown, and state:
-    - ConfigManager: provides access to the pipeline and task definitions.
-    - ShutdownManager: performs a graceful shutdown when unrecoverable errors occur.
-    - WorkflowStateService: records SQLite task-run start, completion, pause,
-      failure, and current document pointer state.
-
-    The loader imports task classes at runtime based on config (module + class),
-    instantiates them, wraps their run methods as Prefect tasks, and wires them
-    into a Prefect flow function. It updates SQLite task runs after each step and handles
-    on-error behavior, then appends and executes a housekeeping step.
-    """
+    Published tasks receive a restricted database-only deployment configuration view
+    and exact resolved parameters. The loader calls on_start then run; each task owns
+    calling validate_required_fields. Setup failures stop the affected document,
+    without shutting down the application. Cleanup is internal and deferred across
+    review pauses and split handoffs."""
 
     _instance = None  # Legacy test compatibility; loaders are no longer singletons.
 
@@ -219,27 +210,17 @@ class WorkflowLoader:
         )
 
     def load_workflow(self, start_task_index: int = 0) -> Callable[[Dict[str, Any]], Any] | None:
-        """Build and return a Prefect flow function for the configured pipeline.
+        """Build a synchronous Prefect flow for one exact published definition.
 
-        Purpose:
-            Validate pipeline configuration, iterate over configured steps, wrap
-            each task's run() as a Prefect @task (with NO_CACHE), execute steps
-            sequentially while updating SQLite task runs, and finally run a
-            housekeeping task before fan-in finalization.
+        Set task identity/index, start SQLite tracking, import approved classes, call
+        on_start and run, and persist each outcome. on_error defaults to stop; continue
+        preserves failure history while allowing subsequent tasks. Review pause and split
+        fan-out return before cleanup; terminal execution runs cleanup and fan-in.
 
         Returns:
-            A Prefect flow function named "Dynamic PDF Processing Flow" that accepts
-            initial_context: Dict[str, Any] and returns the final context.
-
-        Notes:
-            - Pipeline validation: ensures the 'pipeline' config is a list of task keys.
-            - Iteration: for each step, imports and instantiates the configured task
-              class, calls on_start(context), executes run(context) via a wrapped
-              Prefect task, and propagates the resulting context.
-            - Error behavior: if step config specifies on_error == "stop", the
-              pipeline stops after logging and status update; otherwise it continues.
-            - Housekeeping: executes a mandatory cleanup task before leaf fan-in.
-        """
+            The flow callable, or None for a missing/invalid executable definition.
+            Some malformed-definition guards invoke registered shutdown cleanup;
+            runtime task approval/import failures fail only the affected document."""
         # Validate the pinned definition before constructing a runnable flow;
         # deployment YAML must not silently replace a missing published version.
         if self.pipeline_version_id is None or not self.cfg:

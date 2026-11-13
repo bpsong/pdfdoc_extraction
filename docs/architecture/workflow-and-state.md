@@ -5,7 +5,7 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Ingestion and workflow execution
@@ -190,7 +190,9 @@ Human review is a persisted stop and new-flow restart:
 
 1. Extraction persists normalized results and fields.
 2. `ReviewGateTask` evaluates confidence, required-field, split-confidence,
-   structured review flags, and configured policy.
+   structured review flags, and the exact form's business rules. Business-rule
+   evaluation is independent of provider confidence; blocking/inconclusive
+   outcomes force review, while warnings follow `require_review`.
 3. If required, it creates a review item, marks the document
    `review_required`, and sets `pipeline_state` to `paused`.
 4. The loader marks the task run paused and returns before downstream execution
@@ -198,8 +200,10 @@ Human review is a persisted stop and new-flow restart:
 5. An operator claims the item, creating a time-limited lock and changing the
    document to `in_review`.
 6. Draft corrections, diffs, and completion are handled by `ReviewService`.
-7. Completion persists final values, completes the paused task run, and marks
-   the document `review_completed`.
+7. Completion independently checks the submitted schema/business values and
+   revision/claim. Accepted corrections, report, audit summary and review/task/
+   document state commit atomically before resume. Blocking findings prevent
+   release; warning findings can be accepted. The document becomes `review_completed`.
 8. `ResumeManager` reconstructs context from SQLite, prevents duplicate
    downstream work, and starts a new flow at the next task.
 
@@ -217,6 +221,11 @@ cleanup and leaf-derived fan-in complete normally.
 
 The original Prefect flow is not suspended. SQLite retains the business state
 needed for operator work and resume.
+Rule forms require format 2 and exact approved validator versions; startup and
+exact loading reject incompatible published rules. Unsaved **Revalidate** uses
+the same backend evaluator without saving or resuming. See
+[review APIs](../reference/api-contracts.md#business-validation-on-extraction-reviews)
+and the [form contract](../reference/review-schema-format.md#business-validation-configuration).
 
 Extraction tasks may preserve numeric provider confidence when it exists or
 persist it as null when it does not. They must never fabricate a score.

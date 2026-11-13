@@ -1,27 +1,10 @@
-"""Persist extracted metadata as a JSON file while preserving array-of-objects.
+"""Serialize workflow data to a uniquely reserved JSON artifact.
 
-This task is intended to work with extract_pdf, which writes extracted
-values to context["data"] under configured workflow field keys (e.g.,
-"items"). The task preserves list-of-objects for fields marked as is_table:
-true in the extraction.fields configuration while keeping scalar fields as
-single JSON values.
-
-Behavior:
-- Reads configuration (data_dir, filename template) from task params via
-  ConfigManager singleton.
-- Uses alias mapping from extraction.fields config when available.
-- For fields marked with is_table: true, it keeps the list-of-objects
-  structure intact under the configured output alias when available.
-- Generates a safe, unique filename (appending _1, _2, ...) to avoid
-  overwrites.
-- Uses windows_long_path for all filesystem paths.
-- Registers the generated JSON as an ``export_json`` document artifact when
-  SQLite document context is available.
-
-This file follows the conventions used in the existing
-standard_step/storage/store_metadata_as_json.py module but adapts the
-transformation step for array-of-objects support.
-"""
+Constructor parameters own data_dir, filename and optional extraction.fields
+aliases. Nested objects/arrays remain structured without requiring table flags.
+Published tasks do not inherit deployment YAML or another task's field mapping.
+Filename {id} uses document_id, falling back to context.id, rather than extracted
+data.id. Register the result as export_json when document context is available."""
 
 from __future__ import annotations
 
@@ -44,24 +27,13 @@ from modules.utils import (
 )
 
 class StoreMetadataAsJson(BaseTask):
-    """Write extracted metadata to JSON while preserving list-of-objects.
-
-    This task expects the pipeline to put extraction output into context["data"]
-    as a dict keyed by workflow field names. Fields that are arrays of objects
-    (tables) are preserved when the extraction configuration marks them with
-    is_table: true.
-    """
+    """Serialize context.data with optional task-specific top-level aliases."""
 
     def __init__(self, config_manager: ConfigManager, **params: Any) -> None:
-        """Initialize task and read configuration.
+        """Capture task parameters and reject missing data_dir or filename.
 
-        Args:
-            config_manager: ConfigManager singleton instance.
-            **params: Task parameters; expected keys: 'data_dir', 'filename'.
-
-        Raises:
-            TaskError: If required parameters are missing.
-        """
+        The injected configuration provider is used for shared database infrastructure;
+        field aliases come only from this task's extraction.fields parameter."""
         super().__init__(config_manager=config_manager, **params)
         logging.getLogger(__name__)  # ensure logging config has been applied
         self.logger = logging.getLogger(__name__)

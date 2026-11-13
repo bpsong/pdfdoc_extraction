@@ -3,7 +3,7 @@
 This module provides:
   - Password verification using bcrypt directly (no passlib dependency for checking).
   - JWT access token creation and verification using jose.
-  - Integration with project configuration for credentials and JWT settings.
+  - SQLite account credentials and deployment-owned JWT settings.
 
 Security notes:
   - Secret keys must be strong, random values; do not commit real secrets.
@@ -66,27 +66,13 @@ def validate_password(password: str) -> None:
 
 
 class AuthUtils:
-    """Single-user authentication and JWT utilities.
+    """Authenticate the fixed SQLite admin/operator accounts and issue JWTs.
 
-    Responsibilities:
-        - Validate credentials against config (username/password_hash).
-        - Create JWT access tokens with exp/iat/sub claims.
-        - Verify and decode JWT tokens and validate their subject.
-
-    Usage:
-        config = ConfigManager(...)
-        auth = AuthUtils(config)
-        token = auth.login("user", "password")
-        username = auth.get_current_user(token)
-
-    Security notes:
-        - Ensure ConfigManager provides strong secret_key and intended algorithm.
-        - Only a single configured username is accepted.
-
-    Troubleshooting:
-        - Common Issue: Accounts are unavailable. Resolution: Run tools/setup_users.py against the active configuration.
-        - Common Issue: JWT algorithm mismatch. Resolution: Confirm web.jwt_algorithm in config matches the algorithm used when tokens were created.
-    """
+    Read password hashes, roles and token versions from UserRepository. Deployment
+    configuration supplies signing, expiry and process-local login-throttling
+    settings, not account credentials. JWT verification rechecks the current user
+    role/token version so password changes revoke existing sessions. Provision users
+    through tools/setup_users.py; routine password changes use Admin Users."""
 
     _failed_login_attempts: ClassVar[dict[str, list[float]]] = {}
     _locked_login_keys: ClassVar[dict[str, float]] = {}

@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-09 — repository/source review; no live deployment check; Pyright, isolated collection and API regressions |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Testing and verification
@@ -19,6 +19,18 @@ Live LlamaCloud checks are opt-in because they require credentials and external
 resources. Browser tests may require Playwright Chromium. Pyright 1.1.414,
 pytest, pytest-cov, and Playwright are pinned in `requirements-dev.txt`;
 production installs use `requirements.txt`. Ruff is not a supported project check.
+
+Default pytest discovery covers `test/`. Standalone experiment tests also need
+an explicit path, and the prototype's React tests use its separate npm package:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q experimentc experimentd --tb=short
+```
+
+From `pipeline_visual_editor_prototype`, run `npm test` and `npm run build`.
+These test commands use synthetic inputs/mocks; they do not run live inference.
+See the [implementation documentation audit](../../tasks/tasks-documentation-current-implementation-audit.md)
+for the 2026-11-13 results and exact verification scope.
 
 The shared visual-app fixture uses `test/helpers_visual.py` to launch an
 isolated server with a 60-second readiness deadline. Startup stdout/stderr go

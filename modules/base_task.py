@@ -14,20 +14,13 @@ from modules.config_protocol import ConfigProvider as ConfigManager
 
 
 class BaseTask(ABC):
-    """Abstract base class for all workflow tasks.
+    """Define the shared mutable-context contract for configured workflow tasks.
 
-    Responsibilities:
-      - Define a consistent lifecycle for tasks:
-        1) on_start(context): perform setup and early validation.
-        2) run(context) -> dict: execute core business logic and return context.
-        3) validate_required_fields(context): enforce configuration/context requirements.
-      - Provide utility helpers for Railway Programming style error handling:
-        - register_error(context, error): record failure details in context.
-        - initialize_context(context): ensure required context keys exist.
-
-    Subclasses must implement on_start, run, and validate_required_fields and
-    should rely on register_error for standardized error recording.
-    """
+    The loader calls on_start(context), then run(context). Subclasses implement
+    validate_required_fields but must invoke it themselves from a hook or run before
+    performing their operation. Helpers initialize data/error containers and register
+    TaskError details under the configured pipeline key. Durable workflow state is
+    owned by SQLite services rather than this base class."""
 
     def __init__(self, config_manager: ConfigManager, **params):
         """Initialize the task with configuration and parameters.

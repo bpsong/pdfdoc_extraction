@@ -5,7 +5,7 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-09 — repository/source review; no live deployment check; focused regressions and local Superstore walkthrough |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Frontend and UI architecture
@@ -80,7 +80,7 @@ deployment cannot combine cached modules from different releases.
 Operator pages cover upload, processing, split and extraction inspection,
 review, failures, and reports. Admin pages cover the overview with editable
 non-secret operational settings, fixed user accounts, watch folders, versioned
-pipelines and review forms, the task catalog, legacy schema validation, and the
+pipelines and review forms, the task catalog, configuration validation, and the
 filtered administrative audit log.
 
 Extraction and human-review pages use local PDF.js modules to render source PDFs
@@ -96,6 +96,10 @@ corrections, and edit policy; the API owns review-item requests; the field view
 renders scalar, object, and array controls; and the workspace view owns lock,
 diff, source PDF, and pane presentation. The shared PDF viewer treats expected
 render cancellations during page changes or teardown as non-errors.
+`validation.js` owns business-check request/revision tracking and stale-result
+guards; `validation-view.js` renders summaries and field/row annotations.
+The schema editor's `business-rules.js` renders approved catalog descriptors
+without document-type-specific validator branches.
 
 Operator and administrative pages now use versioned feature entries under
 `web/static/js/`, including upload, processing overview, failures, reports,
@@ -166,8 +170,8 @@ name confirmation and remains available for all pipeline lifecycle states.
   HTML disclosures for contextual help; these are presentation concerns and do
   not introduce workflow-state or API contracts.
 - Production JavaScript has no bundling or static type-checking stage.
-- Demoted review-gate and split-settings templates/scripts remain although
-  their routes redirect to the pipeline page.
+- Legacy review-gate and split-settings routes redirect to the pipeline page;
+  their former standalone templates/scripts have been removed.
 
 The React/Vite visual editor has separate dependencies and is not production
 behavior until deliberately ported into `web/`.

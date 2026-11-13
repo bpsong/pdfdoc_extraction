@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Stored versus portable configuration
@@ -61,10 +61,13 @@ Validate in the Pipeline editor or select an imported stored draft:
 .\.venv\Scripts\python.exe -m tools.config_check validate --config path\to\config.yaml --pipeline invoices --draft --import-checks
 ```
 
-The CLI currently accepts `validate-file --kind pipeline` but its validator
-expects an incompatible `pipeline-bundle` wrapper. Use the editor/stored-draft
-path for pipeline bundles. The structural checker and complete publish/business
-validation are distinct; see [CLI reference](../../tools/config_check/README.md).
+For an exported bundle, use
+`.\.venv\Scripts\python.exe -m tools.config_check validate-file --file pipeline.json --kind pipeline`.
+Its serialized `kind` remains `pipeline-bundle`; `pipeline` selects the CLI
+validation mode. Offline form dependencies must be embedded with matching
+hashes, or provide `--config` to resolve exact coordinates from SQLite read-only.
+File validation never imports or publishes. The structural checker and complete
+publish/business validation are distinct; see [CLI reference](../../tools/config_check/README.md).
 
 ## Lifecycle and routing
 

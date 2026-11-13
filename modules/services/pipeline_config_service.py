@@ -1,4 +1,9 @@
-"""Pipeline draft, diff, validation, and publish service for admin UI."""
+"""Retain legacy global YAML pipeline draft/publication compatibility APIs.
+
+This service uses config_versions and can write deployment YAML. Current named
+pipelines use PipelineTemplateService, PipelineDefinitionService and
+VersionedAdminService instead; runtime document execution never selects this
+global YAML definition as a fallback."""
 
 from __future__ import annotations
 
@@ -40,7 +45,7 @@ class PipelineConfigError(ValueError):
 
 
 class PipelineConfigService:
-    """Coordinate admin pipeline drafts, validation, diffs, and publishing."""
+    """Manage legacy global drafts and YAML publication, not named pipeline versions."""
 
     def __init__(self, config_manager: ConfigManager, conn: sqlite3.Connection) -> None:
         """Initialize the service.

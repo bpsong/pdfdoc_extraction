@@ -1,16 +1,10 @@
 #!/usr/bin/env python3
-"""
-Config Check CLI Tool - Main Entry Point
+"""Validate deployment YAML, stored versions/drafts, and portable files.
 
-A CLI tool for validating configuration YAML files for the PDF processing system.
-
-This implements Task 2.0 from the PRD checklist:
-- Complete CLI argument parsing and interface
-- Subcommands 'validate' and 'schema' are required
-- Proper exit codes and input validation
-
-The module exposes the CLI entry point used by the integration tests and packaging metadata.
-"""
+Expose validate, validate-file and schema commands with text/JSON reports and
+exit codes 0 (clean), 1 (errors), 2 (warnings only), and 64 (usage error). Stored
+validation opens SQLite read-only and never migrates or publishes configuration.
+See tools/config_check/README.md for scope and portable pipeline limitations."""
 
 import argparse
 import logging
@@ -510,16 +504,9 @@ def run_validate_command(args, logger: logging.Logger) -> int:
 
 
 def run_schema_command(args, logger: logging.Logger) -> int:
-    """
-    Execute the schema subcommand with placeholder implementation.
+    """Print the selected portable/runtime JSON contract without changing state.
 
-    Args:
-        args: Parsed command line arguments
-        logger: Configured logger instance
-
-    Returns:
-        Exit code (0 for success)
-    """
+    Returns 0 after generation or 64 for an unsupported output format."""
     logger.info("Starting schema command execution")
 
     # Schema only supports JSON format

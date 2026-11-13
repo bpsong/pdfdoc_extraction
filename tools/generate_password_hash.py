@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
-r"""
-CLI utility to generate a bcrypt password hash for config.yaml.
+r"""Generate a bcrypt hash for legacy migration or diagnostics.
 
-Usage examples:
-  C:\Python313\python.exe tools\generate_password_hash.py
-  C:\Python313\python.exe tools\generate_password_hash.py --password abc1234
-  C:\Python313\python.exe tools\generate_password_hash.py -p abc1234 -r 12
+From the repository root in PowerShell:
+    .\.venv\Scripts\python.exe tools\generate_password_hash.py
 
-Notes:
-- Project requirement: bcrypt==5.0.0 (see requirements.txt).
-- bcrypt enforces a 72-byte password limit; longer inputs will be rejected.
-- If --password is omitted, you will be prompted (default: abc1234 if left empty).
-- The output will be a string starting with "$2b$..." suitable for config.yaml:
-    authentication:
-      username: "admin"
-      password_hash: "<paste-generated-hash-here>"
-"""
+This utility prints a hash; it does not provision or update SQLite users. Use
+tools/setup_users.py for initial accounts/recovery and Admin Users for routine
+password changes. It enforces bcrypt's byte limit, not the application's password
+policy. Its empty interactive input uses the legacy weak default abc1234; supply
+a real password interactively and protect stdout. Command-line passwords can be
+visible in shell history/process listings. See requirements.txt for bcrypt."""
 
 import argparse
 import getpass

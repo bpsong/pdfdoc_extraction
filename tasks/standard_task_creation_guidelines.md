@@ -1,5 +1,7 @@
 # Standardized Rules and Guidelines for Creating New Tasks
 
+Last reviewed: 2026-11-13 against repository source and offline regressions.
+
 ## Typed human decisions and shared split artifacts
 
 Manual split reviews use `review_kind=manual_split` and their own revisioned
@@ -356,13 +358,23 @@ Common artifact roles:
 
 Do not encode artifact paths only in status details. Store durable files on disk and register them in SQLite `document_files`.
 
-Artifact registration is currently best-effort and may return `None` when
+Default artifact registration is currently best-effort and may return `None` when
 there is no persisted document or when registration fails. A task should still
 report the primary file-operation outcome accurately, while logging enough
 non-sensitive information to diagnose missing artifact registration. The
 shared helper logs database failures centrally using the document identifier,
 artifact role, and exception type; do not add artifact paths, extracted values,
 or exception messages that may contain sensitive data to this warning.
+Supplying `connection=conn` selects strict registration inside the caller's
+transaction; missing documents and database failures then propagate. Identity
+uses `document_id`, falling back to legacy `id`. Use strict registration when
+file/row compensation and atomic publication require a registration to succeed.
+
+Runner cleanup consumes `cleanup_paths` or falls back to `file_path`; its
+`processing_dir` parameter does not restrict deletion. Only supply owned transient
+paths. Preservation checks the current document's registrations when database
+lookup succeeds, not every document's files; a failed lookup cannot guarantee
+preservation. See the [cleanup reference](../docs/reference/tasks/rules-context-housekeeping.md#housekeepingcleanup).
 
 ### 5.4. Task Approval and Dynamic Imports
 

@@ -5,7 +5,7 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-30 — repository/source review; no live deployment check; isolated synthetic tests; no live provider check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## review.review_gate
@@ -27,7 +27,8 @@
   - `schema_file`: accepted only by legacy YAML/file migration and validation
     surfaces. Import it into a review-schema draft, publish the schema, and
     select the resulting exact version before production use.
-  - `queue_name`: review queue name. Defaults to `review.default_queue_name` or `default_review`.
+  - `queue_name`: review queue name, default `default_review`. Published tasks
+    do not inherit `review.default_queue_name` from deployment settings.
   - `review_scope`: controls the reviewer editing scope. Use `"document"` or `"low_confidence_fields"`; it does not decide which review conditions trigger the gate.
   - `allow_operator_to_edit_high_confidence_fields`: boolean. Default is `true`.
   - `resume_policy`: fixed to `"next_task"`; the Pipeline editor does not expose it as a choice.
@@ -76,6 +77,7 @@ tasks:
     class: ReviewGateTask
     params:
       confidence_threshold: 0.90
+      schema_version_id: "REPLACE-WITH-EXACT-PUBLISHED-FORM-ID"
       queue_name: "default_review"
       review_scope: "low_confidence_fields"
       require_review_when_missing_confidence: true
@@ -98,6 +100,10 @@ pipeline:
   - store_metadata_json
 ```
 
+
+The form ID above is a placeholder for an existing exact published SQLite
+version selected in the editor, not a portable cross-installation identity.
+Use an app export to transfer a complete bundle and its form dependencies.
 
 LiteParse emits `liteparse_unscored`; use document scope when the operator must
 be able to correct every field. Confidence remains null and source locations

@@ -5,7 +5,7 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
 | Applies to | Production application; SQLite schema 9 |
 
 ## Configuration architecture
@@ -51,9 +51,13 @@ directory preparation from validation; `prepare_directories=False` validates
 existing paths without creating directories. The default startup behavior still
 prepares configured `*_dir` paths after required upload/watch roots are checked.
 
-Relative deployment paths resolve from the absolute YAML file directory, with
+Startup path validation resolves from the absolute YAML file directory, with
 user-home and environment-variable expansion. Runtime database access, schema
-loading, and config-check use shared resolution rules. Config-check defaults to
+loading, and config-check use shared resolution rules. Other file consumers can
+use the original strings relative to the process working directory; use absolute
+intake/working/task paths for an external YAML location. See the
+[path-resolution contract](../reference/deployment-configuration.md#path-resolution).
+Config-check defaults to
 the checked YAML directory; `--base-dir` overrides only filesystem validation,
 not the deployment-selected SQLite database. Validation of an in-memory mapping
 without an explicit base or source file defaults to the current directory.
@@ -102,9 +106,11 @@ are checked as aliases while resolved values remain outside stored definitions:
 Stored selectors include `--pipeline KEY` or `--review-schema KEY` with exactly
 one of `--draft`/`--version N`; `--all-stored` audits every stored source.
 `validate-file --kind runtime` and `--kind review-schema` check portable files
-without importing them. The current `--kind pipeline` path expects an incompatible
-`pipeline-bundle` wrapper and is not a supported validation route for bundles;
-validate the imported stored draft in the app or through a stored selector. Warning-only results use exit code `2`;
+without importing them. `--kind pipeline` validates an exported file whose
+content has `kind: pipeline-bundle`; the CLI selector and serialized wrapper
+have different names. Offline validation requires embedded review-schema
+dependencies, or `--config` can resolve exact coordinates from read-only SQLite.
+Warning-only results use exit code `2`;
 usage errors use `64`. The checker does not migrate or modify SQLite.
 
 Admin services support template lifecycle, optimistic draft revision checks,
@@ -197,12 +203,8 @@ current assignment.
 
 ## Binding lifecycle
 
-`/app/admin/watch-folders` manages binding configuration. A binding is enabled,
-paused (assignment retained), unbound (assignment cleared), or retired (disabled
-and immutable). Paused and unbound paths remain reserved. Retired paths are
-reusable through a new binding identity; historical batch references remain
-intact. Only unreferenced settings may be permanently deleted. Lifecycle
-actions do not delete source directories or PDFs.
+The lifecycle above reserves paths for enabled, paused and unbound bindings.
+Retirement releases the path while preserving historical identity.
 
 ## Health and access checks
 

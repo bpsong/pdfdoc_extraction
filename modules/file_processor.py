@@ -1,15 +1,10 @@
-"""File processing utilities for handling web uploads and triggering workflows.
+"""Bridge an already-ingested SQLite processing job to WorkflowManager.
 
-This module is responsible for:
-  - Receiving and storing web uploads into a configured upload directory.
-  - Optionally validating PDF headers using a minimal magic-bytes check.
-  - Generating a UUID and renaming/moving files into the processing directory.
-  - Creating a UUID-based filename and SQLite ingestion records when available.
-  - Triggering downstream processing through WorkflowManager.
-
-It does not change files' content; it orchestrates placement, metadata creation,
-and workflow initiation based on configuration.
-"""
+Primary uploads and watch-folder claims create assigned batch/document/job state
+in their ingestion services. FileProcessor requires those identities before
+triggering synchronous workflow execution. Its legacy process_web_upload helper
+is not used by the retired HTTP upload endpoint and cannot create unassigned
+workflow state."""
 
 import os
 import uuid
@@ -38,29 +33,12 @@ class WorkflowTrigger(Protocol):
         """Start processing for a file and its workflow context."""
 
 class FileProcessor:
-    """Coordinates moving uploaded files into processing and starting workflows.
+    """Trigger workflows for files with existing assigned SQLite identities.
 
-    Dependencies:
-      - ConfigManager: Provides configuration values such as directories and flags.
-      - retry_operation_func: Callable for retrying operations (injected, not used here).
-      - WorkflowManager: Triggers downstream workflows for a given file.
-
-    Directories:
-      - web.upload_dir: Temporary location where web uploads are first written.
-      - watch_folder.processing_dir: Destination directory where files are renamed to
-        their UUID and processed by the workflow.
-
-    High-level flow:
-       1) Accept upload and write it into web.upload_dir.
-       2) Optionally validate that the file is a PDF by checking the '%PDF-' header.
-       3) Generate a UUID, rename the file to <uuid>.pdf, and move it to processing_dir.
-       4) Create initial SQLite batch/document records when available.
-       5) Trigger the workflow via WorkflowManager.
-
-    Performance Considerations:
-       - File processing involves synchronous I/O operations that may block for large files (>10MB).
-       - Rate limiting: File operations are throttled to prevent system overload; consider batching for high-volume scenarios.
-    """
+    Construction prepares configured processing/upload directories. Primary ingestion
+    belongs to UploadReceiver and ingestion services. The injected retry callable is
+    retained for compatibility and is not used here. This class provides no file-I/O
+    rate limiter."""
 
     def __init__(
         self,
@@ -128,30 +106,20 @@ class FileProcessor:
         return is_pdf_header(file_path, read_size=5, attempts=3, delay=0.2, logger=logger)
 
     def process_web_upload(self, upload_file, source: str = "web") -> str:
-        """Handle a web-uploaded file and initiate processing.
+        """Run the legacy upload helper, which cannot assign a pipeline.
 
-        Steps:
-          1) Save the uploaded file to web.upload_dir using its original filename.
-          2) Optionally validate PDF header depending on configuration.
-          3) Generate a UUID and rename to '<uuid>.pdf'.
-          4) Move the file into the processing directory.
-          5) Create SQLite state and trigger the workflow via process_file.
+        Saves the supplied upload, optionally checks its PDF header, moves it to a UUID
+        working path, then calls process_file without assigned batch/document IDs. That
+        unassigned call raises ValueError; the moved file can remain on disk. Production
+        HTTP uploads use UploadReceiver and assigned batch ingestion instead.
 
         Args:
-            upload_file: A Starlette/FastAPI UploadFile instance or a file-like/bytes-like object.
-            source (str): Origin label of the upload (default: "web").
-
-        Returns:
-            str: The generated unique_id (UUID string) for the uploaded file.
+            upload_file: UploadFile, file-like object, or bytes-like content.
+            source: Compatibility origin label.
 
         Raises:
-            ValueError: If web.upload_dir is not configured or if PDF validation fails.
-            Exception: Propagates any I/O related errors encountered during save/move operations.
-
-        Performance Considerations:
-            - This method performs synchronous file I/O, which may block for large files (>10MB).
-            - Rate limiting: Operations are throttled to prevent system overload; use async variants for high throughput.
-        """
+            ValueError: Invalid PDF or missing exact pipeline assignment.
+            OSError: Saving or moving the file fails."""
         # Resolve directories
         upload_dir = str(self.config_manager.get('web.upload_dir'))
         if not upload_dir:
@@ -225,26 +193,23 @@ class FileProcessor:
                      batch_id: Optional[str] = None,
                      document_id: Optional[str] = None,
                      create_sqlite_state: bool = True) -> bool:
-        """Process a file already in the processing directory with a UUID name.
-
-        Intended for files that have been placed/renamed to their UUID form (e.g., '<uuid>.pdf').
+        """Execute a file's assigned workflow synchronously.
 
         Args:
-            filepath (str): Full path to the file in the processing directory.
-            unique_id (str): UUID identifier associated with the file.
-            source (str): Origin label of the file (e.g., 'web', 'watch_folder').
-            original_filename (Optional[str]): Original filename, if available.
-            batch_id: Existing SQLite batch ID for grouped ingestion.
-            document_id: Existing SQLite document ID for grouped ingestion.
-            create_sqlite_state: Whether to create SQLite records when IDs are not provided.
+            filepath: Path to an already-placed working PDF.
+            unique_id: Existing workflow identity.
+            source: Intake origin label.
+            original_filename: Original name, falling back to the working basename.
+            batch_id: Required existing SQLite batch identity.
+            document_id: Required existing SQLite document identity.
+            create_sqlite_state: Legacy flag; missing IDs are rejected rather than created.
 
         Returns:
-            bool: True if status creation and workflow trigger were initiated successfully.
+            Whether the workflow trigger returned a value other than False. A completed
+            invocation can still contain recorded task failure or a review pause.
 
-        Notes:
-            - Triggers the configured workflow via WorkflowManager.
-            - Emits info/debug logs to trace processing.
-        """
+        Raises:
+            ValueError: Existing assigned batch/document identities are absent."""
         # if caller passed in the real original name, use it; otherwise fall back
         filename = original_filename or os.path.basename(filepath)
         destination_path = filepath  # File is already renamed and placed correctly

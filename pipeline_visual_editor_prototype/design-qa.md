@@ -1,5 +1,9 @@
 # Design QA: Flat List Object Row Schema
 
+> Historical prototype assessment. The captures and findings below describe
+> that checkpoint; see [prototype setup](README.md) for current run commands
+> and [production documentation](../docs/README.md) for implemented app behavior.
+
 - Source visual truth: `D:\python_code\pdfdoc_extraction\pipeline_visual_editor_prototype\tasks\flat-list-object-schema\approved-reference.png`
 - Implementation screenshot: `D:\python_code\pdfdoc_extraction\pipeline_visual_editor_prototype\tasks\flat-list-object-schema\implementation.png`
 - Viewport: 1440 × 1024 desktop
