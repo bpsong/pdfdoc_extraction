@@ -8,6 +8,11 @@
 | Last verified | 2026-10-10 — repository/source review; no live deployment check |
 | Applies to | Current application screens |
 
+On **Admin Overview**, **Pipeline templates** counts each active or inactive
+template once, regardless of how many versions it has. Follow **View active
+and inactive templates** to inspect their status and versions. Archived
+templates are available separately through **Show archived** in the editor.
+
 ## Validate the draft you are changing
 
 Use **Validate** inside **Pipeline** or **Review Forms** to check that draft.

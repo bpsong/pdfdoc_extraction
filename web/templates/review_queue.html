@@ -42,13 +42,12 @@
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="confidence" type="button" title="Extraction confidence; manual split tasks have no score">Review signal <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="created_at" type="button">Queued at <span aria-hidden="true"></span></button></th>
                     <th><button class="btn btn-ghost btn-xs" data-review-sort="status" type="button">Status <span aria-hidden="true"></span></button></th>
-                    <th class="text-right">Actions</th>
                 </tr>
             </thead>
             <tbody id="review-queue-body" aria-busy="true">
-                <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
-                <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
-                <tr aria-hidden="true"><td colspan="7"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-2/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span></div></td></tr>
+                <tr aria-hidden="true"><td colspan="6"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
+                <tr aria-hidden="true"><td colspan="6"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span><span class="placeholder-row w-2/5"></span></div></td></tr>
+                <tr aria-hidden="true"><td colspan="6"><div class="grid grid-cols-3 gap-3"><span class="placeholder-row w-2/5"></span><span class="placeholder-row w-3/5"></span><span class="placeholder-row w-4/5"></span></div></td></tr>
             </tbody>
         </table>
         <div class="flex items-center justify-between gap-3 p-3 border-t border-base-200" id="review-pagination">
@@ -64,5 +63,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/js/review-queue/index.js?v=manual-split-1"></script>
+<script type="module" src="/static/js/review-queue/index.js?v=journey-lookup-1"></script>
 {% endblock %}

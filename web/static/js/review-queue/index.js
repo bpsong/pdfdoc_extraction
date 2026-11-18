@@ -1,1 +1,1 @@
-import './controller.js?v=manual-split-1';
+import './controller.js?v=journey-lookup-1';

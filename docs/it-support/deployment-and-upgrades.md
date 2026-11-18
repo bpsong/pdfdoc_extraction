@@ -5,8 +5,8 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-31 — repository/source review; no live deployment check; Pyright and isolated synthetic regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-18 — repository/source review; no live deployment check; isolated browser and retention restart verification |
+| Applies to | Production application; SQLite schema 10 |
 
 ## Prepare a compatible release
 
@@ -39,18 +39,24 @@ Deploy these cache values with the matching server/API artifact:
 - Shared committed CSS query:
   `tailwind-3.4.17-daisyui-4.12.10-pipeline-cleanup`.
 
-The server requires schema **9**. Back up the database consistently before the
+The server requires schema **10**. Back up the database consistently before the
 upgrade. Start through normal `main.py` migration ownership so the parent applies
 the upgrade before web/worker children verify the exact schema. A standalone web
 process remains verification-only unless explicitly started in migration mode.
-The migration preserves all audit history and adds expiring cleanup previews;
-it does not automatically clean processing history or physical files.
+
+Schema 10 adds an empty `pending_upload_files` journal. Startup uses it to
+remove finalized files from interrupted new submissions. It leaves older
+unregistered PDFs in place because they may have been retained by history
+cleanup. Recover any PDF already lost on an earlier release from an archive or backup.
+Upgrades from releases before schema 9 also preserve the audit history and
+add expiring cleanup previews.
 
 Use an isolated synthetic configuration/database for regression checks rather
 than a developer or production database. Run:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q test\db\test_pipeline_cleanup_migration.py test\services\test_pipeline_cleanup_service.py test\integration\test_pipeline_cleanup_api.py test\visual\test_pipeline_cleanup_visual.py test\visual\test_pipeline_metadata_visual.py test\visual\test_pipeline_controller_modules.py --tb=short
+.\.venv\Scripts\python.exe -m pytest -q test\integration\test_batch_upload_api.py test\services\test_upload_receiver.py --tb=short
 .\.venv\Scripts\python.exe -m tools.frontend_release_check check
 npm run build:css
 ```
@@ -60,6 +66,18 @@ mobile archive blockers, archived visibility/read-only controls, preview counts,
 name confirmation, stale-preview recovery, and success results. See the
 [retention guide](../admin/archiving-and-retention.md) and
 [verification record](../../tasks/tasks-pipeline-archive-cleanup.md).
+
+For the retention restart check, upload a synthetic PDF through the browser
+using a staging pipeline and record the SHA-256 of its stored original. Once
+the batch is finished and eligible, clean up its history through **Pipeline**.
+Verify **Files deleted: 0** and confirm the next preview shows zero eligible
+batches for that fixture. Restart the web process and check the stored PDF
+again. Its SHA-256 should match even though the old preview links are gone.
+
+The isolated November 18 check completed the cleanup at 390 × 844 and
+inspected the result at 1366 × 950. The stored PDF's SHA-256 matched after
+restart, and startup removed a separate synthetic interrupted upload with a
+pending journal record.
 
 ## Business-rule runtime compatibility
 

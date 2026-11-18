@@ -65,6 +65,36 @@ class ManualSplitRepository:
         self.conn.execute("UPDATE manual_split_decisions SET phase=?,updated_at=? WHERE id=?", (phase, utc_now(), decision_id))
 
 
+class PendingUploadRepository:
+    """Track final paths owned by uploads that have yet to commit."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def reserve(self, paths: list[str]) -> None:
+        self.conn.executemany(
+            "INSERT INTO pending_upload_files(file_path) VALUES (?)",
+            [(path,) for path in paths],
+        )
+
+    def list_paths(self, paths: list[str] | None = None) -> list[str]:
+        if paths is None:
+            rows = self.conn.execute("SELECT file_path FROM pending_upload_files")
+        else:
+            rows = self.conn.execute(
+                "SELECT file_path FROM pending_upload_files "
+                "WHERE file_path IN (SELECT value FROM json_each(?))",
+                (json_dumps(paths),),
+            )
+        return [row["file_path"] for row in rows]
+
+    def release(self, paths: list[str]) -> None:
+        self.conn.executemany(
+            "DELETE FROM pending_upload_files WHERE file_path = ?",
+            [(path,) for path in paths],
+        )
+
+
 class UploadSubmissionRepository:
     """Retain accepted submission receipts for safe retries and status lookup."""
 
@@ -409,7 +439,15 @@ class BatchRepository:
         order_column = sort_columns.get(sort_by, "created_at")
         order_direction = "ASC" if sort_dir.lower() == "asc" else "DESC"
         rows = self.conn.execute(
-            f"SELECT * FROM batches ORDER BY {order_column} {order_direction}, id {order_direction} LIMIT ? OFFSET ?",
+            f"""
+            SELECT batches.*, (
+                SELECT d.original_filename FROM documents d
+                WHERE d.batch_id = batches.id AND d.parent_document_id IS NULL
+                ORDER BY d.created_at, d.id LIMIT 1
+            ) AS source_filename
+            FROM batches ORDER BY {order_column} {order_direction}, id {order_direction}
+            LIMIT ? OFFSET ?
+            """,
             (limit, offset),
         ).fetchall()
         return [dict(row) for row in rows]
@@ -2069,6 +2107,13 @@ class PipelineTemplateRepository:
                 "SELECT * FROM pipeline_templates WHERE id = ?", (template_id,)
             ).fetchone()
         )
+
+    def count_current(self) -> int:
+        """Count the active and inactive templates shown in the pipeline editor."""
+        row = self.conn.execute(
+            "SELECT COUNT(*) FROM pipeline_templates WHERE status <> 'archived'"
+        ).fetchone()
+        return int(row[0])
 
     def get_by_key(self, template_key: str) -> dict[str, Any] | None:
         return _row_to_dict(

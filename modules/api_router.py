@@ -75,7 +75,7 @@ from .services.upload_receiver import (
     upload_limits,
 )
 from .services.upload_storage_lock import UploadStorageBusy, upload_storage_access
-from .services.upload_submission_service import submission_fingerprint, submission_status
+from .services.upload_submission_service import accept_staged_upload, submission_fingerprint, submission_status
 from .services.ingress_binding_service import (
     IngressBindingConflictError,
     IngressBindingService,
@@ -953,7 +953,6 @@ def build_router() -> APIRouter:
         pipeline_version_id = received.pipeline_version_id
 
         file_descriptors: list[dict[str, Any]] = []
-        finalized_paths: list[Path] = []
         try:
             fingerprint = submission_fingerprint(received) if submission_id else None
             with managed_connect(config) as conn:
@@ -988,8 +987,6 @@ def build_router() -> APIRouter:
 
                 document_id = str(uuid.uuid4())
                 final_path = processing_root / f"web-upload-{document_id}.pdf"
-                os.replace(upload.path, final_path)
-                finalized_paths.append(final_path)
                 file_descriptors.append(
                     {
                         "document_id": document_id,
@@ -1006,32 +1003,15 @@ def build_router() -> APIRouter:
                     }
                 )
 
-            with managed_connect(config) as conn:
-                try:
-                    created = IngestionAssignmentService(conn, config).create_batch(
-                        pipeline_version_id=pipeline_version_id,
-                        role=role,
-                        source="web",
-                        assignment_source="upload",
-                        files=file_descriptors,
-                        user=user,
-                        metadata={
-                            "uploaded_by": user,
-                            "file_count": len(file_descriptors),
-                        },
-                        status="queued",
-                        submission_id=submission_id,
-                        fingerprint=fingerprint,
-                    )
-                except IngestionAssignmentError as exc:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=str(exc),
-                    )
+            try:
+                created = accept_staged_upload(
+                    config, processing_root=processing_root, received=received,
+                    files=file_descriptors, user=user, role=role,
+                    submission_id=submission_id, fingerprint=fingerprint,
+                )
+            except IngestionAssignmentError as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
-            if created.get("replayed"):
-                for path in finalized_paths:
-                    path.unlink(missing_ok=True)
             batch = created["batch"]
             documents = created["documents"]
             return {
@@ -1041,18 +1021,18 @@ def build_router() -> APIRouter:
                 "pipeline": created["pipeline"],
             }
         except HTTPException:
-            for path in [item.path for item in received.files] + finalized_paths:
+            for item in received.files:
                 try:
-                    path.unlink(missing_ok=True)
+                    item.path.unlink(missing_ok=True)
                 except OSError:
-                    logger.warning("Failed to remove rejected upload file: %s", path)
+                    logger.warning("Failed to remove rejected upload file: %s", item.path)
             raise
         except Exception as exc:
-            for path in [item.path for item in received.files] + finalized_paths:
+            for item in received.files:
                 try:
-                    path.unlink(missing_ok=True)
+                    item.path.unlink(missing_ok=True)
                 except OSError:
-                    logger.warning("Failed to remove upload file after error: %s", path)
+                    logger.warning("Failed to remove upload file after error: %s", item.path)
             logger.exception("Batch upload failed")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

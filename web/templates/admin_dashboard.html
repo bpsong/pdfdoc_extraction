@@ -19,9 +19,9 @@
             <div class="stat-desc" id="admin-schema-summary">Schemas</div>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
-            <div class="stat-title">Pipeline</div>
-            <div class="stat-value text-2xl" id="admin-pipeline-health">0</div>
-            <div class="stat-desc" id="admin-pipeline-summary">Enabled steps</div>
+            <div class="stat-title">Pipeline templates</div>
+            <div class="stat-value text-2xl" id="admin-pipeline-health">—</div>
+            <a class="stat-desc link whitespace-normal" href="/app/admin/pipeline">View active and inactive templates</a>
         </div>
         <div class="stat bg-base-100 rounded-lg shadow-sm metric-card">
             <div class="stat-title">Admin Events</div>
@@ -121,5 +121,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="/static/js/admin-dashboard/index.js?v=controller-modularization-7a"></script>
+<script type="module" src="/static/js/admin-dashboard/index.js?v=journey-lookup-1"></script>
 {% endblock %}

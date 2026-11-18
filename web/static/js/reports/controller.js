@@ -1,5 +1,5 @@
-import { createView } from './view.js?v=controller-modularization-7a';
-import { createApi } from './api.js?v=controller-modularization-7a';
+import { createView } from './view.js?v=journey-lookup-1';
+import { createApi } from './api.js?v=journey-lookup-1';
 (function () {
     "use strict";
 
@@ -83,18 +83,7 @@ import { createApi } from './api.js?v=controller-modularization-7a';
 
     document.getElementById("reports-recent-body").addEventListener("click", (event) => {
         const row = event.target.closest(".reports-batch-row");
-        if (row) {
-            openBatchDetails(row.dataset.batchId);
-        }
-    });
-
-    document.getElementById("reports-recent-body").addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" && event.key !== " ") {
-            return;
-        }
-        const row = event.target.closest(".reports-batch-row");
-        if (row) {
-            event.preventDefault();
+        if (row && !event.target.closest("a")) {
             openBatchDetails(row.dataset.batchId);
         }
     });

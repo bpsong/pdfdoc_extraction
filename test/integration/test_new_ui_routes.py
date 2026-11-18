@@ -487,7 +487,7 @@ def test_review_pages_include_task_19_assets(monkeypatch) -> None:
 
     assert queue.status_code == 200
     assert 'id="review-queue-workspace"' in queue.text
-    assert "/static/js/review-queue/index.js?v=manual-split-1" in queue.text
+    assert "/static/js/review-queue/index.js?v=journey-lookup-1" in queue.text
     assert review.status_code == 200
     assert 'id="human-review-workspace"' in review.text
     assert "/static/js/pdf_viewer.js" in review.text
@@ -569,7 +569,7 @@ def test_reports_page_includes_task_25_assets(monkeypatch) -> None:
     assert response.status_code == 200
     assert 'id="reports-workspace"' in response.text
     assert 'id="batch-detail-modal"' in response.text
-    assert "/static/js/reports/index.js?v=controller-modularization-7a" in response.text
+    assert "/static/js/reports/index.js?v=journey-lookup-1" in response.text
 
 
 @pytest.mark.parametrize("username", ["operator", "admin"])
@@ -609,7 +609,7 @@ def test_admin_dashboard_audit_and_users_pages_include_assets(monkeypatch) -> No
 
     assert dashboard.status_code == 200
     assert 'id="admin-dashboard-workspace"' in dashboard.text
-    assert "/static/js/admin-dashboard/index.js?v=controller-modularization-7a" in dashboard.text
+    assert "/static/js/admin-dashboard/index.js?v=journey-lookup-1" in dashboard.text
     assert audit.status_code == 200
     assert 'id="admin-audit-workspace"' in audit.text
     assert users.status_code == 200

@@ -21,6 +21,7 @@ from modules.services.upload_receiver import (
     upload_limits,
 )
 from modules.db.connection import connect
+from modules.db.repositories import PendingUploadRepository
 from modules.services.startup_migration_service import initialize_database
 from modules.services.batch_service import BatchService
 
@@ -379,7 +380,7 @@ def test_admission_rejects_when_capacity_is_full() -> None:
     anyio.run(exercise)
 
 
-def test_startup_reconciliation_removes_only_unreferenced_upload_files(
+def test_startup_reconciliation_removes_only_pending_unreferenced_upload_files(
     tmp_path: Path,
 ) -> None:
     config = Config(tmp_path)
@@ -391,11 +392,15 @@ def test_startup_reconciliation_removes_only_unreferenced_upload_files(
     abandoned.write_bytes(b"partial")
     referenced = processing / "web-upload-referenced.pdf"
     orphaned = processing / "web-upload-orphaned.pdf"
+    legacy = processing / "web-upload-previously-purged.pdf"
     watch_file = processing / "watch-document.pdf"
-    for path in (referenced, orphaned, watch_file):
+    for path in (referenced, orphaned, watch_file, legacy):
         path.write_bytes(b"%PDF-test")
 
     with connect(config) as conn:
+        PendingUploadRepository(conn).reserve([
+            str(referenced), str(orphaned), str(processing / "web-upload-before-rename.pdf"),
+        ])
         BatchService(conn).create_ingestion_batch(
             source="web",
             file_path=str(referenced),
@@ -409,9 +414,37 @@ def test_startup_reconciliation_removes_only_unreferenced_upload_files(
     assert result.orphaned_final_removed == 1
     assert result.cleanup_failures == 0
     assert referenced.exists()
+    assert legacy.exists()
     assert watch_file.exists()
     assert not abandoned.exists()
     assert not orphaned.exists()
+    with connect(config) as conn:
+        assert PendingUploadRepository(conn).list_paths() == []
+
+
+def test_reconciliation_retries_a_pending_pdf_after_unlink_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = Config(tmp_path)
+    initialize_database(config)
+    processing = Path(require_present(config.get("watch_folder.processing_dir")))
+    processing.mkdir(parents=True, exist_ok=True)
+    path = processing / "web-upload-interrupted.pdf"
+    path.write_bytes(b"%PDF-test")
+    with connect(config) as conn:
+        PendingUploadRepository(conn).reserve([str(path)])
+
+    def fail_unlink(self: Path, missing_ok: bool = False) -> None:
+        raise PermissionError("synthetic locked file")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail_unlink)
+        assert reconcile_upload_files(config).cleanup_failures == 1
+    with connect(config) as conn:
+        assert PendingUploadRepository(conn).list_paths() == [str(path)]
+    assert path.exists()
+    assert reconcile_upload_files(config).orphaned_final_removed == 1
+    assert not path.exists()
 
 
 def test_reconciliation_preserves_files_when_database_cannot_be_checked(

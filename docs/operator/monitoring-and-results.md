@@ -26,11 +26,11 @@ Record or bookmark the batch address if you need to return later.
 To find recent work:
 
 1. Open **Reports** and find **Recent Batches**.
-2. Match the submission time, source and batch identifier. **Source** distinguishes
-   browser intake from other intake such as an incoming folder.
-3. Select the batch row; keyboard users can focus it and press Enter or Space.
-4. In its details, inspect documents and task history, then select
-   **Open processing dashboard**.
+2. Find a source filename in the **Batch** column. Multi-file batches show one
+   representative source PDF. Use the submission time, source and batch ID to
+   distinguish repeated filenames.
+3. Select the filename to open that batch in processing. Select **Batch details**
+   to inspect its documents and task history from Reports.
 
 Reports also summarises document statuses, submission sources, review activity,
 completed/failed totals and average processing time. These are activity summaries,

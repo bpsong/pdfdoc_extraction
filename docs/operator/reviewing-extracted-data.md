@@ -25,7 +25,7 @@ Go to [finding work](#open-and-claim-a-review),
 2. Use **Pipeline** and **Search documents** to narrow the list. Check the
    filename and pipeline, especially when similar documents appear.
 3. Use the ownership filters below to find available work or return to your item.
-4. Select **Claim & review** beside an available extraction review, or
+4. Select **Claim & review** under the document name for an available extraction review, or
    **Continue review** for your existing claim. If you open **View**, select
    **Claim** before editing when it is offered. A claim temporarily reserves
    the item for the signed-in account.

@@ -1,5 +1,5 @@
-import { createView } from './view.js?v=controller-modularization-7a';
-import { createApi } from './api.js?v=controller-modularization-7a';
+import { createView } from './view.js?v=journey-lookup-1';
+import { createApi } from './api.js?v=journey-lookup-1';
 (function () {
     "use strict";
 

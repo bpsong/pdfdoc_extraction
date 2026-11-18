@@ -115,4 +115,7 @@ def test_reports_summary_uses_sqlite_state(monkeypatch, tmp_path: Path) -> None:
         "failed": 1,
     }
     assert payload["review"]["total"] == 1
-    assert payload["recent_batches"][0]["total_documents"] == 2
+    batch = payload["recent_batches"][0]
+    assert batch["total_documents"] == 2
+    assert batch["original_filename"] == "2 files"
+    assert batch["source_filename"] in {"invoice-a.pdf", "invoice-b.pdf"}

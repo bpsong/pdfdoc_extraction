@@ -6,7 +6,7 @@
 | Owner | Application maintainers |
 | Status | Current |
 | Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Applies to | Production application; SQLite schema 10 |
 
 ## Persistence and artifacts
 
@@ -18,7 +18,7 @@ and services coordinate cross-table invariants.
 | --- | --- |
 | Identity | `users` |
 | Processing | `batches`, `documents`, `task_runs`, `processing_jobs` |
-| Upload receipts | `upload_submissions` |
+| Web upload finalization and receipts | `pending_upload_files`, `upload_submissions` |
 | Extraction | `extraction_results`, `extracted_fields` |
 | Review | `review_items`, `review_locks`, `manual_split_decisions` |
 | Artifacts | `document_files` |
@@ -61,6 +61,11 @@ web and worker children verify the exact schema without modifying it. Request
 handling does not run schema migrations. Standalone web or worker processes
 must explicitly select migration mode when they own database initialization.
 
+Schema 10 records each new web upload's final path before moving its PDF out
+of staging. The transaction that accepts the batch releases those reservations.
+After a crash, startup can remove an unreferenced final PDF only while its
+reservation exists. Purging history cannot make an accepted PDF eligible.
+
 Schema 9 separates audit identities from processing retention. The upgrade
 rebuilds `audit_events` without processing-record foreign keys, preserving every
 event, historical entity ID, payload, timestamp, and rowid. Historical audit IDs
@@ -87,7 +92,7 @@ the browser clears its stale receipt and waits for an explicit new upload.
 Freed SQLite pages can be reused; neither VACUUM nor physical-file cleanup is
 part of this workflow.
 
-The operator consequences, API payloads, compaction limits, and schema-9 upgrade
+The operator consequences, API payloads, compaction limits, and upgrade
 requirements are maintained in the
 [pipeline retention reference](../admin/archiving-and-retention.md).
 

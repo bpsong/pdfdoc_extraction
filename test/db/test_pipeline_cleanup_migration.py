@@ -6,6 +6,7 @@ import pytest
 
 from modules.db.connection import connect
 from modules.db.migrations import upgrade_processing_cleanup_audit
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.services.startup_migration_service import initialize_database
 from test.helpers_sqlite import TempConfig, seed_pipeline
 from test.helpers_cleanup import seed_history
@@ -26,7 +27,7 @@ def test_legacy_audit_migration_retains_rowids_payloads_and_references(tmp_path:
         conn.execute("DROP TABLE saved_audits")
         conn.commit()
         before = [tuple(row) for row in conn.execute("SELECT rowid,* FROM audit_events")]
-        conn.execute("DELETE FROM schema_migrations WHERE version=9")
+        conn.execute("DELETE FROM schema_migrations WHERE version>=9")
         conn.execute("INSERT INTO schema_migrations VALUES (8,'synthetic')")
         conn.execute("DROP TABLE pipeline_cleanup_previews")
         conn.commit()
@@ -35,7 +36,7 @@ def test_legacy_audit_migration_retains_rowids_payloads_and_references(tmp_path:
         assert before == [tuple(row) for row in conn.execute("SELECT rowid,* FROM audit_events")]
         assert not conn.execute("PRAGMA foreign_key_list(audit_events)").fetchall()
         assert not conn.execute("PRAGMA foreign_key_check").fetchall()
-        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 9
+        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == SCHEMA_VERSION
         assert conn.execute("SELECT COUNT(*) FROM pipeline_cleanup_previews").fetchone()[0] == 0
 
 

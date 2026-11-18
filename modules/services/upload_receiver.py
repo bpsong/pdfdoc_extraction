@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import asyncio
 import logging
-import sqlite3
 from threading import Lock
 from typing import AsyncGenerator, AsyncIterator
 import uuid
@@ -23,6 +22,7 @@ from starlette.types import Message, Receive
 
 from ..config_protocol import ConfigProvider
 from ..db.connection import managed_connect
+from ..db.repositories import PendingUploadRepository
 from .upload_storage_lock import upload_storage_access
 
 MIB = 1024 * 1024
@@ -388,8 +388,42 @@ async def _receive_multipart_upload(
             raise
 
 
+def remove_pending_uploads(
+    config: ConfigProvider, processing_root: Path, paths: list[str] | None = None,
+) -> tuple[int, int]:
+    """Remove only outstanding reservations in this root. Retry I/O failures later."""
+    removed = failures = 0
+    with managed_connect(config) as conn:
+        pending = PendingUploadRepository(conn)
+        reservations = pending.list_paths(paths)
+        if not reservations:
+            return 0, 0
+        rows = conn.execute(
+            "SELECT file_path FROM documents UNION SELECT file_path FROM document_files"
+        )
+        referenced = {Path(row["file_path"]).resolve() for row in rows if row["file_path"]}
+        released: list[str] = []
+        for raw_path in reservations:
+            path = Path(raw_path)
+            if path.parent != processing_root or not path.match("web-upload-*.pdf"):
+                continue
+            if path.resolve() not in referenced:
+                try:
+                    path.unlink()
+                    removed += 1
+                except FileNotFoundError:
+                    pass  # Interrupted before rename, or after a previous unlink.
+                except OSError:
+                    failures += 1
+                    logger.warning("Unable to remove pending finalized upload: %s", path)
+                    continue
+            released.append(raw_path)
+        pending.release(released)
+    return removed, failures
+
+
 def reconcile_upload_files(config: ConfigProvider) -> UploadReconciliationResult:
-    """Remove upload-owned files left unreferenced by an interrupted web process."""
+    """Remove abandoned staging files and journaled, uncommitted final uploads."""
     processing_dir = str(config.get("watch_folder.processing_dir") or "")
     if not processing_dir:
         return UploadReconciliationResult(0, 0, 0)
@@ -404,25 +438,12 @@ def _reconcile_locked_upload_files(
     processing_root = Path(processing_dir).resolve()
     staging_dir = processing_root / ".upload_staging"
 
-    # Resolve durable references before deleting anything. If SQLite cannot be
-    # checked, reconciliation fails closed and leaves every file untouched.
-    with managed_connect(config) as conn:
-        rows = conn.execute(
-            """
-            SELECT file_path FROM documents
-            UNION
-            SELECT file_path FROM document_files
-            """
-        ).fetchall()
-    referenced = {
-        str(Path(str(row["file_path"])).resolve()).casefold()
-        for row in rows
-        if row["file_path"]
-    }
-
+    # History cleanup intentionally forgets paths. A missing reference alone
+    # cannot distinguish an abandoned upload from a retained source PDF.
+    orphaned_final_removed, cleanup_failures = remove_pending_uploads(
+        config, processing_root
+    )
     staging_removed = 0
-    orphaned_final_removed = 0
-    cleanup_failures = 0
     candidates = (
         list(staging_dir.glob("*.upload")) if staging_dir.is_dir() else []
     )
@@ -433,17 +454,6 @@ def _reconcile_locked_upload_files(
         except OSError:
             cleanup_failures += 1
             logger.warning("Unable to remove abandoned upload staging file: %s", path)
-
-    if processing_root.is_dir():
-        for path in processing_root.glob("web-upload-*.pdf"):
-            if str(path.resolve()).casefold() in referenced:
-                continue
-            try:
-                path.unlink()
-                orphaned_final_removed += 1
-            except OSError:
-                cleanup_failures += 1
-                logger.warning("Unable to remove orphaned finalized upload: %s", path)
 
     return UploadReconciliationResult(
         staging_removed=staging_removed,

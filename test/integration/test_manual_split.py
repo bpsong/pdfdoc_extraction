@@ -7,6 +7,7 @@ from pypdf import PdfReader, PdfWriter
 
 from modules.db.connection import connect, json_loads
 from modules.db.repositories import DocumentRepository, ReviewRepository, TaskRunRepository
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.resume_manager import ResumeManager
 from modules.services.batch_service import BatchService
 from modules.services.manual_split_service import ManualSplitReviewService, validate_boundaries
@@ -462,7 +463,7 @@ def test_version7_migration_preserves_reviews_as_extraction(manual_case):
         review = ReviewRepository(conn).get(result["review_item_id"])
         assert review is not None
         assert review["review_kind"] == "extraction"
-        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == 9
+        assert conn.execute("SELECT MAX(version) FROM schema_migrations").fetchone()[0] == SCHEMA_VERSION
         assert conn.execute("SELECT COUNT(*) FROM manual_split_decisions").fetchone()[0] == 0
 
 

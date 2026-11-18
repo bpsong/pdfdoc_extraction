@@ -15,6 +15,7 @@ from modules.db.repositories import (
     AppSettingsRepository,
     AuditRepository,
     ConfigVersionRepository,
+    PipelineTemplateRepository,
 )
 from modules.services.config_validation_service import ConfigValidationService
 from modules.services.audit_service import AuditService
@@ -653,6 +654,7 @@ class AdminSummaryService:
                 "summary": _summary_for_findings(schema_validation.get("findings", [])),
             },
             "pipeline": {
+                "current_template_count": PipelineTemplateRepository(self.conn).count_current(),
                 "active": pipeline["active"]["summary"],
                 "draft": pipeline["draft"]["summary"] if pipeline.get("draft") else None,
                 "has_draft": bool(pipeline.get("has_draft")),

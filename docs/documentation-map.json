@@ -93,6 +93,11 @@
       "audience": "Readers following an earlier documentation link"
     },
     {
+      "path": "audits/codebase-audit-2026-11-18.md",
+      "title": "PDF processing application audit",
+      "audience": "Application maintainers and deployment owners"
+    },
+    {
       "path": "change-summary-2026-09-05.md",
       "title": "Moved: Change summary — 2026-09-05",
       "audience": "Readers following an earlier documentation link"

@@ -1,5 +1,5 @@
-import { createView } from './view.js?v=manual-split-1';
-import { createApi } from './api.js?v=manual-split-1';
+import { createView } from './view.js?v=journey-lookup-1';
+import { createApi } from './api.js?v=journey-lookup-1';
 (function () {
     "use strict";
 
@@ -88,7 +88,7 @@ import { createApi } from './api.js?v=manual-split-1';
                 element.setAttribute("aria-busy", "true");
             }
         });
-        body.innerHTML = window.DocFlow.tableSkeletonRows(7, 4);
+        body.innerHTML = window.DocFlow.tableSkeletonRows(6, 4);
         try {
             const params = new URLSearchParams({
                 paginated: "true",
@@ -120,7 +120,7 @@ import { createApi } from './api.js?v=manual-split-1';
         } catch (error) {
             body.innerHTML = `
                 <tr>
-                    <td colspan="7" class="text-center py-10">
+                    <td colspan="6" class="text-center py-10">
                         <p class="text-error">Review queue failed to load</p>
                         <button class="btn btn-outline btn-sm mt-3" type="button" data-review-retry>Retry</button>
                     </td>

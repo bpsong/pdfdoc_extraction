@@ -92,6 +92,11 @@ CREATE TABLE IF NOT EXISTS task_runs (
     FOREIGN KEY(pipeline_version_id) REFERENCES pipeline_versions(id)
 );
 
+-- Reserved before promotion from staging and released in the batch transaction.
+CREATE TABLE IF NOT EXISTS pending_upload_files (
+    file_path TEXT PRIMARY KEY NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS processing_jobs (
     id TEXT PRIMARY KEY,
     batch_id TEXT NOT NULL,

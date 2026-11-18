@@ -36,6 +36,16 @@ Follow [execution walkthroughs](../developer/execution-walkthroughs.md) for
 request-to-service ownership. OpenAPI/source models are authoritative for
 endpoints not expanded below; this page is not a substitute for those models.
 
+## Report and admin summary fields
+
+In `GET /api/reports/summary`, each recent batch includes `source_filename`,
+one original PDF name from its root documents, or null when unavailable. The
+batch's existing `original_filename` label and ID remain available for lookup.
+
+In `GET /api/admin/summary`, `pipeline.current_template_count` counts the
+non-archived templates listed by default in the pipeline editor. A template
+with several published versions contributes one to this count.
+
 ## Approved business-rule catalog
 
 `GET /api/admin/business-validators` requires authentication and the admin role

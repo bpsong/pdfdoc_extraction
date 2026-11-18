@@ -11,6 +11,7 @@ from modules.services.startup_migration_service import initialize_database
 from modules.file_processor import FileProcessor
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.ingestion_assignment_service import IngestionAssignmentService
+from modules.services.pipeline_cleanup_service import PipelineCleanupService
 from modules.services.upload_receiver import MAX_PART_HEADER_BYTES
 from modules.services.upload_receiver import reconcile_upload_files
 from modules.services.upload_storage_lock import UploadStorageBusy, upload_storage_access
@@ -229,6 +230,64 @@ def test_batch_upload_api_creates_one_batch_for_multiple_pdfs(tmp_path, monkeypa
     assert {job["status"] for job in jobs} == {"queued"}
 
 
+def test_web_upload_survives_history_cleanup_and_restarts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    content = b"%PDF-1.4\nretained source"
+    response = client.post(
+        "/api/batches/upload", data={"pipeline_version_id": config.pipeline_version_id},
+        files={"files": ("original.pdf", content, "application/pdf")},
+    )
+    assert response.status_code == 200
+    [document_id] = response.json()["document_ids"]
+    processing = Path(config.get("watch_folder.processing_dir"))
+    original = processing / f"web-upload-{document_id}.pdf"
+    with connect(config) as conn:
+        # This isolated batch has finished and is old enough for real cleanup.
+        old = "2020-01-01T00:00:00+00:00"
+        for table in ("batches", "documents", "processing_jobs"):
+            conn.execute(
+                f"UPDATE {table} SET status='completed', created_at=?, updated_at=?", (old, old)
+            )
+        conn.execute("UPDATE document_files SET created_at=?", (old,))
+        conn.commit()
+        template_id = conn.execute("SELECT pipeline_template_id FROM batches").fetchone()[0]
+        service = PipelineCleanupService(conn)
+        preview = service.preview(template_id, cutoff_date="2021-01-01", user="admin")
+        result = service.cleanup(
+            template_id, preview_id=preview["preview_id"],
+            confirmation_name="Batch upload test", user="admin",
+        )
+        assert result["files_deleted"] == 0
+        assert result["deleted"]["documents"] == result["deleted"]["document_files"] == 1
+        assert conn.execute("SELECT COUNT(*) FROM pending_upload_files").fetchone()[0] == 0
+    for _ in range(2):
+        assert reconcile_upload_files(config).orphaned_final_removed == 0
+        assert original.read_bytes() == content
+
+
+def test_journal_release_failure_rolls_back_upload_acceptance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    with connect(config) as conn:
+        conn.execute("""
+            CREATE TRIGGER fail_upload_release BEFORE DELETE ON pending_upload_files
+            WHEN EXISTS (SELECT 1 FROM documents WHERE file_path = OLD.file_path)
+            BEGIN SELECT RAISE(ABORT, 'synthetic failure before batch commit'); END
+        """)
+    response = client.post(
+        "/api/batches/upload", data={"pipeline_version_id": config.pipeline_version_id},
+        files={"files": ("original.pdf", b"%PDF-test", "application/pdf")},
+    )
+    assert response.status_code == 500
+    with connect(config) as conn:
+        for table in ("documents", "batches", "processing_jobs", "pending_upload_files"):
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    assert not list(Path(config.get("watch_folder.processing_dir")).glob("web-upload-*.pdf"))
+
+
 def test_batch_upload_api_rejects_cookie_auth_without_csrf_token(tmp_path, monkeypatch):
     client, _, _ = build_client(tmp_path, monkeypatch)
     client.cookies.set("access_token", "browser-token")
@@ -440,7 +499,10 @@ def test_upload_holds_storage_access_until_database_commit(tmp_path, monkeypatch
     def checked_create(service, **kwargs):
         with pytest.raises(UploadStorageBusy):
             reconcile_upload_files(config)
-        assert all(Path(item["file_path"]).exists() for item in kwargs["files"])
+        paths = {item["file_path"] for item in kwargs["files"]}
+        with connect(config) as observer:
+            assert {row[0] for row in observer.execute("SELECT file_path FROM pending_upload_files")} == paths
+        assert all(Path(path).exists() for path in paths)
         return original(service, **kwargs)
 
     monkeypatch.setattr(IngestionAssignmentService, "create_batch", checked_create)

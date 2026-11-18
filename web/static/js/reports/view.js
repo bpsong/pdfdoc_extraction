@@ -112,10 +112,14 @@ export function createView(deps) {
             return;
         }
         body.innerHTML = batches.map((batch) => `
-            <tr class="reports-batch-row" role="button" tabindex="0" data-batch-id="${escapeHtml(batch.id)}" aria-label="View batch ${escapeHtml(batch.id)} workflow details">
+            <tr class="reports-batch-row" data-batch-id="${escapeHtml(batch.id)}">
+                <td>
+                    <a class="link text-primary break-all" href="/app/batches/${encodeURIComponent(batch.id)}">${escapeHtml(batch.source_filename || batch.original_filename || batch.id)}</a>
+                    <button class="block link text-xs" type="button" aria-label="View batch ${escapeHtml(batch.id)} workflow details">Batch details</button>
+                    <div class="font-mono text-xs">${escapeHtml(batch.id)}</div>
+                </td>
                 <td class="text-xs">${escapeHtml(docFlow.formatDateTime(batch.created_at))}</td>
                 <td>${escapeHtml(titleCase(batch.source))}</td>
-                <td class="font-mono text-xs">${escapeHtml(batch.id)}</td>
                 <td>${statusBadge(batch.status)}</td>
                 <td class="text-right">${workflowState(batch)}</td>
             </tr>

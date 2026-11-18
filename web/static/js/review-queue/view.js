@@ -99,7 +99,7 @@ export function createView(deps) {
         const body = document.getElementById("review-queue-body");
         const items = state.items;
         if (!items.length) {
-            body.innerHTML = '<tr><td colspan="7" class="text-center text-base-content/50 py-10">No review items</td></tr>';
+            body.innerHTML = '<tr><td colspan="6" class="text-center text-base-content/50 py-10">No review items</td></tr>';
             return;
         }
 
@@ -113,7 +113,8 @@ export function createView(deps) {
                 <tr class="hover">
                     <td class="px-4 py-3">
                         <a class="font-medium text-primary" href="/app/review/${encodeURIComponent(item.id)}">${escapeHtml(documentLabel(item))}</a>${item.review_kind === "manual_split" ? ' <span class="badge badge-outline badge-sm">Manual split</span>' : ""}
-                        <div class="text-xs text-base-content/50">${item.review_kind === "manual_split" ? `${escapeHtml(item.metadata?.page_count || "")} pages · Choose split boundaries` : escapeHtml(createdAt)}</div>
+                        ${item.review_kind === "manual_split" ? `<div class="text-xs text-base-content/50">${escapeHtml(item.metadata?.page_count || "")} pages · Choose split boundaries</div>` : ""}
+                        <div class="mt-1">${actionButtons(item)}</div>
                     </td>
                     <td>${escapeHtml(item.pipeline_name || "Unassigned")}</td>
                     <td class="max-w-sm">
@@ -122,7 +123,6 @@ export function createView(deps) {
                     <td>${item.review_kind === "manual_split" ? '<span class="badge badge-ghost badge-sm">Manual task</span>' : confidenceBadge(item.lowest_confidence)}</td>
                     <td>${escapeHtml(createdAt)}</td>
                     <td>${statusBadge(item.status === "completed" ? "completed" : activeOwner(item) ? "in_review" : "pending")}<div class="text-xs">${escapeHtml(item.status === "completed" ? "" : activeOwner(item) ? `Claimed by ${activeOwner(item)}` : "Unclaimed")}</div></td>
-                    <td class="text-right">${actionButtons(item)}</td>
                 </tr>
             `;
         }).join("");

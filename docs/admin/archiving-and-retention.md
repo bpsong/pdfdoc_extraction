@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-18 — repository/source review; no live deployment check; isolated desktop and mobile retention verification |
 | Applies to | Current application screens |
 
 Sign in as **admin** and open **Pipeline**. Archiving stops future use of a
@@ -185,7 +185,10 @@ Cleanup retains:
   been removed. A new event in **Audit Log** records the cleanup cutoff and
   record counts.
 - Physical source/split PDFs, archives, CSV/JSON exports, and other files.
-  The result shows **Files deleted: 0**.
+  The result shows **Files deleted: 0**. Accepted web-upload PDFs stay on disk
+  across web restarts, including after cleanup removes their file registrations.
+  To retrieve a retained PDF after its preview link disappears, contact IT
+  support for access to the retained file or its archive copy.
 - A small record of previous uploads to prevent accidental duplicates. If an
   old upload's history was cleaned up, the upload page explains this and waits
   for you to deliberately start a new upload.

@@ -40,8 +40,7 @@ export function createView(deps) {
 
         document.getElementById("admin-schema-health").textContent = schema.valid ? "Ready" : "Review";
         document.getElementById("admin-schema-summary").textContent = `${schema.summary?.errors || 0} errors, ${schema.summary?.warnings || 0} warnings`;
-        document.getElementById("admin-pipeline-health").textContent = String(pipeline.active?.enabled_steps || 0);
-        document.getElementById("admin-pipeline-summary").textContent = pipeline.has_draft ? "Draft pending" : "Published pipeline";
+        document.getElementById("admin-pipeline-health").textContent = String(pipeline.current_template_count ?? "—");
         document.getElementById("admin-draft-status").textContent = pipeline.has_draft ? "Draft pending" : "No draft";
 
         document.getElementById("admin-audit-count").textContent = String(audit.total_admin_events || 0);

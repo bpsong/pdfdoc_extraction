@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 from modules.db.connection import connect, json_loads, utc_now
+from modules.db.schema_version import SCHEMA_VERSION
 from modules.services.startup_migration_service import initialize_database
 from modules.db.migrations import prepare_versioned_config_schema
 from modules.db.repositories import ReviewRepository, TaskRunRepository
@@ -245,7 +246,7 @@ def test_active_yaml_and_schemas_import_idempotently_with_collisions(
     assert stat.S_IMODE(config._config_path.stat().st_mode) == original_mode
     assert (first / "invoice.yaml").exists()
     assert (second / "invoice.json").exists()
-    assert migration_versions == {2, 3, 4, 9}
+    assert migration_versions == {2, 3, 4, SCHEMA_VERSION}
     assert SECRET_VALUE not in caplog.text
 
 
