@@ -98,6 +98,37 @@ schema findings. Incompatible or structurally invalid pinned forms return HTTP
 retain the existing 409 contract. Accepted corrections/report, task/review/
 document state, and audit summary commit atomically before resume.
 
+## CSV lookup on extraction reviews
+
+Review detail and revalidation include `lookup_review` when the gate follows
+CSV lookup. Its `lookups` list includes each task key, decision revision,
+compared inputs, source digest, returned text, and bounded candidate evidence.
+`can_select` and `can_skip` indicate available actions. Returned fields are
+read-only and use reference provenance.
+
+- Send `expected_revision` with draft, revalidation, and completion requests.
+- Revalidate a correction with the usual `corrections` object. A changed input
+  is evaluated against bytes matching the recorded digest. If those bytes are
+  unavailable, the preview reports `reference_changed`. To preview against
+  the current register, send `reference_adoptions` as a map from task key to
+  the reviewer's reason.
+- To select a candidate, send `lookup_actions` keyed by task key with
+  `action: "select"`, the candidate's `record_number`, the corresponding
+  `evaluation_token`, and a `reason`. An optional lookup can use
+  `action: "skip"` with its token and reason. Changing inputs, adoption, or the
+  review revision requires new evidence. Truncated match sets prevent selection.
+- Revalidate the final request. Submit the same corrections, adoptions, and
+  actions to `/complete` with `lookup_preview_token` from
+  `lookup_review.preview_token`. Completion recomputes the proposal. Stale
+  evidence returns 409. Unresolved results return 422 with lookup evidence
+  inside `detail.lookup_review`.
+
+Completion commits lookup decisions, corrections, validation findings, and
+review state together. The accepted decision identities and source digests
+remain available after the file changes. If an interruption occurs between
+completion and the resume claim, the authenticated document resume endpoint
+can continue using the accepted values from SQLite.
+
 ## Manual split decisions
 
 `POST /api/review/items/{id}/split/draft` accepts `boundaries` and

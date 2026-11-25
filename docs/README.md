@@ -6,7 +6,7 @@
 | Owner | Application maintainers |
 | Status | Current |
 | Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 10 |
+| Applies to | Production application; SQLite schema 11 |
 
 Choose the reading path that matches your work. **Operator** and **admin** are
 the application's two fixed accounts. Architect, developer and IT support are
@@ -34,12 +34,13 @@ architecture topics. Each audience guide links its own complete page set.
 
 ## Maintain the documentation
 
-The [2026-11-13 implementation audit](../tasks/tasks-documentation-current-implementation-audit.md)
+The [2026-11-13 implementation audit](../tasks/archive/tasks-documentation-current-implementation-audit.md)
 records reviewed areas, corrected contracts and exact offline verification
 commands. Dated snapshots and original validation evidence retain their scope.
 
 The [November 18 codebase audit](audits/codebase-audit-2026-11-18.md) documents
-the web-upload retention defect fixed in schema 10.
+the web-upload retention defect fixed in schema 10. The accompanying
+[UX walkthrough](audits/ux-walkthrough-2026-11-18.md) covers operator and admin journeys.
 
 Keep screen procedures with their audience and exact technical contracts in
 Reference. Link shared definitions rather than copying them into each guide.

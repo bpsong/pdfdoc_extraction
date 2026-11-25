@@ -5,7 +5,7 @@
 | Audience | Product owners, maintainers, developers and IT support |
 | Owner | Application maintainers |
 | Status | Eight agreed roadmap items; R4 complete |
-| Updated | 2026-10-31 |
+| Updated | 2026-11-25 |
 | Basis | Maintainer direction, repository/source review and synthetic acceptance; no live provider checks |
 
 ## Business aim
@@ -30,7 +30,7 @@ additional roadmap commitments.
 | --- | --- | --- | --- |
 | R1 | Optional PostgreSQL persistence alongside SQLite | Planned; detailed design required | IT support chooses the database appropriate to the deployment |
 | R2 | Mixed-document pipeline routing | Planned; existing proposal to refine | Different document types within one PDF use their own downstream pipelines |
-| R3 | CSV reference lookup and enrichment | Planned; detailed design required | Return matched reference values into document data for downstream outputs |
+| R3 | CSV reference lookup and enrichment | Published lookup, review API, and resume verified. Editor controls and visual acceptance are next. | Return matched text values into document data for downstream outputs |
 | R4 | Dynamic business-logic plugins for review forms | Complete — all five phases verified on 2026-10-30 | Check relationships between extracted values and show actionable operator findings |
 | R5 | Reliable webhook delivery with n8n task integration | Planned; detailed design required | Hand approved values to n8n for delivery to receiving systems with traceable outcomes |
 | R6 | Named users and role-based access | Planned; detailed design required | Give each person an account with appropriate permissions and attributable review/audit actions |
@@ -200,6 +200,8 @@ The proposal remains a design input; finalize its schema and recovery contracts
 before implementation.
 
 ## R3: CSV reference lookup and enrichment
+
+See the [agreed lookup design](design-r3-csv-reference-lookup.md) and [phased implementation plan](tasks-r3-csv-reference-lookup.md).
 
 ### Outcome
 

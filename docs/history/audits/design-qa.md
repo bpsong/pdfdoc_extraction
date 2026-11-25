@@ -2,7 +2,7 @@
 
 > Historical visual assessment of the original properties-panel rollout. Paths,
 > task controls and conclusions below describe that checkpoint. Use the
-> [current Admin task guide](docs/admin/task-guide.md) for supported setup.
+> [current Admin task guide](../../admin/task-guide.md) for supported setup.
 
 - Source visual truth: `C:\tmp\pipeline-properties-qa\phase1-split-prototype-desktop.png` through `phase9-archive-prototype-mobile.png`
 - Implementation evidence: matching `phase*-production-desktop.png` and `phase*-production-mobile.png` files in `C:\tmp\pipeline-properties-qa`

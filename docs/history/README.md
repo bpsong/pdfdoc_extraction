@@ -32,3 +32,8 @@ Use [current documentation](../README.md) for procedures.
 Preserve original findings and append dated corrections rather than silently
 changing what was observed. Record the assessed revision and scope when known.
 Keep secrets, customer documents and raw extraction output out of new evidence.
+
+## Additional UI audit records
+
+- [Audit review laptop 1366x768](audits/audit-review-laptop-1366x768.md)
+- [Design qa](audits/design-qa.md)

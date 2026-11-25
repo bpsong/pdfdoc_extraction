@@ -5,11 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import managed_connect, json_loads
+from modules.db.connection import atomic_transaction, managed_connect, json_loads
 from modules.db.repositories import DocumentRepository, ExtractionRepository, TaskRunRepository, ManualSplitRepository, ReviewRepository
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.services.pipeline_definition_service import PipelineDefinitionService
 from modules.services.split_result_service import restore_single_document_context
+from modules.services.csv_reference_lookup import lookup_inputs
+from modules.services.lookup_decision_service import LookupConflictError, merge_lookup_values
+from modules.services.lookup_review_service import LookupReviewService
 from modules.workflow_loader import WorkflowLoader
 
 
@@ -21,7 +24,7 @@ class ResumeManager:
 
     def resume_document(self, document_id: str, user: str | None = None) -> bool:
         """Resume a document after review without duplicating downstream work."""
-        with managed_connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn, atomic_transaction(conn, immediate=True):
             documents = DocumentRepository(conn)
             extractions = ExtractionRepository(conn)
             task_runs = TaskRunRepository(conn)
@@ -68,8 +71,6 @@ class ResumeManager:
             elif workflow_state.has_completed_at_or_after(document_id, next_index):
                 return False
 
-            if not documents.claim_review_resume(document_id):
-                return False
             context = self._build_resume_context(
                 document, extractions, task_runs,
                 retry_manual_decision_id=manual_decision["id"] if manual_decision else None,
@@ -79,6 +80,34 @@ class ResumeManager:
                 context["data"] = checkpoint.get("data", {})
                 context["metadata"].update(checkpoint.get("metadata", {}))
                 context["manual_split_decision_id"] = manual_decision["id"]
+            else:
+                extraction_id = context["metadata"]["latest_extraction_result_id"]
+                metadata = json_loads(latest_review.get("metadata_json"), {}) if latest_review else {}
+                accepted = metadata.get("lookup_acceptance", {})
+                try:
+                    lookups = LookupReviewService(conn).load_before(
+                        document_id, executable.version_id, extraction_id, next_index,
+                    )
+                    if accepted and not lookups:
+                        return False
+                    if lookups:
+                        if (accepted.get("extraction_result_id") != extraction_id
+                                or accepted.get("decision_ids") != {
+                                    task: lookup.decision.id for task, lookup in lookups.items()
+                                }
+                                or any(
+                                    lookup.decision.state not in {"matched", "skipped"}
+                                    or lookup_inputs(lookup.config, context["data"]) != lookup.decision.evaluation.inputs
+                                    for lookup in lookups.values()
+                                )):
+                            return False
+                        context["data"] = merge_lookup_values(
+                            context["data"], (lookup.decision.returned_values() for lookup in lookups.values()),
+                        )
+                except LookupConflictError:
+                    return False
+            if not documents.claim_review_resume(document_id):
+                return False
             context["resumed_by"] = user
             context["start_task_index"] = next_index
             if executable is not None:

@@ -12,6 +12,7 @@ from typing import Any, cast
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager, get_all_config
 from modules.db.connection import json_loads
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
 from modules.services.task_registry_service import ApprovedTaskRegistry
 
 
@@ -43,7 +44,7 @@ class TaskCatalogService:
         self.project_root = project_root or candidate_root
         self.task_registry = ApprovedTaskRegistry(config_manager)
 
-    def catalog(self) -> dict[str, Any]:
+    def catalog(self, *, include_preview: bool = True) -> dict[str, Any]:
         """Return UI-ready task catalog entries and summary counts."""
         configured_entries = self._configured_entries()
         entries_by_id = self._discover_standard_step_entries()
@@ -55,6 +56,9 @@ class TaskCatalogService:
                 entries_by_id[entry_id] = self._configured_only_entry(configured)
             else:
                 self._merge_configured(existing, configured)
+
+        if not include_preview:
+            entries_by_id.pop(self._entry_id(*CSV_LOOKUP_TASK), None)
 
         entries = sorted(
             entries_by_id.values(),
@@ -389,6 +393,8 @@ class TaskCatalogService:
 
     @staticmethod
     def _label_for(class_name: str) -> str:
+        if class_name == CSV_LOOKUP_TASK[1]:
+            return "CSV reference lookup"
         label = class_name
         for suffix in ("Task",):
             if label.endswith(suffix):
@@ -422,6 +428,8 @@ class TaskCatalogService:
 
     @staticmethod
     def _expected_outputs_for(task_class: type[Any]) -> list[str]:
+        if task_class.__name__ == CSV_LOOKUP_TASK[1]:
+            return ["data.<configured return field>"]
         name = task_class.__name__.lower()
         if "extract" in name:
             return ["data", "extraction_result_id", "extracted_fields"]

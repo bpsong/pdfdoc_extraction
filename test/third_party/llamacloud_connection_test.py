@@ -1,4 +1,5 @@
 import logging
+import os
 import pytest
 import yaml
 from pathlib import Path
@@ -21,6 +22,10 @@ def configuration_id(test_config):
     """Fixture to provide optional LlamaCloud Extract v2 configuration ID."""
     return test_config.get('llamacloud', {}).get('configuration_id')
 
+@pytest.mark.skipif(
+    os.getenv("RUN_LLAMACLOUD_CONNECTION") != "1",
+    reason="Set RUN_LLAMACLOUD_CONNECTION=1 to run the live connection test.",
+)
 def test_llamacloud_connection(api_key: str, configuration_id: str | None):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger("LlamaCloudConnectionTest")

@@ -6,13 +6,17 @@ from typing import Any
 
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
-from modules.db.connection import managed_connect, json_loads
-from modules.db.repositories import DocumentRepository, ExtractionRepository
-from modules.exceptions import TaskError
+from modules.db.connection import atomic_transaction, managed_connect, json_loads
+from modules.db.repositories import DocumentRepository, ExtractionRepository, JobClaim, ProcessingJobRepository
+from modules.exceptions import TaskError, TaskSetupError
 from modules.services.review_service import ReviewService
 from modules.services.schema_service import SchemaService
 from modules.services.workflow_state_service import WorkflowStateService
 from modules.services.review_business_validation import business_review_reasons
+from modules.services.lookup_decision_service import merge_lookup_values
+from modules.services.lookup_review_service import LookupReviewService
+from modules.services.fan_in_service import FanInService
+from modules.services.processing_lease import JobClaimLost
 
 
 class ReviewGateTask(BaseTask):
@@ -44,6 +48,7 @@ class ReviewGateTask(BaseTask):
         """Evaluate review rules and pause the pipeline when review is required."""
         document_id = context.get("document_id")
         batch_id = context.get("batch_id")
+        lookup_claim = context.get("_lookup_job_claim")
         if not document_id or not batch_id:
             if "business_validation" in (self._schema() or {}):
                 error = TaskError("Business validation requires a persisted document and batch.")
@@ -64,14 +69,35 @@ class ReviewGateTask(BaseTask):
 
             fields = extraction_repository.get_fields(str(document_id))
             document = document_repository.get(str(document_id)) or {}
-            reasons, highlight_fields = self._review_reasons(context, fields, document)
+            latest = extraction_repository.get_latest_result(str(document_id))
+            try:
+                lookups = LookupReviewService(conn).load_before(
+                    str(document_id), document.get("pipeline_version_id"),
+                    latest["id"] if latest else None, int(context.get("current_task_index", 0)),
+                )
+                lookup_returns = [lookup.decision.returned_values() for lookup in lookups.values()]
+                gate_payload = merge_lookup_values(self._fields_payload(fields), lookup_returns) if lookups else None
+            except ValueError:
+                raise TaskSetupError("CSV lookup evidence is unavailable at the review gate.") from None
+            reasons, highlight_fields = self._review_reasons(context, fields, document, gate_payload=gate_payload)
+            lookup_inputs = {clause.field for lookup in lookups.values() for clause in lookup.config.clauses}
+            derived = {mapping.field for lookup in lookups.values() for mapping in lookup.config.returns}
+            for key, lookup in lookups.items():
+                if lookup.decision.state == "pending":
+                    reasons.append({"reason": "csv_lookup_pending", "task_key": key})
+                    highlight_fields.extend(clause.field for clause in lookup.config.clauses)
+                elif lookup.decision.state == "failed":
+                    raise TaskSetupError("A failed CSV lookup cannot pass the review gate.")
             try:
                 report = review_service.evaluate_gate_rules(
                     str(document_id), schema_version_id=self.schema_version_id,
                     schema=self._schema() or {}, schema_hash=self.review_schema_hash,
                     task_run_id=context.get("task_run_id"),
+                    lookup_index=int(context.get("current_task_index", 0)),
                 )
             except (ValueError, RuntimeError, KeyError):
+                if lookups:
+                    raise TaskSetupError("CSV lookup gate validation could not be completed.") from None
                 error = TaskError("Business-validation form is unavailable or incompatible; verify its published version.")
                 self.register_error(context, error)
                 raise error from None
@@ -80,6 +106,7 @@ class ReviewGateTask(BaseTask):
                 rule_reasons, rule_highlights = business_review_reasons(report)
                 reasons.extend(rule_reasons)
                 highlight_fields = sorted(set(highlight_fields) | set(rule_highlights))
+            highlight_fields = sorted(set(highlight_fields) - derived)
             extraction_repository.set_review_requirements(str(document_id), highlight_fields)
 
             if not reasons:
@@ -88,29 +115,42 @@ class ReviewGateTask(BaseTask):
                 return context
 
             metadata = self._review_metadata(context, fields, reasons, highlight_fields, document)
+            schema_fields = (self._schema() or {}).get("fields", {})
             if report is not None:
                 metadata["business_validation"] = {"gate": report}
-                schema_fields = (self._schema() or {}).get("fields", {})
                 candidates = (schema_fields if self.allow_edit_high_confidence or self.review_scope == "document"
                               else highlight_fields)
                 metadata["editable_fields"] = sorted(set(metadata["editable_fields"]) | {
                     key for key in candidates if not schema_fields.get(key, {}).get("readonly")
                 })
-            review_item = review_service.create_review_item(
-                batch_id=str(batch_id),
-                document_id=str(document_id),
-                queue_name=self.queue_name,
-                reason=reasons[0]["reason"],
-                scope=self.review_scope,
-                created_by_task_run_id=context.get("task_run_id"),
-                metadata=metadata,
-                review_schema_version_id=(
-                    str(self.schema_version_id) if self.schema_version_id else None
-                ),
-            )
-            state_service.transition_document(
-                str(document_id), "review_required", reason="review_gate"
-            )
+            if lookups:
+                metadata["lookup_scope"] = {"extraction_result_id": latest["id"] if latest else None}
+                metadata["editable_fields"] = sorted({
+                    key for key in set(metadata["editable_fields"]) | lookup_inputs
+                    if key not in derived and not schema_fields.get(key, {}).get("readonly")
+                })
+            with atomic_transaction(conn, immediate=True):
+                if lookup_claim and not ProcessingJobRepository(conn).owns_claim(JobClaim(*lookup_claim)):
+                    raise JobClaimLost("Processing job claim expired before the CSV lookup review was saved.")
+                review_item = review_service.create_review_item(
+                    batch_id=str(batch_id),
+                    document_id=str(document_id),
+                    queue_name=self.queue_name,
+                    reason=reasons[0]["reason"],
+                    scope=self.review_scope,
+                    created_by_task_run_id=context.get("task_run_id"),
+                    metadata=metadata,
+                    review_schema_version_id=(
+                        str(self.schema_version_id) if self.schema_version_id else None
+                    ),
+                )
+                state_service.transition_document(
+                    str(document_id), "review_required", reason="review_gate"
+                )
+                if lookups and context.get("task_run_id"):
+                    state_service.pause_task(str(context["task_run_id"]), {"review_item_id": review_item["id"]})
+                    FanInService(conn).finalize_leaf({"document_id": document_id, "pipeline_state": "paused"})
+                    context["lookup_review_paused"] = True
 
         context["review_required"] = True
         context["review_gate_status"] = "paused"
@@ -135,6 +175,8 @@ class ReviewGateTask(BaseTask):
         context: dict,
         fields: list[dict[str, Any]],
         document: dict[str, Any],
+        *,
+        gate_payload: dict[str, Any] | None = None,
     ) -> tuple[list[dict[str, Any]], list[str]]:
         """Collect all review causes and the top-level fields needing attention."""
         # Keep every cause for review metadata. Order also matters: run() uses
@@ -189,7 +231,8 @@ class ReviewGateTask(BaseTask):
         if schema is not None:
             raw_payload = context.get("data")
             payload: dict[str, Any] = (
-                raw_payload if isinstance(raw_payload, dict) else self._fields_payload(fields)
+                gate_payload if gate_payload is not None
+                else raw_payload if isinstance(raw_payload, dict) else self._fields_payload(fields)
             )
             schema_errors = SchemaService(self.config_manager).validate_payload(payload, schema=schema)
             for error in schema_errors:

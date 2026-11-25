@@ -1,6 +1,6 @@
 # Manual PDF split task: proposed design
 
-Status: **Approved; implemented. See [operations and recovery limits](../docs/manual_split_task.md) and [implementation checklist](tasks-manual-split.md).**
+Status: **Approved; implemented. See [operations and recovery limits](../docs/manual_split_task.md) and [implementation checklist](archive/tasks-manual-split.md).**
 
 Date: 2026-10-07
 
@@ -70,7 +70,7 @@ Documentation consulted: [architecture](../docs/design_architecture.md),
 [review-schema administration](../docs/review_schema_admin_guide.md),
 [frontend deployment](../docs/frontend_deployment.md), and
 [task creation guidelines](standard_task_creation_guidelines.md).
-The [single-document split plan](plan-single-document-split-continuation.md)
+The [single-document split plan](archive/plan-single-document-split-continuation.md)
 also records the existing continuation and child-count regression requirements.
 
 ## 3. Operator experience

@@ -293,16 +293,3 @@ def test_documented_python_file_references_exist() -> None:
                 if "path" in parts:  # Deliberate command placeholder.
                     continue
                 assert ROOT.joinpath(*parts).is_file(), f"{path.relative_to(ROOT)}: {reference}"
-
-
-def test_documented_full_suite_excludes_credentialed_connection_test() -> None:
-    text = (DOCS / "developer" / "testing-and-verification.md").read_text(encoding="utf-8")
-    full_suite_commands = [
-        line for line in text.splitlines()
-        if "-m pytest -v" in line and "test\\" not in line
-    ]
-    assert full_suite_commands
-    assert all(
-        "--ignore=test/third_party/llamacloud_connection_test.py" in line
-        for line in full_suite_commands
-    )

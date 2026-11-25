@@ -87,6 +87,12 @@ class _UploadMultipartParser(MultiPartParser):
         except MultiPartException as exc:
             raise HTTPException(status_code=400, detail=exc.message) from exc
         except MultipartParseError as exc:
+            # The parser reports its per-part limits through the same exception
+            # as malformed input. Keep the upload API's distinct 413 response.
+            if str(exc) == "Maximum header size exceeded":
+                raise HTTPException(status_code=413, detail="Multipart headers are too large") from exc
+            if str(exc) == "Maximum header count exceeded":
+                raise HTTPException(status_code=413, detail="Too many multipart headers") from exc
             raise HTTPException(status_code=400, detail="Invalid multipart upload") from exc
         finally:
             if not accepted:

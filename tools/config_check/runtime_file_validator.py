@@ -44,6 +44,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK, ReferenceDataError, evaluate_reference
+from modules.services.lookup_pipeline_validation import active_lookup_configs
 
 try:
     import pandas as pd
@@ -87,6 +89,14 @@ class RuntimeFileValidator:
         csv_errors, csv_warnings = self._validate_csv_files(config)
         errors.extend(csv_errors)
         warnings.extend(csv_warnings)
+
+        for key, settings in active_lookup_configs(config).items():
+            try:
+                evaluate_reference(settings, {}, config_path=self.base_dir / "config.yaml")
+            except ReferenceDataError as exc:
+                errors.append(TaskIssue(
+                    path=f"tasks.{key}.params.reference_file", message=str(exc), code="lookup-reference-invalid",
+                ))
         
         return FileValidationResult(errors=errors, warnings=warnings)
     
@@ -106,6 +116,8 @@ class RuntimeFileValidator:
             # Check if this is a rules task
             module_name = task_config.get("module", "")
             if not isinstance(module_name, str) or "rules" not in module_name:
+                continue
+            if (module_name, task_config.get("class")) == CSV_LOOKUP_TASK:
                 continue
             
             params = task_config.get("params", {})
@@ -243,6 +255,8 @@ class RuntimeFileValidator:
             # Check if this is a rules task
             module_name = task_config.get("module", "")
             if not isinstance(module_name, str) or "rules" not in module_name:
+                continue
+            if (module_name, task_config.get("class")) == CSV_LOOKUP_TASK:
                 continue
             
             params = task_config.get("params", {})

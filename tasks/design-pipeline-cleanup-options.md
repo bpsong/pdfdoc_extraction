@@ -3,7 +3,7 @@
 Status: historical options proposal. The approved implementation is archive and
 hide plus independent processing-data cleanup. Permanent pipeline deletion,
 physical-file deletion, and compaction remain deferred. See
-[implementation tasks](tasks-pipeline-archive-cleanup.md), the current
+[implementation tasks](archive/tasks-pipeline-archive-cleanup.md), the current
 [retention and API reference](../docs/pipeline_retention_admin_guide.md), and the maintained
 [administrator guide](../docs/user_guide.md#433-pipeline-configuration).
 

@@ -278,7 +278,6 @@ _SUGGESTION_HANDLERS: Dict[str, SuggestionHandler] = {
     "task-import-module": _suggest_import_module,
     "task-import-class": _suggest_import_class,
     "task-import-not-class": _suggest_import_not_class,
-    "pipeline-duplicate-task": _suggest_pipeline_duplicate,
     "param-extraction-not-mapping": lambda _: "Define params as a mapping of parameter names to values for this extraction task.",
     "param-extraction-missing-fields": lambda _: "Add a 'fields' mapping describing the data to extract.",
     "param-field-invalid": lambda d: f"Define field '{d.get('field', 'field')}' as a mapping with alias and type.",

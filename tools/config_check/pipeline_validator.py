@@ -55,6 +55,9 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
+from modules.services.lookup_pipeline_validation import active_lookup_configs, lookup_order_issues
+
 TOKEN_PATTERN = re.compile(r"(?<!\{)\{([A-Za-z0-9_]+)\}(?!\})")
 
 KNOWN_CONTEXT_TOKENS: Set[str] = {
@@ -186,6 +189,10 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
     scalar_field_tokens: Set[str] = metadata.get("scalar_fields", set())
     table_field_tokens: Set[str] = metadata.get("table_fields", set())
 
+    lookups = active_lookup_configs(config)
+    lookup_fields = {mapping.field for lookup in lookups.values() for mapping in lookup.returns}
+    known_field_tokens.update(lookup_fields)
+    scalar_field_tokens.update(lookup_fields)
     allowed_tokens = known_field_tokens | KNOWN_CONTEXT_TOKENS
 
     for usage in token_usages:
@@ -329,6 +336,8 @@ def validate_pipeline(config: Dict[str, Any]) -> PipelineValidationResult:
             )
         )
 
+    errors.extend(PipelineIssue(issue.path, issue.message, issue.code)
+                  for issue in lookup_order_issues(config, lookups))
     return PipelineValidationResult(errors=errors, warnings=warnings)
 
 
@@ -352,6 +361,8 @@ def _build_task_metadata(tasks: Dict[str, Any]) -> Dict[str, Any]:
         module_name = task_config.get("module")
         class_name = task_config.get("class")
         classification = _classify_task(module_name, class_name)
+        if (module_name, class_name) == CSV_LOOKUP_TASK:
+            continue
 
         if (
             classification is None

@@ -50,6 +50,10 @@ review:
 
 ## Global Sections
 
+The web upload parser accepts up to eight headers per multipart part and up to
+4,224 bytes per header line. The receiver also limits the combined header names
+and values to 16 KiB per part. Exceeding a header limit returns HTTP 413.
+
 - **logging:** Controls logging behavior.
 - **watch_folder:** Defines coordinator timing/header behavior, the shared
   processing directory, and the required startup-compatibility path. Exact

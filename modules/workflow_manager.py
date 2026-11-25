@@ -14,7 +14,7 @@ from typing import Dict, Any, Mapping
 from modules.workflow_loader import WorkflowLoader
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import managed_connect, json_loads
-from modules.db.repositories import BatchRepository, DocumentRepository, TaskRunRepository
+from modules.db.repositories import BatchRepository, DocumentRepository, ExtractionRepository, LookupDecisionRepository, TaskRunRepository
 from modules.exceptions import TaskError
 from modules.services.failure_service import _redact, _redact_text
 from modules.services.pipeline_definition_service import (
@@ -22,6 +22,13 @@ from modules.services.pipeline_definition_service import (
     PipelineDefinitionError,
     PipelineDefinitionService,
 )
+from modules.services.processing_lease import JobClaimLost, ProcessingLease, claim_write
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
+from modules.services.lookup_decision_service import LookupConflictError, merge_lookup_values
+from modules.services.lookup_pipeline_validation import active_lookup_configs
+from modules.services.lookup_review_service import LookupReviewService
+from modules.services.split_result_service import restore_single_document_context
+from modules.services.task_registry_service import BUILTIN_TASKS, REVIEW_GATE_TASK
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.extraction.llama_cloud_v2 import preflight_extract_v2_access
 
@@ -57,13 +64,14 @@ class WorkflowManager:
         For detailed system architecture, component interactions, and workflow orchestration
         patterns, refer to docs/design_architecture.md.
     """
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, config_manager: ConfigManager, *, lease: ProcessingLease | None = None) -> None:
         """Initialize WorkflowManager with required collaborators.
 
         Args:
             config_manager: Configuration provider used to construct the
                 WorkflowLoader and to supply settings.
         """
+        self.lease = lease
         self.config_manager = config_manager
         self.logger = logging.getLogger(__name__)
         
@@ -109,6 +117,7 @@ class WorkflowManager:
                 definition=executable.definition,
                 pipeline_version_id=executable.version_id,
                 pipeline_template_id=executable.template_id,
+                lease=self.lease,
             )
             flow_func = loader.load_workflow()
             if not flow_func:
@@ -130,6 +139,8 @@ class WorkflowManager:
             if executable is not None:
                 initial_context["pipeline_version_id"] = executable.version_id
                 initial_context["pipeline_template_id"] = executable.template_id
+            if document_id and self.lease and self.lease.claim.attempt_count > 1:
+                initial_context.update(self._recover_csv_lookup(document_id, executable))
             
             # Start the flow (Prefect executes synchronously; log before and after for clarity)
             self.logger.info(
@@ -137,6 +148,8 @@ class WorkflowManager:
             )
             flow_started = True
             final_context = flow_func(initial_context)
+            if self.lease:
+                self.lease.check()
             if isinstance(final_context, dict) and final_context.get("pipeline_state") == "fan_out":
                 self._trigger_child_workflows(final_context)
             self.logger.info(
@@ -144,6 +157,8 @@ class WorkflowManager:
             )
             return True
             
+        except JobClaimLost:
+            raise
         except (sqlite3.OperationalError, OSError, TimeoutError, ConnectionError) as e:
             if not flow_started and _is_transient_start_error(e):
                 raise RetryableWorkflowStartError(
@@ -156,6 +171,45 @@ class WorkflowManager:
             self.logger.error(f"Failed to trigger workflow for {original_filename}: {e}")
             self._mark_document_failed(document_id, f"Workflow Trigger Failed: {e}")
             return False
+
+    def _recover_csv_lookup(
+        self, document_id: str, executable: ExecutablePipeline,
+    ) -> dict[str, Any]:
+        """Restart a reclaimed lookup or gate from its persisted extraction and decisions."""
+        if not active_lookup_configs(executable.definition):
+            return {}
+        with managed_connect(self.config_manager) as conn, claim_write(conn, self.lease):
+            document = DocumentRepository(conn).get(document_id)
+            extractions = ExtractionRepository(conn)
+            extraction = extractions.get_latest_result(document_id)
+            if not document or not extraction or not LookupDecisionRepository(conn).has_for_extraction(
+                document_id, executable.version_id, extraction["id"],
+            ):
+                return {}
+            index = int(document["current_task_index"])
+            pairs = [
+                (executable.tasks[key].get("module"), executable.tasks[key].get("class"))
+                for key in executable.pipeline
+            ]
+            supported_prefix = {
+                BUILTIN_TASKS[key] for key in ("extract_pdf", "liteparse_extract", "glm_ocr_extract", "llamacloud_split")
+            } | {CSV_LOOKUP_TASK}
+            if (index >= len(pairs) or pairs[index] not in {CSV_LOOKUP_TASK, REVIEW_GATE_TASK}
+                    or any(pair not in supported_prefix for pair in pairs[:index])):
+                raise LookupConflictError("The interrupted CSV lookup workflow has no safe recovery point.")
+            lookups = LookupReviewService(conn).load_before(document_id, executable.version_id, extraction["id"], index)
+            values = json_loads(extraction.get("data_json"), {})
+            for field in extractions.get_fields(document_id):
+                if field["extraction_result_id"] == extraction["id"]:
+                    values[field["field_key"]] = json_loads(field.get("final_value_json"))
+            context = {
+                "data": merge_lookup_values(values, (lookup.decision.returned_values() for lookup in lookups.values())),
+                "extraction_result_id": extraction["id"],
+                "start_task_index": index,
+            }
+            restore_single_document_context(context, document)
+            TaskRunRepository(conn).cancel_interrupted_runs(document_id, executable.version_id, index)
+            return context
 
     def _load_document_pipeline(
         self, document_id: str | None
@@ -178,8 +232,8 @@ class WorkflowManager:
             )
 
     def _mark_document_failed(self, document_id: str | None, reason: str) -> None:
-        """Mark a SQLite document failed after workflow launch failures."""
-        if not document_id:
+        """The queue worker commits its own failure together with the job result."""
+        if not document_id or self.lease is not None:
             return
         try:
             with managed_connect(self.config_manager) as conn:
@@ -206,6 +260,8 @@ class WorkflowManager:
         if executable is None:
             self.logger.error("Cannot start child workflows without a pinned pipeline.")
             return
+        if self.lease:
+            self.lease.check()
         if self._fail_children_when_extract_preflight_fails(
             parent_context,
             child_documents,
@@ -217,6 +273,8 @@ class WorkflowManager:
         for child in child_documents:
             if child is None:
                 continue
+            if self.lease:
+                self.lease.check()
             child_context = self._build_child_context(child, parent_context, start_task_index)
             child_executable = (
                 executable
@@ -228,13 +286,14 @@ class WorkflowManager:
                 definition=child_executable.definition,
                 pipeline_version_id=child_executable.version_id,
                 pipeline_template_id=child_executable.template_id,
+                lease=self.lease,
             )
             flow_func = loader.load_workflow(start_task_index=start_task_index)
             if not flow_func:
                 self.logger.error("Failed to load child workflow for %s", child["id"])
                 continue
             if parent_context.get("manual_split_decision_id"):
-                with managed_connect(self.config_manager) as conn:
+                with managed_connect(self.config_manager) as conn, claim_write(conn, self.lease):
                     cursor = conn.execute(
                         """UPDATE documents SET status='processing'
                         WHERE id=? AND status='queued'
@@ -331,7 +390,7 @@ class WorkflowManager:
             "batch_id": batch_id,
             "affected_child_documents": [child.get("id") for child in child_documents],
         }
-        with managed_connect(self.config_manager) as conn:
+        with managed_connect(self.config_manager) as conn, claim_write(conn, self.lease):
             documents = DocumentRepository(conn)
             task_runs = TaskRunRepository(conn)
             root = documents.get(root_document_id)

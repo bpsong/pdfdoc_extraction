@@ -118,7 +118,10 @@ class PipelineCleanupService:
                 reason = "active_work"
             else:
                 activity = [batch["updated_at"]]
-                for table in ("documents", "processing_jobs", "task_runs", "review_items", "manual_split_decisions", "artifact_activity", "extraction_activity", "field_activity"):
+                for table in (
+                    "documents", "processing_jobs", "task_runs", "review_items", "manual_split_decisions",
+                    "artifact_activity", "extraction_activity", "field_activity", "lookup_decisions",
+                ):
                     for entry in group[table]:
                         activity.extend(entry[key] for key in ("updated_at", "started_at", "ended_at", "created_at", "completed_at") if entry.get(key))
                 timestamps = [_timestamp(value) for value in activity]

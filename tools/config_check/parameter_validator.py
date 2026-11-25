@@ -62,6 +62,8 @@ from modules.services.versioned_config_contracts import (
 
 from .pipeline_validator import MODULE_PREFIX_CLASSIFICATION
 from .rules_task_validator import validate_rules_task
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
+from modules.services.lookup_pipeline_validation import lookup_parameters
 
 _ALLOWED_BASE_TYPES = {"str", "int", "float", "bool", "Decimal", "Any"}
 _EXTRACTION_OPTIONAL_STRING_PARAMS = (
@@ -189,7 +191,10 @@ def validate_parameters(config: Dict[str, Any]) -> ParameterValidationResult:
                 )
             )
 
-        if classification == "extraction":
+        if (module_name, class_name) == CSV_LOOKUP_TASK:
+            _, issues = lookup_parameters(task_name, task_config)
+            errors.extend(ParameterIssue(issue.path, issue.message, issue.code) for issue in issues)
+        elif classification == "extraction":
             _validate_extraction_params(
                 params,
                 params_path,

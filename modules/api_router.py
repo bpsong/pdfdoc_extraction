@@ -99,6 +99,7 @@ from .services.workflow_state_service import WorkflowStateService
 from .services.user_service import UserService, UserServiceError
 from .services.versioned_admin_service import VersionedAdminService
 from .services.versioned_config_contracts import redact_sensitive
+from .services.validation_facade import ValidationFacade
 from .resume_manager import ResumeManager
 
 
@@ -1096,7 +1097,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         with managed_connect(config) as conn:
-            return TaskCatalogService(config, conn=conn).catalog()
+            return TaskCatalogService(config, conn=conn).catalog(include_preview=False)
 
     @router.get("/api/admin/users")
     def get_admin_users(user: str = Depends(get_current_user)):
@@ -1833,7 +1834,8 @@ def build_router() -> APIRouter:
         try:
             with managed_connect(config) as conn:
                 result = PipelineTemplateService(
-                    conn, configured_secret_aliases=_secret_aliases(config)
+                    conn, validation=ValidationFacade(config),
+                    configured_secret_aliases=_secret_aliases(config),
                 ).validate_draft(template_id, user=user)
             return redact_sensitive(result)
         except Exception as exc:
@@ -1914,6 +1916,7 @@ def build_router() -> APIRouter:
                 return redact_sensitive(
                     PipelineTemplateService(
                         conn,
+                        validation=ValidationFacade(config),
                         configured_secret_aliases=_secret_aliases(config),
                     ).publish(
                         template_id,
@@ -2667,6 +2670,8 @@ def build_router() -> APIRouter:
                     review_item_id, user, payload.get("corrections", {}),
                     expected_revision=payload.get("expected_revision"),
                     request_revision=payload.get("request_revision"),
+                    lookup_actions=payload.get("lookup_actions"),
+                    reference_adoptions=payload.get("reference_adoptions"),
                 )
         except ReviewServiceError as exc:
             raise HTTPException(status_code=getattr(exc, "status_code", 409), detail=getattr(exc, "detail", str(exc)))
@@ -2691,6 +2696,9 @@ def build_router() -> APIRouter:
             with managed_connect(config) as conn:
                 return ReviewService(conn, config).complete(
                     review_item_id, operator, corrections, expected_revision=payload.get("expected_revision"),
+                    lookup_actions=payload.get("lookup_actions"),
+                    reference_adoptions=payload.get("reference_adoptions"),
+                    lookup_preview_token=payload.get("lookup_preview_token"),
                 )
         except ReviewServiceError as exc:
             raise HTTPException(status_code=getattr(exc, "status_code", 409), detail=getattr(exc, "detail", str(exc)))

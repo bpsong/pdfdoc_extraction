@@ -149,6 +149,25 @@ CREATE TABLE IF NOT EXISTS extracted_fields (
     FOREIGN KEY(extraction_result_id) REFERENCES extraction_results(id)
 );
 
+CREATE TABLE IF NOT EXISTS lookup_decisions (
+    id TEXT PRIMARY KEY NOT NULL,
+    document_id TEXT NOT NULL REFERENCES documents(id),
+    pipeline_version_id TEXT NOT NULL REFERENCES pipeline_versions(id),
+    task_key TEXT NOT NULL,
+    extraction_result_id TEXT NOT NULL REFERENCES extraction_results(id),
+    revision INTEGER NOT NULL CHECK(revision >= 1),
+    supersedes_id TEXT REFERENCES lookup_decisions(id),
+    state TEXT NOT NULL CHECK(state IN ('matched','pending','skipped','failed')),
+    evaluation_json TEXT NOT NULL,
+    selected_record_number INTEGER CHECK(selected_record_number >= 1),
+    actor TEXT,
+    reason TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(document_id, pipeline_version_id, task_key, revision),
+    CHECK((state = 'matched') = (selected_record_number IS NOT NULL)),
+    CHECK((revision = 1) = (supersedes_id IS NULL))
+);
+
 CREATE TABLE IF NOT EXISTS review_items (
     id TEXT PRIMARY KEY,
     batch_id TEXT NOT NULL,

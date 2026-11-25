@@ -442,6 +442,51 @@ def test_batch_upload_api_removes_finalized_files_when_database_commit_fails(
     assert workflow.calls == []
 
 
+def test_partial_file_promotion_rolls_back_and_allows_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client, config, _ = build_client(tmp_path, monkeypatch)
+    root = Path(config.get("watch_folder.processing_dir"))
+    files = [("files", (f"{name}.pdf", f"%PDF-{name}".encode(), "application/pdf"))
+             for name in ("first", "second")]
+    headers = {"Idempotency-Key": "a569e9a2-7801-4f78-85d1-07ec45065634"}
+    data = {"pipeline_version_id": config.pipeline_version_id}
+    original = Path.replace
+    promotion_attempts: list[Path] = []
+
+    def fail_second(source: Path, target: str | Path) -> Path:
+        destination = Path(target)
+        if destination.parent == root and destination.match("web-upload-*.pdf"):
+            if promotion_attempts:
+                promotion_attempts.append(destination)
+                raise OSError("synthetic second promotion failure")
+            moved = original(source, target)
+            promotion_attempts.append(moved)
+            return moved
+        return original(source, target)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "replace", fail_second)
+        response = client.post("/api/batches/upload", headers=headers, data=data, files=files)
+    assert response.status_code == 500
+    assert len(promotion_attempts) == 2
+    assert not list(root.glob("web-upload-*.pdf"))
+    assert not list(root.rglob("*.upload"))
+    tables = ("batches", "documents", "processing_jobs", "upload_submissions", "pending_upload_files")
+    with connect(config) as conn:
+        for table in tables:
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+
+    retry = client.post("/api/batches/upload", headers=headers, data=data, files=files)
+    assert retry.status_code == 200
+    with connect(config) as conn:
+        for table, expected in zip(tables, (1, 2, 2, 1, 0), strict=True):
+            assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == expected
+    assert sorted(path.read_bytes() for path in root.glob("web-upload-*.pdf")) == [
+        b"%PDF-first", b"%PDF-second",
+    ]
+
+
 def test_batch_upload_api_never_buffers_the_complete_request(
     tmp_path, monkeypatch
 ):

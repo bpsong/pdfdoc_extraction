@@ -363,7 +363,7 @@ def test_resume_manager_defensive_resume_and_failure_context_paths(
     documents = Mock()
     extractions = Mock()
     task_runs = Mock()
-    monkeypatch.setattr(resume_module, "managed_connect", lambda _config: nullcontext(object()))
+    monkeypatch.setattr(resume_module, "managed_connect", lambda _config: nullcontext(Mock(in_transaction=False)))
     monkeypatch.setattr(resume_module, "DocumentRepository", lambda _conn: documents)
     monkeypatch.setattr(resume_module, "ExtractionRepository", lambda _conn: extractions)
     monkeypatch.setattr(resume_module, "TaskRunRepository", lambda _conn: task_runs)
@@ -438,8 +438,7 @@ def test_workflow_loader_and_manager_defensive_child_paths(monkeypatch) -> None:
     assert loader._state_service({}) is None
     WorkflowLoader._restore_continued_failure({"continued_failures": ["bad"]})
 
-    manager = object.__new__(WorkflowManager)
-    manager.config_manager = Mock()
+    manager = WorkflowManager(Mock())
     manager.workflow_loader = Mock()
     manager.logger = Mock()
     manager._load_document_pipeline = Mock(return_value=None)

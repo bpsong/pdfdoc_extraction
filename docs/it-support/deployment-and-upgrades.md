@@ -6,7 +6,7 @@
 | Owner | Application maintainers |
 | Status | Current |
 | Last verified | 2026-11-18 — repository/source review; no live deployment check; isolated browser and retention restart verification |
-| Applies to | Production application; SQLite schema 10 |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Prepare a compatible release
 
@@ -39,10 +39,13 @@ Deploy these cache values with the matching server/API artifact:
 - Shared committed CSS query:
   `tailwind-3.4.17-daisyui-4.12.10-pipeline-cleanup`.
 
-The server requires schema **10**. Back up the database consistently before the
+The server requires schema **11**. Back up the database consistently before the
 upgrade. Start through normal `main.py` migration ownership so the parent applies
 the upgrade before web/worker children verify the exact schema. A standalone web
 process remains verification-only unless explicitly started in migration mode.
+
+Schema 11 creates an empty table for CSV lookup decisions. The upgrade
+preserves existing documents, pinned versions, and review records.
 
 Schema 10 adds an empty `pending_upload_files` journal. Startup uses it to
 remove finalized files from interrupted new submissions. It leaves older
@@ -65,7 +68,7 @@ Also run the full pytest suite before promotion. In staging, inspect desktop and
 mobile archive blockers, archived visibility/read-only controls, preview counts,
 name confirmation, stale-preview recovery, and success results. See the
 [retention guide](../admin/archiving-and-retention.md) and
-[verification record](../../tasks/tasks-pipeline-archive-cleanup.md).
+[verification record](../../tasks/archive/tasks-pipeline-archive-cleanup.md).
 
 For the retention restart check, upload a synthetic PDF through the browser
 using a staging pipeline and record the SHA-256 of its stored original. Once

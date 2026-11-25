@@ -58,6 +58,13 @@ review/task/document state before resuming. Legacy format-1 rule forms require
 explicit republishing and pipeline repinning; they cannot run rules implicitly.
 See [review APIs](../api-contracts.md#business-validation-on-extraction-reviews).
 
+An upstream CSV lookup with a pending decision forces review. The gate makes
+match inputs available for correction and validates returned text in the
+effective document values. Reference results carry no OCR confidence. Review
+completion validates decisions against the live claim and submitted revision
+before atomically accepting the lookup and corrected values. Resume uses the
+accepted decision even if the CSV has since changed or been removed. [CSV lookup review API](../api-contracts.md#csv-lookup-on-extraction-reviews)
+
 **YAML configuration example:**
 
 ```yaml

@@ -42,6 +42,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from modules.config_paths import resolve_config_path
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
+from modules.services.lookup_pipeline_validation import lookup_file_issues
 
 
 @dataclass(slots=True)
@@ -80,6 +82,9 @@ class PathValidator:
         errors.extend(self._validate_watch_folder(config))
         errors.extend(self._validate_processing_dir(config))
         errors.extend(self._validate_dynamic_paths(config))
+        for severity, issue in lookup_file_issues(config, (self.base_dir or Path.cwd()) / "config.yaml"):
+            target = errors if severity == "error" else warnings
+            target.append(PathIssue(issue.path, issue.message, issue.code))
 
         return PathValidationResult(errors=errors, warnings=warnings)
 
@@ -143,6 +148,12 @@ class PathValidator:
 
     def _validate_dynamic_paths(self, config: Dict[str, Any]) -> List[PathIssue]:
         findings: List[PathIssue] = []
+        tasks = config.get("tasks")
+        lookup_paths = {
+            f"tasks.{key}.params.reference_file"
+            for key, task in tasks.items()
+            if isinstance(task, dict) and (task.get("module"), task.get("class")) == CSV_LOOKUP_TASK
+        } if isinstance(tasks, dict) else set()
 
         def _walk(node: Any, trace: str = "") -> None:
             if isinstance(node, dict):
@@ -154,7 +165,7 @@ class PathValidator:
                         pass
                     elif lowered_key.endswith("_dir"):
                         findings.extend(self._validate_directory_value(value, current))
-                    elif lowered_key.endswith("_file"):
+                    elif lowered_key.endswith("_file") and current not in lookup_paths:
                         findings.extend(self._validate_file_value(value, current))
 
                     if isinstance(value, (dict, list)):

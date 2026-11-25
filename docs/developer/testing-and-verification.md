@@ -29,7 +29,7 @@ an explicit path, and the prototype's React tests use its separate npm package:
 
 From `pipeline_visual_editor_prototype`, run `npm test` and `npm run build`.
 These test commands use synthetic inputs/mocks; they do not run live inference.
-See the [implementation documentation audit](../../tasks/tasks-documentation-current-implementation-audit.md)
+See the [implementation documentation audit](../../tasks/archive/tasks-documentation-current-implementation-audit.md)
 for the 2026-11-13 results and exact verification scope.
 
 The shared visual-app fixture uses `test/helpers_visual.py` to launch an
@@ -61,8 +61,7 @@ Useful focused checks from the repository root are:
 .\.venv\Scripts\python.exe -m pytest -q test\visual\test_configuration_boundaries_visual.py
 
 # Full suite without opt-in live provider checks
-$env:RUN_LLAMACLOUD_SPLIT_SMOKE = '0'
-.\.venv\Scripts\python.exe -m pytest -v --ignore=test/third_party/llamacloud_connection_test.py
+.\.venv\Scripts\python.exe -m pytest -v
 ```
 
 Changes to templates, JavaScript, CSS, or browser behavior require a visual
@@ -88,11 +87,12 @@ intended configuration to subprocesses.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -v test\path\to\test_file.py
-.\.venv\Scripts\python.exe -m pytest -v --ignore=test/third_party/llamacloud_connection_test.py
+.\.venv\Scripts\python.exe -m pytest -v
 ```
 
-The second command excludes the credentialed live LlamaCloud module. Run live
-provider checks only when specifically requested and credentials are supplied.
+Both live LlamaCloud checks skip by default. To run an explicitly requested live
+check, set its environment variable to `1`: `RUN_LLAMACLOUD_CONNECTION` for the
+connection check or `RUN_LLAMACLOUD_SPLIT_SMOKE` for the split smoke test.
 If Chromium is missing for visual tests:
 
 ```powershell

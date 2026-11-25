@@ -30,8 +30,9 @@ from .validator import ValidationMessage, ValidationResult
 class _MappingConfig:
     """Dot-path configuration provider for shared validation services."""
 
-    def __init__(self, values: Mapping[str, Any]) -> None:
+    def __init__(self, values: Mapping[str, Any], config_path: Path | None = None) -> None:
         self.values = dict(values)
+        self._config_path = config_path
 
     def get(self, key: str, default: Any = None) -> Any:
         value: Any = self.values
@@ -129,10 +130,11 @@ class StoredSourceValidator:
         conn: sqlite3.Connection,
         *,
         runtime_config: Mapping[str, Any],
+        config_path: Path | None = None,
     ) -> None:
         self.conn = conn
         self.runtime_config = dict(runtime_config)
-        self.facade = ValidationFacade(_MappingConfig(runtime_config))
+        self.facade = ValidationFacade(_MappingConfig(runtime_config, config_path))
         raw_secrets = runtime_config.get("pipeline_secrets")
         self.secret_aliases = (
             set(raw_secrets) if isinstance(raw_secrets, Mapping) else set()
@@ -487,6 +489,7 @@ def validate_portable_file(
     *,
     kind: str,
     runtime_config: Mapping[str, Any] | None = None,
+    config_path: Path | None = None,
     conn: sqlite3.Connection | None = None,
 ) -> ValidationResult:
     """Validate a portable file without importing or mutating any state."""
@@ -498,7 +501,7 @@ def validate_portable_file(
         from .validator import ConfigValidator
 
         return ConfigValidator(base_dir=path.parent).validate_config_data(document)
-    facade = ValidationFacade(_MappingConfig(runtime_config or {}))
+    facade = ValidationFacade(_MappingConfig(runtime_config or {}, config_path))
     if kind == "review-schema":
         schema = document.get("schema", document)
         if not isinstance(schema, dict):

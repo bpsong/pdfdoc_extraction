@@ -6,7 +6,7 @@ import hashlib
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 from modules.db.connection import (
     json_dumps,
@@ -128,6 +128,7 @@ class ProcessingHistoryRepository:
     SCOPES = {
         "review_locks": "review_item_id IN (SELECT id FROM review_items WHERE batch_id IN (SELECT id FROM cleanup_batch_selection))",
         "manual_split_decisions": DOCUMENT_SCOPE,
+        "lookup_decisions": DOCUMENT_SCOPE,
         "extracted_fields": DOCUMENT_SCOPE,
         "extraction_results": DOCUMENT_SCOPE,
         "document_files": DOCUMENT_SCOPE,
@@ -153,6 +154,7 @@ class ProcessingHistoryRepository:
             "artifact_activity": "SELECT d.batch_id, f.created_at FROM document_files f JOIN documents d ON d.id=f.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
             "extraction_activity": "SELECT d.batch_id, e.created_at FROM extraction_results e JOIN documents d ON d.id=e.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
             "field_activity": "SELECT d.batch_id, e.updated_at FROM extracted_fields e JOIN documents d ON d.id=e.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
+            "lookup_decisions": "SELECT d.batch_id, l.created_at FROM lookup_decisions l JOIN documents d ON d.id=l.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
             "manual_split_decisions": "SELECT m.id, d.batch_id, m.phase, m.updated_at FROM manual_split_decisions m JOIN documents d ON d.id = m.document_id WHERE d.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
             "review_locks": "SELECT l.id, r.batch_id, l.expires_at FROM review_locks l JOIN review_items r ON r.id = l.review_item_id WHERE r.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
             "external_children": "SELECT DISTINCT p.batch_id FROM documents c JOIN documents p ON p.id = c.parent_document_id WHERE c.batch_id != p.batch_id AND p.batch_id IN (SELECT id FROM batches WHERE pipeline_template_id = ?)",
@@ -504,6 +506,14 @@ class BatchRepository:
         return self.get(batch_id)
 
 
+class JobClaim(NamedTuple):
+    """Identify one execution, including successive claims by the same worker."""
+
+    job_id: str
+    worker_id: str
+    attempt_count: int
+
+
 class ProcessingJobRepository:
     """Durable queue operations for document workflow dispatch."""
 
@@ -580,7 +590,7 @@ class ProcessingJobRepository:
             row = self.conn.execute(
                 """
                 SELECT * FROM processing_jobs
-                WHERE status = 'queued' AND available_at <= ?
+                WHERE status = 'queued' AND attempt_count < max_attempts AND available_at <= ?
                 ORDER BY available_at, created_at
                 LIMIT 1
                 """,
@@ -594,13 +604,13 @@ class ProcessingJobRepository:
                 SET status = 'running', attempt_count = attempt_count + 1,
                     worker_id = ?, lease_expires_at = ?, started_at = COALESCE(started_at, ?),
                     updated_at = ?
-                WHERE id = ? AND status = 'queued'
+                WHERE id = ? AND status = 'queued' AND attempt_count < max_attempts
                 """,
                 (worker_id, lease_expires_at, now, now, row["id"]),
             )
             if cursor.rowcount != 1:
                 return None
-        return self.get(str(row["id"]))
+            return self.get(str(row["id"]))
 
     def requeue_expired(self) -> int:
         """Return expired leases to the queue for crash recovery."""
@@ -612,61 +622,70 @@ class ProcessingJobRepository:
                 SET status = 'queued', worker_id = NULL, lease_expires_at = NULL,
                     available_at = ?, updated_at = ?
                 WHERE status = 'running' AND lease_expires_at IS NOT NULL
-                  AND lease_expires_at <= ?
+                  AND lease_expires_at <= ? AND attempt_count < max_attempts
                 """,
                 (now, now, now),
             )
         return int(cursor.rowcount)
 
-    def mark_completed(self, job_id: str, *, worker_id: str) -> bool:
-        """Complete a job only when the claiming worker still owns its lease."""
-        with transaction(self.conn):
-            cursor = self.conn.execute(
-                """
-                UPDATE processing_jobs
-                SET status = 'completed', completed_at = ?, updated_at = ?,
-                    worker_id = NULL, lease_expires_at = NULL
-                WHERE id = ? AND status = 'running' AND worker_id = ?
-                """,
-                (utc_now(), utc_now(), job_id, worker_id),
-            )
-        return cursor.rowcount == 1
+    def fail_exhausted(self) -> list[sqlite3.Row]:
+        """Close expired final attempts and exhausted rows queued by older workers."""
+        now = utc_now()
+        return self.conn.execute(
+            """UPDATE processing_jobs SET status = 'failed', worker_id = NULL,
+                      lease_expires_at = NULL, last_error = 'lease_expired_attempts_exhausted',
+                      updated_at = ?
+               WHERE attempt_count >= max_attempts AND
+                     (status = 'queued' OR (status = 'running' AND lease_expires_at <= ?))
+               RETURNING document_id, batch_id""",
+            (now, now),
+        ).fetchall()
+
+    _ACTIVE_CLAIM = ("id = ? AND worker_id = ? AND attempt_count = ? "
+                     "AND status = 'running' AND lease_expires_at > ?")
+
+    def owns_claim(self, claim: JobClaim) -> bool:
+        """Check whether an attempt still has an unexpired lease."""
+        return self.conn.execute(
+            f"SELECT 1 FROM processing_jobs WHERE {self._ACTIVE_CLAIM}",
+            (*claim, utc_now()),
+        ).fetchone() is not None
+
+    def renew(self, claim: JobClaim, lease_expires_at: str) -> bool:
+        """Extend only the original, still-live claim."""
+        with immediate_transaction(self.conn):
+            now = utc_now()
+            return self.conn.execute(
+                f"UPDATE processing_jobs SET lease_expires_at = ?, updated_at = ? "
+                f"WHERE {self._ACTIVE_CLAIM}", (lease_expires_at, now, *claim, now),
+            ).rowcount == 1
+
+    def mark_completed(self, claim: JobClaim) -> bool:
+        """Commit completion only for the live owner of this attempt."""
+        with immediate_transaction(self.conn):
+            now = utc_now()
+            return self.conn.execute(
+                f"""UPDATE processing_jobs SET status = 'completed', completed_at = ?,
+                    updated_at = ?, worker_id = NULL, lease_expires_at = NULL
+                    WHERE {self._ACTIVE_CLAIM}""", (now, now, *claim, now),
+            ).rowcount == 1
 
     def mark_failed(
-        self,
-        job_id: str,
-        *,
-        worker_id: str,
-        error: str,
-        retry_at: str | None = None,
+        self, claim: JobClaim, *, error: str, retry_at: str | None = None,
     ) -> dict[str, Any] | None:
-        """Retry or terminally fail a job owned by the worker."""
-        now = utc_now()
-        with transaction(self.conn):
+        """Retry or terminally fail an active attempt."""
+        with immediate_transaction(self.conn):
+            now = utc_now()
             row = self.conn.execute(
-                "SELECT * FROM processing_jobs WHERE id = ? AND status = 'running' AND worker_id = ?",
-                (job_id, worker_id),
+                f"""UPDATE processing_jobs SET status = CASE
+                        WHEN ? IS NOT NULL AND attempt_count < max_attempts THEN 'queued'
+                        ELSE 'failed' END,
+                    available_at = ?, worker_id = NULL, lease_expires_at = NULL,
+                    last_error = ?, updated_at = ?
+                    WHERE {self._ACTIVE_CLAIM} RETURNING *""",
+                (retry_at, retry_at or now, error, now, *claim, now),
             ).fetchone()
-            if row is None:
-                return None
-            retry = retry_at is not None and int(row["attempt_count"]) < int(row["max_attempts"])
-            self.conn.execute(
-                """
-                UPDATE processing_jobs
-                SET status = ?, available_at = ?, worker_id = NULL,
-                    lease_expires_at = NULL, last_error = ?, updated_at = ?
-                WHERE id = ? AND status = 'running' AND worker_id = ?
-                """,
-                (
-                    "queued" if retry else "failed",
-                    retry_at or now,
-                    error,
-                    now,
-                    job_id,
-                    worker_id,
-                ),
-            )
-        return self.get(job_id)
+            return _row_to_dict(row)
 
 
 class DocumentRepository:
@@ -981,6 +1000,14 @@ class TaskRunRepository:
                 (utc_now(), json_dumps(output_data), task_run_id),
             )
 
+    def cancel_interrupted_runs(self, document_id: str, version_id: str, task_index: int) -> None:
+        """Close old running attempts before retrying a recoverable task cursor."""
+        self.conn.execute(
+            """UPDATE task_runs SET status = 'cancelled', ended_at = ?
+               WHERE document_id = ? AND pipeline_version_id = ? AND task_index = ? AND status = 'running'""",
+            (utc_now(), document_id, version_id, task_index),
+        )
+
     def list_by_document(self, document_id: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             "SELECT * FROM task_runs WHERE document_id = ? ORDER BY task_index, started_at",
@@ -1176,6 +1203,75 @@ class ExtractionRepository:
                         field_key,
                     ),
                 )
+
+
+class LookupKey(NamedTuple):
+    """Identify one configured lookup in a pinned document pipeline."""
+
+    document_id: str
+    pipeline_version_id: str
+    task_key: str
+
+
+class LookupDecisionRepository:
+    """Store immutable revisions and read their latest projection."""
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+
+    def current(self, key: LookupKey) -> dict[str, Any] | None:
+        return _row_to_dict(self.conn.execute(
+            """SELECT * FROM lookup_decisions
+               WHERE document_id=? AND pipeline_version_id=? AND task_key=?
+               ORDER BY revision DESC LIMIT 1""", key,
+        ).fetchone())
+
+    def get(self, key: LookupKey, decision_id: str) -> dict[str, Any] | None:
+        """Read one historical revision within its exact lookup scope."""
+        return _row_to_dict(self.conn.execute(
+            """SELECT * FROM lookup_decisions
+               WHERE document_id=? AND pipeline_version_id=? AND task_key=? AND id=?""",
+            (*key, decision_id),
+        ).fetchone())
+
+    def has_for_extraction(self, document_id: str, version_id: str, extraction_id: str) -> bool:
+        return self.conn.execute(
+            """SELECT 1 FROM lookup_decisions
+               WHERE document_id=? AND pipeline_version_id=? AND extraction_result_id=? LIMIT 1""",
+            (document_id, version_id, extraction_id),
+        ).fetchone() is not None
+
+    def append(
+        self, key: LookupKey, *, extraction_result_id: str, revision: int,
+        supersedes_id: str | None, state: str, evaluation_json: str,
+        selected_record_number: int | None, actor: str | None, reason: str | None,
+    ) -> dict[str, Any]:
+        """Insert one revision inside the service's transaction."""
+        row = self.conn.execute(
+            """INSERT INTO lookup_decisions (
+                id, document_id, pipeline_version_id, task_key, extraction_result_id, revision,
+                supersedes_id, state, evaluation_json, selected_record_number, actor, reason, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *""",
+            (_new_id(), *key, extraction_result_id, revision, supersedes_id, state,
+             evaluation_json, selected_record_number, actor, reason, utc_now()),
+        ).fetchone()
+        return dict(row)
+
+    def current_for_document(
+        self, document_id: str, pipeline_version_id: str, extraction_result_id: str,
+    ) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """SELECT decision.* FROM lookup_decisions decision
+               JOIN (
+                   SELECT task_key, MAX(revision) AS revision FROM lookup_decisions
+                   WHERE document_id=? AND pipeline_version_id=? GROUP BY task_key
+               ) latest USING (task_key, revision)
+               WHERE decision.document_id=? AND decision.pipeline_version_id=?
+                 AND decision.extraction_result_id=?
+               ORDER BY decision.task_key""",
+            (document_id, pipeline_version_id, document_id, pipeline_version_id, extraction_result_id),
+        )
+        return [dict(row) for row in rows]
 
 
 class ReviewRepository:

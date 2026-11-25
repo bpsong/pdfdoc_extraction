@@ -20,9 +20,11 @@ from modules.shutdown_manager import ShutdownManager
 from modules.base_task import BaseTask
 from modules.db.connection import connect, managed_connect
 from modules.exceptions import TaskError, TaskSetupError
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
 from modules.services.failure_service import _redact, _redact_text
 from modules.services.fan_in_service import FanInService
-from modules.services.task_registry_service import ApprovedTaskRegistry, TaskApprovalError
+from modules.services.processing_lease import JobClaimLost, ProcessingLease, claim_write
+from modules.services.task_registry_service import ApprovedTaskRegistry, REVIEW_GATE_TASK, TaskApprovalError
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 
@@ -50,6 +52,7 @@ class WorkflowLoader:
         definition: Mapping[str, Any] | None = None,
         pipeline_version_id: str | None = None,
         pipeline_template_id: str | None = None,
+        lease: ProcessingLease | None = None,
     ) -> None:
         """Initialize an isolated loader for one explicit definition."""
         self.config_manager = config_manager
@@ -58,6 +61,7 @@ class WorkflowLoader:
         # YAML when a definition is absent.
         self.cfg = dict(definition) if isinstance(definition, Mapping) else {}
         self.task_defs = self.cfg.get("tasks", {})
+        self.lease = lease
         self.pipeline_version_id = pipeline_version_id
         self.pipeline_template_id = pipeline_template_id
         self.task_config_manager: ConfigManager = (
@@ -240,6 +244,11 @@ class WorkflowLoader:
             )
             self.shutdown_manager.shutdown()
             return None
+        first_lookup_index = next((
+            index for index, key in enumerate(pipeline_config)
+            if isinstance(key, str) and isinstance(config := self.task_defs.get(key), Mapping)
+            and (config.get("module"), config.get("class")) == CSV_LOOKUP_TASK
+        ), len(pipeline_config))
 
         @flow(name="Dynamic PDF Processing Flow")
         def dynamic_flow(initial_context: Dict[str, Any]):
@@ -255,6 +264,8 @@ class WorkflowLoader:
             for task_index, task_key in enumerate(pipeline_config):
                 if task_index < effective_start_index:
                     continue
+                if self.lease:
+                    self.lease.check()
                 step_cfg = self.task_defs.get(task_key)
                 if not step_cfg:
                     self.logger.critical(f"Unknown pipeline step: '{task_key}' not found in 'tasks' definition.")
@@ -266,6 +277,11 @@ class WorkflowLoader:
                 class_name = step_cfg.get("class")
                 params = step_cfg.get("params", {})
                 on_error = step_cfg.get("on_error", "stop")
+                lookup_gate = (module_name, class_name) == REVIEW_GATE_TASK and first_lookup_index < task_index
+                if lookup_gate:
+                    on_error = "stop"
+                    if self.lease:
+                        current_context["_lookup_job_claim"] = tuple(self.lease.claim)
 
                 if not module_name or not class_name:
                     self.logger.critical(f"Task '{task_name}' missing 'module' or 'class' path.")
@@ -281,17 +297,23 @@ class WorkflowLoader:
                     current_context["current_task_index"] = task_index
                     state_service = self._state_service(current_context)
                     if state_service is not None:
-                        task_run = state_service.start_task(
-                            batch_id=str(current_context["batch_id"]),
-                            document_id=str(current_context["document_id"]),
-                            task_key=task_key,
-                            task_index=task_index,
-                            module_name=str(module_name),
-                            class_name=str(class_name),
-                            input_data=self._context_summary(current_context),
-                        )
-                        task_run_id = task_run["id"]
-                        current_context["task_run_id"] = task_run_id
+                        with claim_write(state_service.conn, self.lease):
+                            task_run = state_service.start_task(
+                                batch_id=str(current_context["batch_id"]),
+                                document_id=str(current_context["document_id"]),
+                                task_key=task_key,
+                                task_index=task_index,
+                                module_name=str(module_name),
+                                class_name=str(class_name),
+                                input_data=self._context_summary(current_context),
+                            )
+                            task_run_id = task_run["id"]
+                            current_context["task_run_id"] = task_run_id
+
+                    if (module_name, class_name) == CSV_LOOKUP_TASK and (
+                        self.pipeline_version_id is None or on_error != "stop"
+                    ):
+                        raise TaskSetupError("CSV lookup requires a published pipeline and on_error: stop.")
 
                     # Import and instantiate the task class, passing config_manager and params
                     task_class = self._import_task_class(module_name, class_name)
@@ -304,12 +326,16 @@ class WorkflowLoader:
                     )
 
                     # Call on_start with context
+                    if self.lease:
+                        self.lease.check()
                     task_instance.on_start(current_context)
 
                     # Wrap the run method as a Prefect task with NO_CACHE to avoid serialization errors
                     def run_task(context: dict[str, Any]) -> dict[str, Any]:
                         logger = get_run_logger()
                         logger.info(f"--> Running {task_name}")
+                        if self.lease:
+                            self.lease.check()
                         result = task_instance.run(context)
                         return result or {}
 
@@ -339,16 +365,20 @@ class WorkflowLoader:
                         output_summary = self._context_summary(current_context)
                         current_context.setdefault("fan_out_start_task_index", task_index + 1)
                         if state_service is not None and task_run_id:
-                            state_service.complete_task(task_run_id, output_summary)
+                            with claim_write(state_service.conn, self.lease):
+                                state_service.complete_task(task_run_id, output_summary)
                         self.logger.info("Pipeline fan-out after task '%s'.", task_name)
                         return current_context
 
                     if current_context.get("pipeline_state") == "paused":
+                        current_context.pop("_lookup_job_claim", None)
                         output_summary = self._context_summary(current_context)
-                        if state_service is not None and task_run_id:
-                            state_service.pause_task(task_run_id, output_summary)
-                            state_service.pause_document(str(current_context["document_id"]))
-                            FanInService(state_service.conn).finalize_leaf(current_context)
+                        lookup_review_paused = lookup_gate and current_context.pop("lookup_review_paused", False)
+                        if state_service is not None and task_run_id and not lookup_review_paused:
+                            with claim_write(state_service.conn, self.lease):
+                                state_service.pause_task(task_run_id, output_summary)
+                                state_service.pause_document(str(current_context["document_id"]))
+                                FanInService(state_service.conn).finalize_leaf(current_context)
                         self.logger.info("Pipeline paused after task '%s'.", task_name)
                         return current_context
 
@@ -366,7 +396,8 @@ class WorkflowLoader:
                         )
                         output_summary = self._context_summary(current_context)
                         if state_service is not None and task_run_id:
-                            state_service.fail_task(task_run_id, str(current_context["error"]), output_summary)
+                            with claim_write(state_service.conn, self.lease):
+                                state_service.fail_task(task_run_id, str(current_context["error"]), output_summary)
                         if on_error == "stop":
                             self.logger.critical(f"Stopping pipeline due to error in task '{task_name}'.")
                             break
@@ -378,8 +409,11 @@ class WorkflowLoader:
                     else:
                         output_summary = self._context_summary(current_context)
                         if state_service is not None and task_run_id:
-                            state_service.complete_task(task_run_id, output_summary)
+                            with claim_write(state_service.conn, self.lease):
+                                state_service.complete_task(task_run_id, output_summary)
 
+                except JobClaimLost:
+                    raise
                 except TaskSetupError as e:
                     # Invalid/unapproved implementations always stop execution;
                     # on_error=continue cannot bypass the task approval boundary.
@@ -399,11 +433,12 @@ class WorkflowLoader:
                         ),
                     }
                     if state_service is not None and task_run_id:
-                        state_service.fail_task(
-                            task_run_id,
-                            str(current_context["error"]),
-                            self._context_summary(current_context),
-                        )
+                        with claim_write(state_service.conn, self.lease):
+                            state_service.fail_task(
+                                task_run_id,
+                                str(current_context["error"]),
+                                self._context_summary(current_context),
+                            )
                     break
                 except TaskError as e:
                     self.logger.error(f"Task '{task_name}' failed with TaskError: {e}")
@@ -419,11 +454,12 @@ class WorkflowLoader:
                         error=e,
                     )
                     if state_service is not None and task_run_id:
-                        state_service.fail_task(
-                            task_run_id,
-                            str(current_context["error"]),
-                            self._context_summary(current_context),
-                        )
+                        with claim_write(state_service.conn, self.lease):
+                            state_service.fail_task(
+                                task_run_id,
+                                str(current_context["error"]),
+                                self._context_summary(current_context),
+                            )
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to TaskError in task '{task_name}'.")
                         break
@@ -442,7 +478,8 @@ class WorkflowLoader:
                         error=current_context["error"],
                     )
                     if state_service is not None and task_run_id:
-                        state_service.fail_task(task_run_id, str(current_context["error"]), self._context_summary(current_context))
+                        with claim_write(state_service.conn, self.lease):
+                            state_service.fail_task(task_run_id, str(current_context["error"]), self._context_summary(current_context))
                     raise
                 except Exception as e:
                     self.logger.error(f"Unexpected error in task '{task_name}': {e}")
@@ -458,11 +495,12 @@ class WorkflowLoader:
                         error=e,
                     )
                     if state_service is not None and task_run_id:
-                        state_service.fail_task(
-                            task_run_id,
-                            str(current_context["error"]),
-                            self._context_summary(current_context),
-                        )
+                        with claim_write(state_service.conn, self.lease):
+                            state_service.fail_task(
+                                task_run_id,
+                                str(current_context["error"]),
+                                self._context_summary(current_context),
+                            )
                     if on_error == "stop":
                         self.logger.critical(f"Stopping pipeline due to unexpected error in task '{task_name}'.")
                         break
@@ -473,6 +511,8 @@ class WorkflowLoader:
 
             # Track cleanup as an internal run after normal completion or failure.
             # It must not advance the configured cursor used for recovery.
+            if self.lease:
+                self.lease.check()
             self.logger.info("Executing mandatory housekeeping task.")
             final_context = current_context
             cleanup_state_service = None
@@ -487,17 +527,18 @@ class WorkflowLoader:
             try:
                 cleanup_state_service = self._state_service(current_context)
                 if cleanup_state_service is not None:
-                    cleanup_task_run = cleanup_state_service.start_internal_task(
-                        batch_id=str(current_context["batch_id"]),
-                        document_id=str(current_context["document_id"]),
-                        task_key=INTERNAL_CLEANUP_TASK_KEY,
-                        task_index=cleanup_task_index,
-                        module_name=INTERNAL_CLEANUP_MODULE,
-                        class_name=INTERNAL_CLEANUP_CLASS,
-                        input_data=self._context_summary(current_context),
-                    )
-                    cleanup_task_run_id = cleanup_task_run["id"]
-                    current_context["task_run_id"] = cleanup_task_run_id
+                    with claim_write(cleanup_state_service.conn, self.lease):
+                        cleanup_task_run = cleanup_state_service.start_internal_task(
+                            batch_id=str(current_context["batch_id"]),
+                            document_id=str(current_context["document_id"]),
+                            task_key=INTERNAL_CLEANUP_TASK_KEY,
+                            task_index=cleanup_task_index,
+                            module_name=INTERNAL_CLEANUP_MODULE,
+                            class_name=INTERNAL_CLEANUP_CLASS,
+                            input_data=self._context_summary(current_context),
+                        )
+                        cleanup_task_run_id = cleanup_task_run["id"]
+                        current_context["task_run_id"] = cleanup_task_run_id
 
                 housekeeping_task_instance = CleanupTask(
                     config_manager=self.task_config_manager
@@ -508,6 +549,8 @@ class WorkflowLoader:
                 def wrapped_housekeeping_run_task(context: dict):
                     logger = get_run_logger()
                     logger.info("--> Running cleanup_task")
+                    if self.lease:
+                        self.lease.check()
                     result = housekeeping_task_instance.run(context)
                     return result or {}
 
@@ -520,16 +563,19 @@ class WorkflowLoader:
                     final_context = current_context
 
                 if cleanup_state_service is not None and cleanup_task_run_id:
-                    cleanup_state_service.complete_task(
-                        cleanup_task_run_id,
-                        self._context_summary(final_context),
-                    )
+                    with claim_write(cleanup_state_service.conn, self.lease):
+                        cleanup_state_service.complete_task(
+                            cleanup_task_run_id,
+                            self._context_summary(final_context),
+                        )
                 # Successful cleanup must not hide an earlier continued failure
                 # or leave recovery pointing at the internal cleanup task.
                 self._restore_task_position(final_context, previous_task_position)
                 self._restore_continued_failure(final_context)
                 self._finalize_leaf(final_context)
                 return final_context
+            except JobClaimLost:
+                raise
             except Exception as e:
                 self.logger.critical(f"Housekeeping task failed: {e}")
                 failure_context = final_context if isinstance(final_context, dict) else current_context
@@ -544,11 +590,12 @@ class WorkflowLoader:
                     error=e,
                 )
                 if cleanup_state_service is not None and cleanup_task_run_id:
-                    cleanup_state_service.fail_task(
-                        cleanup_task_run_id,
-                        str(failure_context["error"]),
-                        self._context_summary(failure_context),
-                    )
+                    with claim_write(cleanup_state_service.conn, self.lease):
+                        cleanup_state_service.fail_task(
+                            cleanup_task_run_id,
+                            str(failure_context["error"]),
+                            self._context_summary(failure_context),
+                        )
                 self._restore_task_position(failure_context, previous_task_position)
                 self._finalize_leaf(failure_context)
                 return failure_context
@@ -576,7 +623,9 @@ class WorkflowLoader:
         if not context.get("document_id") and not context.get("id"):
             return
         try:
-            with managed_connect(self.config_manager) as conn:
+            with managed_connect(self.config_manager) as conn, claim_write(conn, self.lease):
                 FanInService(conn).finalize_leaf(context)
+        except JobClaimLost:
+            raise
         except Exception:
             self.logger.exception("Fan-in finalization failed for %s", context.get("document_id") or context.get("id"))

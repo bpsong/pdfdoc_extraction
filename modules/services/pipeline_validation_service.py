@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from modules.config_protocol import ConfigProvider as ConfigManager
+from modules.services.lookup_pipeline_validation import lookup_file_issues
 from modules.services.schema_service import SchemaService
 from modules.services.task_registry_service import ApprovedTaskRegistry
 from tools.config_check.parameter_validator import validate_parameters
@@ -86,6 +87,12 @@ class PipelineValidationService:
         findings.extend(self._validate_pipeline_task_cardinality(config_data))
         findings.extend(self._validate_task_approvals(config_data))
         findings.extend(self._validate_schema_references(config_data))
+        config_path = getattr(self.config_manager, "_config_path", None)
+        if config_path:
+            findings.extend(
+                _finding(severity=severity, path=issue.path, message=issue.message, code=issue.code)
+                for severity, issue in lookup_file_issues(config_data, config_path)
+            )
 
         findings = _dedupe_findings(findings)
         return {

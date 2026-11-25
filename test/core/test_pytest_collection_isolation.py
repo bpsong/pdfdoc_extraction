@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 
@@ -30,3 +31,20 @@ def test_collection_ignores_external_config(tmp_path: Path, existing: bool) -> N
     assert external.exists() is existing
     if existing:
         assert external.read_text(encoding="utf-8") == invalid
+
+
+def test_llamacloud_connection_skips_before_credentials(tmp_path: Path) -> None:
+    # Isolate the module from any real test_config.yaml, even if its gate regresses.
+    source = Path(__file__).resolve().parents[1] / "third_party" / "llamacloud_connection_test.py"
+    isolated = tmp_path / source.name
+    shutil.copyfile(source, isolated)
+    env = os.environ.copy()
+    env.pop("RUN_LLAMACLOUD_CONNECTION", None)
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-rs", "--setup-show", isolated.name],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60, check=False,
+    )
+    assert result.returncode == 0
+    assert "1 skipped" in result.stdout
+    assert "RUN_LLAMACLOUD_CONNECTION" in result.stdout
+    assert "SETUP    F test_config" not in result.stdout

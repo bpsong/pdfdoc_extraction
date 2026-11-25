@@ -397,7 +397,7 @@ def run_validate_command(args, logger: logging.Logger) -> int:
                 _merge_results(validation_result, schema_result)
                 if schema_result.is_valid:
                     stored = StoredSourceValidator(
-                        conn, runtime_config=runtime_config
+                        conn, runtime_config=runtime_config, config_path=Path(resolved_config_path),
                     )
                     if args.pipeline:
                         stored_result = stored.validate_pipeline(
@@ -595,6 +595,7 @@ def run_validate_file_command(args, logger: logging.Logger) -> int:
                         path,
                         kind=args.kind,
                         runtime_config=runtime_config,
+                        config_path=config_path,
                         conn=conn,
                     )
             else:

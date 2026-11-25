@@ -55,6 +55,17 @@ Split precedes extraction, and the review gate follows extraction. Extraction
 supports at most one table field. Task-specific parameter, shape and approval
 rules are checked before atomic publication; a failed publish creates no version.
 
+The R3 CSV lookup backend accepts the built-in `CsvReferenceLookupTask` in
+published definitions. Configure it after extraction and before business
+outputs. A filename token from a lookup must reference
+an earlier required lookup. Review policies require a gate before release.
+Reference paths are literal task parameters relative to the deployment
+configuration when supplied as relative paths. The worker verifies the file
+when it evaluates a document. The review gate uses persisted lookup decisions.
+A review form may declare an upstream return key as a text field for schema
+and business validation. Review completion resolves pending lookups before
+any output can run. [R3 design](../../tasks/design-r3-csv-reference-lookup.md)
+
 Validate in the Pipeline editor or select an imported stored draft:
 
 ```powershell

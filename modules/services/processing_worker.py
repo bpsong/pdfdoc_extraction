@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import logging
 from threading import Event
 from typing import Any
 import uuid
 
 from modules.config_protocol import ConfigProvider
-from modules.db.connection import managed_connect
-from modules.db.repositories import BatchRepository, DocumentRepository, ProcessingJobRepository
+from modules.db.connection import immediate_transaction, json_loads, managed_connect
+from modules.db.repositories import BatchRepository, JobClaim, ProcessingJobRepository, ReviewRepository
 from modules.file_processor import FileProcessor
+from modules.services.processing_lease import JobClaimLost, ProcessingLease
 from modules.services.processing_job_service import ProcessingJobService
 from modules.services.runtime_health_service import RuntimeHealthReporter
 from modules.services.workflow_state_service import WorkflowStateService
@@ -45,94 +45,79 @@ class ProcessingWorker:
         )
         self.stop_event = Event()
         self.health_reporter = health_reporter
-        self.file_processor = file_processor or FileProcessor(
-            config, None, WorkflowManager(config)
-        )
+        self.file_processor = file_processor
 
     def run_once(self) -> bool:
         """Claim and process one job, returning whether work was claimed."""
-        with managed_connect(self.config) as conn:
-            jobs = ProcessingJobRepository(conn)
-            jobs.requeue_expired()
-            lease_expires_at = (
-                datetime.now(timezone.utc) + timedelta(seconds=self.lease_seconds)
-            ).isoformat()
-            job = jobs.claim_next(
-                worker_id=self.worker_id,
-                lease_expires_at=lease_expires_at,
+        with managed_connect(self.config) as conn, immediate_transaction(conn):
+            ProcessingJobService(conn).recover_expired()
+            job = ProcessingJobRepository(conn).claim_next(
+                worker_id=self.worker_id, lease_expires_at=ProcessingLease.deadline(self.lease_seconds),
             )
-        if job is None:
-            return False
+            if job is None:
+                return False
+            document_id = str(job["document_id"])
+            claim = JobClaim(str(job["id"]), self.worker_id, int(job["attempt_count"]))
+            if claim.attempt_count > 1:
+                review = ReviewRepository(conn).find_latest_for_document(document_id, review_kind="extraction")
+                if review and json_loads(review.get("metadata_json"), {}).get("lookup_scope"):
+                    # The lookup gate committed the review and its paused task before the old worker died.
+                    ProcessingJobRepository(conn).mark_completed(claim)
+                    return True
+            document = WorkflowStateService(conn).transition_document(
+                document_id, "processing", reason="processing_job_claimed",
+            )
 
-        job_id = str(job["id"])
-        document_id = str(job["document_id"])
-        document: dict[str, Any] | None = None
+        lease = ProcessingLease(self.config, claim, self.lease_seconds)
         if self.health_reporter is not None:
-            self.health_reporter.set_status("busy", {"job_id": job_id})
+            self.health_reporter.set_status("busy", {"job_id": claim.job_id})
         try:
-            with managed_connect(self.config) as conn:
-                document = DocumentRepository(conn).get(document_id)
-                batch = BatchRepository(conn).get(str(job["batch_id"]))
-                if document is None or batch is None:
-                    raise ValueError("Queued document or batch no longer exists.")
-                WorkflowStateService(conn).transition_document(
-                    document_id,
-                    "processing",
-                    reason="processing_job_claimed",
-                )
-
-            result = self.file_processor.process_file(
-                filepath=str(document["file_path"]),
-                unique_id=document_id,
-                source=str(batch["source"]),
-                original_filename=str(document.get("original_filename") or document["file_path"]),
-                batch_id=str(batch["id"]),
-                document_id=document_id,
-                create_sqlite_state=False,
-            )
-            if result is False:
-                with managed_connect(self.config) as conn:
-                    WorkflowStateService(conn).transition_document(
-                        document_id,
-                        "failed",
-                        reason="processing_job_failed",
-                    )
-                    ProcessingJobRepository(conn).mark_failed(
-                        job_id,
-                        worker_id=self.worker_id,
-                        error="Workflow execution returned failure.",
-                    )
-                return True
-
-            with managed_connect(self.config) as conn:
-                ProcessingJobRepository(conn).mark_completed(
-                    job_id, worker_id=self.worker_id
-                )
-            return True
-        except Exception as exc:
-            error = str(exc)[:2000]
-            logger.exception("Processing job failed: job_id=%s", job_id)
-            with managed_connect(self.config) as conn:
-                updated = ProcessingJobRepository(conn).mark_failed(
-                    job_id,
-                    worker_id=self.worker_id,
-                    error=error,
-                    retry_at=(
-                        ProcessingJobService.retry_at(self.retry_delay)
-                        if isinstance(exc, (RetryableWorkflowStartError, OSError))
-                        else None
-                    ),
-                )
-                if updated and updated.get("status") == "failed" and document is not None:
-                    WorkflowStateService(conn).transition_document(
-                        document_id,
-                        "failed",
-                        reason="processing_job_exception",
-                    )
-            return True
+            with lease.maintain():
+                self._execute(job, document, lease)
         finally:
             if self.health_reporter is not None and not self.stop_event.is_set():
                 self.health_reporter.set_status("ready")
+        return True
+
+    def _execute(
+        self, job: dict[str, Any], document: dict[str, Any], lease: ProcessingLease,
+    ) -> None:
+        retry_at = None
+        reason = "processing_job_failed"
+        try:
+            with managed_connect(self.config) as conn:
+                lease.check(conn)
+                batch = BatchRepository(conn).get(str(job["batch_id"]))
+                if batch is None:
+                    raise ValueError("Queued batch no longer exists.")
+            processor = self.file_processor or FileProcessor(
+                self.config, None, WorkflowManager(self.config, lease=lease),
+            )
+            result = processor.process_file(
+                filepath=str(document["file_path"]), unique_id=str(document["id"]),
+                source=str(batch["source"]),
+                original_filename=str(document.get("original_filename") or document["file_path"]),
+                batch_id=str(batch["id"]), document_id=str(document["id"]), create_sqlite_state=False,
+            )
+            if result is not False:
+                with managed_connect(self.config) as conn:
+                    ProcessingJobRepository(conn).mark_completed(lease.claim)
+                return
+            error = "Workflow execution returned failure."
+        except JobClaimLost:
+            logger.info("Stopped execution after losing processing claim %s", lease.claim)
+            return
+        except Exception as exc:
+            logger.exception("Processing job failed: job_id=%s", lease.claim.job_id)
+            error = str(exc)[:2000]
+            reason = "processing_job_exception"
+            if isinstance(exc, (RetryableWorkflowStartError, OSError)):
+                retry_at = ProcessingJobService.retry_at(self.retry_delay)
+
+        with managed_connect(self.config) as conn, immediate_transaction(conn):
+            updated = ProcessingJobRepository(conn).mark_failed(lease.claim, error=error, retry_at=retry_at)
+            if updated and updated["status"] == "failed":
+                WorkflowStateService(conn).transition_document(str(document["id"]), "failed", reason=reason)
 
     def run(self) -> None:
         """Poll until shutdown is requested."""

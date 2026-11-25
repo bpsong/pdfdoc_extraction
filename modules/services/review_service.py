@@ -8,6 +8,8 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
+from pydantic import ValidationError
+
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import atomic_transaction, json_loads
 from modules.db.repositories import (
@@ -27,6 +29,8 @@ from modules.services.review_business_validation import (
 from modules.services.business_validation_schema import require_business_rule_capability
 from modules.services.business_validation_catalog_service import business_validator_labels
 from modules.services.versioned_config_contracts import canonicalize_json, content_hash
+from modules.services.lookup_decision_service import LookupConflictError, merge_lookup_values
+from modules.services.lookup_review_service import LookupProposal, LookupReviewRequest, LookupReviewService, ReviewLookup
 
 
 class ReviewServiceError(ValueError):
@@ -39,6 +43,7 @@ class ReviewBusinessError(ReviewServiceError):
     def __init__(
         self, message: str, code: str, *, status_code: int = 409,
         report: dict[str, Any] | None = None, current_revision: str | None = None,
+        lookup_review: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -47,6 +52,8 @@ class ReviewBusinessError(ReviewServiceError):
             self.detail["business_validation"] = report
         if current_revision is not None:
             self.detail["current_revision"] = current_revision
+        if lookup_review is not None:
+            self.detail["lookup_review"] = lookup_review
 
 
 class _NullConfig:
@@ -66,6 +73,7 @@ class ReviewService:
         self.task_runs = TaskRunRepository(conn)
         self.audit = AuditRepository(conn)
         self.state = WorkflowStateService(conn)
+        self.lookup_review = LookupReviewService(conn, config_manager)
 
     def list_items(self, *, status: str | None = None, queue_name: str | None = None) -> list[dict[str, Any]]:
         """List review queue items."""
@@ -180,9 +188,18 @@ class ReviewService:
         draft = metadata.get("draft", {}).get("corrections", {})
         if isinstance(draft, dict):
             values.update(draft)
+        if snapshot["lookups"]:
+            _, lookup_payload, values = self._lookup_preview(
+                snapshot, values, draft if isinstance(draft, dict) else {},
+                LookupReviewRequest(), allow_rematch=item.get("status") != "completed",
+            )
+        else:
+            lookup_payload = None
         accepted = metadata.get("business_validation", {}).get("accepted")
         report = (accepted if item.get("status") == "completed" and accepted is not None
                   else self._business_report(snapshot, values))
+        if report is not None and lookup_payload is not None and report is not accepted:
+            report["lookup_sources"] = self._lookup_report_sources(lookup_payload)
         return {
             "review_item": self._review_item_payload(item),
             "metadata": metadata,
@@ -203,6 +220,7 @@ class ReviewService:
             "review_revision": snapshot["revision"],
             "business_validation": report,
             "business_validation_labels": business_validator_labels(),
+            **({"lookup_review": lookup_payload} if lookup_payload is not None else {}),
         }
 
     def create_review_item(
@@ -371,6 +389,7 @@ class ReviewService:
     def revalidate(
         self, review_item_id: str, user: str, corrections: dict[str, Any], *,
         expected_revision: str | None = None, request_revision: str | int | None = None,
+        lookup_actions: Any = None, reference_adoptions: Any = None,
     ) -> dict[str, Any]:
         """Check unsaved values without saving, extending locks, or resuming work."""
         if (request_revision is not None and (
@@ -382,11 +401,17 @@ class ReviewService:
             self._check_revision(snapshot, expected_revision)
             corrections = self._checked_corrections(snapshot, corrections)
             values = {**self._display_values(snapshot), **corrections}
+        request = self._lookup_request(lookup_actions, reference_adoptions)
+        _, lookup_payload, values = self._lookup_preview(snapshot, values, corrections, request)
+        report = self._business_report(snapshot, values)
+        if report is not None and lookup_payload is not None:
+            report["lookup_sources"] = self._lookup_report_sources(lookup_payload)
         return {
             "review_revision": snapshot["revision"], "request_revision": request_revision,
-            "business_validation": self._business_report(snapshot, values),
+            "business_validation": report,
             "business_validation_labels": business_validator_labels(),
             "schema_errors": self._schema_errors(snapshot, values),
+            **({"lookup_review": lookup_payload} if lookup_payload is not None else {}),
         }
 
     def diff_preview(self, review_item_id: str, corrections: dict[str, Any]) -> dict[str, Any]:
@@ -411,6 +436,9 @@ class ReviewService:
         *,
         trigger_resume: bool = True,
         expected_revision: str | None = None,
+        lookup_actions: Any = None,
+        reference_adoptions: Any = None,
+        lookup_preview_token: str | None = None,
     ) -> dict[str, Any]:
         """Validate and persist corrections, complete review, and optionally resume."""
         if trigger_resume and self.conn.in_transaction:
@@ -421,7 +449,24 @@ class ReviewService:
             corrections = self._checked_corrections(snapshot, corrections)
             values = {**self._display_values(snapshot), **corrections}
         # Calculate outside the write transaction, then recheck the exact source.
+        request = self._lookup_request(lookup_actions, reference_adoptions)
+        proposals, lookup_payload, values = self._lookup_preview(snapshot, values, corrections, request)
+        if lookup_payload is not None:
+            if lookup_payload["blocked"]:
+                stale = any(proposal.issue == "stale_lookup_selection" for proposal in proposals.values())
+                raise ReviewBusinessError(
+                    "Resolve the CSV lookup findings before completing review.",
+                    "stale_lookup_selection" if stale else "lookup_review_blocked",
+                    status_code=409 if stale else 422, lookup_review=lookup_payload,
+                )
+            if lookup_preview_token != lookup_payload["preview_token"]:
+                raise ReviewBusinessError(
+                    "Revalidate the current values and CSV lookup decisions before completing review.",
+                    "stale_lookup_preview", lookup_review=lookup_payload,
+                )
         report = self._business_report(snapshot, values)
+        if report is not None and lookup_payload is not None:
+            report["lookup_sources"] = self._lookup_report_sources(lookup_payload)
         validation_errors = self._schema_errors(snapshot, values)
         if validation_errors:
             if report is not None:
@@ -439,13 +484,25 @@ class ReviewService:
             item = current["item"]
             document_id = str(item["document_id"])
             metadata = current["metadata"]
-            diff = self.diff_preview(review_item_id, corrections)
             accepted = dict(corrections)
             if report is not None:
                 # Materialize configured defaults/missing fields only when accepted.
                 accepted.update({key: value for key, value in values.items()
-                                 if key not in current["values"]})
-            self.extractions.apply_corrections(document_id, accepted, create_missing=report is not None)
+                                 if key not in current["values"] and key not in current["lookup_fields"]})
+            if proposals:
+                try:
+                    lookup_ids = self.lookup_review.accept(proposals, user)
+                except LookupConflictError:
+                    raise ReviewBusinessError(
+                        "CSV lookup decisions changed. Reload the review.", "stale_review",
+                    ) from None
+                metadata["lookup_acceptance"] = {
+                    "decision_ids": lookup_ids, "extraction_result_id": current["extraction_result_id"],
+                }
+                if report is not None and lookup_payload is not None:
+                    report["lookup_sources"] = self._lookup_report_sources(lookup_payload, lookup_ids)
+            diff = self.diff_preview(review_item_id, corrections) if report is None and not proposals else None
+            self.extractions.apply_corrections(document_id, accepted, create_missing=report is not None or bool(proposals))
             metadata.pop("draft", None)
             metadata["completed_by"] = user
             metadata["completed_corrections"] = accepted
@@ -458,7 +515,7 @@ class ReviewService:
             event: dict[str, Any] = {"field_keys": sorted(accepted)}
             if report is not None:
                 event["business_validation"] = business_report_summary(report)
-            else:
+            elif not proposals:
                 event["diff"] = diff
             self.audit.append(event_type="review_completed", event=event, batch_id=item.get("batch_id"),
                               document_id=document_id, review_item_id=review_item_id, user=user)
@@ -469,6 +526,54 @@ class ReviewService:
 
             resume_triggered = ResumeManager(self.config_manager).resume_document(document_id, user=user)
         return {"review_item_id": review_item_id, "status": "completed", "resume_triggered": resume_triggered}
+
+    @staticmethod
+    def _lookup_request(actions: Any, adoptions: Any) -> LookupReviewRequest:
+        try:
+            return LookupReviewRequest.model_validate({
+                "actions": {} if actions is None else actions,
+                "adoptions": {} if adoptions is None else adoptions,
+            })
+        except ValidationError:
+            raise ReviewBusinessError("Invalid CSV lookup actions or adoption reasons.", "lookup_request_invalid",
+                                      status_code=422) from None
+
+    @staticmethod
+    def _lookup_report_sources(
+        payload: dict[str, Any], accepted_ids: dict[str, str] | None = None,
+    ) -> dict[str, dict[str, str]]:
+        sources: dict[str, dict[str, str]] = {}
+        for entry in payload["lookups"]:
+            task_key = str(entry["task_key"])
+            sources[task_key] = {
+                "decision_id": accepted_ids[task_key] if accepted_ids is not None else str(entry["decision_id"]),
+                "source_sha256": str(entry["source_sha256"]),
+            }
+        return sources
+
+    def _lookup_preview(
+        self, snapshot: dict[str, Any], values: dict[str, Any], corrections: dict[str, Any],
+        request: LookupReviewRequest, *, allow_rematch: bool = True,
+    ) -> tuple[dict[str, LookupProposal], dict[str, Any] | None, dict[str, Any]]:
+        try:
+            proposals = self.lookup_review.propose(
+                snapshot["lookups"], values, request, snapshot["revision"], allow_rematch=allow_rematch,
+            )
+            if not proposals:
+                return {}, None, values
+            values = merge_lookup_values(values, (proposal.returned for proposal in proposals.values()))
+        except ValueError:
+            raise ReviewBusinessError("CSV lookup actions or field bindings are invalid for this review.",
+                                      "lookup_request_invalid", status_code=422) from None
+        payload = {
+            "lookups": [proposal.payload() for proposal in proposals.values()],
+            "blocked": any(proposal.blocked for proposal in proposals.values()),
+            "preview_token": snapshot_hash({
+                "revision": snapshot["revision"], "corrections": corrections, "request": request.model_dump(mode="json"),
+                "evaluations": {task: proposal.evaluation_token for task, proposal in proposals.items()},
+            }),
+        }
+        return proposals, payload, values
 
     def _snapshot(self, item: dict[str, Any]) -> dict[str, Any]:
         document_id = str(item["document_id"])
@@ -504,6 +609,24 @@ class ReviewService:
                                           "review_schema_version_required", status_code=422)
         lock = self.reviews.get_lock(str(item["id"]))
         document = self.documents.get(document_id) or {}
+        task_run_id = item.get("created_by_task_run_id")
+        task_run = self.task_runs.get(task_run_id) if task_run_id else None
+        lookup_acceptance = metadata.get("lookup_acceptance", {}) if item.get("status") == "completed" else {}
+        extraction_id = latest["id"] if latest else None
+        lookup_scope = metadata.get("lookup_scope")
+        if (item.get("status") != "completed" and lookup_scope is not None
+                and lookup_scope.get("extraction_result_id") != extraction_id):
+            raise ReviewBusinessError("The review's source extraction has changed.", "stale_review")
+        try:
+            lookups = self.lookup_review.load_before(
+                document_id, document.get("pipeline_version_id"),
+                lookup_acceptance.get("extraction_result_id", extraction_id),
+                int(task_run["task_index"]) if task_run else 0,
+                accepted_ids=lookup_acceptance.get("decision_ids"),
+            )
+        except LookupConflictError:
+            raise ReviewBusinessError("The CSV lookup evidence for this review is unavailable.",
+                                      "lookup_evidence_unavailable") from None
         source_ids = [file["id"] for file in self.documents.list_files(document_id)
                       if file.get("file_type") in {"source_original", "original_pdf", "split_pdf"}]
         revision = snapshot_hash({
@@ -511,12 +634,16 @@ class ReviewService:
             "fields": sorted(fields, key=lambda field: field["id"]),
             "extraction_result_id": latest["id"] if latest else None,
             "pipeline_version_id": document.get("pipeline_version_id"), "source_artifact_ids": sorted(source_ids),
+            "lookup_decision_ids": {task: lookup.decision.id for task, lookup in lookups.items()},
         })
         return {"item": item, "metadata": metadata, "schema": schema,
                 "schema_hash": schema_hash, "schema_format": schema_format,
                 "version_id": version_id, "revision": revision, "lock": lock,
                 "source_artifact_ids": source_ids,
                 "extraction_result_id": latest["id"] if latest else None,
+                "lookups": lookups,
+                "lookup_fields": {mapping.field for lookup in lookups.values() for mapping in lookup.config.returns},
+                "lookup_inputs": {clause.field for lookup in lookups.values() for clause in lookup.config.clauses},
                 "values": {str(field["field_key"]): json_loads(
                     field.get("final_value_json") if field.get("final_value_json") is not None
                     else field.get("extracted_value_json")
@@ -537,7 +664,9 @@ class ReviewService:
 
     @staticmethod
     def _check_revision(snapshot: dict[str, Any], expected_revision: str | None) -> None:
-        required = snapshot["schema"] is not None and "business_validation" in snapshot["schema"]
+        required = bool(snapshot["lookups"]) or (
+            snapshot["schema"] is not None and "business_validation" in snapshot["schema"]
+        )
         if expected_revision is None and required:
             raise ReviewBusinessError("Reload the review and provide its current revision.", "review_revision_required",
                                       current_revision=snapshot["revision"])
@@ -552,7 +681,7 @@ class ReviewService:
         if not schema or "business_validation" not in schema:
             return values
         for key, field in schema.get("fields", {}).items():
-            if key in values:
+            if key in values or key in snapshot["lookup_fields"] or key in snapshot["lookup_inputs"]:
                 continue
             if field.get("default") is not None:
                 value = field["default"]
@@ -578,9 +707,12 @@ class ReviewService:
         except ValueError as exc:
             raise ReviewServiceError("Corrections must contain finite JSON values.") from exc
         schema = snapshot["schema"]
-        if schema and "business_validation" in schema:
-            fields = schema.get("fields", {})
-            allowed = set(fields) | set(snapshot["values"])
+        if corrections.keys() & snapshot["lookup_fields"]:
+            raise ReviewBusinessError("CSV lookup return fields are read-only.", "lookup_readonly_field",
+                                      status_code=422)
+        if (schema and "business_validation" in schema) or snapshot["lookups"]:
+            fields = (schema or {}).get("fields", {})
+            allowed = set(fields) | set(snapshot["values"]) | snapshot["lookup_inputs"]
             editable = snapshot["metadata"].get("editable_fields")
             for key, value in corrections.items():
                 if key not in allowed:
@@ -613,6 +745,7 @@ class ReviewService:
     def evaluate_gate_rules(
         self, document_id: str, *, schema_version_id: str | None,
         schema: dict[str, Any], schema_hash: str | None, task_run_id: str | None,
+        lookup_index: int = 0,
     ) -> dict[str, Any] | None:
         """Evaluate/persist a gate report from authoritative extracted fields."""
         if "business_validation" not in schema:
@@ -629,7 +762,9 @@ class ReviewService:
             values = {field["field_key"]: json_loads(field.get("final_value_json")) for field in fields}
             source_ids = [file["id"] for file in self.documents.list_files(document_id)
                           if file.get("file_type") in {"source_original", "original_pdf", "split_pdf"}]
-            revision = self._gate_source_revision(document_id, fields, latest, source_ids)
+            lookups = self._gate_lookups(document_id, latest, lookup_index)
+            values = merge_lookup_values(values, (lookup.decision.returned_values() for lookup in lookups.values()))
+            revision = self._gate_source_revision(document_id, fields, latest, source_ids, lookup_index)
         report = build_business_report(
             values, schema, schema_version_id=schema_version_id,
             schema_hash=str(schema_hash), format_version=version["format_version"],
@@ -639,12 +774,18 @@ class ReviewService:
         if report is None:
             return None
         report.update(task_run_id=task_run_id, source_revision=revision)
+        if lookups:
+            report["lookup_sources"] = {
+                task: {"decision_id": lookup.decision.id, "source_sha256": lookup.decision.evaluation.source_sha256}
+                for task, lookup in lookups.items()
+            }
         with atomic_transaction(self.conn, immediate=True):
             current_sources = [file["id"] for file in self.documents.list_files(document_id)
                                if file.get("file_type") in {"source_original", "original_pdf", "split_pdf"}]
             if self._gate_source_revision(
                 document_id, self.extractions.get_fields(document_id),
                 self.extractions.get_latest_result(document_id), current_sources,
+                lookup_index,
             ) != revision:
                 raise ReviewServiceError("Extracted values changed during gate validation.")
             document = self.documents.get(document_id)
@@ -655,9 +796,17 @@ class ReviewService:
             self.documents.update_metadata(document_id, metadata)
         return report
 
+    def _gate_lookups(
+        self, document_id: str, latest: dict[str, Any] | None, index: int,
+    ) -> dict[str, ReviewLookup]:
+        document = self.documents.get(document_id) or {}
+        return self.lookup_review.load_before(
+            document_id, document.get("pipeline_version_id"), latest["id"] if latest else None, index,
+        )
+
     def _gate_source_revision(
         self, document_id: str, fields: list[dict[str, Any]],
-        latest: dict[str, Any] | None, source_ids: list[str],
+        latest: dict[str, Any] | None, source_ids: list[str], lookup_index: int,
     ) -> str:
         """Fingerprint values and their source identities before report persistence."""
         document = self.documents.get(document_id) or {}
@@ -666,6 +815,10 @@ class ReviewService:
             "extraction_result_id": latest["id"] if latest else None,
             "source_artifact_ids": sorted(source_ids),
             "pipeline_version_id": document.get("pipeline_version_id"),
+            "lookup_decision_ids": {
+                task: lookup.decision.id
+                for task, lookup in self._gate_lookups(document_id, latest, lookup_index).items()
+            },
         })
 
     def _complete_review_task_run(self, item: dict[str, Any], metadata: dict[str, Any]) -> None:

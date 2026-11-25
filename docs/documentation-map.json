@@ -98,6 +98,11 @@
       "audience": "Application maintainers and deployment owners"
     },
     {
+      "path": "audits/ux-walkthrough-2026-11-18.md",
+      "title": "UX walkthrough: operator and admin journeys",
+      "audience": "Operators, application administrators and maintainers"
+    },
+    {
       "path": "change-summary-2026-09-05.md",
       "title": "Moved: Change summary — 2026-09-05",
       "audience": "Readers following an earlier documentation link"
@@ -185,6 +190,16 @@
     {
       "path": "history/audits/admin-navigation-2026-07-03/audit.md",
       "title": "Admin navigation audit: 2026-07-03",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/audits/audit-review-laptop-1366x768.md",
+      "title": "Laptop review screen audit",
+      "audience": "Readers investigating historical evidence"
+    },
+    {
+      "path": "history/audits/design-qa.md",
+      "title": "Pipeline Properties Design QA",
       "audience": "Readers investigating historical evidence"
     },
     {

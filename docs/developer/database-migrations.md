@@ -6,7 +6,7 @@
 | Owner | Application maintainers |
 | Status | Current |
 | Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 10 |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Migration development workflow
 
@@ -40,7 +40,9 @@ compensation tests when changing legacy import.
 
 Update schema, migration, repositories, owning services and integration tests
 together. Keep structural migrations free of application-service imports.
-The current [schema version](../../modules/db/schema_version.py) is 10.
+The current [schema version](../../modules/db/schema_version.py) is 11.
+The schema 10 to 11 upgrade creates an empty `lookup_decisions` table from the
+canonical schema before startup records the new version.
 There is no supported general downgrade chain; release notes must describe
 artifact compatibility and recovery from a consistent backup.
 

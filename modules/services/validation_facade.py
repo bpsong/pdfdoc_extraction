@@ -6,6 +6,8 @@ import json
 from typing import Any, Mapping
 
 from modules.config_protocol import ConfigProvider
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
+from modules.services.lookup_pipeline_validation import lookup_fields_before
 from modules.services.pipeline_validation_service import PipelineValidationService
 from modules.services.schema_service import SchemaService
 from modules.services.business_validation_schema import (
@@ -78,6 +80,12 @@ class ValidationFacade:
                 )
             )
         validation_copy = replace_secret_references_for_validation(normalized)
+        tasks = normalized.get("tasks")
+        if isinstance(tasks, dict):
+            for key, task in tasks.items():
+                if isinstance(task, dict) and (task.get("module"), task.get("class")) == CSV_LOOKUP_TASK:
+                    # Lookup paths and bindings are literal deployment configuration.
+                    validation_copy["tasks"][key] = task
         base_result = PipelineValidationService(self.config_manager).validate(validation_copy)
         findings.extend(base_result["findings"])
         findings.extend(
@@ -181,6 +189,16 @@ class ValidationFacade:
                         "review-gate-schema-invalid",
                     ))
             if isinstance(schema, Mapping):
+                fields = schema.get("fields")
+                if isinstance(fields, Mapping):
+                    for field_key in sorted(lookup_fields_before(definition, str(task_key)) & fields.keys()):
+                        field = fields[field_key]
+                        if not isinstance(field, Mapping) or field.get("type") != "string":
+                            findings.append(ValidationFacade._finding(
+                                "error", f"tasks.{task_key}.schema.fields.{field_key}.type",
+                                "A CSV lookup return field requires a text review field.",
+                                "lookup-review-field-type",
+                            ))
                 if "business_validation" in schema:
                     try:
                         require_business_rule_capability(schema, dependency.get("format_version"))

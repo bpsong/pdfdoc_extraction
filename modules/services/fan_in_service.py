@@ -86,12 +86,7 @@ class FanInService:
             root_status = root_summary["status"]
             self._update_document_status(str(root["id"]), root_status)
 
-            batch_leaves = self._batch_leaves(str(document["batch_id"]))
-            batch_summary = self._summarize_leaves(batch_leaves)
-            self._update_batch_counts(
-                batch_id=str(document["batch_id"]),
-                summary=batch_summary,
-            )
+            batch_summary = self.recompute_batch(str(document["batch_id"]))
 
             if root_summary["all_terminal"] and root_status in {SUCCESS_STATUS, AGGREGATE_FAILURE_STATUS}:
                 self._append_fan_in_completed_once(
@@ -112,6 +107,13 @@ class FanInService:
                 failed_leaves=int(root_summary["failed"]),
                 total_leaves=int(root_summary["total"]),
             )
+
+    def recompute_batch(self, batch_id: str) -> dict[str, Any]:
+        """Update aggregate counts from leaf states, including outstanding reviews."""
+        with transaction(self.conn):
+            summary = self._summarize_leaves(self._batch_leaves(batch_id))
+            self._update_batch_counts(batch_id=batch_id, summary=summary)
+        return summary
 
     @staticmethod
     def _leaf_status_from_context(context: dict[str, Any]) -> str:

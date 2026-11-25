@@ -116,7 +116,7 @@ Processing jobs have a separate lifecycle and are not document states:
 stateDiagram-v2
     [*] --> queued
     queued --> running: worker claims lease
-    running --> queued: lease expires / retry available
+    running --> queued: expired or retryable, attempts remain
     running --> completed: workflow finished
     running --> failed: attempts exhausted or terminal job failure
 ```
@@ -335,10 +335,14 @@ Recovery paths include the following:
   for already-assigned work.
 - Corrected provider/task failures are normally re-ingested.
 - Fan-in is recomputed as child leaves finish.
-- A claimed job whose lease expires is returned to the queue by the next worker
-  poll. A workflow that fails after task execution begins still requires task
-  idempotency or operator re-ingestion; the queue does not make external
-  provider calls transactional.
+- The worker renews a running job's lease every third of its configured duration.
+  Each claim consumes one attempt, including the initial run. The next poll
+  requeues an expired claim with attempts left or fails an exhausted job with
+  `lease_expired_attempts_exhausted`. Closing an exhausted job preserves
+  committed review and terminal document states. The runner checks the worker
+  ID, attempt number and deadline before dispatching more work or committing
+  runner state. An external operation already in progress may finish after its
+  worker loses the lease. Retried tasks must tolerate that possibility.
 
 ## Manual split review exception
 

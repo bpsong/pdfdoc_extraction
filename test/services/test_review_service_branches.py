@@ -18,10 +18,9 @@ from modules.services.review_service import ReviewService, ReviewServiceError, _
 
 
 def _service() -> ReviewService:
-    service = object.__new__(ReviewService)
-    service.conn = Mock()
-    service.conn.in_transaction = False
-    service.config_manager = None
+    conn = Mock()
+    conn.in_transaction = False
+    service = ReviewService(conn)
     service.reviews = Mock()
     service.documents = Mock()
     service.extractions = Mock()

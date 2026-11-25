@@ -9,6 +9,8 @@ from typing import Any, Mapping
 
 from modules.config_protocol import ConfigProvider
 from modules.db.repositories import BatchRepository, DocumentRepository
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
+from modules.services.lookup_pipeline_validation import lookup_order_issues, lookup_parameters
 from modules.services.pipeline_template_service import PipelineTemplateService
 from modules.services.review_schema_version_service import ReviewSchemaVersionService
 from modules.services.business_validation_schema import require_business_rule_capability
@@ -150,6 +152,7 @@ class PipelineDefinitionService:
         if not isinstance(tasks, Mapping) or not isinstance(pipeline, list):
             raise PipelineDefinitionError("Pinned pipeline structure is malformed.")
         registry = ApprovedTaskRegistry(self.config)
+        lookups = {}
         for task_key in pipeline:
             task = tasks.get(task_key)
             if not isinstance(task, Mapping):
@@ -159,3 +162,10 @@ class PipelineDefinitionService:
             module_name = str(task.get("module") or "")
             class_name = str(task.get("class") or "")
             registry.assert_approved(module_name, class_name)
+            if (module_name, class_name) == CSV_LOOKUP_TASK:
+                settings, issues = lookup_parameters(str(task_key), task)
+                if issues or settings is None:
+                    raise PipelineDefinitionError("Pinned CSV lookup configuration is invalid.")
+                lookups[str(task_key)] = settings
+        if lookup_order_issues(definition, lookups):
+            raise PipelineDefinitionError("Pinned CSV lookup placement or field bindings are invalid.")

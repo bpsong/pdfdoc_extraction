@@ -36,3 +36,14 @@ Archive groups:
 
 Links inside archived documents may reflect their original repository
 locations and the code structure that existed when they were written.
+
+## Completed implementation and verification records
+
+- [Pipeline editor focus jump bug](pipeline_editor_focus_jump_bug.md)
+- [Tasks documentation reorganization](tasks-documentation-reorganization.md)
+- [Tasks documentation current implementation audit](tasks-documentation-current-implementation-audit.md)
+- [Tasks frontend controller modularization](tasks-frontend-controller-modularization.md)
+- [Tasks manual split](tasks-manual-split.md)
+- [Plan single document split continuation](plan-single-document-split-continuation.md)
+- [Tasks pipeline archive cleanup](tasks-pipeline-archive-cleanup.md)
+- [Tasks watch folder management](tasks-watch-folder-management.md)

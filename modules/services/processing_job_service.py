@@ -6,7 +6,10 @@ from datetime import datetime, timedelta, timezone
 import sqlite3
 from typing import Any
 
-from modules.db.repositories import ProcessingJobRepository
+from modules.db.connection import immediate_transaction
+from modules.db.repositories import DocumentRepository, ProcessingJobRepository
+from modules.services.fan_in_service import FanInService
+from modules.services.workflow_state_service import WorkflowStateService
 
 
 class ProcessingJobService:
@@ -29,6 +32,21 @@ class ProcessingJobService:
             )
             for document_id in document_ids
         ]
+
+    def recover_expired(self) -> None:
+        """Close exhausted jobs and reconcile unfinished documents before requeueing."""
+        with immediate_transaction(self.conn):
+            batches: set[str] = set()
+            for row in self.jobs.fail_exhausted():
+                document = DocumentRepository(self.conn).get(row["document_id"])
+                if document and document["status"] in {"pending", "received", "queued", "processing"}:
+                    WorkflowStateService(self.conn).transition_document(
+                        row["document_id"], "failed", reason="lease_expired_attempts_exhausted",
+                    )
+                    batches.add(row["batch_id"])
+            for batch_id in batches:
+                FanInService(self.conn).recompute_batch(batch_id)
+            self.jobs.requeue_expired()
 
     @staticmethod
     def retry_at(delay_seconds: float) -> str:

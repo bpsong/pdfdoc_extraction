@@ -6,7 +6,7 @@
 | Owner | Application maintainers |
 | Status | Current |
 | Last verified | 2026-10-10 — repository/source review; no live deployment check |
-| Applies to | Production application; SQLite schema 10 |
+| Applies to | Production application; SQLite schema 11 |
 
 This is the stable architecture entry point for the current production app.
 It describes implemented boundaries; proposed work remains in explicitly

@@ -1,6 +1,6 @@
 # Manual split implementation
 
-Approved design: [design-manual-split-task.md](design-manual-split-task.md).
+Approved design: [design-manual-split-task.md](../design-manual-split-task.md).
 
 - [x] Persist typed reviews and manual decisions with revisions and identity checks.
 - [x] Share local child materialization; implement manual skip/pause/application and resume/fan-out.
@@ -36,7 +36,7 @@ Approved design: [design-manual-split-task.md](design-manual-split-task.md).
 
 ## Verification
 
-See [validation evidence](../docs/manual_split_validation.md): full suite 1,586 passed / 4 skipped; final focused suite 41 passed; CSS and 17 release graphs passed. All three real Superstore cases reached reviewed JSON export.
+See [validation evidence](../../docs/manual_split_validation.md): full suite 1,586 passed / 4 skipped; final focused suite 41 passed; CSS and 17 release graphs passed. All three real Superstore cases reached reviewed JSON export.
 
 After source review fixes on 2026-10-07: full suite **1,598 passed / 4 skipped**;
 manual integration suite **29 passed**; 17 release graphs and diff whitespace

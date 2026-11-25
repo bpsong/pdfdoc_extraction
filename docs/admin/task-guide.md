@@ -42,6 +42,7 @@ Go directly to [all built-in tasks](#available-built-in-tasks),
 | **Store File To Localdrive** | `store_file_to_localdrive` | Copies the processed PDF to an output folder with the chosen filename. |
 | **Archive Pdf** | `archive_pdf` | Copies the PDF being processed at that step to an archive destination with a safe unique name. |
 | **Update Reference** | `update_reference` | Marks matching rows in a reference CSV. After review when matching needs approved values. |
+| **CSV reference lookup** | `csv_reference_lookup` | Copies matched reference text into document data. Configure it in a published definition. Lookup authoring and review controls are planned for phase 5. |
 | **Cleanup** | `cleanup_task` | Internal working-file housekeeping, normally invoked automatically. Do not add it to an ordinary pipeline. |
 
 Only one split task, one extraction task and one Review Gate are allowed per

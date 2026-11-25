@@ -15,6 +15,7 @@ from modules.db.repositories import (
     PipelineVersionRepository,
 )
 from modules.services.validation_facade import ValidationFacade
+from modules.services.lookup_pipeline_validation import lookup_fields_before
 from modules.services.versioned_config_contracts import (
     PIPELINE_DEFINITION_SCHEMA_VERSION,
     ValidationSource,
@@ -597,7 +598,8 @@ class PipelineTemplateService:
             fields = schema.get("fields") if isinstance(schema, dict) else None
             if not isinstance(fields, dict) or not extraction_fields:
                 continue
-            incompatible = sorted(set(str(key) for key in fields) - extraction_fields)
+            available = extraction_fields | lookup_fields_before(definition, task_key)
+            incompatible = sorted(set(str(key) for key in fields) - available)
             if incompatible:
                 result["findings"].append(
                     {

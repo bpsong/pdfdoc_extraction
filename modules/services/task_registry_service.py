@@ -27,6 +27,7 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
     "cleanup_task": ("standard_step.housekeeping.cleanup_task", "CleanupTask"),
     "review_gate": ("standard_step.review.review_gate", "ReviewGateTask"),
     "update_reference": ("standard_step.rules.update_reference", "UpdateReferenceTask"),
+    "csv_reference_lookup": ("standard_step.rules.csv_reference_lookup", "CsvReferenceLookupTask"),
     "llamacloud_split": ("standard_step.split.llamacloud_split", "LlamaCloudSplitTask"),
     "manual_split": ("standard_step.split.manual_split", "ManualSplitTask"),
     "store_file_to_localdrive": (
@@ -42,6 +43,9 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
         "StoreMetadataAsJson",
     ),
 }
+
+
+REVIEW_GATE_TASK = BUILTIN_TASKS["review_gate"]
 
 
 @dataclass(frozen=True)

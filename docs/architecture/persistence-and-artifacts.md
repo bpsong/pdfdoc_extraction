@@ -6,7 +6,7 @@
 | Owner | Application maintainers |
 | Status | Current |
 | Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 10 |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Persistence and artifacts
 
@@ -20,6 +20,7 @@ and services coordinate cross-table invariants.
 | Processing | `batches`, `documents`, `task_runs`, `processing_jobs` |
 | Web upload finalization and receipts | `pending_upload_files`, `upload_submissions` |
 | Extraction | `extraction_results`, `extracted_fields` |
+| CSV lookup | `lookup_decisions` |
 | Review | `review_items`, `review_locks`, `manual_split_decisions` |
 | Artifacts | `document_files` |
 | Governance | `audit_events`, `app_settings`, `config_versions`, `pipeline_cleanup_previews` |
@@ -65,6 +66,11 @@ Schema 10 records each new web upload's final path before moving its PDF out
 of staging. The transaction that accepts the batch releases those reservations.
 After a crash, startup can remove an unreferenced final PDF only while its
 reservation exists. Purging history cannot make an accepted PDF eligible.
+
+Schema 11 adds append-only CSV lookup revisions tied to the document, pinned
+pipeline, task key, and extraction result. Each revision stores the reference
+file digest and bounded decision evidence. Processing-history retention removes
+these revisions with their documents and preserves audit events.
 
 Schema 9 separates audit identities from processing retention. The upgrade
 rebuilds `audit_events` without processing-record foreign keys, preserving every

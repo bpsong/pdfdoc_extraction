@@ -368,7 +368,8 @@ def test_cli_validate_stored_source_and_file_error_paths(tmp_path: Path, monkeyp
     (tmp_path / "schemas" / "legacy.yaml").write_text("{}", encoding="utf-8")
 
     class FakeStored:
-        def __init__(self, _conn, runtime_config=None):
+        def __init__(self, _conn, runtime_config=None, *, config_path=None):
+            assert config_path == tmp_path / "config.yaml"
             self.runtime_config = runtime_config
 
         def validate_pipeline(self, *args, **kwargs):

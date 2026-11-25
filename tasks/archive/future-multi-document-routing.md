@@ -126,7 +126,7 @@ explicit latest-version upgrades, and retirement. Paused/unbound paths remain
 reserved; retirement preserves history and releases the path. Used bindings
 cannot be permanently deleted. Per-binding scan health, access diagnostics,
 filters, and paginated activity are available without editing pipeline drafts.
-See [the management task plan](../tasks-watch-folder-management.md) for verification.
+See [the management task plan](tasks-watch-folder-management.md) for verification.
 
 Conceptually:
 

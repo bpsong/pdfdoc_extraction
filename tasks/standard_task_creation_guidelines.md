@@ -83,6 +83,10 @@ Each task is a self-contained Python module that implements a specific step in t
   flow starts and to file-processor input I/O errors. Once a configured task runs,
   its own Prefect retry policy applies. Returning a failed workflow does not
   replay the entire document pipeline.
+- Crash recovery consumes the same attempt budget. The worker renews its lease
+  during execution and the runner checks ownership at task boundaries. A task
+  already in progress can finish an external operation after ownership changes.
+  Design retryable external operations to tolerate replay.
 - For `on_error: continue`, the workflow loader preserves the failure in its
   internal `continued_failures` history and clears transient error fields before
   invoking the next task. Tasks must not use or overwrite
@@ -235,6 +239,12 @@ unpersisted `context["data"]`. Extraction/enrichment tasks must persist changed
 values before this gate. It combines business findings with confidence, schema,
 and structured/legacy flags. Blocking/inconclusive findings require review;
 nonblocking findings respect their review policy; evaluator failure blocks release.
+
+Project upstream CSV lookup values from `lookup_decisions` before evaluating the
+gate and review rules. A pending lookup stays in SQLite and the downstream gate
+owns the pause. Accepted lookup returns remain derived fields. Review acceptance
+stores their decision identities alongside the source corrections, and resume
+projects those exact decisions into `context["data"]`.
 
 The gate sets `context["business_validation"]` to the report and stores the latest
 gate report in document metadata through repositories. Reports contain business
@@ -389,6 +399,10 @@ Dynamic task imports are allow-listed by exact module/class pair.
   approval check to accept arbitrary imports.
 - Keep the registry-coverage tests passing so every `BaseTask` subclass under
   `standard_step/` is explicitly approved.
+- CSV reference lookup requires a published pipeline and `on_error: stop`.
+  Persist its decision before merging returned text into `context["data"]`.
+  Keep reference evidence in SQLite and leave extraction records intact.
+  [R3 design](design-r3-csv-reference-lookup.md)
 
 ---
 
