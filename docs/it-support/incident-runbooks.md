@@ -5,8 +5,8 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup recovery scenarios verified in synthetic workflows |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Establish scope and preserve evidence
 
@@ -60,6 +60,32 @@ with no active attempt or queued children with no task runs. Started, failed
 downstream, completed or ambiguous attempts require maintainer investigation;
 the retry does not replay them. An abrupt crash can leave orphan split files.
 See the exact [recovery boundary](../reference/tasks/splitting.md).
+
+## CSV lookup is blocking release
+
+1. Find the document and lookup task in its pinned pipeline version. Check the
+   configured register under the worker and web accounts. A required missing
+   result, ambiguity, and an unreadable or invalid CSV have different remedies.
+2. For a pending valid lookup, compare the PDF, review inputs and candidate
+   evidence. Correct inaccurate input and use **Revalidate**. If the match list
+   is truncated, narrow the input or work with the register owner to repair the
+   duplicates. A valid optional miss can use the configured continuation policy
+   or the review action **Skip lookup** when offered.
+3. If the original file is unavailable for rematching, locate its approved
+   backup and compare the SHA-256 to `recorded_source_sha256` in the
+   [authenticated review detail](../reference/api-contracts.md#csv-lookup-on-extraction-reviews).
+   On Windows, `Get-FileHash -LiteralPath <approved-csv-path> -Algorithm SHA256`
+   verifies the recovered file. Coordinate any restore to the pinned path with
+   the register owner because it can change results for new documents. When the
+   replacement is approved instead, the reviewer uses **Use current reference
+   file** with a reason and checks the new result before **Complete Review**.
+4. If the file changes again during review, revalidate and check the new
+   evidence before completion. Recorded choices for unchanged inputs and
+   completed lookup decisions can use their persisted evidence. If a completed
+   review did not continue, confirm document state and registered outputs,
+   then use the [document resume contract](../reference/api-contracts.md#csv-lookup-on-extraction-reviews).
+   A pipeline change applies to new assignments. Escalate disputed or failed
+   work using safe identifiers and preserve the existing files and decision history.
 
 ## Extraction failed or saved output is missing
 

@@ -630,7 +630,7 @@ class ReviewService:
         source_ids = [file["id"] for file in self.documents.list_files(document_id)
                       if file.get("file_type") in {"source_original", "original_pdf", "split_pdf"}]
         revision = snapshot_hash({
-            "review": item, "lock": lock,
+            "review": item, "lock": {key: lock.get(key) for key in ("id", "locked_by", "locked_at")} if lock else None,
             "fields": sorted(fields, key=lambda field: field["id"]),
             "extraction_result_id": latest["id"] if latest else None,
             "pipeline_version_id": document.get("pipeline_version_id"), "source_artifact_ids": sorted(source_ids),

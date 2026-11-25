@@ -28,4 +28,6 @@ Read in this order, or choose the task you need:
 6. [Storage and archiving](storage-and-archiving.md)
 7. [Rules, context and housekeeping](rules-context-housekeeping.md)
 
+The rules reference includes the [CSV lookup contract and supplier example](rules-context-housekeeping.md#csv-reference-lookup).
+
 [All documentation](../../README.md)

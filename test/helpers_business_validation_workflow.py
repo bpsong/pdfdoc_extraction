@@ -1,6 +1,7 @@
 """Offline synthetic invoice with real versioning, review, resume, and exports."""
 
 from contextlib import contextmanager
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any, Iterator
@@ -42,12 +43,8 @@ EXPORT_FIELDS: dict[str, Any] = {
 }
 
 
-def create_invoice_workflow(
-    config: TempConfig, directory: Path, *, with_rules: bool = True, extended_rules: bool = False,
-    filename_template: str = '{invoice_number}',
-) -> dict[str, Any]:
-    """Publish and assign a real pipeline with exact schema and output metadata."""
-    source = directory / 'synthetic-invoice.pdf'
+def write_synthetic_pdf(source: Path, lines: list[str]) -> None:
+    """Write a one-page fixture whose text is readable in the PDF preview."""
     source.parent.mkdir(parents=True, exist_ok=True)
     writer = PdfWriter()
     page = writer.add_blank_page(width=612, height=792)
@@ -55,17 +52,28 @@ def create_invoice_workflow(
         NameObject('/F1'): DictionaryObject({NameObject('/Type'): NameObject('/Font'),
                                            NameObject('/Subtype'): NameObject('/Type1'),
                                            NameObject('/BaseFont'): NameObject('/Helvetica')})})})
-    lines = ['SYNTHETIC INVOICE - TEST DATA ONLY', 'Invoice number: INV-OK',
-             'Invoice date: 2026-10-01', 'Due date: 2026-10-30', 'Purchase order: PO-OK',
-             '', 'Description       Quantity       Unit price       Line total',
-             'Paper                    3              10.00              30.00',
-             'Folders                  2              10.00              20.00',
-             '', 'Subtotal before discount and tax: 50.00']
     content = DecodedStreamObject()
+    escaped_lines = [line.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)') for line in lines]
     content.set_data(('BT /F1 12 Tf 48 744 Td 24 TL '
-                      + ' '.join(f'({line}) Tj T*' for line in lines) + ' ET').encode('ascii'))
+                      + ' '.join(f'({line}) Tj T*' for line in escaped_lines) + ' ET').encode('ascii'))
     page[NameObject('/Contents')] = writer._add_object(content)
     writer.write(source)
+
+
+def create_invoice_workflow(
+    config: TempConfig, directory: Path, *, with_rules: bool = True, extended_rules: bool = False,
+    filename_template: str = '{invoice_number}',
+) -> dict[str, Any]:
+    """Publish and assign a real pipeline with exact schema and output metadata."""
+    source = directory / 'synthetic-invoice.pdf'
+    write_synthetic_pdf(source, [
+        'SYNTHETIC INVOICE - TEST DATA ONLY', 'Invoice number: INV-OK',
+        'Invoice date: 2026-10-01', 'Due date: 2026-10-30', 'Purchase order: PO-OK',
+        '', 'Description       Quantity       Unit price       Line total',
+        'Paper                    3              10.00              30.00',
+        'Folders                  2              10.00              20.00',
+        '', 'Subtotal before discount and tax: 50.00',
+    ])
     output = directory / 'exports'
     schema = invoice_review_schema()
     schema['fields']['invoice_number'] = {'type': 'string', 'required': True}
@@ -133,8 +141,10 @@ def run_invoice_workflow(config: TempConfig, case: dict[str, Any]) -> dict[str, 
 
 
 @contextmanager
-def offline_invoice_workflows(source_values: dict[str, Any] | None = None) -> Iterator[list[dict[str, Any]]]:
-    """Replace only extraction, orchestration wrappers, and destructive cleanup."""
+def offline_invoice_workflows(
+    source_values: dict[str, Any] | Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+) -> Iterator[list[dict[str, Any]]]:
+    """Replace provider calls, orchestration wrappers, and destructive cleanup."""
     calls: list[dict[str, Any]] = []
 
     class SyntheticExtraction(BaseTask):
@@ -145,7 +155,8 @@ def offline_invoice_workflows(source_values: dict[str, Any] | None = None) -> It
             return None
 
         def run(self, context: dict[str, Any]) -> dict[str, Any]:
-            data = deepcopy(SOURCE_VALUES if source_values is None else source_values)
+            values = source_values(context) if callable(source_values) else source_values
+            data = deepcopy(SOURCE_VALUES if values is None else values)
             calls.append({'document_id': context['document_id'], 'task_run_id': context['task_run_id']})
             with managed_connect(self.config_manager) as conn:
                 extractions = ExtractionRepository(conn)
@@ -178,6 +189,7 @@ def offline_invoice_workflows(source_values: dict[str, Any] | None = None) -> It
 
     logger = type('SyntheticLogger', (), {'info': lambda *_args, **_kwargs: None})()
     with patch.object(WorkflowLoader, '_import_task_class', import_task), \
+            patch('modules.workflow_manager.preflight_extract_v2_access', return_value=None), \
             patch('modules.workflow_loader.CleanupTask', PreserveSyntheticInput), \
             patch('modules.workflow_loader.flow', flow_decorator), \
             patch('modules.workflow_loader.task', task_decorator), \

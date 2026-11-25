@@ -826,6 +826,15 @@ class DocumentRepository:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def files_for_task_run(self, document_id: str, file_type: str, task_run_id: str) -> list[dict[str, Any]]:
+        """Read artifacts registered by this exact document task attempt."""
+        rows = self.conn.execute(
+            """SELECT * FROM document_files
+               WHERE document_id = ? AND file_type = ? AND json_extract(metadata_json, '$.task_run_id') = ?""",
+            (document_id, file_type, task_run_id),
+        )
+        return [dict(row) for row in rows]
+
     def list_all(self, *, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         """Return all documents for legacy list/status compatibility views."""
         rows = self.conn.execute(
@@ -1007,6 +1016,24 @@ class TaskRunRepository:
                WHERE document_id = ? AND pipeline_version_id = ? AND task_index = ? AND status = 'running'""",
             (utc_now(), document_id, version_id, task_index),
         )
+
+    def latest_completed_at(self, document_id: str, version_id: str, task_index: int) -> dict[str, Any] | None:
+        """Read the most recently committed result at an exact pinned position."""
+        return _row_to_dict(self.conn.execute(
+            """SELECT * FROM task_runs
+               WHERE document_id = ? AND pipeline_version_id = ? AND task_index = ? AND status = 'completed'
+               ORDER BY ended_at DESC, rowid DESC LIMIT 1""",
+            (document_id, version_id, task_index),
+        ).fetchone())
+
+    def latest_at(self, document_id: str, version_id: str, task_index: int) -> dict[str, Any] | None:
+        """Read the latest started attempt at the exact pinned position."""
+        return _row_to_dict(self.conn.execute(
+            """SELECT * FROM task_runs
+               WHERE document_id = ? AND pipeline_version_id = ? AND task_index = ?
+               ORDER BY started_at DESC, rowid DESC LIMIT 1""",
+            (document_id, version_id, task_index),
+        ).fetchone())
 
     def list_by_document(self, document_id: str) -> list[dict[str, Any]]:
         rows = self.conn.execute(
@@ -1264,12 +1291,13 @@ class LookupDecisionRepository:
             """SELECT decision.* FROM lookup_decisions decision
                JOIN (
                    SELECT task_key, MAX(revision) AS revision FROM lookup_decisions
-                   WHERE document_id=? AND pipeline_version_id=? GROUP BY task_key
+                   WHERE document_id=? AND pipeline_version_id=? AND extraction_result_id=?
+                   GROUP BY task_key
                ) latest USING (task_key, revision)
                WHERE decision.document_id=? AND decision.pipeline_version_id=?
                  AND decision.extraction_result_id=?
                ORDER BY decision.task_key""",
-            (document_id, pipeline_version_id, document_id, pipeline_version_id, extraction_result_id),
+            (document_id, pipeline_version_id, extraction_result_id, document_id, pipeline_version_id, extraction_result_id),
         )
         return [dict(row) for row in rows]
 
@@ -1548,8 +1576,13 @@ class ReviewRepository:
                 FROM review_items
                 WHERE id = ? AND status IN ('pending', 'in_review')
                 ON CONFLICT(review_item_id) DO UPDATE SET
+                    id = CASE WHEN review_locks.locked_by = excluded.locked_by
+                                  AND review_locks.expires_at > excluded.locked_at
+                              THEN review_locks.id ELSE excluded.id END,
                     locked_by = excluded.locked_by,
-                    locked_at = excluded.locked_at,
+                    locked_at = CASE WHEN review_locks.locked_by = excluded.locked_by
+                                         AND review_locks.expires_at > excluded.locked_at
+                                     THEN review_locks.locked_at ELSE excluded.locked_at END,
                     expires_at = excluded.expires_at
                 WHERE review_locks.locked_by = excluded.locked_by
                    OR review_locks.expires_at <= excluded.locked_at
@@ -1570,9 +1603,9 @@ class ReviewRepository:
                 """
                 UPDATE review_items
                 SET status = 'in_review', assigned_to = ?, updated_at = ?
-                WHERE id = ?
+                WHERE id = ? AND (status <> 'in_review' OR assigned_to IS NOT ?)
                 """,
-                (locked_by, now, review_item_id),
+                (locked_by, now, review_item_id, locked_by),
             )
         return self.get(review_item_id) or {}
 

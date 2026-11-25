@@ -115,21 +115,25 @@ def lookup_order_issues(
         if ".extraction." in str(task.get("module", "")) and isinstance(fields, dict):
             source_fields.update(fields)
     targets: dict[str, tuple[int, LookupConfig]] = {}
-    seen: set[str] = set()
+    prior_fields: dict[str, Any] = {}
+    lookup_sources: dict[str, dict[str, Any]] = {}
     extraction_seen = False
     issues: list[LookupIssue] = []
 
     for index, key, task in steps:
         if ".extraction." in str(task.get("module", "")):
             extraction_seen = True
+            fields = _params(task).get("fields")
+            if isinstance(fields, dict):
+                prior_fields.update(fields)
         settings = lookups.get(key)
         if settings is None:
             continue
         path = f"tasks.{key}.params"
-        if key in seen:
+        if key in lookup_sources:
             issues.append(LookupIssue(f"pipeline[{index}]", "A lookup task key can run only once.", "lookup-duplicate-step"))
             continue
-        seen.add(key)
+        lookup_sources[key] = prior_fields.copy()
         if not extraction_seen:
             issues.append(LookupIssue(f"pipeline[{index}]", "CSV lookup must follow extraction.", "lookup-before-extraction"))
         needs_review = "review" in (settings.on_no_match, settings.on_multiple_matches)
@@ -147,12 +151,15 @@ def lookup_order_issues(
             targets[mapping.field] = (index, settings)
 
     for key, settings in lookups.items():
+        available = lookup_sources[key]
         for position, clause in enumerate(settings.clauses):
             path = f"tasks.{key}.params.clauses.{position}.field"
-            if clause.field in targets or (source_fields and clause.field not in source_fields):
-                issues.append(LookupIssue(path, "Match inputs must name extraction fields.", "lookup-source-field"))
+            if clause.field in targets or (
+                clause.field not in available and (available or clause.field in source_fields)
+            ):
+                issues.append(LookupIssue(path, "Match inputs must name fields from earlier extraction.", "lookup-source-field"))
                 continue
-            spec = source_fields.get(clause.field)
+            spec = available.get(clause.field)
             field_type = spec.get("type") if isinstance(spec, dict) else spec
             scalar_types = {"str", "string", "Any"} | ({"int", "float", "Decimal", "number", "integer"} if clause.mode == "numeric" else set())
             if (isinstance(spec, dict) and spec.get("is_table")) or (

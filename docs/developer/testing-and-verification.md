@@ -5,8 +5,8 @@
 | Audience | Developers and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. R3 integration, Chromium and full-suite verification recorded |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Testing and verification
 
@@ -102,6 +102,23 @@ If Chromium is missing for visual tests:
 After a change, review the diff for accidental edits, generated data and secrets.
 Report exact commands, outcomes and checks omitted. Do not stage, commit or
 discard existing user changes without a request.
+
+### Verify changes to CSV lookup release
+
+Use [lookup export integration tests](../../test/integration/test_lookup_exports.py)
+and [editor](../../test/visual/test_lookup_editor_visual.py) and
+[review](../../test/visual/test_lookup_review_visual.py) Chromium cases. The
+suite uses isolated databases, a synthetic register and offline extraction,
+including stubbed provider preflight on split fan-out. It exercises real pinned
+publication, review completion, worker execution and registered storage.
+
+When changing lookup or release behavior, check the direct and reviewed
+paths with an identifier such as `00042`. Parse JSON and CSV, verify the PDF
+filename and registered document identity, compare the reference bytes, and
+assert that unresolved or stale work produces no exports. Reopen the accepted
+review and use desktop/mobile screenshots to verify the affected controls. The
+[R3 verification record](../../tasks/archive/tasks-r3-csv-reference-lookup.md#phase-6--end-to-end-release-and-regression-verification)
+records the tested paths and environment limits.
 
 ## Static type checking
 

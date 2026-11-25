@@ -103,6 +103,65 @@ def test_retry_after_restart_reuses_decision_without_reading_register(
             )
 
 
+def test_lookup_audit_normalizes_reviewer_identity_and_adoption_reason(
+    state: tuple[TempConfig, LookupKey, str, LookupConfig],
+) -> None:
+    config, key, extraction_id, settings = state
+    with managed_connect(config) as conn:
+        service = LookupDecisionService(conn)
+        evaluation = evaluate_reference(settings, {"tax": "001"})
+        initial = service.record_initial(key, extraction_id, lambda: evaluation)
+        revised = service.record_reevaluation(
+            key, evaluation, expected_revision=initial.revision, actor=" operator ", adoption_reason="  ",
+        )
+        assert (revised.actor, revised.reason) == ("operator", None)
+        with pytest.raises(ValueError, match="requires a reason"):
+            service.record_reevaluation(key, evaluation.model_copy(update={"source_sha256": "different"}),
+                                        expected_revision=revised.revision, actor="operator", adoption_reason="  ")
+        resolved = service.resolve(key, expected_revision=revised.revision, record_number=2,
+                                   actor=" operator ", reason=" checked ")
+        assert (resolved.actor, resolved.reason) == ("operator", "checked")
+        entries = AuditRepository(conn).list_for_document(key.document_id)
+        assert [(entry["event_type"], entry["user"]) for entry in entries] == [
+            ("lookup_reevaluated", "operator"), ("lookup_resolved", "operator"),
+        ]
+
+
+def test_automatic_selection_rejects_inconsistent_evidence(
+    state: tuple[TempConfig, LookupKey, str, LookupConfig],
+) -> None:
+    config, key, extraction_id, settings = state
+    evaluation = evaluate_reference(settings, {"tax": "001"}).model_copy(update={
+        "outcome": "matched", "disposition": "matched",
+    })
+    with managed_connect(config) as conn:
+        service = LookupDecisionService(conn)
+        with pytest.raises(ValueError, match="exactly one"):
+            service.record_initial(key, extraction_id, lambda: evaluation)
+        assert service.current(key) is None
+        unique = evaluate_reference(settings, {"tax": "002"})
+        candidate = unique.candidates[0].model_copy(update={"values": {}})
+        with pytest.raises(ValueError, match="blank return cell"):
+            service.record_initial(key, extraction_id, lambda: unique.model_copy(update={"candidates": [candidate]}))
+        assert service.current(key) is None
+
+
+def test_effective_projection_reads_the_latest_revision_within_the_requested_extraction(
+    state: tuple[TempConfig, LookupKey, str, LookupConfig],
+) -> None:
+    config, key, extraction_id, settings = state
+    with managed_connect(config) as conn:
+        service = LookupDecisionService(conn)
+        older = evaluate_reference(settings, {"tax": "002"})
+        service.record_initial(key, extraction_id, lambda: older)
+        new_id = ExtractionRepository(conn).save_result(document_id=key.document_id, provider="test", data={})["id"]
+        service.record_initial(key, new_id, lambda: evaluate_reference(settings, {"tax": "001"}))
+        assert service.effective_data(key.document_id, key.pipeline_version_id, extraction_id, {}) == {
+            "supplier_id": "00044",
+        }
+        assert service.effective_data(key.document_id, key.pipeline_version_id, new_id, {}) == {}
+
+
 def test_concurrent_initial_evaluations_reuse_the_winner(
     state: tuple[TempConfig, LookupKey, str, LookupConfig],
 ) -> None:

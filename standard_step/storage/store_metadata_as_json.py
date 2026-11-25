@@ -17,7 +17,7 @@ from typing import Any, Dict
 from modules.base_task import BaseTask
 from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.exceptions import TaskError
-from modules.services.artifact_service import register_document_artifact
+from modules.services.artifact_service import artifact_sha256, register_document_artifact
 from modules.utils import (
     preprocess_filename_value,
     release_reserved_filepath,
@@ -241,12 +241,20 @@ class StoreMetadataAsJson(BaseTask):
                 self.logger.info(f"Metadata for {unique_id} stored as JSON at {output_path}")
                 # Put output path into context for downstream steps
                 context["output_path"] = output_path
+                metadata = {"task_key": self.task_key(context)}
+                task_run_id = context.get("task_run_id")
+                if context.get("document_id") and context.get("pipeline_version_id") and isinstance(task_run_id, str):
+                    metadata["task_run_id"] = task_run_id
+                    try:
+                        metadata["sha256"] = artifact_sha256(output_path)
+                    except OSError:
+                        self.logger.warning("Could not fingerprint JSON artifact for task run %s", task_run_id)
                 register_document_artifact(
                     self.config_manager,
                     context,
                     file_type="export_json",
                     file_path=output_path,
-                    metadata={"task_key": self.task_key(context)},
+                    metadata=metadata,
                 )
             except Exception as e:
                 if not release_reserved_filepath(reserved_path):

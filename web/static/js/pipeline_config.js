@@ -7,14 +7,14 @@ import {
     summaryText,
     taskKind,
     withoutHousekeeping,
-} from "./pipeline-config/model.js?v=pipeline-lifecycle-2";
-import { deleteParam, getParam, setParam } from "./pipeline-config/parameters.js?v=pipeline-lifecycle-2";
-import { createPipelineApi } from "./pipeline-config/api.js?v=pipeline-lifecycle-2";
-import { buildPipelineYamlPreview } from "./pipeline-config/preview.js?v=pipeline-lifecycle-2";
-import { createPipelineWorkspaceView } from "./pipeline-config/workspace-view.js?v=pipeline-lifecycle-2";
-import { createPipelineTaskEditors } from "./pipeline-config/task-editors.js?v=pipeline-lifecycle-2";
-import { createPipelineResourceBrowser } from "./pipeline-config/resource-browser.js?v=pipeline-lifecycle-2";
-import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=pipeline-lifecycle-2";
+} from "./pipeline-config/model.js?v=r3-lookup-1";
+import { deleteParam, getParam, setParam } from "./pipeline-config/parameters.js?v=r3-lookup-1";
+import { createPipelineApi } from "./pipeline-config/api.js?v=r3-lookup-1";
+import { buildPipelineYamlPreview } from "./pipeline-config/preview.js?v=r3-lookup-1";
+import { createPipelineWorkspaceView } from "./pipeline-config/workspace-view.js?v=r3-lookup-1";
+import { createPipelineTaskEditors } from "./pipeline-config/task-editors.js?v=r3-lookup-1";
+import { createPipelineResourceBrowser } from "./pipeline-config/resource-browser.js?v=r3-lookup-1";
+import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=r3-lookup-1";
 
 (function () {
     "use strict";
@@ -352,10 +352,13 @@ import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=pipeli
         const findings = state.validation && Array.isArray(state.validation.findings)
             ? state.validation.findings
             : [];
-        return findings.filter((finding) => {
+        const sourcePrefix = state.validation?.source ? `${state.validation.source}.` : "";
+        const taskPath = `tasks.${step.key}`;
+        return findings.map((finding) => {
             const path = String(finding.path || "");
-            return path.startsWith(`tasks.${step.key}`) || path.startsWith(`steps.${state.selectedIndex}.`);
-        });
+            return { ...finding, path: path.startsWith(sourcePrefix) ? path.slice(sourcePrefix.length) : path };
+        }).filter(({path}) => path === taskPath || path.startsWith(`${taskPath}.`)
+            || path.startsWith(`steps.${state.selectedIndex}.`));
     }
 
     function taskIssuesPanel(step) {
@@ -424,9 +427,10 @@ import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=pipeli
                                 <select class="select select-bordered select-sm" data-step-field="on_error">
                                     <option value="" ${!step.on_error ? "selected" : ""}>Default runtime behavior</option>
                                     <option value="stop" ${step.on_error === "stop" ? "selected" : ""}>Stop the pipeline</option>
-                                    <option value="continue" ${step.on_error === "continue" ? "selected" : ""}>Continue to the next task</option>
+                                    ${step.class !== "CsvReferenceLookupTask" || step.on_error === "continue" ? `<option value="continue" ${step.on_error === "continue" ? "selected" : ""} ${step.class === "CsvReferenceLookupTask" ? "disabled" : ""}>Continue to the next task</option>` : ""}
                                 </select>
                                 <span class="text-xs text-base-content/50 mt-1">${step.on_error === "continue" ? "Later tasks will run even if this task fails." : "No later tasks will run after this failure."}</span>
+                                ${taskFindings.filter(({path}) => path === `tasks.${step.key}.on_error`).map(({message}) => `<span class="mt-1 text-xs text-error">${escapeHtml(message)}</span>`).join("")}
                             </label>
                             <label class="label cursor-pointer justify-start gap-3 rounded-lg border border-base-300 px-3 py-2">
                                 <input class="toggle toggle-sm" type="checkbox" data-step-field="enabled" ${step.enabled !== false ? "checked" : ""}>
@@ -626,6 +630,7 @@ import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=pipeli
             StoreMetadataAsJson: { data_dir: "data", filename: "{id}" },
             StoreFileToLocaldrive: { files_dir: "files", filename: "{id}" },
             UpdateReferenceTask: { reference_file: "reference_file/reference_file.csv", update_field: "MATCHED", write_value: "match_all", backup: true, csv_match: { type: "column_equals_all", clauses: [{ column: "", from_context: "" }] } },
+            CsvReferenceLookupTask: { reference_file: "", clauses: [{ field: "", column: "", mode: "case_sensitive" }], returns: [{ column: "", field: "" }], required: true, on_no_match: "review", on_multiple_matches: "review" },
             ReviewGateTask: { confidence_threshold: 0.8, per_document_type_thresholds: {}, field_threshold_overrides: {}, split_confidence_levels_requiring_review: [], require_review_when_missing_confidence: true, require_review_for_missing_required_fields: true, always_review: false, queue_name: "default_review", review_scope: "low_confidence_fields", allow_operator_to_edit_high_confidence_fields: true, resume_policy: "next_task" },
             ArchivePdfTask: { archive_dir: "archive_folder" },
         };
@@ -1137,6 +1142,27 @@ import { createPipelineLifecycle } from "./pipeline-config/lifecycle.js?v=pipeli
         if (action === "remove-rule-clause") {
             const clauses = getParam(params, ["csv_match", "clauses"], []);
             if (clauses.length > 1) clauses.splice(Number(button.dataset.clauseIndex), 1);
+            markDirty();
+            return true;
+        }
+        if (["add-lookup-clause", "add-lookup-return", "remove-lookup-clause", "remove-lookup-return", "move-lookup-clause-up", "move-lookup-clause-down"].includes(action)) {
+            const isClause = action.includes("-clause");
+            const key = isClause ? "clauses" : "returns";
+            const rows = Array.isArray(params[key]) ? params[key] : [];
+            const index = Number(button.dataset.clauseIndex);
+            if (action.startsWith("add-")) {
+                if (!isClause || rows.length < 5) rows.push(isClause
+                    ? { field: "", column: "", mode: "case_sensitive" } : { column: "", field: "" });
+            } else if (action.startsWith("remove-")) {
+                if (rows.length > 1) rows.splice(index, 1);
+            } else {
+                const other = index + (action.endsWith("-up") ? -1 : 1);
+                if (other >= 0 && other < rows.length) {
+                    [rows[index], rows[other]] = [rows[other], rows[index]];
+                    button.dataset.clauseIndex = String(other);
+                }
+            }
+            params[key] = rows;
             markDirty();
             return true;
         }

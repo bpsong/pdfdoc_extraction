@@ -14,6 +14,7 @@ Use [current documentation](../README.md) for procedures.
 
 ## Change records
 
+- [R3 CSV reference lookup and enrichment, 2026-11-25](changes/2026-11-25-r3-csv-reference-lookup.md)
 - [Documentation reorganisation, 2026-10-10](changes/2026-10-10.md)
 - [Change summary, 2026-09-05](changes/2026-09-05.md)
 - [Earlier combined-guide revision history](changes/user-guide-history.md)

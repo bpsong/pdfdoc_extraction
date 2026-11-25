@@ -46,6 +46,7 @@ BUILTIN_TASKS: dict[str, tuple[str, str]] = {
 
 
 REVIEW_GATE_TASK = BUILTIN_TASKS["review_gate"]
+ASSIGN_NANOID_TASK = BUILTIN_TASKS["assign_nanoid"]
 
 
 @dataclass(frozen=True)

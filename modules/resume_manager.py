@@ -12,7 +12,8 @@ from modules.services.pipeline_definition_service import PipelineDefinitionServi
 from modules.services.split_result_service import restore_single_document_context
 from modules.services.csv_reference_lookup import lookup_inputs
 from modules.services.lookup_decision_service import LookupConflictError, merge_lookup_values
-from modules.services.lookup_review_service import LookupReviewService
+from modules.services.lookup_pipeline_validation import active_lookup_configs
+from modules.services.lookup_review_service import LookupReviewService, lookup_nanoid
 from modules.workflow_loader import WorkflowLoader
 
 
@@ -85,6 +86,8 @@ class ResumeManager:
                 metadata = json_loads(latest_review.get("metadata_json"), {}) if latest_review else {}
                 accepted = metadata.get("lookup_acceptance", {})
                 try:
+                    if active_lookup_configs(executable.definition):
+                        context["data"].update(lookup_nanoid(task_runs, document_id, executable, next_index))
                     lookups = LookupReviewService(conn).load_before(
                         document_id, executable.version_id, extraction_id, next_index,
                     )

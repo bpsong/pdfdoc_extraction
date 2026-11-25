@@ -5,13 +5,20 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-11 — repository/source review; no live deployment check; comparison operands/scopes, publication/bindings, and synthetic regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup return fields checked in a synthetic published form |
+| Applies to | Production application; SQLite schema 11 |
 
 Routine form authoring belongs in the [Admin guide](../admin/managing-review-forms.md).
 This reference covers portable YAML/JSON and advanced field mapping. Runtime
 review uses the exact published SQLite definition selected by the pipeline.
 Editing a filesystem schema does not change already-published behaviour.
+
+A form can name an upstream CSV lookup return as a top-level `type: string`
+field. Publication checks the type and the review screen displays the value as
+derived, read-only text. Business rules can refer to that field through its
+usual path and evaluate the current lookup proposal during revalidation. Use
+the [review gate contract](tasks/review-gate.md#csv-lookup-decisions-at-the-gate)
+to plan required fields and optional skips.
 
 ## Import, Export, and Legacy Migration
 

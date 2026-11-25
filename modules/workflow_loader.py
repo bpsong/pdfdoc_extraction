@@ -24,7 +24,7 @@ from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
 from modules.services.failure_service import _redact, _redact_text
 from modules.services.fan_in_service import FanInService
 from modules.services.processing_lease import JobClaimLost, ProcessingLease, claim_write
-from modules.services.task_registry_service import ApprovedTaskRegistry, REVIEW_GATE_TASK, TaskApprovalError
+from modules.services.task_registry_service import ASSIGN_NANOID_TASK, ApprovedTaskRegistry, REVIEW_GATE_TASK, TaskApprovalError
 from modules.services.workflow_state_service import WorkflowStateService
 from standard_step.housekeeping.cleanup_task import CleanupTask
 
@@ -280,6 +280,11 @@ class WorkflowLoader:
                 lookup_gate = (module_name, class_name) == REVIEW_GATE_TASK and first_lookup_index < task_index
                 if lookup_gate:
                     on_error = "stop"
+                lookup_pipeline_gate = (
+                    (module_name, class_name) == REVIEW_GATE_TASK and first_lookup_index < len(pipeline_config)
+                )
+                if lookup_pipeline_gate:
+                    current_context["_lookup_pipeline_gate"] = True
                     if self.lease:
                         current_context["_lookup_job_claim"] = tuple(self.lease.claim)
 
@@ -358,6 +363,9 @@ class WorkflowLoader:
 
                     if task_run_id:
                         current_context["task_run_id"] = task_run_id
+                    if lookup_pipeline_gate:
+                        current_context.pop("_lookup_job_claim", None)
+                        current_context.pop("_lookup_pipeline_gate", None)
 
                     # Fan-out and review pause hand control to other workflows
                     # or an operator. Skip remaining tasks and the cleanup block.
@@ -371,9 +379,8 @@ class WorkflowLoader:
                         return current_context
 
                     if current_context.get("pipeline_state") == "paused":
-                        current_context.pop("_lookup_job_claim", None)
                         output_summary = self._context_summary(current_context)
-                        lookup_review_paused = lookup_gate and current_context.pop("lookup_review_paused", False)
+                        lookup_review_paused = lookup_pipeline_gate and current_context.pop("lookup_review_paused", False)
                         if state_service is not None and task_run_id and not lookup_review_paused:
                             with claim_write(state_service.conn, self.lease):
                                 state_service.pause_task(task_run_id, output_summary)
@@ -408,6 +415,8 @@ class WorkflowLoader:
                             self._continue_after_failure(current_context)
                     else:
                         output_summary = self._context_summary(current_context)
+                        if (module_name, class_name) == ASSIGN_NANOID_TASK and first_lookup_index < len(pipeline_config):
+                            output_summary["nanoid"] = current_context["data"]["nanoid"]
                         if state_service is not None and task_run_id:
                             with claim_write(state_service.conn, self.lease):
                                 state_service.complete_task(task_run_id, output_summary)

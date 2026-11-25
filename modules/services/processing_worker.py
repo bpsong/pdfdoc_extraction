@@ -60,7 +60,8 @@ class ProcessingWorker:
             claim = JobClaim(str(job["id"]), self.worker_id, int(job["attempt_count"]))
             if claim.attempt_count > 1:
                 review = ReviewRepository(conn).find_latest_for_document(document_id, review_kind="extraction")
-                if review and json_loads(review.get("metadata_json"), {}).get("lookup_scope"):
+                metadata = json_loads(review.get("metadata_json"), {}) if review else {}
+                if metadata.get("lookup_scope") or metadata.get("lookup_pipeline_gate"):
                     # The lookup gate committed the review and its paused task before the old worker died.
                     ProcessingJobRepository(conn).mark_completed(claim)
                     return True

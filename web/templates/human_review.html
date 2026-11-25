@@ -76,6 +76,13 @@
                     <ul id="review-validation-list"></ul>
                 </details>
             </section>
+            <section class="review-business-panel review-lookup-panel" id="review-lookup-panel" aria-labelledby="review-lookup-title" hidden>
+                <div class="review-business-heading">
+                    <h3 id="review-lookup-title">CSV reference lookups</h3>
+                    <span id="review-lookup-status" role="status" aria-live="polite" aria-atomic="true" tabindex="-1"></span>
+                </div>
+                <div data-lookup-results></div>
+            </section>
             <div id="review-fields-container" class="review-fields-container">
                 <div class="empty-panel">No fields loaded</div>
             </div>
@@ -94,5 +101,5 @@
 
 {% block scripts %}
 <script src="/static/js/pdf_viewer.js?v=pdf-evidence-4" defer></script>
-<script type="module" src="/static/js/human-review/index.js?v=generic-rules-1"></script>
+<script type="module" src="/static/js/human-review/index.js?v=r3-lookup-1"></script>
 {% endblock %}

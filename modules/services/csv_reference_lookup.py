@@ -89,6 +89,10 @@ class ReferenceUnavailableError(ReferenceDataError):
     """The validating process cannot open the configured file."""
 
 
+class ReferenceSizeError(ReferenceDataError):
+    """The current reference bytes exceed the configured read limit."""
+
+
 class MatchInput(BaseModel):
     """Store the input and comparison key separately for review evidence."""
 
@@ -103,13 +107,13 @@ class MatchInput(BaseModel):
 class Candidate(BaseModel):
     """Retain the displayed match columns and mapped values from one row."""
 
-    record_number: int
+    record_number: Annotated[int, Field(gt=0)]
     matched_columns: dict[str, str]
     values: dict[str, str]
 
     def complete_values(self) -> dict[str, str]:
         """Require every mapped cell before releasing any returned field."""
-        if any(not value.strip() for value in self.values.values()):
+        if not self.values or any(not value.strip() for value in self.values.values()):
             raise ReferenceDataError("A selected record contains a blank return cell.")
         return dict(self.values)
 
@@ -178,7 +182,7 @@ def _read_reference(
     except (OSError, RuntimeError, ValueError):
         raise ReferenceUnavailableError("The configured reference file could not be read.") from None
     if len(raw) > max_bytes:
-        raise ReferenceDataError("The reference file exceeds the byte limit.")
+        raise ReferenceSizeError("The reference file exceeds the byte limit.")
     return raw
 
 
@@ -221,7 +225,7 @@ def evaluate_reference(
         raise ValueError("Reference byte and candidate limits must be positive.")
     try:
         raw = _read_reference(config, config_path, max_bytes)
-    except ReferenceUnavailableError:
+    except (ReferenceUnavailableError, ReferenceSizeError):
         if expected_sha256 is not None:
             raise ReferenceChangedError("The original reference file is unavailable.") from None
         raise

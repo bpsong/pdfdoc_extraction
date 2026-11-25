@@ -91,11 +91,12 @@ def _publish(config: TempConfig, definition: dict[str, Any]) -> dict[str, Any]:
     return version
 
 
-def _document(config: TempConfig, root: Path, version: dict[str, Any]) -> dict[str, Any]:
-    source = root / "invoice.pdf"
-    pdf = PdfWriter()
-    pdf.add_blank_page(width=200, height=200)
-    pdf.write(source)
+def _document(config: TempConfig, root: Path, version: dict[str, Any], *, source: Path | None = None) -> dict[str, Any]:
+    if source is None:
+        source = root / "invoice.pdf"
+        pdf = PdfWriter()
+        pdf.add_blank_page(width=200, height=200)
+        pdf.write(source)
     with managed_connect(config) as conn:
         assigned = IngestionAssignmentService(conn, config).create_batch(
             pipeline_version_id=version["id"], role="operator", source="web", assignment_source="upload",
@@ -166,6 +167,8 @@ def test_published_lookup_resolves_worker_file_and_exports_pinned_text(
     ("bad-header", "lookup-reference-invalid"),
     ("secret-path", "lookup-invalid-parameters"),
     ("chained", "lookup-source-field"),
+    ("later-extraction", "lookup-source-field"),
+    ("later-extraction-with-undeclared-earlier-fields", "lookup-source-field"),
 ])
 def test_publication_rejects_invalid_lookup_bindings(
     deployment: TempConfig, tmp_path: Path, variant: str, code: str,
@@ -202,6 +205,13 @@ def test_publication_rejects_invalid_lookup_bindings(
         second["params"]["clauses"][0]["field"] = "supplier_id"
         definition["tasks"]["second"] = second
         definition["pipeline"].insert(2, "second")
+    elif variant.startswith("later-extraction"):
+        definition["tasks"]["later"] = deepcopy(definition["tasks"]["extract"])
+        definition["tasks"]["later"]["params"]["fields"]["future_tax"] = {"type": "str", "alias": "Future tax"}
+        if variant.endswith("earlier-fields"):
+            del definition["tasks"]["extract"]["params"]["fields"]
+        settings["clauses"][0]["field"] = "future_tax"
+        definition["pipeline"].insert(2, "later")
     with managed_connect(deployment) as conn:
         service = PipelineTemplateService(conn, validation=ValidationFacade(deployment),
                                           configured_secret_aliases={"extract"})
@@ -295,6 +305,11 @@ def test_config_check_and_backend_catalog_keep_lookup_and_update_distinct(
     register.write_text("Tax,Name,Code\nrow,wrong-column-count\n", encoding="utf-8")
     result = ConfigValidator(check_files=True).validate(path)
     assert any(error.code == "lookup-reference-invalid" for error in result.errors)
+    register.unlink()
+    structural = ConfigValidator().validate(path)
+    assert any(warning.code == "lookup-reference-unavailable" for warning in structural.warnings)
+    local = ConfigValidator(check_files=True).validate(path)
+    assert any(error.code == "lookup-reference-invalid" for error in local.errors)
     catalog = TaskCatalogService(deployment)
     tasks = {task["class_name"]: task for task in catalog.catalog()["tasks"]}
     assert tasks[CSV_LOOKUP_TASK[1]]["import_status"] == "ok"

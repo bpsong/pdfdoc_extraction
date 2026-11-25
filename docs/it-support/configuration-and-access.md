@@ -5,8 +5,8 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. Lookup path resolution checked in an isolated Windows deployment |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Select the intended deployment
 
@@ -35,6 +35,22 @@ interactive-user access alone does not prove service-account access.
 Use **Test access** or **Check now** to diagnose listing access, then a synthetic
 ingestion test to verify the actual file lifecycle. Those UI checks do not test
 all destructive permissions and do not enqueue a document.
+
+### Prepare a CSV lookup register
+
+Give the Windows worker account read access to the CSV and the directory path.
+The web process needs the same access when validating headers or rematching an
+edited review. On a UNC share, check both the share and NTFS permissions under
+the actual supervised account. Prefer a UNC path over a drive letter mapped
+only in an interactive session. A relative lookup path is resolved beside the
+active deployment YAML. The lookup does not require write access.
+
+Save comma-delimited UTF-8 with exact, unique headers. The built-in lookup reads
+files up to 8 MiB. Have the register owner validate a complete replacement in
+the same directory, then publish it with an approved same-volume atomic
+replacement. Coordinate replacement with any **Update Reference** writer.
+Preserve earlier register bytes under your recovery policy when pending reviews
+may need to rematch. See the [register contract](../reference/tasks/rules-context-housekeeping.md#csv-reference-lookup).
 
 ## Manage secret aliases
 

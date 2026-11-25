@@ -1,18 +1,18 @@
 # R3 design — CSV reference lookup and enrichment
 
-**Status** · First-release scope agreed on 2026-11-25. Each lookup returns text into new document-level fields. Numeric comparison applies only to match inputs. The [phased implementation plan](tasks-r3-csv-reference-lookup.md) tracks delivery and verification.
+**Status** · Implemented and verified on 2026-11-25. Each lookup returns text into new document-level fields. Numeric comparison applies only to match inputs. The [archived implementation record](archive/tasks-r3-csv-reference-lookup.md) contains the release checks and sign-off. Use the [task reference](../docs/reference/tasks/rules-context-housekeeping.md#csv-reference-lookup) for current configuration.
 
 ## Operator outcome
 
 A supplier invoice carries tax number `00123`. The receiving system needs supplier ID `00042`. A pipeline author configures a lookup from the extracted tax number to the supplier register. A unique match adds `supplier_id: "00042"` to the document data used for export. The original supplier name, tax number, and extraction evidence stay available. The lookup opens the reference file read-only.
 
-The proposed production pipeline is **extract → CSV lookup → review gate (when configured) → outputs**. SQLite holds the lookup decision for the current document or split child. The feature can ship on the current notebook independently of PostgreSQL, mixed-document routing, and n8n. [R3 roadmap scope](roadmap.md#r3-csv-reference-lookup-and-enrichment)
+The production pipeline is **extract → CSV lookup → review gate (when configured) → outputs**. SQLite holds the lookup decision for the current document or split child. [R3 roadmap scope](roadmap.md#r3-csv-reference-lookup-and-enrichment)
 
 ## Pipeline authoring
 
 Offer **CSV reference lookup** as a separate built-in task in the production pipeline editor. The existing CSV update task can update multiple matching rows and replace its source file. Keeping its configuration and behavior intact lets authors add enrichment explicitly. [Current CSV update task](../standard_step/rules/update_reference.py)
 
-| Editor setting | Proposed contract | Invoice example |
+| Editor setting | Contract | Invoice example |
 | --- | --- | --- |
 | Reference CSV | One administrator-configured reference file readable by the worker. Resolve it from trusted configuration, never from document or reviewer input. | `suppliers.csv` |
 | Match clauses | One to five clauses joined by AND. For each clause, the administrator selects a document field, CSV column, and comparison mode. Choices are **Case-sensitive text** (default), **Case-insensitive text**, and **Numeric**. | Match the supplier name ignoring case and the tax number as case-sensitive text. |
@@ -28,7 +28,7 @@ Require `on_error: stop` for the lookup task. A configured optional miss is a su
 
 ## Matching contract
 
-Read a comma-delimited UTF-8 CSV with a header, optional BOM, standard quoted fields, and exact, unique column names. Read cells as text before comparison. Reject invalid encoding, malformed rows, duplicate or missing configured headers, unreadable files, and files over a deployment-defined size limit as task errors. This distinguishes a broken register from a valid register with no matching supplier.
+Read a comma-delimited UTF-8 CSV with a header, optional BOM, standard quoted fields, and exact, unique column names. Read cells as text before comparison. Invalid encoding, malformed rows, duplicate or missing configured headers, unreadable files, and files over the built-in 8 MiB limit are task errors. The evaluator counts all matches and retains up to 50 candidates.
 
 | Mode | Equality rule | Consequence |
 | --- | --- | --- |
@@ -37,6 +37,10 @@ Read a comma-delimited UTF-8 CSV with a header, optional BOM, standard quoted fi
 | Numeric (opt-in) | Compare finite decimals using a period as decimal separator and an optional sign. Reject booleans, grouping separators, currency, and exponent notation. | `"00123.00"` matches `123`. Choose text for tax numbers and account codes. |
 
 Both text modes operate on string fields and preserve internal spaces and punctuation. Model identifiers as text upstream to retain leading zeros. Use numeric mode for numeric fields. Comparison transforms apply only to match keys. Review displays the original input and reference values, and exports preserve the case and formatting of the returned cells.
+
+Numeric mode accepts a trailing decimal separator. For example, `"1."` matches
+`1`. When clauses share a reference column, the review shows each comparison
+with its own input field and mode.
 
 A blank, absent, or invalid document input goes through the no-match policy with a distinct reason visible to the reviewer. A blank reference key cannot match. A nonblank malformed numeric key in a configured numeric column is a reference-data error. Count matching records before taking any returned values. Two matching records remain ambiguous even when they return the same ID. Each selected return cell must contain a nonblank value. An incomplete selected row is a reference-data error. Preserve returned strings, including leading zeros.
 
@@ -75,7 +79,7 @@ The new approved `standard_step.*` task follows `BaseTask` and the existing erro
 
 Use the same effective data for the uninterrupted path, the gate, and resumed outputs. Merge accepted lookup values into workflow `context["data"]` alongside the current extraction values and corrections. The gate currently reads persisted fields, and resume reconstructs data from SQLite. Both paths need the same persisted lookup projection. Preserve original extraction values and confidence separately. Omit an optional skipped key on both paths. Candidate rows and decision metadata are review evidence and stay out of ordinary business exports. [Resume behavior](../modules/resume_manager.py) and [output contracts](../docs/reference/tasks/storage-and-archiving.md)
 
-## Acceptance examples for design review
+## Acceptance examples
 
 | Given | Observable result |
 | --- | --- |

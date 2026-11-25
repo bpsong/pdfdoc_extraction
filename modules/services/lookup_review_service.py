@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_vali
 
 from modules.config_protocol import ConfigProvider
 from modules.db.connection import json_loads
-from modules.db.repositories import LookupKey, PipelineVersionRepository
+from modules.db.repositories import LookupKey, PipelineVersionRepository, TaskRunRepository
 from modules.services.csv_reference_lookup import (
     LookupConfig, LookupEvaluation, ReferenceChangedError, ReferenceDataError,
     evaluate_reference, lookup_inputs,
@@ -20,11 +20,29 @@ from modules.services.lookup_decision_service import (
     DecisionState, LookupConflictError, LookupDecision, LookupDecisionService, resolution_values,
 )
 from modules.services.lookup_pipeline_validation import active_lookup_configs
+from modules.services.pipeline_definition_service import ExecutablePipeline
 from modules.services.review_business_validation import snapshot_hash
+from modules.services.task_registry_service import ASSIGN_NANOID_TASK
 
 
 Reason = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=1000)]
 Token = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64}$")]
+
+
+def lookup_nanoid(
+    task_runs: TaskRunRepository, document_id: str, executable: ExecutablePipeline, before_index: int,
+) -> dict[str, str]:
+    """Restore the generated ID recorded before this lookup pipeline cursor."""
+    for index in range(before_index - 1, -1, -1):
+        task = executable.tasks[executable.pipeline[index]]
+        if (task.get("module"), task.get("class")) != ASSIGN_NANOID_TASK:
+            continue
+        run = task_runs.latest_completed_at(document_id, executable.version_id, index)
+        value = json_loads(run["output_json"], {}).get("nanoid") if run else None
+        if not isinstance(value, str) or not value:
+            raise LookupConflictError("The generated document identifier is unavailable for recovery.")
+        return {"nanoid": value}
+    return {}
 
 
 class LookupAction(BaseModel):
@@ -92,7 +110,17 @@ class LookupProposal:
             "returned_values": self.returned,
             "return_fields": [mapping.field for mapping in self.lookup.config.returns],
             "match_count": evaluation.match_count,
-            "candidates": [item.model_dump() for item in evaluation.candidates],
+            "candidates": [
+                {
+                    **candidate.model_dump(),
+                    "match_evidence": [
+                        {"field": item.field, "column": item.column, "mode": item.mode,
+                         "reference_value": candidate.matched_columns.get(item.column)}
+                        for item in evaluation.inputs
+                    ],
+                }
+                for candidate in evaluation.candidates
+            ],
             "candidates_truncated": not complete,
             "selected_record_number": self.selected,
             "evaluation_token": self.evaluation_token,

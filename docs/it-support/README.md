@@ -26,4 +26,7 @@ Read in this order, or choose the task you need:
 8. [Investigate runtime incidents](incident-runbooks.md)
 9. [Troubleshoot configuration validation](config-check-troubleshooting.md)
 
+For CSV lookups, see [register access](configuration-and-access.md#prepare-a-csv-lookup-register)
+and [recovery when a lookup blocks release](incident-runbooks.md#csv-lookup-is-blocking-release).
+
 [All documentation](../README.md)

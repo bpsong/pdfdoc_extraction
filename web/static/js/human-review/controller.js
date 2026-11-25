@@ -1,9 +1,10 @@
-import { createHumanReviewModel } from "./model.js?v=generic-rules-1";
-import { createHumanReviewApi } from "./api.js?v=generic-rules-1";
-import { createHumanReviewFieldView } from "./field-view.js?v=generic-rules-1";
-import { createHumanReviewView } from "./view.js?v=generic-rules-1";
-import { createReviewValidation } from './validation.js?v=generic-rules-1';
-import { createReviewValidationView } from './validation-view.js?v=generic-rules-1';
+import { createHumanReviewModel } from "./model.js?v=r3-lookup-1";
+import { createHumanReviewApi } from "./api.js?v=r3-lookup-1";
+import { createHumanReviewFieldView } from "./field-view.js?v=r3-lookup-1";
+import { createHumanReviewView } from "./view.js?v=r3-lookup-1";
+import { createReviewValidation } from './validation.js?v=r3-lookup-1';
+import { createReviewValidationView } from './validation-view.js?v=r3-lookup-1';
+import { createLookupReview } from './lookup-review.js?v=r3-lookup-1';
 
 (function () {
     "use strict";
@@ -63,6 +64,7 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
         elements.validationSummary = document.getElementById('review-validation-summary');
         elements.validationDetails = document.getElementById('review-validation-details');
         elements.validationList = document.getElementById('review-validation-list');
+        elements.lookupPanel = document.getElementById('review-lookup-panel');
     }
 
     const model = createHumanReviewModel(state);
@@ -78,10 +80,25 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
     let renderEditor;
     let api;
     let validationView;
+    let lookup;
     const validation = createReviewValidation(state, model, renderValidation);
 
     function renderValidation() {
+        lookup?.render();
         validationView?.render();
+        if (lookup?.active()) {
+            if (!state.completionPending) renderLockState();
+            const conflict = validation.current().conflict;
+            elements.revalidateButton.hidden = model.isComplete();
+            elements.revalidateButton.disabled = conflict || !lookup.canCheck();
+            elements.revalidateButton.textContent = lookup.pending() ? 'Checking…' : 'Revalidate';
+            elements.revalidateButton.setAttribute('aria-busy', String(lookup.pending()));
+            elements.revalidateButton.setAttribute('aria-describedby', validation.current().enabled
+                ? 'review-lookup-status review-validation-status' : 'review-lookup-status');
+            elements.completeButton.disabled ||= !lookup.canComplete();
+        } else {
+            elements.revalidateButton.setAttribute('aria-describedby', 'review-validation-status');
+        }
         if (validation.current().enabled && validation.current().conflict) {
             elements.saveButton.disabled = true;
             elements.completeButton.disabled = true;
@@ -96,7 +113,9 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
         state.extraction = payload.extraction || null;
         state.lock = payload.lock || null;
         initializeValues(payload);
+        lookup.load(payload);
         if (preservedValues) state.values = preservedValues;
+        if (preservedValues) lookup.changed();
         renderHeader();
         renderLockState();
         renderEditor();
@@ -143,6 +162,7 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
         if (state.savingDraft || state.completionPending) return;
         state.savingDraft = true;
         renderLockState();
+        renderValidation();
         const savedValues = model.cloneValue(state.values);
         const ticket = validation.capture();
         try {
@@ -153,6 +173,7 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
             window.DocFlow.showToast("Draft saved", "success");
         } catch (error) {
             validation.fail(ticket, error);
+            if (error.status === 409) lookup.fail(error);
             window.DocFlow.showToast(error.message || "Unable to save draft", "error");
         } finally {
             state.savingDraft = false;
@@ -162,13 +183,22 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
     }
 
     async function revalidate() {
-        if (!validation.canCheck()) return;
+        if (lookup.active() ? !lookup.canCheck() || validation.current().conflict : !validation.canCheck()) return;
+        if (lookup.active()) lookup.start();
         const ticket = validation.capture(true);
+        renderValidation();
         try {
-            const payload = await api.revalidate(collectCorrections(), ticket.id);
-            validation.accept(ticket, payload);
+            const payload = await api.revalidate(collectCorrections(), ticket.id, lookup.request());
+            if (!validation.isCurrent(ticket)) return;
+            if (lookup.active()) lookup.accept(payload.request_revision === ticket.id && payload.review_revision === ticket.revision
+                ? payload.lookup_review : null);
+            if (validation.current().enabled) validation.accept(ticket, payload);
         } catch (error) {
-            validation.fail(ticket, error);
+            if (!validation.isCurrent(ticket)) return;
+            lookup.fail(error);
+            if (validation.current().enabled) validation.fail(ticket, error);
+        } finally {
+            renderValidation();
         }
     }
 
@@ -185,21 +215,30 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
     }
 
     async function completeReview() {
-        if (state.completionPending || state.savingDraft) {
+        if (state.completionPending || state.savingDraft || !lookup.canComplete()) {
             return;
         }
         setCompletionPending(true);
+        renderValidation();
         const ticket = validation.capture();
         try {
-            await api.complete(collectCorrections());
+            await api.complete(collectCorrections(), lookup.request(true));
             window.DocFlow.showToast("Review completed", "success");
             window.location.href = "/app/review";
         } catch (error) {
             setCompletionPending(false);
             renderLockState();
-            validation.completionFailure(ticket, error);
+            if (error.detail?.lookup_review) {
+                lookup.fail(error);
+                validation.changed();
+            } else {
+                if (error.status === 409) lookup.fail(error);
+                validation.completionFailure(ticket, error);
+            }
             renderValidation();
-            if (validation.current().enabled) {
+            if (error.detail?.lookup_review) {
+                lookup.focusStatus();
+            } else if (validation.current().enabled) {
                 validationView.scrollToSummary();
                 elements.validationStatus.tabIndex = -1;
                 elements.validationStatus.focus({preventScroll: true});
@@ -236,8 +275,13 @@ import { createReviewValidationView } from './validation-view.js?v=generic-rules
             { renderEditor: () => fieldView.renderEditor() },
             window.DocFlow, window.DocFlowPdfViewer);
         validationView = createReviewValidationView(elements, model, validation);
+        lookup = createLookupReview(elements.lookupPanel, state, model, revalidate);
         fieldView = createHumanReviewFieldView(state, elements, model, view, {
-            changed: () => validation.changed(), rendered: renderValidation,
+            changed: () => {
+                lookup.changed();
+                validation.changed();
+                if (!validation.current().enabled) renderValidation();
+            }, rendered: renderValidation,
         });
         ({ initializeSourceValueMode, setSourceValueMode, renderHeader,
             renderLockState, setCompletionPending, initializePaneDivider, renderDiff } = view);

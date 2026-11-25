@@ -45,7 +45,14 @@ the upgrade before web/worker children verify the exact schema. A standalone web
 process remains verification-only unless explicitly started in migration mode.
 
 Schema 11 creates an empty table for CSV lookup decisions. The upgrade
-preserves existing documents, pinned versions, and review records.
+preserves existing documents, pinned versions, and review records. Existing
+documents keep their assigned pipeline version. In the R3 release, the Pipeline
+and Human Review module entry points use `r3-lookup-1`. The shared CSS queries
+are `r3-lookup-1` for `app.css` and
+`tailwind-3.4.17-daisyui-4.12.10-r3-lookup-1` for `vendor.css`. Deploy the files
+with the matching server and templates. Before activating a lookup pipeline,
+verify [register access](configuration-and-access.md#prepare-a-csv-lookup-register)
+and run a unique and ambiguous synthetic invoice through the published version.
 
 Schema 10 adds an empty `pending_upload_files` journal. Startup uses it to
 remove finalized files from interrupted new submissions. It leaves older
@@ -135,9 +142,9 @@ need to change. For a shared-module,
 template-shell, CSS, or server/API regression, restore a complete compatible
 artifact. Check database schema compatibility before starting it.
 
-Schema 9 has no supported downgrade. An older schema-8 artifact must not be
-started against the upgraded database. Recover a schema-changing deployment
-using a matching artifact and verified consistent database backup, with a plan
+Schema 11 has no supported downgrade. Run an older artifact only with its
+supported schema. Recover a schema-changing deployment using a matching
+artifact and verified consistent database backup, with a plan
 for any work accepted since that backup. Restoring static assets does not undo
 confirmed processing-data cleanup; that action has no in-app undo. Keep database
 backup/restore planning separate from frontend asset rollback.

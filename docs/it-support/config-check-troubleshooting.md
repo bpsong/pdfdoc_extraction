@@ -5,8 +5,8 @@
 | Audience | IT support and maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. Lookup validation checked against a synthetic deployment and exported bundle |
+| Applies to | Production application; SQLite schema 11 |
 
 | Item | Value |
 | --- | --- |
@@ -29,6 +29,7 @@ than matching prose.
 - [Common validation problems](#missing-directories-or-files)
 - [Task configuration problems](#missing-extraction-credentials)
 - [LiteParse local extraction](#liteparse-local-provider-configuration-errors)
+- [CSV lookup findings](#csv-lookup-findings)
 - [Rules task validation](#rules-task-validation-errors)
 - [Optional analyses](#performance-analysis-issues)
 - [Still stuck](#still-stuck)
@@ -59,6 +60,7 @@ common codes for navigation rather than duplicating the catalog.
 | Required watch-folder path is missing | `watch-folder-missing-dir` | [Watch folder](#watch-folder-not-prepared) |
 | Module or class cannot be imported | `task-import-module-not-found`, `task-import-class-not-found` | [Import failures](#import-failures) |
 | Rules task has invalid clauses or context paths | `rules-duplicate-clause`, `rules-context-path-invalid`, `rules-field-not-found` | [Rules validation](#rules-task-validation-errors) |
+| CSV lookup has an unavailable register or invalid binding | `lookup-reference-unavailable`, `lookup-reference-invalid`, `lookup-source-field` | [CSV lookup findings](#csv-lookup-findings) |
 | Stored/portable pipeline task order or dependencies fail | `pipeline-multiple-split-tasks`, `pipeline-split-after-extract` | [Pipeline validation](../../tools/config_check/README.md#pipeline-shape-and-ordering) |
 
 Some runtime YAML path findings currently have no stable finding code. Use the
@@ -417,6 +419,21 @@ failure handling and diagnostic citation behavior.
 - When using `storage:` overrides, keep only the supported keys (`data_dir` and `filename`). Remove or rename any other entries.
 - Define overrides as a mapping, e.g. `storage: { data_dir: ./alt-output, filename: {id}.json }`.
 - If overrides are unnecessary, drop the `storage` block entirely and keep the legacy top-level `data_dir` and `filename` parameters.
+
+## CSV lookup findings
+
+| Finding or symptom | What to check |
+| --- | --- |
+| `lookup-reference-unavailable` | Resolve the literal path beside the active YAML. A machine validating the pipeline can warn when only the worker can read the CSV. Verify worker and web account access before release. |
+| `lookup-reference-invalid` | Check UTF-8 encoding, nonblank unique headers, configured columns, and the 8 MiB limit. Publication checks the header when accessible. Execution validates all data records. |
+| `lookup-source-field` or `lookup-source-type` | Use an earlier top-level extraction field and a supported mode for its type. Model identifiers as text. |
+| `lookup-field-collision` or `lookup-filename-dependency` | Pick new return keys and use a required earlier lookup for filenames that depend on its returns. |
+| `lookup-review-gate-order` or `lookup-on-error` | Put a gate after any lookup that can send work to review and before business outputs. Set the lookup task to stop on failure. |
+
+An explicit `--check-files` check of a runtime/legacy YAML requires readable
+files from the machine running it. For a stored draft or exported bundle, use
+the [supplier-lookup validation commands](../../tools/config_check/README.md#validate-a-supplier-lookup).
+For a held review, follow the [CSV recovery runbook](incident-runbooks.md#csv-lookup-is-blocking-release).
 
 ## Rules Task Required Configuration
 

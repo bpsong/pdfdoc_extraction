@@ -491,7 +491,7 @@ def test_review_pages_include_task_19_assets(monkeypatch) -> None:
     assert review.status_code == 200
     assert 'id="human-review-workspace"' in review.text
     assert "/static/js/pdf_viewer.js" in review.text
-    assert "/static/js/human-review/index.js?v=generic-rules-1" in review.text
+    assert "/static/js/human-review/index.js?v=r3-lookup-1" in review.text
 
 
 def test_schema_editor_page_includes_task_17_assets(monkeypatch) -> None:
@@ -544,7 +544,7 @@ def test_pipeline_config_page_includes_task_34_assets(monkeypatch) -> None:
     assert response.text.count('class="admin-panel ') == 9
     assert response.text.count('class="admin-panel-header"') == 6
     assert 'type="module"' in response.text
-    assert "/static/js/pipeline-config/index.js?v=pipeline-lifecycle-2" in response.text
+    assert "/static/js/pipeline-config/index.js?v=r3-lookup-1" in response.text
 
 
 def test_review_gate_and_split_pages_redirect_to_pipeline(monkeypatch) -> None:

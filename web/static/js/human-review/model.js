@@ -419,7 +419,16 @@ export function createHumanReviewModel(state) {
                 state.values[key] = cloneValue(value);
             });
         }
-        state.schemaFields = mergedSchemaFields(schemaFields, state.fields);
+        const lookups = payload.lookup_review?.lookups || [];
+        const returnKeys = new Set(lookups.flatMap((lookup) => lookup.return_fields));
+        state.schemaFields = mergedSchemaFields(schemaFields, state.fields)
+            .filter((field) => !returnKeys.has(field.key));
+        const defined = new Set(state.schemaFields.map((field) => field.key));
+        for (const {field} of lookups.flatMap((lookup) => lookup.inputs)) {
+            if (defined.has(field) || returnKeys.has(field)) continue;
+            state.schemaFields.push(inferredFieldFromValue(field, null));
+            defined.add(field);
+        }
     }
 
     function parseInputValue(input, field) {

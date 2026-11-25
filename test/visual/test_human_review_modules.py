@@ -135,9 +135,9 @@ def test_review_entry_uses_matching_asset_version_and_no_controller_transport() 
     entry = (MODULE_ROOT / "index.js").read_text(encoding="utf-8")
     controller = (MODULE_ROOT / "controller.js").read_text(encoding="utf-8")
     model = (MODULE_ROOT / "model.js").read_text(encoding="utf-8")
-    assert "human-review/index.js?v=generic-rules-1" in template
-    assert 'import "./controller.js?v=generic-rules-1"' in entry
-    assert controller.count("generic-rules-1") == 6
+    assert "human-review/index.js?v=r3-lookup-1" in template
+    assert 'import "./controller.js?v=r3-lookup-1"' in entry
+    assert controller.count("r3-lookup-1") == 7
     assert "window.DocFlow.apiGet" not in controller
     assert "window.DocFlow.apiPost" not in controller
     assert "window." not in model
@@ -170,3 +170,18 @@ def test_review_model_retains_explicit_null_correction() -> None:
         return state.originalValues;
     """)
     assert result == {"value": None}
+
+
+def test_preview_response_is_stale_after_reverting_an_edit_without_business_rules() -> None:
+    result = _run_module("validation.js", """
+        const state = {values: {tax: '00123'}, reviewRevision: 'same-claim'};
+        const validation = module.createReviewValidation(state, {isComplete: () => false});
+        validation.load({});
+        const requested = validation.capture(true);
+        state.values.tax = '00124';
+        validation.changed();
+        state.values.tax = '00123';
+        validation.changed();
+        return validation.isCurrent(requested);
+    """)
+    assert result is False

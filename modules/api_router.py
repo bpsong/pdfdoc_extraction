@@ -1097,7 +1097,7 @@ def build_router() -> APIRouter:
         config, _, _, _, _ = get_dependencies()
         require_admin_user(user, config)
         with managed_connect(config) as conn:
-            return TaskCatalogService(config, conn=conn).catalog(include_preview=False)
+            return TaskCatalogService(config, conn=conn).catalog()
 
     @router.get("/api/admin/users")
     def get_admin_users(user: str = Depends(get_current_user)):

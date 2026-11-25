@@ -5,7 +5,7 @@
 | Audience | Operators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-11 — repository/source review; no live deployment check; neutral findings, isolated desktop/mobile corrections/exports; no live provider check |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. Desktop and mobile Chromium verified CSV lookup review and synthetic exports |
 | Applies to | Current application screens |
 
 Review compares the machine's extracted information with the source PDF and
@@ -15,6 +15,7 @@ An item in the queue does not necessarily mean extraction failed.
 
 Go to [finding work](#open-and-claim-a-review),
 [correcting the form](#check-and-correct-the-form),
+[resolving a CSV lookup](#resolve-a-csv-reference-lookup),
 [saving or completing](#save-progress-complete-or-hand-over), or
 [claim problems](#claims-expiry-and-another-session).
 
@@ -73,9 +74,8 @@ items and avoid editing the same document in several tabs or computers.
 
 ### Check business relationships
 
-Forms without business rules use the normal review workflow and hide Business
-checks and Revalidate. Required fields and other field validation still apply;
-you can correct values, save a draft, and complete review as usual.
+Forms with no business rules or CSV lookups use the normal review workflow
+with field validation. They hide **Business checks** and **Revalidate**.
 
 Forms with configured rules show **Business checks** above the fields. Checks run
 when the form loads, including restored draft values. The summary distinguishes
@@ -116,6 +116,39 @@ again, even if an earlier result passed. A rejected completion retains your edit
 and shows the current findings. If checks are unavailable, retry Revalidate; if
 the review or claim changed, keep a copy of your unsaved corrections before
 reloading. Completed reviews display their accepted report and are read only.
+
+### Resolve a CSV reference lookup
+
+**CSV reference lookups** shows the compared inputs, comparison modes, and
+matched records. Check the source PDF and follow the outcome shown in the panel.
+
+- **Unique match.** Check the **Returned text · Read-only** values before
+  completion. Returned identifiers keep their leading zeros.
+- **No match.** Correct the extracted input in **Review Fields** and select
+  **Revalidate**. A changed match input clears any prior selection.
+- **Multiple matches.** Compare the recorded candidates to the PDF, select the
+  matching record, enter **Reason for this decision**, and select **Use selected
+  record**. Use Tab and the arrow keys to navigate the radio choices. If the
+  list shows only part of the matches, correct an input or ask the administrator
+  to narrow the register.
+- **Optional lookup.** If the panel offers **Skip lookup**, enter **Reason for
+  this decision** and select it to proceed without that lookup's returned values.
+- **Changed or unavailable CSV.** A correction can require the original
+  register bytes. If the panel offers **Use current reference file**, confirm
+  that the replacement is approved, enter **Reason for using the current file**,
+  and select the action. Inspect the new matches and any business findings. If
+  the replacement is unavailable or unsuitable, leave the review open and
+  contact support.
+
+**Save Draft** stores your field corrections. Lookup selections, skip reasons,
+and adoptions are proposals until **Complete Review**. Enter them again after
+saving or reloading a draft. **Revalidate** checks your current values. Pending
+lookup decisions, stale evidence and blocking checks hold release. If the CSV
+changes again before completion, revalidate and inspect the refreshed evidence
+before trying to complete the review again. For a blocked reference file, use
+the [support recovery procedure](../it-support/incident-runbooks.md#csv-lookup-is-blocking-release).
+
+![Completed synthetic invoice review showing selected record 2 and read-only supplier ID 00042 alongside the source PDF](assets/r3-lookup-accepted.png)
 
 ### Enter the right kind of value
 

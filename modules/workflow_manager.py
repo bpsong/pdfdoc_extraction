@@ -9,6 +9,7 @@ See docs/architecture/workflow-and-state.md."""
 import errno
 import logging
 import sqlite3
+from pathlib import Path
 from typing import Dict, Any, Mapping
 
 from modules.workflow_loader import WorkflowLoader
@@ -16,6 +17,7 @@ from modules.config_protocol import ConfigProvider as ConfigManager
 from modules.db.connection import managed_connect, json_loads
 from modules.db.repositories import BatchRepository, DocumentRepository, ExtractionRepository, LookupDecisionRepository, TaskRunRepository
 from modules.exceptions import TaskError
+from modules.services.artifact_service import artifact_sha256
 from modules.services.failure_service import _redact, _redact_text
 from modules.services.pipeline_definition_service import (
     ExecutablePipeline,
@@ -26,11 +28,15 @@ from modules.services.processing_lease import JobClaimLost, ProcessingLease, cla
 from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
 from modules.services.lookup_decision_service import LookupConflictError, merge_lookup_values
 from modules.services.lookup_pipeline_validation import active_lookup_configs
-from modules.services.lookup_review_service import LookupReviewService
+from modules.services.lookup_review_service import LookupReviewService, lookup_nanoid
 from modules.services.split_result_service import restore_single_document_context
-from modules.services.task_registry_service import BUILTIN_TASKS, REVIEW_GATE_TASK
+from modules.services.task_registry_service import ASSIGN_NANOID_TASK, BUILTIN_TASKS, REVIEW_GATE_TASK
 from modules.services.workflow_state_service import WorkflowStateService
+from modules.utils import windows_long_path
 from standard_step.extraction.llama_cloud_v2 import preflight_extract_v2_access
+
+
+JSON_EXPORT_TASK = BUILTIN_TASKS["store_metadata_as_json"]
 
 
 class RetryableWorkflowStartError(RuntimeError):
@@ -157,7 +163,7 @@ class WorkflowManager:
             )
             return True
             
-        except JobClaimLost:
+        except (JobClaimLost, LookupConflictError):
             raise
         except (sqlite3.OperationalError, OSError, TimeoutError, ConnectionError) as e:
             if not flow_started and _is_transient_start_error(e):
@@ -175,7 +181,7 @@ class WorkflowManager:
     def _recover_csv_lookup(
         self, document_id: str, executable: ExecutablePipeline,
     ) -> dict[str, Any]:
-        """Restart a reclaimed lookup or gate from its persisted extraction and decisions."""
+        """Restart from persisted lookup decisions and verifiable JSON exports."""
         if not active_lookup_configs(executable.definition):
             return {}
         with managed_connect(self.config_manager) as conn, claim_write(conn, self.lease):
@@ -193,23 +199,69 @@ class WorkflowManager:
             ]
             supported_prefix = {
                 BUILTIN_TASKS[key] for key in ("extract_pdf", "liteparse_extract", "glm_ocr_extract", "llamacloud_split")
-            } | {CSV_LOOKUP_TASK}
-            if (index >= len(pairs) or pairs[index] not in {CSV_LOOKUP_TASK, REVIEW_GATE_TASK}
+            } | {CSV_LOOKUP_TASK, REVIEW_GATE_TASK, ASSIGN_NANOID_TASK, JSON_EXPORT_TASK}
+            retryable = {CSV_LOOKUP_TASK, REVIEW_GATE_TASK, ASSIGN_NANOID_TASK, JSON_EXPORT_TASK}
+            if (index >= len(pairs) or pairs[index] not in retryable
                     or any(pair not in supported_prefix for pair in pairs[:index])):
                 raise LookupConflictError("The interrupted CSV lookup workflow has no safe recovery point.")
-            lookups = LookupReviewService(conn).load_before(document_id, executable.version_id, extraction["id"], index)
+            task_runs = TaskRunRepository(conn)
+            output_path = None
+            for output_index in range(index + 1):
+                if pairs[output_index] == JSON_EXPORT_TASK:
+                    output_path = self._recover_json_export(
+                        conn, document_id, executable.version_id, output_index, at_cursor=output_index == index,
+                    )
+            start_index = index
+            completed_nanoid = pairs[index] == ASSIGN_NANOID_TASK and task_runs.latest_completed_at(
+                document_id, executable.version_id, index,
+            )
+            if pairs[index] == JSON_EXPORT_TASK or completed_nanoid:
+                start_index += 1
+            lookups = LookupReviewService(conn).load_before(
+                document_id, executable.version_id, extraction["id"], start_index,
+            )
             values = json_loads(extraction.get("data_json"), {})
             for field in extractions.get_fields(document_id):
                 if field["extraction_result_id"] == extraction["id"]:
                     values[field["field_key"]] = json_loads(field.get("final_value_json"))
+            values.update(lookup_nanoid(task_runs, document_id, executable, start_index))
             context = {
                 "data": merge_lookup_values(values, (lookup.decision.returned_values() for lookup in lookups.values())),
                 "extraction_result_id": extraction["id"],
-                "start_task_index": index,
+                "start_task_index": start_index,
             }
+            if output_path is not None:
+                context["output_path"] = output_path
             restore_single_document_context(context, document)
-            TaskRunRepository(conn).cancel_interrupted_runs(document_id, executable.version_id, index)
+            task_runs.cancel_interrupted_runs(document_id, executable.version_id, index)
             return context
+
+    @staticmethod
+    def _recover_json_export(
+        conn: sqlite3.Connection, document_id: str, version_id: str, index: int, *, at_cursor: bool,
+    ) -> str:
+        """Continue past an exact, verified JSON export without invoking its writer."""
+        task_runs = TaskRunRepository(conn)
+        run = task_runs.latest_at(document_id, version_id, index)
+        allowed = {"completed", "running"} if at_cursor else {"completed"}
+        error = "The interrupted JSON export cannot be verified. Inspect the existing output before retrying."
+        if run is None or run["status"] not in allowed:
+            raise LookupConflictError(error)
+        artifacts = DocumentRepository(conn).files_for_task_run(document_id, "export_json", run["id"])
+        if len(artifacts) != 1:
+            raise LookupConflictError(error)
+        artifact = artifacts[0]
+        expected = json_loads(artifact["metadata_json"], {}).get("sha256")
+        path = Path(artifact["file_path"])
+        readable_path = Path(windows_long_path(str(path)))
+        try:
+            if not expected or not readable_path.is_file() or artifact_sha256(readable_path) != expected:
+                raise LookupConflictError(error)
+        except OSError:
+            raise LookupConflictError(error) from None
+        if run["status"] == "running":
+            task_runs.mark_completed(run["id"], {"recovered_artifact_id": artifact["id"]})
+        return str(path)
 
     def _load_document_pipeline(
         self, document_id: str | None

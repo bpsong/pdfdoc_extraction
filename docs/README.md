@@ -31,8 +31,12 @@ architecture topics. Each audience guide links its own complete page set.
 - [Standard task creation guidelines](../tasks/standard_task_creation_guidelines.md)
 - [Config-check CLI reference](../tools/config_check/README.md)
 - [Config-check finding catalog](../tools/config_check/examples/ERROR_CODES.md)
+- [CSV lookup supplier example](reference/tasks/rules-context-housekeeping.md#synthetic-supplier-example)
 
 ## Maintain the documentation
+
+The [R3 CSV lookup change record](history/changes/2026-11-25-r3-csv-reference-lookup.md)
+links operator, administrator, support and verification guidance for the feature.
 
 The [2026-11-13 implementation audit](../tasks/archive/tasks-documentation-current-implementation-audit.md)
 records reviewed areas, corrected contracts and exact offline verification

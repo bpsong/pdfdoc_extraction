@@ -33,7 +33,7 @@ export function createPipelineTaskEditors(context) {
         return `
             <label class="form-control">
                 <span class="label-text">${escapeHtml(label)}</span>
-                <input class="${inputClass}" data-param-path="${pathAttr(path)}" ${opts.paramType ? `data-param-type="${escapeHtml(opts.paramType)}"` : ""} ${opts.ariaLabel ? `aria-label="${escapeHtml(opts.ariaLabel)}"` : ""} value="${controlValue(value)}" ${opts.readonly ? "readonly" : ""}>
+                <input class="${inputClass}" data-param-path="${pathAttr(path)}" ${opts.list ? `list="${escapeHtml(opts.list)}"` : ""} ${opts.paramType ? `data-param-type="${escapeHtml(opts.paramType)}"` : ""} ${opts.ariaLabel ? `aria-label="${escapeHtml(opts.ariaLabel)}"` : ""} value="${controlValue(value)}" ${opts.readonly ? "readonly" : ""}>
                 ${opts.hint ? `<span class="text-xs text-base-content/50 mt-1">${escapeHtml(opts.hint)}</span>` : ""}
                 ${opts.findings || ""}
             </label>
@@ -472,7 +472,7 @@ export function createPipelineTaskEditors(context) {
     }
 
     function inlineFindings(step, path, prefix) {
-        const expected = `tasks.${step.key}.params.${path}`;
+        const expected = `tasks.${step.key}.params${path ? `.${path}` : ""}`;
         const matches = selectedTaskFindings(step).filter((finding) => {
             const findingPath = String(finding.path || "");
             return prefix ? findingPath.startsWith(expected) : findingPath === expected;
@@ -700,8 +700,14 @@ export function createPipelineTaskEditors(context) {
         return fields && typeof fields === "object" && !Array.isArray(fields) ? Object.keys(fields) : [];
     }
 
-    function availableFilenameTokens() {
-        return [...new Set(["id", "nanoid", "filename", "source", "original_filename", "file_path", ...extractionFieldNames()])];
+    function availableFilenameTokens(step) {
+        const steps = stepsOf(state.draft);
+        const lookupFields = steps.slice(0, steps.indexOf(step)).flatMap((earlier) => {
+            const params = earlier.params || {};
+            return earlier.class === "CsvReferenceLookupTask" && params.required !== false && Array.isArray(params.returns)
+                ? params.returns.map((entry) => entry?.field).filter(Boolean) : [];
+        });
+        return [...new Set(["id", "nanoid", "filename", "source", "original_filename", "file_path", ...extractionFieldNames(), ...lookupFields])];
     }
 
     function filenameBuilder(step, path, value) {
@@ -717,7 +723,7 @@ export function createPipelineTaskEditors(context) {
                     <input class="input input-bordered input-sm" data-token-search placeholder="Find a field or context token">
                 </label>
                 <div class="mt-2 flex flex-wrap gap-1" data-token-list>
-                    ${availableFilenameTokens().map((token) => `<button class="btn btn-outline btn-xs h-auto min-h-7 font-mono" type="button" data-param-action="insert-filename-token" data-token="${escapeHtml(token)}" data-param-path="${pathAttr(path)}">{${escapeHtml(token)}}</button>`).join("")}
+                    ${availableFilenameTokens(step).map((token) => `<button class="btn btn-outline btn-xs h-auto min-h-7 font-mono" type="button" data-param-action="insert-filename-token" data-token="${escapeHtml(token)}" data-param-path="${pathAttr(path)}">{${escapeHtml(token)}}</button>`).join("")}
                 </div>
                 ${inlineFindings(step, path.join("."))}
             </div>
@@ -827,6 +833,82 @@ export function createPipelineTaskEditors(context) {
         `;
     }
 
+    function lookupControls(step) {
+        const params = step.params || {};
+        const steps = stepsOf(state.draft);
+        const inputs = [...new Set(steps.slice(0, steps.indexOf(step)).filter((task) => taskKind(task) === "extract")
+            .flatMap((task) => Object.keys(task.params?.fields || {})))];
+        const columns = state.csvMetadata[params.reference_file]?.columns || [];
+        const clauses = Array.isArray(params.clauses) ? params.clauses : [];
+        const returns = Array.isArray(params.returns) ? params.returns : [];
+        const required = params.required !== false;
+        const modes = [
+            { value: "case_sensitive", label: "Case-sensitive" },
+            { value: "case_insensitive", label: "Case-insensitive" },
+            { value: "numeric", label: "Numeric" },
+        ];
+        const policies = [
+            { value: "review", label: "Send to review" },
+            { value: "fail", label: "Fail the task" },
+            { value: "continue", label: "Continue", disabled: required },
+        ];
+        const suggestions = (id, values) => `<datalist id="${id}">${values.map((value) => `<option value="${escapeHtml(value)}"></option>`).join("")}</datalist>`;
+        const field = (label, path, value, list) => textControl(label, path, value, {
+            list, findings: inlineFindings(step, path.join(".")),
+        });
+        const option = (label, path, value, options) => {
+            const choices = options.some((entry) => entry.value === value) ? options
+                : [{ value, label: `${value} (invalid)`, disabled: true }, ...options];
+            return selectControl(label, [path], value, choices, "", inlineFindings(step, path));
+        };
+        return `<div class="space-y-3" data-lookup-controls>
+            ${inlineFindings(step, "")}
+            ${fileControl("Reference CSV", ["reference_file"], params.reference_file, ".csv", { startPath: "reference_file", findings: inlineFindings(step, "reference_file") })}
+            ${suggestions("lookup-source-fields", inputs)}
+            ${suggestions("lookup-reference-columns", columns)}
+            ${section("Match clauses", `
+                <p class="mb-3 text-sm">Every clause must match the same CSV record. Text matching is case-sensitive by default.</p>
+                <div class="space-y-2">${clauses.map((clause, index) => `<fieldset class="rounded-md border border-base-300 p-3">
+                    <legend class="px-1 text-sm font-semibold">Clause ${index + 1}</legend>
+                    <div class="grid min-w-0 gap-2 sm:grid-cols-2">
+                        ${field("Extracted field", ["clauses", index, "field"], clause?.field, "lookup-source-fields")}
+                        ${field("CSV column", ["clauses", index, "column"], clause?.column, "lookup-reference-columns")}
+                        <div class="sm:col-span-2">${selectControl("Comparison mode", ["clauses", index, "mode"], clause?.mode ?? "case_sensitive", modes, "", inlineFindings(step, `clauses.${index}.mode`))}</div>
+                    </div>
+                    ${inlineFindings(step, `clauses.${index}`)}
+                    <div class="mt-2 flex flex-wrap gap-1">
+                        <button class="btn btn-ghost btn-xs" type="button" data-param-action="move-lookup-clause-up" data-clause-index="${index}" aria-label="Move clause ${index + 1} up" ${index === 0 ? "disabled" : ""}>Move up</button>
+                        <button class="btn btn-ghost btn-xs" type="button" data-param-action="move-lookup-clause-down" data-clause-index="${index}" aria-label="Move clause ${index + 1} down" ${index === clauses.length - 1 ? "disabled" : ""}>Move down</button>
+                        <button class="btn btn-ghost btn-xs text-error" type="button" data-param-action="remove-lookup-clause" data-clause-index="${index}" aria-label="Remove clause ${index + 1}" ${clauses.length <= 1 ? "disabled" : ""}>Remove</button>
+                    </div>
+                </fieldset>`).join("")}</div>
+                ${inlineFindings(step, "clauses")}
+                <button class="btn btn-outline btn-xs mt-3" type="button" data-param-action="add-lookup-clause" ${clauses.length >= 5 ? "disabled" : ""}>Add clause</button>
+            `)}
+            ${section("Returned text", `
+                <div class="space-y-2">${returns.map((mapping, index) => `<fieldset class="rounded-md border border-base-300 p-3">
+                    <legend class="px-1 text-sm font-semibold">Mapping ${index + 1}</legend>
+                    <div class="grid min-w-0 gap-2 sm:grid-cols-2">
+                        ${field("CSV column", ["returns", index, "column"], mapping?.column, "lookup-reference-columns")}
+                        ${field("Output field", ["returns", index, "field"], mapping?.field)}
+                    </div>
+                    ${inlineFindings(step, `returns.${index}`)}
+                    <button class="btn btn-ghost btn-xs mt-2 text-error" type="button" data-param-action="remove-lookup-return" data-clause-index="${index}" aria-label="Remove mapping ${index + 1}" ${returns.length <= 1 ? "disabled" : ""}>Remove</button>
+                </fieldset>`).join("")}</div>
+                ${inlineFindings(step, "returns")}
+                <button class="btn btn-outline btn-xs mt-3" type="button" data-param-action="add-lookup-return">Add return mapping</button>
+            `)}
+            ${section("Release policies", `
+                ${checkboxControl("Require a resolved lookup before release", ["required"], required, "Optional lookups can continue without returned text.")}
+                ${inlineFindings(step, "required")}
+                <div class="mt-2 grid min-w-0 gap-2 sm:grid-cols-2">
+                    ${option("No match", "on_no_match", params.on_no_match ?? "review", policies)}
+                    ${option("Multiple matches", "on_multiple_matches", params.on_multiple_matches ?? "review", policies)}
+                </div>
+            `)}
+        </div>`;
+    }
+
     function rulesControls(step) {
         const params = step.params || {};
         const info = state.csvMetadata[params.reference_file] || {};
@@ -888,6 +970,9 @@ export function createPipelineTaskEditors(context) {
     }
 
     function taskSpecificControls(step) {
+        if (step.class === "CsvReferenceLookupTask") {
+            return lookupControls(step);
+        }
         if (step.class === "LiteParseExtractTask") {
             return liteParseExtractControls(step);
         }

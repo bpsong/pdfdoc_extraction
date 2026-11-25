@@ -5,8 +5,8 @@
 | Audience | IT support and developers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup path resolution checked with a temporary deployment YAML |
+| Applies to | Production application; SQLite schema 11 |
 
 This reference describes deployment infrastructure. Pipeline and review-form
 definitions are separate SQLite-backed objects. Runtime YAML is selected by
@@ -191,8 +191,9 @@ paths beside the YAML. Binding administration also normalizes relative incoming
 folder paths beside the YAML and stores absolute paths. Upload staging/locks,
 processing paths, `FileProcessor`, and task file operations commonly use
 `Path(...)` or `os` directly, so their relative
-paths resolve from the process working directory. Task parameters are not
-rebased to the YAML directory. Shared expansion is not applied by every consumer.
+paths resolve from the process working directory. CSV lookup specifically
+resolves a relative `reference_file` beside the active deployment YAML using
+the shared resolver. See [register access on Windows](../it-support/configuration-and-access.md#prepare-a-csv-lookup-register).
 
 Run from the repository root as required; supervised children also start there.
 When the YAML is elsewhere, use explicit absolute paths for watch/upload roots,

@@ -5,8 +5,24 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. JSON, CSV and PDF lookup release checked in synthetic workflows |
+| Applies to | Production application; SQLite schema 11 |
+
+## CSV lookup values in outputs
+
+Storage receives the same effective document data after a direct match or
+review resume. JSON stores lookup returns as strings. CSV writes their text
+values with its usual line-break cleanup, and the PDF filename can use them in
+a template. An identifier such as `00042` keeps its leading zeros in the file
+contents and the filename.
+The PDF copy's page contents stay the same. An optional skip omits the mapped
+keys from effective data. Keep filename tokens dependent on an earlier required
+lookup. If you explicitly configure an optional key as a CSV export column,
+that schema can emit its missing value as an empty cell.
+
+The task registers each written file under its own document. Candidate rows,
+digests, reviewer reasons and lookup decision IDs belong to review evidence.
+For details and sample values, see the [synthetic supplier lookup](rules-context-housekeeping.md#synthetic-supplier-example).
 
 ## storage.store_metadata_as_csv
 
@@ -76,6 +92,12 @@ An extracted field named `id` cannot replace that filename binding; it remains
 unchanged in the JSON payload. Use `{invoice_number}_{id}` to distinguish
 documents that share an invoice reference. Files are still reserved uniquely
 and registered against their document before downstream use.
+
+Versioned JSON exports register their task-run identity and a SHA-256 digest
+when the file is readable. On worker reclaim in a CSV lookup pipeline, a
+single artifact with the exact task-run identity and a matching digest lets
+the worker continue from the next task using the existing file. Missing or
+altered evidence stops recovery and preserves the existing files for inspection.
 
 **YAML configuration example:**
 

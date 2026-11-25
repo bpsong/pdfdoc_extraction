@@ -4,7 +4,7 @@
 | --- | --- |
 | Audience | Product owners, maintainers, developers and IT support |
 | Owner | Application maintainers |
-| Status | Eight agreed roadmap items; R4 complete |
+| Status | Eight agreed roadmap items. R3 and R4 complete. |
 | Updated | 2026-11-25 |
 | Basis | Maintainer direction, repository/source review and synthetic acceptance; no live provider checks |
 
@@ -28,9 +28,9 @@ additional roadmap commitments.
 
 | ID | Item | Status | Intended outcome |
 | --- | --- | --- | --- |
-| R1 | Optional PostgreSQL persistence alongside SQLite | Planned; detailed design required | IT support chooses the database appropriate to the deployment |
+| R1 | Optional PostgreSQL persistence alongside SQLite | Planned for a later development notebook. Detailed design required. | IT support chooses the database appropriate to the deployment |
 | R2 | Mixed-document pipeline routing | Planned; existing proposal to refine | Different document types within one PDF use their own downstream pipelines |
-| R3 | CSV reference lookup and enrichment | Published lookup, review API, and resume verified. Editor controls and visual acceptance are next. | Return matched text values into document data for downstream outputs |
+| R3 | CSV reference lookup and enrichment | Complete. [Verification and documentation sign-off](archive/tasks-r3-csv-reference-lookup.md#phase-7--update-documentation-and-close-r3). | Return matched text values into document data for downstream outputs |
 | R4 | Dynamic business-logic plugins for review forms | Complete — all five phases verified on 2026-10-30 | Check relationships between extracted values and show actionable operator findings |
 | R5 | Reliable webhook delivery with n8n task integration | Planned; detailed design required | Hand approved values to n8n for delivery to receiving systems with traceable outcomes |
 | R6 | Named users and role-based access | Planned; detailed design required | Give each person an account with appropriate permissions and attributable review/audit actions |
@@ -42,35 +42,33 @@ additional roadmap commitments.
 ### Planning assumptions
 
 The current planning parameter is **one human user using the application at a
-time**. PostgreSQL remains a firm roadmap commitment for future deployment
-options and concurrent use. R4 is complete on SQLite. Implement R1 next while
-retaining SQLite for the current deployment; completing R1 does not require
-immediately migrating that deployment to PostgreSQL.
+time**. R4 and R3 are complete on SQLite. PostgreSQL remains a roadmap
+commitment for future deployment options and concurrent use. Schedule R1 when
+the development notebook is ready. SQLite supports continuing the current
+application work in the meantime.
 
-The recommended sequence is **R4 -> R1 -> R3 -> R2 -> R5 -> R6 -> R7 -> R8**.
-It delivers validation first, then persistence and enrichment, document
-routing and delivery, and finally team use and the lower-priority additions.
-This is implementation guidance, not a release schedule or a claim that every
-preceding item is a mandatory technical prerequisite.
+The completed sequence is **R4 → R3**. The remaining product sequence is
+**R2 → R5 → R6 → R7 → R8**. R1 can proceed when the development environment is
+ready. Coordinate it with any planned rollout that requires PostgreSQL or
+expanded concurrent use. This sequence guides implementation without setting
+release dates.
 
 | Order | Item | Reason for this position |
 | --- | --- | --- |
-| 1 | R4 - Dynamic business validation | Deliver useful validation on the current single-user SQLite deployment; establish findings, revalidation, and release checks before enrichment and delivery. Keep persistence behind existing service/repository boundaries for later migration. |
-| 2 | R1 - PostgreSQL alternative | Establish dual-backend persistence, migrations, and transaction guarantees next. Include any R4 persistence in the migration, then develop later features against both supported backends. |
-| 3 | R3 - CSV lookup and enrichment | Add reference values and destination identifiers, using established review conventions for missing or ambiguous matches. Together with R4, produce more complete and validated data for delivery. |
-| 4 | R2 - Mixed-document routing | Settle how children are processed, reviewed, and completed across pipelines before finalizing external-delivery behavior. Decide whether each child is delivered independently or delivery waits for the source's children. |
-| 5 | R5 - Reliable n8n delivery | Build payload revisions, retries, duplicate prevention, and acknowledgements around the accepted-data lifecycle and document boundaries established above. Deliver business value for the current single-user deployment. |
-| 6 | R6 - Named users and roles | Expand the established workflow to individual users on the R1 persistence foundation. Verify simultaneous actions, review ownership, permissions, and audit attribution across the complete workflow, including delivery retries. |
-| 7 | R7 - Local scan-quality checks | Add the agreed lower-priority input-quality feature using established warning/review conventions. Its implementation can follow the core workflow even though its checks run before extraction. |
-| 8 | R8 - Azure Document Intelligence integration | Add optional analysis through established extraction, validation, review, and output contracts. Allow time to collect representative examples and evaluate trained signature models. |
+| 1 | R2 - Mixed-document routing | Settle how children are processed, reviewed, and completed across pipelines before finalizing external delivery. Decide whether delivery is per child or waits for the source's children. |
+| 2 | R5 - Reliable n8n delivery | Build payload revisions, retries, deduplication, and acknowledgements around the accepted-data lifecycle and document boundaries. |
+| 3 | R6 - Named users and roles | Expand the workflow to individual users. Verify simultaneous actions, review ownership, permissions, and audit attribution across the complete workflow, including delivery retries. |
+| 4 | R7 - Local scan-quality checks | Add input-quality checks using established warning and review conventions. |
+| 5 | R8 - Azure Document Intelligence integration | Add optional analysis through established extraction, validation, review, and output contracts. Allow time to collect representative examples and evaluate trained signature models. |
+| When the development notebook is ready | R1 - PostgreSQL alternative | Establish dual-backend persistence, migrations, and transaction guarantees. Include the R3 and R4 SQLite data and re-run their acceptance cases on the supported backends. |
 
 ### Technical dependencies versus recommended sequencing
 
 | Relationship | Dependency assessment |
 | --- | --- |
 | R1 before R6 | Recommended preparation for concurrent deployment, not a functional requirement for named accounts. R6 must still support SQLite; PostgreSQL availability does not replace concurrency acceptance tests. |
-| R1 before R2/R3/R5 | Reduces later database conversion work. These features can technically run on SQLite. R4 now starts first and must keep any persistence migratable through the existing boundaries. |
-| R4 before R3 | Enables consistent review findings and resolution behavior. CSV lookup itself can exist without the validation plugin; agree shared field/revision contracts before implementation. |
+| R1 and R2/R3/R5 | R3 runs on SQLite. R2 and R5 can also proceed on SQLite and should keep persistence within the existing service and repository boundaries. |
+| R4 before R3 | The completed features share review, validation, and release contracts. A lookup-only pipeline can use a form without business rules. |
 | R3/R4 before R5 | Conditional on the configured workflow's release policy. Required matching and validation must finish before handoff. Basic delivery can use existing review without requiring every pipeline to use R3/R4. |
 | R2 before R5 | Recommended to settle per-child versus whole-source delivery, partial failures, and accepted revisions. Delivery is technically possible without mixed routing; existing document IDs and lineage must remain stable. |
 | Existing pipeline versioning before R2 | A functional prerequisite already implemented: named templates, immutable published versions, and explicit assignments. Routing extends that foundation. |
@@ -98,11 +96,9 @@ delivery callbacks/retries. Check permissions, audit identities, filesystem
 operations, and shared CSV access as well as database transactions. A database
 change alone does not resolve conflicting edits or coordinate external files.
 
-Starting R4 first delivers visible single-user value sooner, accepting that R1
-may later adapt its persistence. R1 still precedes the remaining persistence-heavy
-items and concurrent-user expansion. Supporting two databases adds testing and
-maintenance; reassess its position if deployment priorities change rather than
-treating PostgreSQL as an unavoidable blocker for all other work.
+R3 and R4 established the release workflow on SQLite. When R1 starts, include
+their decision and validation histories in migration and verify review claims,
+resume and registered outputs on each supported backend.
 
 ## R1: Optional PostgreSQL persistence alongside SQLite
 
@@ -201,7 +197,9 @@ before implementation.
 
 ## R3: CSV reference lookup and enrichment
 
-See the [agreed lookup design](design-r3-csv-reference-lookup.md) and [phased implementation plan](tasks-r3-csv-reference-lookup.md).
+R3 is complete. See the [lookup design](design-r3-csv-reference-lookup.md),
+[archived verification and sign-off](archive/tasks-r3-csv-reference-lookup.md),
+and [supplier lookup example](../docs/reference/tasks/rules-context-housekeeping.md#synthetic-supplier-example).
 
 ### Outcome
 
@@ -223,8 +221,8 @@ enriches the document without modifying the source CSV.
   production pipeline editor. Validate missing columns, conflicting output
   keys, and incompatible types before publication or execution as appropriate.
 - Begin with deterministic exact matching, including documented text and
-  numeric normalization. Preserve identifier formatting such as leading zeros
-  unless numeric comparison is explicitly selected.
+  numeric normalization. Numeric comparison is opt-in for match inputs.
+  Returned identifiers always preserve text formatting such as leading zeros.
 - Define explicit outcomes for zero, one, and multiple matching rows. A unique
   match returns the configured values. Missing or ambiguous matches follow
   configured review, failure, or optional continuation policies; required
@@ -256,7 +254,8 @@ hub, API/database sources, scheduled synchronization, fuzzy matching, and
 chained lookups remain separate future extensions. R3 does not depend on
 PostgreSQL or mixed-document routing.
 
-Current reference: [CSV reference updates](../docs/reference/tasks/rules-context-housekeeping.md#rulesupdate_reference).
+See [CSV reference lookup](../docs/reference/tasks/rules-context-housekeeping.md#csv-reference-lookup)
+and [CSV reference updates](../docs/reference/tasks/rules-context-housekeeping.md#rulesupdate_reference).
 
 ## R4: Dynamic business-logic plugins for review forms
 

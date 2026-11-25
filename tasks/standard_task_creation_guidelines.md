@@ -246,6 +246,14 @@ owns the pause. Accepted lookup returns remain derived fields. Review acceptance
 stores their decision identities alongside the source corrections, and resume
 projects those exact decisions into `context["data"]`.
 
+The runner checkpoints a completed built-in `assign_nanoid` result in lookup
+pipelines so review continuation and safe worker recovery can reuse the
+generated ID. A committed review handoff survives reclamation of the original
+worker job. The worker can continue past a built-in JSON export when a single
+registered artifact identifies the exact pinned task attempt and its content
+digest matches the file. Restore its output path and continue with the next
+task. An uncertain export requires inspection before any retry.
+
 The gate sets `context["business_validation"]` to the report and stores the latest
 gate report in document metadata through repositories. Reports contain business
 data: do not log their values/messages or place them in audit events. Audit only
@@ -402,7 +410,8 @@ Dynamic task imports are allow-listed by exact module/class pair.
 - CSV reference lookup requires a published pipeline and `on_error: stop`.
   Persist its decision before merging returned text into `context["data"]`.
   Keep reference evidence in SQLite and leave extraction records intact.
-  [R3 design](design-r3-csv-reference-lookup.md)
+  [CSV lookup task reference](../docs/reference/tasks/rules-context-housekeeping.md#csv-reference-lookup)
+  and [R3 verification](archive/tasks-r3-csv-reference-lookup.md).
 
 ---
 

@@ -49,6 +49,7 @@ class ReviewGateTask(BaseTask):
         document_id = context.get("document_id")
         batch_id = context.get("batch_id")
         lookup_claim = context.get("_lookup_job_claim")
+        lookup_pipeline_gate = bool(context.get("_lookup_pipeline_gate"))
         if not document_id or not batch_id:
             if "business_validation" in (self._schema() or {}):
                 error = TaskError("Business validation requires a persisted document and batch.")
@@ -129,6 +130,8 @@ class ReviewGateTask(BaseTask):
                     key for key in set(metadata["editable_fields"]) | lookup_inputs
                     if key not in derived and not schema_fields.get(key, {}).get("readonly")
                 })
+            if lookup_pipeline_gate:
+                metadata["lookup_pipeline_gate"] = True
             with atomic_transaction(conn, immediate=True):
                 if lookup_claim and not ProcessingJobRepository(conn).owns_claim(JobClaim(*lookup_claim)):
                     raise JobClaimLost("Processing job claim expired before the CSV lookup review was saved.")
@@ -147,7 +150,7 @@ class ReviewGateTask(BaseTask):
                 state_service.transition_document(
                     str(document_id), "review_required", reason="review_gate"
                 )
-                if lookups and context.get("task_run_id"):
+                if (lookups or lookup_pipeline_gate) and context.get("task_run_id"):
                     state_service.pause_task(str(context["task_run_id"]), {"review_item_id": review_item["id"]})
                     FanInService(conn).finalize_leaf({"document_id": document_id, "pipeline_state": "paused"})
                     context["lookup_review_paused"] = True

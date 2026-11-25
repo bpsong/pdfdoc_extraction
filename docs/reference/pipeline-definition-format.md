@@ -5,8 +5,8 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup publication and config-check verified with synthetic fixtures |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Stored versus portable configuration
 
@@ -55,16 +55,18 @@ Split precedes extraction, and the review gate follows extraction. Extraction
 supports at most one table field. Task-specific parameter, shape and approval
 rules are checked before atomic publication; a failed publish creates no version.
 
-The R3 CSV lookup backend accepts the built-in `CsvReferenceLookupTask` in
-published definitions. Configure it after extraction and before business
-outputs. A filename token from a lookup must reference
-an earlier required lookup. Review policies require a gate before release.
+The Pipeline editor can publish the built-in `CsvReferenceLookupTask`. Place it
+after extraction and before business outputs. A filename token from a lookup
+must reference an earlier required lookup. Review policies require a gate
+between the lookup and business outputs.
 Reference paths are literal task parameters relative to the deployment
 configuration when supplied as relative paths. The worker verifies the file
 when it evaluates a document. The review gate uses persisted lookup decisions.
 A review form may declare an upstream return key as a text field for schema
 and business validation. Review completion resolves pending lookups before
-any output can run. [R3 design](../../tasks/design-r3-csv-reference-lookup.md)
+any output can run. The pinned version fixes the path and match/return bindings.
+New documents use the reference bytes available when their lookup first runs.
+See the [lookup task and example](tasks/rules-context-housekeeping.md#csv-reference-lookup).
 
 Validate in the Pipeline editor or select an imported stored draft:
 

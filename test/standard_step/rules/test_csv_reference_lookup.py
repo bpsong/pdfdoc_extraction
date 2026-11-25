@@ -113,6 +113,9 @@ def test_reference_bounds_and_digest_are_checked(tmp_path: Path) -> None:
     result = evaluate_reference(config, {"source": "a"})
     with pytest.raises(ReferenceDataError, match="byte limit"):
         evaluate_reference(config, {"source": "a"}, max_bytes=8)
+    path.write_bytes(b"Key,ID\na," + b"x" * 32 + b"\n")
+    with pytest.raises(ReferenceChangedError, match="unavailable"):
+        evaluate_reference(config, {"source": "a"}, expected_sha256=result.source_sha256, max_bytes=32)
     path.write_bytes(b"Key,ID\na,y\n")
     with pytest.raises(ReferenceChangedError, match="changed"):
         evaluate_reference(config, {"source": "a"}, expected_sha256=result.source_sha256)
@@ -129,6 +132,14 @@ def test_invalid_numeric_reference_key_is_an_error_even_with_a_valid_match(tmp_p
     config = config_for(path, clauses=[{"field": "source", "column": "Key", "mode": "numeric"}])
     with pytest.raises(ReferenceDataError, match="invalid numeric key"):
         evaluate_reference(config, {"source": 1})
+
+
+def test_numeric_lookup_accepts_a_trailing_decimal_separator(tmp_path: Path) -> None:
+    path = tmp_path / "register.csv"
+    path.write_text("Key,ID\n1.,00042\n", encoding="utf-8")
+    config = config_for(path, clauses=[{"field": "source", "column": "Key", "mode": "numeric"}])
+    result = evaluate_reference(config, {"source": 1})
+    assert result.candidates[0].complete_values() == {"id_from_reference": "00042"}
 
 
 @pytest.mark.parametrize("override", [

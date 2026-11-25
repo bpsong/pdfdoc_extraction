@@ -826,11 +826,43 @@ tasks:
       filename: "result.json"         # Simple filename without variables
 ```
 
+### Validate a supplier lookup
+
+Copy the [synthetic supplier register and form](../../docs/reference/tasks/rules-context-housekeeping.md#synthetic-supplier-example)
+into a test deployment. Save the CSV alongside its `config.yaml`. Create a
+test pipeline draft with stable key `supplier-lookup` and choose the exact
+published form version. Store the extraction secret alias in the deployment
+configuration. The YAML recipe describes the draft definition. Export a
+published version from the app to get its portable bundle.
+
+From the repository root, replace `$lookupRoot` with the test directory and
+adjust the version number if needed.
+
+```powershell
+$lookupRoot = 'C:\DocFlow\lookup-test'
+$lookupConfig = Join-Path $lookupRoot 'config.yaml'
+$lookupForm = Join-Path $lookupRoot 'supplier-review.yaml'
+$lookupBundle = Join-Path $lookupRoot 'supplier-lookup-bundle.json'
+.\.venv\Scripts\python.exe -m tools.config_check validate-file --file $lookupForm --kind review-schema
+.\.venv\Scripts\python.exe -m tools.config_check validate --config $lookupConfig --pipeline supplier-lookup --draft --import-checks
+.\.venv\Scripts\python.exe -m tools.config_check validate --config $lookupConfig --pipeline supplier-lookup --version 1
+.\.venv\Scripts\python.exe -m tools.config_check validate-file --file $lookupBundle --kind pipeline --config $lookupConfig
+```
+
+The commands check lookup structure, ordering, pinned form dependencies and,
+when the deployment path is available, the CSV header. The worker checks the
+full register during execution. After validation, upload a synthetic document
+and inspect the outputs.
+
 ## Runtime File Validation
 
 The `--check-files` flag enables file checks for references present in the
 runtime/legacy YAML document. It does not walk task paths inside a selected
 SQLite definition or a non-runtime portable file.
+
+Structural CSV lookup validation warns when a register is available only to
+the worker. The explicit `--check-files` pass requires access from the machine
+running the command and reports an error when it cannot open the register.
 
 ### Runtime File Validation Features
 

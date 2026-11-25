@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-18 — repository/source review; no live deployment check; isolated desktop and mobile retention verification |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. R3 lookup retention checked against persistence tests and the existing cleanup contract |
 | Applies to | Current application screens |
 
 Sign in as **admin** and open **Pipeline**. Archiving stops future use of a
@@ -168,8 +168,8 @@ deleting anything. A rejected cleanup attempt does not partially delete history.
 ## What cleanup removes and retains
 
 Cleanup removes the selected batches' processing records: document history,
-processing steps, extraction results, completed reviews and split decisions,
-and the app's links to their files.
+processing steps, extraction results, completed reviews, split decisions, CSV
+lookup revisions and candidate evidence, and the app's links to their files.
 
 Deleted history disappears from **Reports**, batch/document pages, review pages,
 and processing timelines. Application PDF/artifact links for removed records
@@ -189,6 +189,8 @@ Cleanup retains:
   across web restarts, including after cleanup removes their file registrations.
   To retrieve a retained PDF after its preview link disappears, contact IT
   support for access to the retained file or its archive copy.
+- Reference registers. Keep historical reference bytes under your backup
+  policy when they may be required to rematch an open review.
 - A small record of previous uploads to prevent accidental duplicates. If an
   old upload's history was cleaned up, the upload page explains this and waits
   for you to deliberately start a new upload.

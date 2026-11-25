@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sqlite3
 from pathlib import Path
@@ -13,6 +14,12 @@ from modules.db.repositories import DocumentRepository
 
 
 logger = logging.getLogger(__name__)
+
+
+def artifact_sha256(path: str | Path) -> str:
+    """Fingerprint the bytes of a closed artifact without loading it into memory."""
+    with open(path, "rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def register_document_artifact(

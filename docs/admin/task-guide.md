@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup editor controls and policies checked in synthetic Chromium acceptance |
 | Applies to | Current application screens |
 
 A task is one processing operation. This guide covers every currently approved
@@ -42,7 +42,7 @@ Go directly to [all built-in tasks](#available-built-in-tasks),
 | **Store File To Localdrive** | `store_file_to_localdrive` | Copies the processed PDF to an output folder with the chosen filename. |
 | **Archive Pdf** | `archive_pdf` | Copies the PDF being processed at that step to an archive destination with a safe unique name. |
 | **Update Reference** | `update_reference` | Marks matching rows in a reference CSV. After review when matching needs approved values. |
-| **CSV reference lookup** | `csv_reference_lookup` | Copies matched reference text into document data. Configure it in a published definition. Lookup authoring and review controls are planned for phase 5. |
+| **CSV reference lookup** | `csv_reference_lookup` | Copies matched CSV cells into document data as text. Configure it after extraction and place a Review Gate before outputs when either outcome policy sends the document to review. |
 | **Cleanup** | `cleanup_task` | Internal working-file housekeeping, normally invoked automatically. Do not add it to an ordinary pipeline. |
 
 Only one split task, one extraction task and one Review Gate are allowed per
@@ -208,6 +208,24 @@ that copy in your split acceptance test. Use the PDF output task for child copie
 with names based on approved values. An Archive Pdf task is different from
 archiving a pipeline definition or deleting processing history. It does not
 implement a full backup or automatically expire old files.
+
+## Configure a CSV reference lookup
+
+Use **CSV reference lookup** to bring identifiers or labels from a register
+into the document. Select the reference file, add up to five match clauses,
+and map the requested CSV columns to new text fields. Keep account codes and
+tax identifiers as text to preserve leading zeros. **Case-sensitive** is the
+default. Choose **Case-insensitive** per text clause or **Numeric** for
+decimal equality.
+
+Choose **No match** and **Multiple matches** independently. **Send to review**
+requires a gate before business outputs. **Fail the task** stops the pipeline.
+**Continue** is available only for optional lookups and omits their returned
+fields. A filename token such as `{supplier_id}` needs an earlier required
+lookup. Keep **If this task fails** set to **Stop the pipeline**.
+
+Use the [pipeline editor walkthrough](managing-pipelines.md#publish-a-supplier-lookup)
+and the [CSV lookup reference](../reference/tasks/rules-context-housekeeping.md#csv-reference-lookup).
 
 ## Configure a reference CSV update
 

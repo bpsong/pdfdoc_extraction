@@ -1,6 +1,6 @@
 /** Accessible business-check summary and annotations, independent of source mode. */
 
-import { pointerParts } from './validation.js?v=generic-rules-1';
+import { pointerParts } from './validation.js?v=r3-lookup-1';
 
 const OUTCOMES = {passed: 'Passed', failed: 'Check failed', not_evaluated: 'Cannot evaluate', error: 'Validation error', skipped: 'Skipped', disabled: 'Disabled', not_applicable: 'Not applicable'};
 const outcomeKey = (check) => check.status === 'skipped' ? check.code === 'disabled' ? 'disabled' : 'not_applicable' : check.status;
@@ -19,7 +19,7 @@ export function scrollReviewTarget(target, block = 'center') {
 }
 
 export function createReviewValidationView(elements, model, validation) {
-    const {fieldsContainer, validationPanel, validationStatus, validationSummary,
+    const {fieldsContainer, lookupPanel, validationPanel, validationStatus, validationSummary,
         validationDetails, validationList, revalidateButton} = elements;
 
     function node(tag, className, text) {
@@ -42,16 +42,18 @@ export function createReviewValidationView(elements, model, validation) {
     }
 
     function clearAnnotations() {
-        fieldsContainer.querySelectorAll('.review-business-inline, .review-business-row-findings').forEach((item) => item.remove());
+        for (const zone of [fieldsContainer, lookupPanel]) {
+            zone?.querySelectorAll('.review-business-inline, .review-business-row-findings').forEach((item) => item.remove());
+            zone?.querySelectorAll('.review-business-warning, .review-business-blocking').forEach((item) => {
+                item.classList.remove('review-business-warning', 'review-business-blocking');
+            });
+        }
         fieldsContainer.querySelectorAll('[data-business-described]').forEach((input) => {
             const owned = new Set(input.dataset.businessDescribed.split(' '));
             const ids = (input.getAttribute('aria-describedby') || '').split(' ').filter((id) => id && !owned.has(id));
             if (ids.length) input.setAttribute('aria-describedby', ids.join(' '));
             else input.removeAttribute('aria-describedby');
             delete input.dataset.businessDescribed;
-        });
-        fieldsContainer.querySelectorAll('.review-business-warning, .review-business-blocking').forEach((item) => {
-            item.classList.remove('review-business-warning', 'review-business-blocking');
         });
     }
 
@@ -90,8 +92,8 @@ export function createReviewValidationView(elements, model, validation) {
                 : findings.length ? ' Warnings allow completion. Drafts can still be saved.' : ' No business findings prevent completion.');
         validationPanel.dataset.blocking = String(Boolean(blocking));
         validationDetails.hidden = !checks.length && !schemaErrors.length;
-        const targets = new Map(Array.from(fieldsContainer.querySelectorAll('[data-validation-path]'),
-            (item) => [item.dataset.validationPath, item]));
+        const targets = new Map([fieldsContainer, lookupPanel].flatMap((zone) =>
+            Array.from(zone?.querySelectorAll('[data-validation-path]') || [], (item) => [item.dataset.validationPath, item])));
 
         function targetFor(pointer) {
             while (pointer) {

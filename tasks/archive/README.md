@@ -39,6 +39,7 @@ locations and the code structure that existed when they were written.
 
 ## Completed implementation and verification records
 
+- [R3 CSV reference lookup and enrichment](tasks-r3-csv-reference-lookup.md)
 - [Pipeline editor focus jump bug](pipeline_editor_focus_jump_bug.md)
 - [Tasks documentation reorganization](tasks-documentation-reorganization.md)
 - [Tasks documentation current implementation audit](tasks-documentation-current-implementation-audit.md)

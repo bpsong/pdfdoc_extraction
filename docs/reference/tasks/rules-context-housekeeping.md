@@ -5,8 +5,150 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup source review and synthetic acceptance |
+| Applies to | Production application; SQLite schema 11 |
+
+## CSV reference lookup
+
+The **CSV reference lookup** task uses
+`standard_step.rules.csv_reference_lookup` / `CsvReferenceLookupTask`.
+It reads a CSV and copies text from a matching row to new document-level keys.
+**Update Reference** writes a configured value to matched rows in its CSV and
+uses a separate parameter and comparison contract.
+
+| Parameter | Contract |
+| --- | --- |
+| `reference_file` | Required literal CSV path. A relative path is resolved beside the deployment YAML. |
+| `clauses` | One to five ordered objects with `field`, `column`, and optional `mode`. Every comparison must match the same record. `field` names a top-level extraction field from an earlier task. |
+| `returns` | One or more objects with `column` and `field`. The field must be a new top-level key. Each lookup commits its returned values together. |
+| `required` | Defaults to `true`. A required lookup must return a complete match before release. |
+| `on_no_match`, `on_multiple_matches` | Independent policies. Both default to `review`. Each also accepts `fail` or, for an optional lookup, `continue`. |
+| `on_error` | Set `stop` on the task. A malformed or inaccessible register stops execution even for an optional lookup. |
+
+Place the lookup after extraction and before business outputs and CSV updates.
+If either policy is `review`, put a Review Gate between the lookup and those
+tasks. Independent lookups may use distinct return keys. A return key cannot
+overwrite an extraction field, another lookup's output, or a reserved workflow
+key such as `id` or `nanoid`. Match clauses take extraction fields as inputs.
+
+### Comparison and release behavior
+
+| Mode | Comparison |
+| --- | --- |
+| `case_sensitive` | Default. Trim surrounding whitespace from both strings and compare exactly. |
+| `case_insensitive` | Trim both strings and apply Unicode case folding. Internal spaces, punctuation and leading zeros still matter. |
+| `numeric` | Compare finite decimals. Text accepts an optional sign and a period as decimal separator, including `1.`. Booleans, grouping separators, currency and exponent notation in text are invalid. |
+
+Return values preserve the cell text, including case, whitespace and leading
+zeros. Match input cleanup changes only the comparison keys. A missing, blank,
+or invalid input follows the no-match policy. A blank CSV key cannot match. A
+nonblank invalid numeric key in a configured numeric column stops the task.
+
+Use comma-delimited UTF-8 with an optional BOM, exact unique nonblank headers,
+and standard CSV quoting. Every record must have the header's column count.
+The built-in task reads at most 8 MiB and retains at most 50 candidates per
+evaluation. It counts all matches. A candidate number starts at 1 after the
+header and identifies a CSV record, including quoted multiline records.
+
+A unique match needs a nonblank value in each return cell. Multiple matching
+records remain ambiguous even if they return the same values. **Send to review**
+holds the document at the gate. **Fail the task** stops the pipeline.
+**Continue** for an optional outcome records a skip and omits all of its return
+keys. A reviewer can choose a complete candidate from an untruncated set or
+skip an optional lookup with a reason. See the [operator procedure](../../operator/reviewing-extracted-data.md#resolve-a-csv-reference-lookup).
+
+### Synthetic supplier example
+
+Save this register as `suppliers.csv` beside the deployment YAML. Use a test
+invoice with extracted text `tax: "00123"` and `supplier: "acme"`.
+
+```csv
+Tax,Name,Code
+00123,Acme,00042
+123,Acme,00999
+```
+
+Publish and activate a review form with text fields `tax`, `supplier`, and
+`supplier_id`. This minimal form can be imported into a form draft.
+
+```yaml
+# supplier-review.yaml
+title: Synthetic supplier review
+fields:
+  tax: {type: string, label: Tax ID}
+  supplier: {type: string, label: Supplier}
+  supplier_id: {type: string, label: Supplier ID}
+```
+
+Use the following definition as a configuration recipe in **Pipeline**.
+Replace the form ID, output directory and extraction secret alias with the
+values approved for your test deployment. The extract task uses an approved
+LlamaCloud alias for actual extraction. The verification suite supplies these
+synthetic extraction values offline. To transfer the complete definition, use
+the [portable bundle procedure](../pipeline-definition-format.md#stored-versus-portable-configuration).
+
+```yaml
+# supplier-lookup.yaml
+schema_version: 1
+pipeline: [extract, lookup, gate, output, csv, pdf]
+tasks:
+  extract:
+    module: standard_step.extraction.extract_pdf
+    class: ExtractPdfTask
+    params:
+      api_key: { $secret: "supplier-extract" }
+      fields:
+        tax: {type: str, alias: Tax ID}
+        supplier: {type: str, alias: Supplier}
+    on_error: stop
+  lookup:
+    module: standard_step.rules.csv_reference_lookup
+    class: CsvReferenceLookupTask
+    params:
+      reference_file: suppliers.csv
+      clauses:
+        - {field: tax, column: Tax, mode: case_sensitive}
+        - {field: supplier, column: Name, mode: case_insensitive}
+      returns:
+        - {column: Code, field: supplier_id}
+      required: true
+      on_no_match: review
+      on_multiple_matches: review
+    on_error: stop
+  gate:
+    module: standard_step.review.review_gate
+    class: ReviewGateTask
+    params:
+      schema_version_id: REPLACE-WITH-PUBLISHED-FORM-ID
+    on_error: stop
+  output:
+    module: standard_step.storage.store_metadata_as_json
+    class: StoreMetadataAsJson
+    params: {data_dir: "C:/DocFlow/test-exports", filename: "{supplier_id}_{id}"}
+    on_error: stop
+  csv:
+    module: standard_step.storage.store_metadata_as_csv
+    class: StoreMetadataAsCsv
+    params: {data_dir: "C:/DocFlow/test-exports", filename: "{supplier_id}_{id}"}
+    on_error: stop
+  pdf:
+    module: standard_step.storage.store_file_to_localdrive
+    class: StoreFileToLocaldrive
+    params: {files_dir: "C:/DocFlow/test-exports", filename: "{supplier_id}_{id}"}
+    on_error: stop
+```
+
+The expected JSON is `{"tax":"00123","supplier":"acme","supplier_id":"00042"}`.
+The CSV has the same three values, including `00042`. The PDF copy is named
+`00042_<document-id>.pdf` on its first release to an empty directory. To
+exercise ambiguity on a fresh document, insert `00123,ACME,00041` as the first
+data record, choose the record returning `00042`, and complete review. Verify
+the same values in the outputs and a filename tied to the new document ID.
+Open CSV exports with identifier columns treated as text if a spreadsheet
+application would otherwise remove the leading zeros.
+
+For the stored draft and portable-bundle checks, see the
+[config-check examples](../../../tools/config_check/README.md#validate-a-supplier-lookup).
 
 ## rules.update_reference
 

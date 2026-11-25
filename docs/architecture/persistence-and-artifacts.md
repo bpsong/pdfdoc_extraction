@@ -5,7 +5,7 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. Lookup revisions and retention checked against the persistence tests |
 | Applies to | Production application; SQLite schema 11 |
 
 ## Persistence and artifacts
@@ -69,8 +69,13 @@ reservation exists. Purging history cannot make an accepted PDF eligible.
 
 Schema 11 adds append-only CSV lookup revisions tied to the document, pinned
 pipeline, task key, and extraction result. Each revision stores the reference
-file digest and bounded decision evidence. Processing-history retention removes
-these revisions with their documents and preserves audit events.
+file's SHA-256 digest, compared inputs, match count, bounded candidate evidence,
+and the selected record and reason when applicable. The accepted review stores
+the exact decision IDs for that extraction. The digest identifies the bytes used
+for the decision. Keep original register bytes outside SQLite through your
+backup process when edited reviews may need them. Processing-history retention
+removes these revisions with their documents and preserves audit events. See
+[backup and recovery](../it-support/backup-and-restore.md#backup-and-recovery).
 
 Schema 9 separates audit identities from processing retention. The upgrade
 rebuilds `audit_events` without processing-record foreign keys, preserving every

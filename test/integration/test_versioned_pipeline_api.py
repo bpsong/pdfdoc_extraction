@@ -9,6 +9,7 @@ from fastapi import FastAPI
 import modules.api_router as api_router
 from modules.db.connection import connect
 from modules.db.repositories import UserRepository
+from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
 from test.integration.test_batch_upload_api import build_client
 
 
@@ -63,6 +64,35 @@ def _glm_definition():
             }
         },
     }
+
+
+def test_pipeline_editor_lists_and_publishes_lookup(tmp_path, monkeypatch):
+    client, _ = _admin_client(tmp_path, monkeypatch)
+    classes = {
+        task["class_name"] for task in client.get("/api/admin/pipeline").json()["catalog"]["tasks"]
+    }
+    direct_catalog = {task["class_name"] for task in client.get("/api/admin/task-catalog").json()["tasks"]}
+    assert {CSV_LOOKUP_TASK[1], "UpdateReferenceTask"} <= classes & direct_catalog
+
+    definition = _definition()
+    definition["pipeline"].append("lookup")
+    definition["tasks"]["lookup"] = {
+        "module": CSV_LOOKUP_TASK[0], "class": CSV_LOOKUP_TASK[1],
+        "params": {"reference_file": "synthetic.csv",
+                   "clauses": [{"field": "supplier", "column": "Supplier"}],
+                   "returns": [{"field": "supplier_id", "column": "ID"}],
+                   "on_no_match": "fail", "on_multiple_matches": "fail"},
+    }
+    response = client.post("/api/admin/pipeline-templates", json={
+        "template_key": "supplier-lookup", "name": "Supplier lookup", "definition": definition,
+    })
+    assert response.status_code == 200
+    path = f"/api/admin/pipeline-templates/{response.json()['template']['id']}"
+    validation = client.post(path + "/draft/validate", json={}).json()
+    assert validation["valid"], validation
+    response = client.post(path + "/publish", json={"expected_revision": 1})
+    assert response.status_code == 200, response.json()
+    assert response.json()["version"]["version_number"] == 1
 
 
 def test_pipeline_template_lifecycle_clone_diff_and_redaction(tmp_path, monkeypatch):

@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 from modules.config_protocol import ConfigProvider
 from modules.services.csv_reference_lookup import CSV_LOOKUP_TASK
-from modules.services.lookup_pipeline_validation import lookup_fields_before
+from modules.services.lookup_pipeline_validation import active_lookup_configs, lookup_fields_before
 from modules.services.pipeline_validation_service import PipelineValidationService
 from modules.services.schema_service import SchemaService
 from modules.services.business_validation_schema import (
@@ -35,8 +35,11 @@ class _NullConfig:
 class ValidationFacade:
     """Validate explicit configuration content and qualify every finding."""
 
-    def __init__(self, config_manager: ConfigProvider | None = None) -> None:
+    def __init__(
+        self, config_manager: ConfigProvider | None = None, *, allow_lookup_preview: bool = True,
+    ) -> None:
         self.config_manager = config_manager
+        self.allow_lookup_preview = allow_lookup_preview
 
     def validate_pipeline(
         self,
@@ -88,6 +91,12 @@ class ValidationFacade:
                     validation_copy["tasks"][key] = task
         base_result = PipelineValidationService(self.config_manager).validate(validation_copy)
         findings.extend(base_result["findings"])
+        if not self.allow_lookup_preview:
+            for key in active_lookup_configs(normalized):
+                findings.append(self._finding(
+                    "error", f"tasks.{key}", "CSV lookup authoring requires the operator review controls.",
+                    "lookup-editor-unavailable",
+                ))
         findings.extend(
             self._validate_schema_dependencies(
                 normalized,

@@ -48,8 +48,8 @@ export function createReviewValidation(state, model, onChange = () => {}) {
     }
 
     function changed() {
-        if (!result.enabled) return;
         edit += 1;
+        if (!result.enabled) return;
         result = {...result, phase: 'stale', pending: false, message: ''};
         onChange();
     }
@@ -107,5 +107,5 @@ export function createReviewValidation(state, model, onChange = () => {}) {
             && !result.pending && !result.conflict && Number.isFinite(expiry) && expiry > Date.now();
     }
 
-    return {load, changed, capture, accept, fail, completionFailure, canCheck, current: () => result};
+    return {load, changed, capture, isCurrent, accept, fail, completionFailure, canCheck, current: () => result};
 }

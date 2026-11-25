@@ -5,7 +5,7 @@
 | Audience | Application administrators |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-10-10 — repository/source review; no live deployment check |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup publication and export verified in synthetic Chromium acceptance |
 | Applies to | Current application screens |
 
 A **pipeline** is an ordered set of processing tasks for a document type. A
@@ -19,6 +19,7 @@ Use [Choose and configure tasks](task-guide.md) for every supported task and
 
 Go directly to [creation and publication](#create-and-publish-a-pipeline),
 [the worked pipeline](#worked-example-local-invoice-review-and-export),
+[supplier CSV lookup](#publish-a-supplier-lookup),
 [acceptance checks](#verify-before-routine-use),
 [changing a pipeline](#change-an-existing-pipeline), or
 [troubleshooting](#resolve-common-setup-problems).
@@ -128,6 +129,28 @@ After acceptance you may choose confidence-based review if business policy
 allows it. Removing Always require review does not bypass local extractors'
 unscored-result review requirement at a following gate.
 
+## Publish a supplier lookup
+
+Use the [synthetic supplier example](../reference/tasks/rules-context-housekeeping.md#synthetic-supplier-example)
+to try this workflow with a disposable register and output directory.
+
+1. Publish and activate the review form. In the pipeline, add **CSV reference
+   lookup** after extraction and before **Review Gate** and outputs.
+2. Set **Reference CSV** to `suppliers.csv`. Under **Match clauses**, choose
+   `tax` and `Tax` with **Case-sensitive**, then `supplier` and `Name` with
+   **Case-insensitive**. Every clause must match the same CSV record.
+3. Under **Returned text**, map the `Code` column to the new `supplier_id`
+   field. Enable **Require a resolved lookup before release**. Set **No match**
+   and **Multiple matches** to **Send to review**. For task failures, select
+   **Stop the pipeline**.
+4. Select the exact form under **Published review form version** on the gate.
+   For JSON, CSV and PDF storage, use `{supplier_id}_{id}` as the filename
+   template and the approved test output location.
+5. **Save Draft**, **Validate**, **Publish**, then **Activate for uploads**.
+   Upload a synthetic invoice against that version. Test a unique match and
+   an ambiguous match on separate documents. Check the accepted review, the
+   returned `00042` in JSON and CSV, and the document ID in the PDF filename.
+
 ## Verify before routine use
 
 | Check | Evidence to inspect |
@@ -138,6 +161,7 @@ unscored-result review requirement at a following gate.
 | Extraction quality | Original extracted values, addresses and item counts match the PDF before corrections. Include the largest expected PDF and scans. |
 | Review usability | All required controls appear, optional blanks are allowed, valid corrections can be made, and invalid required values prevent completion. |
 | Approved output | Complete review, then open exported files: corrections, row count, keys/columns, filename and destination meet requirements. |
+| CSV lookup, if configured | A required unresolved lookup holds outputs. A unique or accepted match supplies the exact identifier text. An optional skip omits its returns. |
 | Reference update, if configured | Intended reference rows change and unrelated rows stay unchanged. |
 | Failure handling | Check known invalid/missing-input examples and ensure a required failure does not produce a misleading later business action. |
 | Intake rollout | Controlled upload and folder sample both use the approved version; folder health alone is insufficient. |

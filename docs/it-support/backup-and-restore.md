@@ -5,8 +5,8 @@
 | Audience | IT support and deployment owners |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup persistence and recovery contract reviewed |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Backup and Recovery
 
@@ -20,6 +20,14 @@ For a complete operational backup, include:
   sources need not be in a task output directory
 - reference CSVs, deployment configuration, and any portable configuration
   exports retained by your organization
+
+Keep the exact bytes of approved lookup registers when pending documents may
+need to rematch edited inputs. SQLite records decision revisions, bounded
+evidence and the SHA-256 digest. Retain the register bytes separately in backups.
+Completed decisions can resume from the recorded evidence. Rematching a
+corrected input needs the original bytes or an explicit, audited adoption of
+the replacement. Verify recovered bytes against the recorded digest. See the
+[lookup recovery procedure](incident-runbooks.md#csv-lookup-is-blocking-release).
 
 Stop the application before copying the SQLite database, or use SQLite's
 online backup mechanism. Do not assume that copying only the main database
@@ -61,7 +69,7 @@ versions; restore those from a consistent database backup.
    references, configuration and compatible application artifact. Keep paths
    consistent or reconcile them with the registered artifact paths.
 3. Validate configuration and start through `main.py`. Check exact schema
-   acceptance and every supervised component. Schema 9 has no supported downgrade.
+   acceptance and every supervised component. Schema 11 has no supported downgrade.
 4. Verify both logins, representative batches, pending reviews, pinned versions,
    folder assignments and readable source/output artifacts. Inspect interrupted
    work using [incident runbooks](incident-runbooks.md).

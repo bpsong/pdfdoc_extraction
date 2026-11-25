@@ -61,19 +61,16 @@ def make_task(params=None):
 # Update Reference Tests
 # (From test_update_reference.py)
 
-def test_validate_required_fields_columns_exist():
-    task = make_task()
-    # Header missing update_field should error
-    with patch("pandas.read_csv") as mock_read_csv:
-        mock_read_csv.return_value = pd.DataFrame(columns=pd.Index(["policy_number"]))
-        with pytest.raises(TaskError, match="missing required update_field column"):
-            task.validate_required_fields({})
-
-    # Header missing selection column should error
-    with patch("pandas.read_csv") as mock_read_csv:
-        mock_read_csv.return_value = pd.DataFrame(columns=pd.Index(["status"]))
-        with pytest.raises(TaskError, match="missing required selection column"):
-            task.validate_required_fields({})
+@pytest.mark.parametrize(("header", "message"), [
+    ("policy_number", "missing required update_field column"),
+    ("status", "missing required selection column"),
+])
+def test_error_handling_missing_columns(tmp_path: Path, header: str, message: str) -> None:
+    reference = tmp_path / "reference.csv"
+    reference.write_text(f"{header}\nvalue\n", encoding="utf-8")
+    task = make_task({"reference_file": str(reference)})
+    with pytest.raises(TaskError, match=message):
+        task.validate_required_fields({})
 
 
 def test_column_equals_all_single_clause(sample_context, sample_csv_data):

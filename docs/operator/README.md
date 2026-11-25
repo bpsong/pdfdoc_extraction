@@ -36,6 +36,7 @@ these tasks, but operators do not configure processing or change account passwor
 | New PDFs ready to submit | Upload & Process, or the incoming folder approved for that document type |
 | You need to find an earlier batch | Reports, then Recent Batches and Open processing dashboard |
 | A person must check values or choose page boundaries | Review Queue; check whether the item is extraction review or Manual split |
+| A supplier lookup is holding release | [Resolve the CSV reference lookup](reviewing-extracted-data.md#resolve-a-csv-reference-lookup) in the claimed review |
 | A document cannot finish | Its failure link or Failures; compare recorded errors with current progress |
 | You need saved values | The document's Extraction page; it is a results screen, not an editing screen |
 

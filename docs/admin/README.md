@@ -35,6 +35,9 @@ Choose the task you need:
 7. [Validate settings and inspect administrative history](validation-and-audit.md)
 8. [Archive pipelines and clean processing history](archiving-and-retention.md)
 
+For supplier registers and other reference identifiers, start with
+[Publish a supplier lookup](managing-pipelines.md#publish-a-supplier-lookup).
+
 Before enabling routine intake, confirm the full business outcome: expected
 pages and values, usable review controls, corrected final exports, accessible
 PDF copies and any reference-file updates. Configuration validation alone does

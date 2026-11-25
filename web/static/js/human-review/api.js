@@ -9,9 +9,9 @@ export function createHumanReviewApi(docFlow, reviewItemId, getRevision = () => 
         release: () => docFlow.apiPost(`${itemUrl}/release`, {}),
         saveDraft: (corrections) => docFlow.apiPost(`${itemUrl}/draft`, { corrections, ...revision() }),
         previewDiff: (corrections) => docFlow.apiPost(`${itemUrl}/diff`, { corrections }),
-        complete: (corrections) => docFlow.apiPost(`${itemUrl}/complete`, { corrections, ...revision() }),
-        revalidate: (corrections, requestRevision) => docFlow.apiPost(`${itemUrl}/revalidate`, {
-            corrections, ...revision(), request_revision: requestRevision,
+        complete: (corrections, lookup = {}) => docFlow.apiPost(`${itemUrl}/complete`, { corrections, ...revision(), ...lookup }),
+        revalidate: (corrections, requestRevision, lookup = {}) => docFlow.apiPost(`${itemUrl}/revalidate`, {
+            corrections, ...revision(), request_revision: requestRevision, ...lookup,
         }),
     };
 }

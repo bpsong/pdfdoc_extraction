@@ -5,8 +5,8 @@
 | Audience | Developers and IT support |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-11 — repository/source review; no live deployment check; catalog permissions, separate review labels, and isolated API/browser regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. Lookup request, error and resume contracts checked in isolated integration tests |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Discovery, authentication and request safety
 
@@ -101,17 +101,23 @@ document state, and audit summary commit atomically before resume.
 ## CSV lookup on extraction reviews
 
 Review detail and revalidation include `lookup_review` when the gate follows
-CSV lookup. Its `lookups` list includes each task key, decision revision,
-compared inputs, source digest, returned text, and bounded candidate evidence.
+an active CSV lookup. Its `lookups` list includes each task key, decision ID and
+revision, compared inputs, current and recorded source digests, returned text,
+and bounded candidate evidence with one `match_evidence` entry per clause.
 `can_select` and `can_skip` indicate available actions. Returned fields are
 read-only and use reference provenance.
 
 - Send `expected_revision` with draft, revalidation, and completion requests.
+  Renewing a live claim preserves its revision. A new claim after expiration,
+  release, or takeover requires fresh evidence.
 - Revalidate a correction with the usual `corrections` object. A changed input
   is evaluated against bytes matching the recorded digest. If those bytes are
   unavailable, the preview reports `reference_changed`. To preview against
   the current register, send `reference_adoptions` as a map from task key to
   the reviewer's reason.
+- Draft saves persist `corrections`. Candidate selections and file adoptions
+  are proposals until completion. Direct attempts to correct a lookup return
+  field fail with `lookup_readonly_field`.
 - To select a candidate, send `lookup_actions` keyed by task key with
   `action: "select"`, the candidate's `record_number`, the corresponding
   `evaluation_token`, and a `reason`. An optional lookup can use
@@ -120,14 +126,17 @@ read-only and use reference provenance.
 - Revalidate the final request. Submit the same corrections, adoptions, and
   actions to `/complete` with `lookup_preview_token` from
   `lookup_review.preview_token`. Completion recomputes the proposal. Stale
-  evidence returns 409. Unresolved results return 422 with lookup evidence
-  inside `detail.lookup_review`.
+  evidence returns 409 with `stale_lookup_selection` or `stale_lookup_preview`.
+  An unresolved lookup returns 422 with `lookup_review_blocked`. These responses
+  include the latest proposal in `detail.lookup_review`. A stale claim or review
+  revision is handled separately.
 
 Completion commits lookup decisions, corrections, validation findings, and
 review state together. The accepted decision identities and source digests
 remain available after the file changes. If an interruption occurs between
-completion and the resume claim, the authenticated document resume endpoint
-can continue using the accepted values from SQLite.
+completion and the resume claim, `POST /api/documents/{document_id}/resume`
+can continue eligible work using the accepted values from SQLite. This request
+requires authentication and the normal CSRF check for cookie-authenticated writes.
 
 ## Manual split decisions
 

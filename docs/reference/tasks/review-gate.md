@@ -5,8 +5,8 @@
 | Audience | Developers, IT support and advanced configuration maintainers |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. CSV lookup gate and completion checked in synthetic workflows |
+| Applies to | Production application; SQLite schema 11 |
 
 ## review.review_gate
 
@@ -58,12 +58,28 @@ review/task/document state before resuming. Legacy format-1 rule forms require
 explicit republishing and pipeline repinning; they cannot run rules implicitly.
 See [review APIs](../api-contracts.md#business-validation-on-extraction-reviews).
 
-An upstream CSV lookup with a pending decision forces review. The gate makes
-match inputs available for correction and validates returned text in the
-effective document values. Reference results carry no OCR confidence. Review
-completion validates decisions against the live claim and submitted revision
-before atomically accepting the lookup and corrected values. Resume uses the
-accepted decision even if the CSV has since changed or been removed. [CSV lookup review API](../api-contracts.md#csv-lookup-on-extraction-reviews)
+### CSV lookup decisions at the gate
+
+A pending upstream CSV lookup forces review even when extraction confidence
+and business checks pass. The gate exposes match fields for correction,
+including in low-confidence editing scope, subject to published read-only field
+settings. It checks the pinned form and applicable business rules against
+effective values. Lookup returns carry reference provenance and no OCR score.
+
+An operator can correct an input and **Revalidate**, choose a candidate and
+give a reason with **Use selected record**, or use **Skip lookup** when the
+pending lookup is optional. Changing a match input clears its previous choice.
+If the original bytes are unavailable for recalculation, the review holds until
+the operator can rematch against the original file or can explicitly select
+**Use current reference file** with a reason. Truncated candidate evidence holds
+record selection. A required result, fresh evidence, and any blocking form or
+business findings must all be resolved before release.
+
+Completion checks the live claim and revision, then atomically records
+accepted lookup decisions, corrections, validation findings and workflow state.
+Next-task resume uses the accepted evidence even after a reference file changes.
+See the [operator steps](../../operator/reviewing-extracted-data.md#resolve-a-csv-reference-lookup)
+and the [review API](../api-contracts.md#csv-lookup-on-extraction-reviews).
 
 **YAML configuration example:**
 

@@ -22,8 +22,10 @@ from modules.services.processing_lease import JobClaimLost
 from modules.services.processing_worker import ProcessingWorker
 from modules.services.review_service import ReviewService
 from modules.services.startup_migration_service import initialize_database
+from modules.services.task_registry_service import ASSIGN_NANOID_TASK
 from standard_step.review.review_gate import ReviewGateTask
 from standard_step.rules.csv_reference_lookup import CsvReferenceLookupTask
+from standard_step.storage.store_metadata_as_json import StoreMetadataAsJson
 from test.helpers_business_validation_workflow import offline_invoice_workflows, run_invoice_workflow
 from test.helpers_sqlite import TempConfig
 from test.integration.test_lookup_pipeline import _add_gate, _definition, _document, _publish
@@ -43,7 +45,7 @@ def config(tmp_path: Path) -> TempConfig:
 def _publish_review(
     config: TempConfig, root: Path, *, register: str = AMBIGUOUS,
     schema: dict[str, Any] | None = None, multiple: bool = False, gate_before_lookup: bool = False,
-    always_review: bool = False,
+    always_review: bool = False, nanoid: bool = False, repeated_column: bool = False,
 ) -> dict[str, Any]:
     definition = _definition(root)
     (root / "register.csv").write_text(register, encoding="utf-8")
@@ -65,11 +67,21 @@ def _publish_review(
         definition["pipeline"] = ["extract", "lookup", "billing", "gate", "output"]
     if gate_before_lookup:
         definition["pipeline"] = ["extract", "gate", "lookup", "output"]
+    if repeated_column:
+        definition["tasks"]["lookup"]["params"]["clauses"].append({
+            "field": "tax", "column": "Tax", "mode": "numeric",
+        })
+    if nanoid:
+        definition["tasks"]["assign_id"] = {"module": ASSIGN_NANOID_TASK[0], "class": ASSIGN_NANOID_TASK[1]}
+        definition["pipeline"].insert(1, "assign_id")
+        definition["tasks"]["output"]["params"]["filename"] = "{supplier_id}_{nanoid}"
     return _publish(config, definition)
 
 
-def _pause(config: TempConfig, root: Path, version: dict[str, Any], values: dict[str, Any]) -> tuple[str, str]:
-    case = _document(config, root, version)
+def _pause(
+    config: TempConfig, root: Path, version: dict[str, Any], values: dict[str, Any], *, source: Path | None = None,
+) -> tuple[str, str]:
+    case = _document(config, root, version, source=source)
     with offline_invoice_workflows(values):
         result = run_invoice_workflow(config, case)
     assert result.get("pipeline_state") == "paused", result.get("error")
@@ -93,7 +105,7 @@ def _action(token: str, record: int | None = 2) -> dict[str, Any]:
 def test_multiple_lookup_resolution_is_bound_to_claim_and_evidence(
     config: TempConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    version = _publish_review(config, tmp_path, multiple=True)
+    version = _publish_review(config, tmp_path, multiple=True, repeated_column=True)
     document_id, review_id = _pause(config, tmp_path, version, VALUES)
     app = _api(config, monkeypatch)
     url = f"/api/review/items/{review_id}"
@@ -110,6 +122,10 @@ def test_multiple_lookup_resolution_is_bound_to_claim_and_evidence(
         assert by_task["lookup"]["match_count"] == 2
         assert by_task["billing"]["can_skip"]
         assert by_task["lookup"]["candidates"][1]["values"] == {"supplier_id": "00042"}
+        evidence = by_task["lookup"]["candidates"][1]["match_evidence"]
+        assert [(clause["mode"], clause["reference_value"]) for clause in evidence if clause["column"] == "Tax"] == [
+            ("case_sensitive", "00123"), ("numeric", "00123"),
+        ]
         request = {"expected_revision": detail["review_revision"]}
         edit = {"corrections": {"supplier_id": "MANUAL"}}
         assert client.post(url + "/draft", json={**request, **edit}).json()["detail"]["code"] == "lookup_readonly_field"
@@ -130,6 +146,8 @@ def test_multiple_lookup_resolution_is_bound_to_claim_and_evidence(
         }
         preview = client.post(url + "/revalidate", json=request, headers=headers).json()["lookup_review"]
         assert not preview["blocked"]
+        assert client.post(url + "/claim", json={}, headers=headers).status_code == 200
+        assert client.get(url).json()["review_revision"] == detail["review_revision"]
         request["lookup_preview_token"] = preview["preview_token"]
         app.dependency_overrides[api_router.get_current_user] = lambda: "other"
         assert client.post(url + "/complete", json=request, headers=headers).status_code == 409
@@ -156,7 +174,7 @@ def test_multiple_lookup_resolution_is_bound_to_claim_and_evidence(
 def test_lost_claim_invalidates_previously_passing_lookup_preview(
     config: TempConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    version = _publish_review(config, tmp_path)
+    version = _publish_review(config, tmp_path, nanoid=True)
     _, review_id = _pause(config, tmp_path, version, VALUES)
     app = _api(config, monkeypatch)
     url = f"/api/review/items/{review_id}"
@@ -316,7 +334,7 @@ def test_r4_checks_use_returned_text_and_acceptance_rolls_back_before_restart(
 def test_reclaimed_worker_reuses_lookup_evidence_and_single_gate(
     config: TempConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, after_gate_commit: bool,
 ) -> None:
-    version = _publish_review(config, tmp_path)
+    version = _publish_review(config, tmp_path, nanoid=True)
     case = _document(config, tmp_path, version)
     doc_id = case["document"]["id"]
     crash_task = ReviewGateTask if after_gate_commit else CsvReferenceLookupTask
@@ -351,16 +369,139 @@ def test_reclaimed_worker_reuses_lookup_evidence_and_single_gate(
 def test_gate_before_lookup_uses_accepted_input_on_resume(config: TempConfig, tmp_path: Path) -> None:
     version = _publish_review(
         config, tmp_path, register="Tax,Name,Code\n00123,Acme,00042\n",
-        gate_before_lookup=True, always_review=True,
+        gate_before_lookup=True, always_review=True, nanoid=True,
     )
-    _, review_id = _pause(config, tmp_path, version, {**VALUES, "tax": "wrong"})
+    doc_id, review_id = _pause(config, tmp_path, version, {**VALUES, "tax": "wrong"})
     with managed_connect(config) as conn, offline_invoice_workflows():
+        run = TaskRunRepository(conn).latest_completed_at(doc_id, version["id"], 1)
+        assert run is not None
+        nanoid = json_loads(run["output_json"])["nanoid"]
         service = ReviewService(conn, config)
         service.claim(review_id, "operator")
         detail = service.get_detail(review_id)
         assert detail is not None and "lookup_review" not in detail
         assert service.complete(review_id, "operator", {"tax": "00123"})["resume_triggered"]
-    assert len(list((tmp_path / "exports").glob("00042_*.json"))) == 1
+    outputs = list((tmp_path / "exports").glob("00042_*.json"))
+    assert len(outputs) == 1
+    assert json.loads(outputs[0].read_text(encoding="utf-8"))["nanoid"] == nanoid
+
+
+@pytest.mark.parametrize("crash_stage", ["early_gate", "lookup", "output", "unverified_output"])
+def test_worker_recovery_preserves_early_review_and_never_replays_started_export(
+    config: TempConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, crash_stage: str,
+) -> None:
+    version = _publish_review(
+        config, tmp_path, register="Tax,Name,Code\n00123,Acme,00042\n",
+        gate_before_lookup=True, always_review=crash_stage == "early_gate", nanoid=True,
+    )
+    case = _document(config, tmp_path, version)
+    document_id = case["document"]["id"]
+    implementation = {
+        "early_gate": ReviewGateTask, "lookup": CsvReferenceLookupTask,
+        "output": StoreMetadataAsJson, "unverified_output": StoreMetadataAsJson,
+    }[crash_stage]
+    original = implementation.run
+
+    def interrupted(task: Any, context: dict[str, Any]) -> dict[str, Any]:
+        original(task, context)
+        raise JobClaimLost("Simulated worker interruption")
+
+    with offline_invoice_workflows(VALUES) as calls:
+        with monkeypatch.context() as patcher:
+            patcher.setattr(implementation, "run", interrupted)
+            assert ProcessingWorker(config, worker_id="crashed").run_once()
+        with managed_connect(config) as conn:
+            run = TaskRunRepository(conn).latest_completed_at(document_id, version["id"], 1)
+            assert run is not None
+            nanoid = json_loads(run["output_json"])["nanoid"]
+            conn.execute("UPDATE processing_jobs SET lease_expires_at='2000-01-01T00:00:00+00:00'")
+            if crash_stage == "unverified_output":
+                artifact = next(
+                    item for item in DocumentRepository(conn).list_files(document_id)
+                    if item["file_type"] == "export_json"
+                )
+                Path(artifact["file_path"]).write_text("{}", encoding="utf-8")
+        (tmp_path / "register.csv").unlink()
+        assert ProcessingWorker(config, worker_id="restarted").run_once()
+    assert len(calls) == 1
+    with managed_connect(config) as conn:
+        job = ProcessingJobRepository(conn).get_for_document(document_id)
+        assert job is not None
+        assert job["status"] == ("failed" if crash_stage == "unverified_output" else "completed")
+        item = ReviewRepository(conn).find_latest_for_document(document_id)
+        assert bool(item) == (crash_stage == "early_gate")
+        if item:
+            assert item["status"] == "pending"
+    outputs = list((tmp_path / "exports").glob("*.json"))
+    assert len(outputs) == (0 if crash_stage == "early_gate" else 1)
+    if crash_stage == "unverified_output":
+        assert outputs[0].read_text(encoding="utf-8") == "{}"
+    elif outputs:
+        assert json.loads(outputs[0].read_text(encoding="utf-8"))["nanoid"] == nanoid
+
+
+@pytest.mark.parametrize("interrupt_after_registration", [False, True])
+def test_worker_recovers_registered_json_export_before_review_gate(
+    config: TempConfig, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    interrupt_after_registration: bool,
+) -> None:
+    definition = _definition(tmp_path)
+    (tmp_path / "register.csv").write_text("Tax,Name,Code\n00123,Acme,00042\n", encoding="utf-8")
+    _add_gate(config, definition, always_review=True)
+    definition["tasks"]["preliminary"] = deepcopy(definition["tasks"]["output"])
+    definition["tasks"]["preliminary"]["params"]["filename"] = "preliminary_{supplier_id}"
+    definition["pipeline"] = ["extract", "lookup", "preliminary", "gate", "output"]
+    version = _publish(config, definition)
+    case = _document(config, tmp_path, version)
+    document_id = case["document"]["id"]
+    original = StoreMetadataAsJson.run
+
+    def interrupted(task: StoreMetadataAsJson, context: dict[str, Any]) -> dict[str, Any]:
+        result = original(task, context)
+        if context["current_task_key"] == "preliminary":
+            if not interrupt_after_registration:
+                # Leave the bytes behind and simulate interruption before their receipt.
+                with managed_connect(config) as conn:
+                    conn.execute(
+                        "DELETE FROM document_files WHERE document_id=? AND file_type='export_json'", (document_id,),
+                    )
+            raise JobClaimLost("Simulated interrupted preliminary JSON export")
+        return result
+
+    with offline_invoice_workflows(VALUES) as calls:
+        with monkeypatch.context() as patcher:
+            patcher.setattr(StoreMetadataAsJson, "run", interrupted)
+            assert ProcessingWorker(config, worker_id="crashed").run_once()
+        with managed_connect(config) as conn:
+            conn.execute("UPDATE processing_jobs SET lease_expires_at='2000-01-01T00:00:00+00:00'")
+        assert ProcessingWorker(config, worker_id="restarted").run_once()
+    assert len(calls) == 1
+    assert len(list((tmp_path / "exports").glob("*.json"))) == 1
+    with managed_connect(config) as conn:
+        job = ProcessingJobRepository(conn).get_for_document(document_id)
+        review = ReviewRepository(conn).find_latest_for_document(document_id)
+        assert job is not None and job["status"] == ("completed" if interrupt_after_registration else "failed")
+        if not interrupt_after_registration:
+            assert "interrupted JSON export cannot be verified" in job["last_error"]
+        assert bool(review) == interrupt_after_registration
+        if review:
+            run = TaskRunRepository(conn).latest_completed_at(document_id, version["id"], 2)
+            assert run is not None and json_loads(run["output_json"])["recovered_artifact_id"]
+            assert review["status"] == "pending"
+            with offline_invoice_workflows():
+                service = ReviewService(conn, config)
+                service.claim(review["id"], "operator")
+                detail = service.get_detail(review["id"])
+                assert detail is not None
+                revision = detail["review_revision"]
+                preview = service.revalidate(review["id"], "operator", {}, expected_revision=revision)
+                assert service.complete(
+                    review["id"], "operator", {}, expected_revision=revision,
+                    lookup_preview_token=preview["lookup_review"]["preview_token"],
+                )["resume_triggered"]
+    if interrupt_after_registration:
+        outputs = sorted(path.name for path in (tmp_path / "exports").glob("*.json"))
+        assert outputs == [f"00042_{document_id}.json", "preliminary_00042.json"]
 
 
 def test_lookup_gate_failure_cannot_continue_to_export(

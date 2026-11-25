@@ -5,8 +5,8 @@
 | Audience | Software architects and technical leads |
 | Owner | Application maintainers |
 | Status | Current |
-| Last verified | 2026-11-13 — repository/source review; no live deployment check; offline regressions |
-| Applies to | Production application; SQLite schema 9 |
+| Last verified | 2026-11-25 — repository/source review; no live deployment check. Lookup, review and resume boundaries checked in synthetic workflows |
+| Applies to | Production application; SQLite schema 11 |
 
 ## Ingestion and workflow execution
 
@@ -226,6 +226,25 @@ exact loading reject incompatible published rules. Unsaved **Revalidate** uses
 the same backend evaluator without saving or resuming. See
 [review APIs](../reference/api-contracts.md#business-validation-on-extraction-reviews)
 and the [form contract](../reference/review-schema-format.md#business-validation-configuration).
+
+### CSV lookup values across execution and review
+
+The lookup task persists a decision revision for the current document or split
+child, pinned pipeline, extraction and task key. A unique match is projected
+into `context["data"]` by the shared lookup merge. An optional skip contributes
+no fields. `ReviewGateTask` uses the same persisted projection so required-field
+and business checks see the values that downstream tasks will use. Pending
+decisions force the gate to pause. The original extraction stays separate.
+
+Review revalidation evaluates corrections and lookup choices for the current
+claim and evidence. Completion rechecks the preview and uses one SQLite write
+transaction for the accepted lookup IDs, field corrections, validation report,
+review and task/document state, and audit event. `ResumeManager` claims the
+document separately, verifies those IDs against the pinned extraction and its
+current lookup revisions, reconstructs effective data and starts at the next
+task. Accepted return values come from SQLite even if the register later
+changes. See the [review API](../reference/api-contracts.md#csv-lookup-on-extraction-reviews)
+and [lookup persistence](persistence-and-artifacts.md#persistence-and-artifacts).
 
 Extraction tasks may preserve numeric provider confidence when it exists or
 persist it as null when it does not. They must never fabricate a score.

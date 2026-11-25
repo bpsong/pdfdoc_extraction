@@ -107,7 +107,8 @@ class LookupDecisionService:
         actor: str, reason: str,
     ) -> LookupDecision:
         """Select one recorded candidate or explicitly skip an optional lookup."""
-        if not actor.strip() or not reason.strip():
+        actor, reason = actor.strip(), reason.strip()
+        if not actor or not reason:
             raise ValueError("A lookup resolution requires an actor and reason.")
         with atomic_transaction(self.conn, immediate=True):
             current = self._checked_revision(key, expected_revision)
@@ -120,7 +121,7 @@ class LookupDecisionService:
                 key, extraction_result_id=current.extraction_result_id,
                 revision=current.revision + 1, supersedes_id=current.id,
                 state=state, evaluation_json=evaluation.model_dump_json(),
-                selected_record_number=record_number, actor=actor, reason=reason.strip(),
+                selected_record_number=record_number, actor=actor, reason=reason,
             ))
             self._audit(key, decision, "lookup_resolved")
             return decision
@@ -130,12 +131,14 @@ class LookupDecisionService:
         expected_revision: int, actor: str, adoption_reason: str | None = None,
     ) -> LookupDecision:
         """Append a new input revision, requiring an explicit reason to adopt new bytes."""
-        if not actor.strip():
+        actor = actor.strip()
+        adoption_reason = (adoption_reason or "").strip() or None
+        if not actor:
             raise ValueError("A lookup reevaluation requires an actor.")
         with atomic_transaction(self.conn, immediate=True):
             current = self._checked_revision(key, expected_revision)
             changed = evaluation.source_sha256 != current.evaluation.source_sha256
-            if changed and not (adoption_reason or "").strip():
+            if changed and adoption_reason is None:
                 raise ValueError("Adopting a different reference file requires a reason.")
             decision = self._append_evaluation(
                 key, current.extraction_result_id, evaluation, current, actor, adoption_reason,
@@ -149,6 +152,8 @@ class LookupDecisionService:
     ) -> LookupDecision:
         selection = None
         if evaluation.disposition == "matched":
+            if evaluation.outcome != "matched" or evaluation.match_count != 1 or len(evaluation.candidates) != 1:
+                raise ValueError("Automatic selection requires exactly one matching record.")
             candidate = evaluation.candidates[0]
             candidate.complete_values()
             selection = candidate.record_number
@@ -157,7 +162,7 @@ class LookupDecisionService:
             revision=current.revision + 1 if current else 1,
             supersedes_id=current.id if current else None, state=evaluation.disposition,
             evaluation_json=evaluation.model_dump_json(), selected_record_number=selection,
-            actor=actor, reason=reason.strip() if reason else None,
+            actor=actor, reason=reason,
         ))
 
     def _audit(self, key: LookupKey, decision: LookupDecision, event_type: str) -> None:
